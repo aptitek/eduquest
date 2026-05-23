@@ -8,5 +8,14 @@
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "prettier": "^3.8.3",
+    "wrangler": "^4.94.0"
+  },
+  "volta": {
+    "node": "22.22.3"
   }
 }

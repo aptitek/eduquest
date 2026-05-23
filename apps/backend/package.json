@@ -4,16 +4,20 @@
   "private": true,
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev src/index.ts",
-    "deploy": "wrangler deploy --minify src/index.ts"
+    "dev": "wrangler dev src/index.ts --show-interactive-dev-session=false",
+    "deploy": "wrangler deploy --minify src/index.ts",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "hono": "^4.0.0",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.3",
     "@eduquest/shared": "*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240222.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.0.0",
-    "wrangler": "^3.30.0"
+    "wrangler": "^4.94.0"
   }
 }

@@ -2,32 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom layer resets */
 @layer base {
+  :root {
+    /* Official Solarized Theme Palette */
+    --color-solarized-base03: #002b36;
+    --color-solarized-base02: #073642;
+    --color-solarized-base01: #586e75;
+    --color-solarized-base00: #657b83;
+    --color-solarized-base0: #839496;
+    --color-solarized-base1: #93a1a1;
+    --color-solarized-base2: #eee8d5;
+    --color-solarized-base3: #fdf6e3;
+    --color-solarized-yellow: #b58900;
+    --color-solarized-orange: #cb4b16;
+    --color-solarized-red: #dc322f;
+    --color-solarized-magenta: #d33682;
+    --color-solarized-violet: #6c71c4;
+    --color-solarized-blue: #268bd2;
+    --color-solarized-cyan: #2aa198;
+    --color-solarized-green: #859900;
+
+    /* Design Tokens - Solarized Dark default theme mappings */
+    --color-bg-base: var(--color-solarized-base03);
+    --color-bg-card: var(--color-solarized-base02);
+
+    --color-text-primary: var(--color-solarized-base1);
+    --color-text-secondary: var(--color-solarized-base0);
+    --color-text-muted: var(--color-solarized-base01);
+    --color-border: var(--color-solarized-base02);
+
+    /* Technological grid lines derived from base01 */
+    --color-gaming-grid: rgba(88, 110, 117, 0.12);
+
+    /* Semantic Progression Tokens */
+    --color-status-locked: var(--color-solarized-base01);
+    --color-status-completed: var(--color-solarized-green);
+    --color-status-campfire: var(--color-solarized-yellow);
+    --color-status-quest: var(--color-solarized-blue);
+    --color-status-boss: var(--color-solarized-magenta);
+  }
+
   body {
-    @apply bg-gaming-dark text-zinc-100 font-body overflow-x-hidden;
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-family: 'Inter', sans-serif;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-display font-bold;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Outfit', sans-serif;
+    color: var(--color-text-primary);
   }
-}
-
-/* Glassmorphism classes for the game panels */
-.glass-panel {
-  background: rgba(18, 18, 24, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.glass-panel-hover {
-  @apply transition-all duration-300 ease-out;
-}
-
-.glass-panel-hover:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px 0 rgba(168, 85, 247, 0.15);
-  transform: translateY(-2px);
 }

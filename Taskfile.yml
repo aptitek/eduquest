@@ -1,0 +1,68 @@
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  default:
+    desc: 'Default task: runs both backend and frontend'
+    cmds:
+      - task: run
+
+  clean:
+    desc: 'Clean the cache and temporary build files'
+    cmds:
+      - echo "Cleaning cache and build artifacts..."
+      - rm -rf apps/frontend/dist apps/backend/dist
+      - rm -rf .wrangler apps/backend/.wrangler apps/frontend/.wrangler
+      - rm -rf node_modules/.cache
+      - echo "Cleanup complete."
+
+  compile:
+    desc: 'Build all packages and applications, verifying type safety'
+    cmds:
+      - echo "Compiling workspaces..."
+      - npm run build
+      - echo "Compilation successful."
+
+  run-backend:
+    desc: 'Start the Hono backend server using Wrangler'
+    cmds:
+      - npm run dev -w apps/backend
+
+  run-frontend:
+    desc: 'Start the Vite frontend development server'
+    cmds:
+      - npm run dev -w apps/frontend
+
+  run-frontend-open:
+    desc: 'Start the Vite frontend and automatically open the application in the browser'
+    cmds:
+      - npm run dev -w apps/frontend -- --open
+
+  run:
+    desc: 'Run the backend and frontend dev servers concurrently'
+    deps: [run-backend, run-frontend]
+
+  preview:
+    desc: 'Run backend and frontend concurrently and open the browser (HMR enabled)'
+    deps: [run-backend, run-frontend-open]
+
+  publish:
+    desc: 'Clean temporary files, commit, pull, and push changes to the repository'
+    cmds:
+      - task: clean
+      - echo "Staging changes..."
+      - git add .
+      - 'git commit -m "Publish automated changes" || echo "No changes to commit."'
+      - echo "Pulling and merging latest changes..."
+      - git pull origin main
+      - echo "Pushing changes..."
+      - git push origin main
+      - echo "Publish completed successfully."
+
+  lint:
+    desc: 'Reformat the codebase to meet modern styling and clean coding guidelines'
+    cmds:
+      - echo "Formatting files with Prettier..."
+      - npx prettier --write .
+      - echo "Formatting completed."

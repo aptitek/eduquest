@@ -9,12 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "zustand": "^4.5.1",
+    "@eduquest/shared": "*",
+    "clsx": "^2.1.1",
+    "daisyui": "^5.5.20",
     "framer-motion": "^11.0.3",
     "lucide-react": "^0.344.0",
-    "@eduquest/shared": "*"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^4.5.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.56",

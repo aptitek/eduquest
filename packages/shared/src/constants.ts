@@ -30,6 +30,6 @@ export const GUILDS: GuildConfig[] = [
     id: 'scouts',
     name: 'Éclaireurs de la Donnée',
     color: '#10b981', // Vert
-    description: 'Experts dans l\'exploration et la structuration des bases de données.',
+    description: "Experts dans l'exploration et la structuration des bases de données.",
   },
 ];

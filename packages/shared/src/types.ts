@@ -1,35 +1,144 @@
-// Rôles dans le LMS
-export type UserRole = 'player' | 'gamemaster';
+// ==========================================
+// 1. PARTIE ADMINISTRATIVE & UTILISATEURS
+// ==========================================
 
-// Structure de base d'un utilisateur / joueur
+// Table `users` : Données de connexion et administration
 export interface User {
   id: string;
-  username: string;
-  role: UserRole;
-  level: number;
-  xp: number;
-  guildId?: string;
-  inventory: string[];
+  githubEmail: string;
+  githubSsoToken?: string;
+  isAdmin: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  lastLogin?: string;
 }
 
-// Règle de déverrouillage d'une activité
+// Table `schools` : Établissement
+export interface School {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Table `guilds` : Groupes de JDR des élèves
+export interface Guild {
+  id: string;
+  schoolId?: string;
+  name: string;
+  description?: string;
+  iconUrl?: string;
+  color?: string; // Code Hexa (ex: #ef4444)
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Table `students` : Profil élève lié à un utilisateur
+export interface Student {
+  id: string;
+  userId: string;
+  guildId?: string;
+  institutionalEmail?: string;
+  birthDate?: string;
+  internalDescription?: string;
+  photoUrl?: string;
+  pronouns?: string[]; // Stocké sous forme de JSONB (ex: ["He/Him", "They/Them"])
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Table `student_skills_history` : Radar de compétences évolutif
+export interface StudentSkillsHistory {
+  id: string;
+  studentId: string;
+  skills: Record<string, number>; // JSONB (ex: {"tech": 0.8, "soft": 0.5, "design": 0.2})
+  evaluatedAt?: string;
+  evaluatedBy?: string; // ID de l'admin (User)
+}
+
+// ==========================================
+// 2. PARTIE LUDIQUE (Préfixe game_)
+// ==========================================
+
+// Table `game_characters` : Verso de la carte étudiant (Stats JDR)
+export interface GameCharacter {
+  studentId: string;
+  characterClass: string; // ex: 'Archer', 'Mage', 'Guerrier'
+  stats: {
+    str: number;
+    dex: number;
+    int: number;
+    cha: number;
+    [key: string]: number;
+  }; // JSONB
+  currentLevel: number;
+  updatedAt?: string;
+}
+
+// Table `game_decks` : Decks de classes / promotions
+export interface GameDeck {
+  id: string;
+  schoolId: string;
+  name: string;
+}
+
+// Règle de déverrouillage de quête (logique métier)
 export interface UnlockRule {
   requiredLevel?: number;
-  requiredCompletedActivities?: string[];
+  requiredCompletedActivities?: string[]; // IDs des activités prérequises
   requiredItems?: string[];
 }
 
-// Type d'activité pédagogique ou événement de jeu
-export type ActivityType = 'lesson' | 'quiz' | 'boss_fight' | 'campfire';
+// Métadonnées spécifiques aux Boss (Examens)
+export interface BossMetadata {
+  projectUrl?: string;
+  gradingUrl?: string;
+  [key: string]: any;
+}
 
-// Structure d'une activité sur la carte
+// Type d'activité du jeu
+export type ActivityType = 'campfire' | 'quest' | 'boss';
+
+// Table `game_activities` : Activités sur la carte
 export interface Activity {
   id: string;
+  type: ActivityType; // campfire (CM), quest (TD), boss (Exam)
   title: string;
-  description: string;
-  type: ActivityType;
-  xpReward: number;
-  unlockRule: UnlockRule;
-  isCompleted: boolean;
-  position: { x: number; y: number };
+  startDate?: string;
+  endDate?: string;
+  url?: string;
+  isGraded: boolean;
+  x: number;
+  y: number;
+  requiredLevel: number;
+  bossMetadata?: BossMetadata; // JSONB
+  unlockRule?: UnlockRule; // Optionnel : règles de progression
+  createdAt?: string;
+}
+
+// Table `game_battles` : Rendus de devoirs et combats
+export interface GameBattle {
+  id: string;
+  studentId: string;
+  activityId: string;
+  grade?: number; // Flottant entre 0 et 1 (Note sur 20 représentée en pourcentage)
+  workUrl?: string;
+  createdAt?: string;
+}
+
+// ==========================================
+// 3. SYSTEME D'AUDIT
+// ==========================================
+
+// Table `audit_logs` : Historique des actions
+export interface AuditLog {
+  id: string;
+  tableName: string;
+  recordId: string;
+  action: 'INSERT' | 'UPDATE' | 'DELETE';
+  oldData?: any; // JSONB
+  newData?: any; // JSONB
+  userId?: string; // Auteur de l'action
+  changedAt?: string;
 }

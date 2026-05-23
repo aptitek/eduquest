@@ -6,7 +6,7 @@ import { Activity } from '@eduquest/shared';
  */
 export function useStorm() {
   const isStormActive = (activity: Activity, playerLevel: number): boolean => {
-    if (activity.unlockRule.requiredLevel && playerLevel < activity.unlockRule.requiredLevel) {
+    if (activity.unlockRule?.requiredLevel && playerLevel < activity.unlockRule.requiredLevel) {
       return true;
     }
     return false;
