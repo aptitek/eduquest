@@ -19,6 +19,7 @@ export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   logoUrl: text('logo_url'),
+  emailDomain: text('email_domain'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -40,6 +41,9 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   githubEmail: text('github_email').unique().notNull(),
   githubSsoToken: text('github_sso_token'),
+  githubUsername: text('github_username'),
+  githubName: text('github_name'),
+  githubAvatar: text('github_avatar'),
   isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -54,10 +58,11 @@ export const students = pgTable('students', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   guildId: uuid('guild_id').references(() => guilds.id),
+  schoolId: uuid('school_id').references(() => schools.id),
   institutionalEmail: text('institutional_email').unique(),
   birthDate: date('birth_date'),
-  internalDescription: text('internal_description'),
-  photoUrl: text('photo_url'),
+  internalDescription: text('internal_description'), //TODO: delete
+  photoUrl: text('photo_url'), //TODO delete (replaced by avatar in user table)
   pronouns: jsonb('pronouns').default('[]'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

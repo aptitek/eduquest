@@ -1,9 +1,16 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { mapRouter } from './routes/map';
+import { authRouter } from './routes/auth';
+import { authMiddleware } from './middleware/auth';
 
 type Bindings = {
   DATABASE_URL: string;
+  JWT_SECRET: string;
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  GITHUB_REDIRECT_URI: string;
+  FRONTEND_URL: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -17,6 +24,13 @@ app.use(
     allowHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+// Montage des routes publiques d'authentification sous /api/auth
+app.route('/api/auth', authRouter);
+
+// Enforcer l'authentification sur les endpoints protégés du jeu
+app.use('/api/map', authMiddleware);
+app.use('/api/guilds', authMiddleware);
 
 app.get('/', (c) => {
   return c.text("Bienvenue sur l'API de l'EduQuest Game Master Server ! 🎮");

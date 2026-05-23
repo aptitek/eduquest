@@ -1,61 +1,76 @@
-# EduQuest Monorepo 🎮📚
+<p align="center">
+  <img src="./branding/aptipiou.svg" alt="Aptipiou Mascot" width="150" />
+  <br />
+  <img src="./branding/aptitek.svg" alt="Aptitek Logo" width="220" />
+</p>
 
-EduQuest est un système de gestion de l'apprentissage (LMS) gamifié sous forme de jeu de rôle pédagogique.
+🌐 _[Version française](./README.fr.md)_
 
-Ce dépôt est structuré comme un monorepo à l'aide de **npm Workspaces**.
+# EduQuest 🎮📚
 
-## 📂 Structure du Monorepo
+EduQuest is a gamified learning management system (LMS) designed as a pedagogical role-playing game.
 
-- **`packages/shared`** : 📦 Types TypeScript et constantes du jeu partagés entre le frontend et le backend (ex: structures d'utilisateurs, calculs d'XP, quêtes).
-- **`apps/backend`** : ⚙️ API de backend sous forme de Cloudflare Worker utilisant **Hono** et **Drizzle ORM** (connexion à une base de données PostgreSQL).
-- **`apps/frontend`** : 🎮 Application React client (SPA) construite avec **Vite**, **TypeScript**, **Tailwind CSS v4** pour l'interface, **Zustand** pour l'état du jeu et **Framer Motion** pour les animations.
+This repository is structured as a monorepo using **npm Workspaces**.
+
+## 📂 Monorepo Structure
+
+- **`packages/shared`** : 📦 Shared TypeScript types and game constants used across both the frontend and backend (e.g., user structures, XP calculations, quests).
+- **`apps/backend`** : ⚙️ Backend API implemented as a Cloudflare Worker using **Hono** and **Drizzle ORM** (connecting to a PostgreSQL database).
+- **`apps/frontend`** : 🎮 Client-side React application (SPA) built with **Vite**, **TypeScript**, **Tailwind CSS v4** for the interface, **Zustand** for game state, and **Framer Motion** for animations.
 
 ---
 
-## 🛠️ Démarrage et Développement
+## 🛠️ Getting Started & Development
 
-Les dépendances sont installées et liées automatiquement au niveau de la racine.
+Dependencies are installed and automatically linked at the root level.
 
-### Prérequis
+### Prerequisites
 
 - **Node.js** (v18+)
 - **npm** (v9+)
 
 ### Installation
 
-Installez toutes les dépendances du projet depuis la racine :
+Install all project dependencies from the root:
 
 ```bash
 npm install
 ```
 
-### Commandes Globales
+### Global Commands
 
-- **Démarrer en mode développement (Frontend & Backend)** :
+- **Start in development mode (Frontend & Backend)**:
   ```bash
   npm run dev
   ```
 
-````
-*   **Compiler toutes les applications et packages** :
-    ```bash
-    npm run build
-````
+* **Build all applications and packages**:
+  ```bash
+  npm run build
+  ```
 
 ---
 
-## 🏗️ Architecture et Design System (Frontend)
+## 🏗️ Architecture & Design System (Frontend)
 
-L'application frontend applique les principes du **Design Atomique** dans `apps/frontend/src/components` :
+The frontend application follows **Atomic Design** principles inside `apps/frontend/src/components`:
 
-1.  **Atoms** : Composants graphiques de base sans logique (ex: bouton, badge d'XP, avatar).
-2.  **Molecules** : Combinaison d'atomes (ex: barre de progression de quête, ligne d'icônes).
-3.  **Organisms** : Blocs complexes et interactifs (ex: carte de jeu interactive, panneau latéral d'inventaire).
-4.  **Templates** : Squelettes de mise en page réutilisables (ex: mise en page du jeu avec barre d'état).
+1.  **Atoms** : Basic UI components with no internal logic (e.g., button, XP badge, avatar).
+2.  **Molecules** : Combinations of atoms (e.g., quest progress bar, icon row).
+3.  **Organisms** : Complex, interactive blocks (e.g., interactive game map, inventory sidebar).
+4.  **Templates** : Reusable page skeleton layouts (e.g., game layout with status bar).
 
-La logique métier est quant à elle découplée et gérée dans le dossier `features/` :
+Business logic is decoupled and managed inside the `features/` directory:
 
-- `auth/` : Session de l'utilisateur et gestion des rôles (Joueur vs Maître du Jeu).
-- `game/` : Moteur de rendu de la carte de progression, déplacements et boucle de jeu.
-- `activities/` : Logique de validation des leçons, combats de boss et gains d'XP.
-- `gamemaster/` : Outils de l'enseignant pour modifier la carte ou voir les statistiques.
+- `auth/` : User session and role management (Player vs. Game Master).
+- `game/` : Progression map rendering engine, movement, and game loop.
+- `activities/` : Validation logic for lessons, boss fights, and XP rewards.
+- `gamemaster/` : Teacher tools to modify the map or view statistics.
+
+---
+
+## 🎨 Attribution
+
+This project is proudly developed and maintained by **[Aptitek](https://aptitek.io)** (founded by **Antoine GRÉA**).
+
+For more information or to collaborate on AI, development, and no-code training, visit **[aptitek.io](https://aptitek.io)**! 🐣💻

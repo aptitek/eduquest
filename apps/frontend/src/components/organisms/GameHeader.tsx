@@ -1,18 +1,12 @@
 import { useRef, useEffect } from 'react';
-import { Server } from 'lucide-react';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
-import { cn } from '../../utils/cn';
+import { AccountDropdown } from '../molecules/AccountDropdown';
+import iconUrl from '../../assets/icon.svg';
 
-interface GameHeaderProps {
-  apiSource: 'database' | 'mock' | 'offline';
-  loading: boolean;
-  onRefresh: () => void;
-}
-
-export function GameHeader({ apiSource, loading, onRefresh }: GameHeaderProps) {
+export function GameHeader() {
   const { student, character } = useGameStore();
-  const { t, locale, setLocale } = useTranslation();
+  const { t } = useTranslation();
   const progressBarRef = useRef<HTMLDivElement>(null);
 
   const currentXp = character?.stats.xp || 0;
@@ -27,18 +21,14 @@ export function GameHeader({ apiSource, loading, onRefresh }: GameHeaderProps) {
 
   if (!student || !character) return null;
 
-  const serverIconColor = cn(
-    apiSource === 'database' ? 'text-status-completed' : 'text-status-campfire'
-  );
-
   return (
     <div className="flex flex-col gap-6">
       {/* Barre de Navigation et Status Unifiée (Premium HUD) */}
-      <div className="flex flex-col lg:flex-row justify-between items-center bg-gaming-card border border-gaming-border rounded-lg p-4 gap-4 text-xs shadow-md">
+      <div className="flex justify-between items-center bg-gaming-card border border-gaming-border rounded-lg p-4 gap-4 text-xs shadow-md">
         {/* Partie Gauche : Logo & Version */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center font-bold text-gaming-base shadow-md font-display">
-            EQ
+          <div className="w-8 h-8 rounded-lg bg-gaming-base flex items-center justify-center shadow-md overflow-hidden p-1 border border-gaming-border">
+            <img src={iconUrl} alt="Aptipiou Icon" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-lg font-bold font-display tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary">
             {t('layout.title')}{' '}
@@ -46,39 +36,9 @@ export function GameHeader({ apiSource, loading, onRefresh }: GameHeaderProps) {
           </h1>
         </div>
 
-        {/* Partie Centrale : Status de l'API */}
-        <div className="flex items-center gap-4 bg-gaming-base/60 border border-gaming-border px-3 py-2 rounded-sm text-text-muted">
-          <div className="flex items-center gap-2">
-            <Server size={14} className={serverIconColor} />
-            <span>
-              {t('common.apiSource')} :{' '}
-              <strong className="uppercase text-text-secondary">{apiSource}</strong>
-            </span>
-          </div>
-          <button
-            className="btn btn-xs btn-outline btn-secondary"
-            onClick={onRefresh}
-            disabled={loading}
-          >
-            {loading ? t('header.reconnecting') : t('header.checkConnection')}
-          </button>
-        </div>
-
-        {/* Partie Droite : Onglets Jeu / GM & Langue */}
+        {/* Partie Droite : Account Dropdown */}
         <div className="flex gap-3 items-center">
-          <nav className="flex gap-1">
-            <button className="btn btn-neutral">{t('layout.tabPlay')}</button>
-            <button className="btn btn-ghost">{t('layout.tabGm')}</button>
-          </nav>
-
-          <select
-            value={locale}
-            onChange={(e) => setLocale(e.target.value as any)}
-            className="select select-bordered"
-          >
-            <option value="fr">🇫🇷 FR</option>
-            <option value="en">🇬🇧 EN</option>
-          </select>
+          <AccountDropdown />
         </div>
       </div>
 

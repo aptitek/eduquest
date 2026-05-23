@@ -15,6 +15,13 @@
       "when": 1779510249923,
       "tag": "0001_gifted_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779544687504,
+      "tag": "0002_fat_firelord",
+      "breakpoints": true
     }
   ]
 }

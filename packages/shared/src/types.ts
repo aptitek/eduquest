@@ -7,6 +7,9 @@ export interface User {
   id: string;
   githubEmail: string;
   githubSsoToken?: string;
+  githubUsername?: string;
+  githubName?: string;
+  githubAvatar?: string;
   isAdmin: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -18,6 +21,7 @@ export interface School {
   id: string;
   name: string;
   logoUrl?: string;
+  emailDomain?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -39,6 +43,8 @@ export interface Student {
   id: string;
   userId: string;
   guildId?: string;
+  schoolId?: string;
+  school?: School;
   institutionalEmail?: string;
   birthDate?: string;
   internalDescription?: string;

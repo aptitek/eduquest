@@ -1,0 +1,13 @@
+# Local environment variables for Wrangler development (copy this to .dev.vars)
+
+# JWT Signing Secret (change in production)
+JWT_SECRET="eduquest-secret-key-1337-gaming-token"
+
+# Frontend Vite Dev Server URL
+FRONTEND_URL="http://localhost:5174"
+
+# GitHub OAuth Credentials
+# Retrieve these from: GitHub -> Settings -> Developer Settings -> OAuth Apps
+GITHUB_CLIENT_ID="your_github_client_id_here"
+GITHUB_CLIENT_SECRET="your_github_client_secret_here"
+GITHUB_REDIRECT_URI="http://localhost:8787/api/auth/github/callback"

@@ -33,3 +33,6 @@ Thumbs.db
 *.sln
 *.sw?
 package-lock.json
+
+
+apps/backend/.dev.vars

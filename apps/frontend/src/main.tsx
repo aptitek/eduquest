@@ -2,8 +2,67 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 import { MapPage } from './pages/MapPage/MapPage';
+import { LoginPage } from './pages/LoginPage/LoginPage';
+import { useAuth } from './features/auth/useAuth';
+import { useTranslation } from './hooks/useTranslation';
+import { motion } from 'framer-motion';
+import { Gamepad2 } from 'lucide-react';
 
 function App() {
+  const { t } = useTranslation();
+  const { user, loadingSession } = useAuth();
+
+  if (loadingSession) {
+    return (
+      <div className="min-h-screen bg-gaming-base flex flex-col justify-center items-center gap-6 relative font-display">
+        {/* Glowing Retro Splash Symbol */}
+        <motion.div
+          animate={{
+            scale: [1, 1.1, 1],
+            rotate: [0, 360],
+          }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: 'easeInOut',
+          }}
+          className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center shadow-[0_0_30px_rgba(211,54,130,0.5)] border border-white/10 text-white"
+        >
+          <Gamepad2 size={32} />
+        </motion.div>
+
+        {/* Loading Message */}
+        <div className="flex flex-col items-center gap-1.5 text-center">
+          <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-text-primary via-solarized-blue to-status-boss tracking-wider">
+            {t('layout.title').toUpperCase()}
+          </h2>
+          <span className="text-xs text-status-campfire font-semibold uppercase tracking-widest animate-pulse">
+            {t('layout.loadingSession')}
+          </span>
+        </div>
+
+        {/* Pulsing Game Console Loading Line */}
+        <div className="w-48 h-[2px] bg-gaming-border rounded-full overflow-hidden relative border border-gaming-border">
+          <motion.div
+            initial={{ left: '-100%' }}
+            animate={{ left: '100%' }}
+            transition={{
+              repeat: Infinity,
+              duration: 1.5,
+              ease: 'linear',
+            }}
+            className="w-24 h-full bg-gradient-to-r from-transparent via-status-boss to-transparent absolute"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Force authentication to access the app
+  if (!user) {
+    return <LoginPage />;
+  }
+
   return <MapPage />;
 }
 

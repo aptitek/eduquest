@@ -1,0 +1,104 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useGameStore } from '../game/gameStore';
+
+const BACKEND_BASE_URL = 'http://localhost:8787';
+
+export function useAuth() {
+  const { user, student, character, setUserSession, logout: clearStoreSession } = useGameStore();
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Vérifie la validité du token local
+  const verifySession = useCallback(
+    async (token: string) => {
+      setLoadingSession(true);
+      setError(null);
+      try {
+        const response = await fetch(`${BACKEND_BASE_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Unauthorized or session expired');
+        }
+
+        const data = await response.json();
+        if (data.success && data.user && data.student && data.character) {
+          setUserSession(data.user, data.student, data.character);
+        } else {
+          throw new Error('Malformed server session payload');
+        }
+      } catch (err: any) {
+        console.warn('Authentication validation failed:', err.message);
+        localStorage.removeItem('eduquest_token');
+        clearStoreSession();
+        setError('invalidSession');
+      } finally {
+        setLoadingSession(false);
+      }
+    },
+    [setUserSession, clearStoreSession]
+  );
+
+  // Initialisation et parsing URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    const errorFromUrl = urlParams.get('error');
+
+    if (errorFromUrl) {
+      setError(errorFromUrl);
+      setLoadingSession(false);
+      // Clean query params to keep clean experience
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+      return;
+    }
+
+    if (tokenFromUrl) {
+      localStorage.setItem('eduquest_token', tokenFromUrl);
+
+      // Clean query params to keep URLs clean
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+
+      verifySession(tokenFromUrl);
+    } else {
+      const savedToken = localStorage.getItem('eduquest_token');
+      if (savedToken) {
+        verifySession(savedToken);
+      } else {
+        setLoadingSession(false);
+      }
+    }
+  }, [verifySession]);
+
+  // Déclencheurs de Redirection
+  const loginWithGithub = useCallback(() => {
+    window.location.href = `${BACKEND_BASE_URL}/api/auth/github`;
+  }, []);
+
+  const loginWithMock = useCallback(() => {
+    window.location.href = `${BACKEND_BASE_URL}/api/auth/mock`;
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('eduquest_token');
+    clearStoreSession();
+  }, [clearStoreSession]);
+
+  return {
+    user,
+    student,
+    character,
+    loadingSession,
+    error,
+    loginWithGithub,
+    loginWithMock,
+    logout,
+  };
+}

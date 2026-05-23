@@ -9,77 +9,37 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 import { MapContainer, MapArea, LoadingMap } from '../../components/organisms/MapContainer';
 import { GameMap } from '../../components/organisms/GameMap';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
+import { ProfilePage } from '../Profile/ProfilePage';
 
 export function MapPage() {
   const { t } = useTranslation();
-  const {
-    user,
-    student,
-    character,
-    activities,
-    battles,
-    setUserSession,
-    setActivities,
-    addBattle,
-    gainXp,
-  } = useGameStore();
+  const { student, character, activities, battles, setActivities, addBattle, gainXp, activeView } =
+    useGameStore();
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
-  const [apiSource, setApiSource] = useState<'database' | 'mock' | 'offline'>('offline');
-
-  // Initialisation de la session de jeu mockée (si vide)
-  useEffect(() => {
-    if (!user) {
-      setUserSession(
-        {
-          id: 'user_1',
-          githubEmail: 'wizard@github.com',
-          isAdmin: false,
-        },
-        {
-          id: 'stud_1',
-          userId: 'user_1',
-          guildId: 'mages',
-          institutionalEmail: 'wizard@school.edu',
-          pronouns: ['He/Him'],
-          photoUrl:
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-        },
-        {
-          studentId: 'stud_1',
-          characterClass: 'Mage Frontend',
-          stats: {
-            str: 5,
-            dex: 8,
-            int: 18,
-            cha: 12,
-            xp: 25,
-          },
-          currentLevel: 1,
-        }
-      );
-    }
-  }, [user, setUserSession]);
 
   // Chargement de la carte depuis le Backend Hono
   const fetchMapData = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8787/api/map');
+      const token = localStorage.getItem('eduquest_token');
+      const response = await fetch('http://localhost:8787/api/map', {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
       if (!response.ok) {
         throw new Error('Erreur HTTP ' + response.status);
       }
       const data = await response.json();
       if (data.success) {
         setActivities(data.activities);
-        setApiSource(data.source || 'database');
       } else {
         throw new Error('Le serveur a renvoyé un statut invalide');
       }
     } catch (error: any) {
       console.warn('Backend injoignable ou en erreur. Utilisation des mocks locaux.');
-      setApiSource('offline');
       setActivities([
         {
           id: 'act_1',
@@ -164,28 +124,32 @@ export function MapPage() {
 
   return (
     <GameLayout>
-      <GameHeader apiSource={apiSource} loading={loading} onRefresh={fetchMapData} />
+      <GameHeader />
 
-      <MapContainer>
-        <MapArea>
-          {loading ? (
-            <LoadingMap />
-          ) : (
-            <GameMap
-              activities={activities}
-              completedActivityIds={completedActivityIds}
-              playerLevel={character.currentLevel}
-              onSelectNode={setSelectedActivity}
-            />
-          )}
-        </MapArea>
+      {activeView === 'profile' ? (
+        <ProfilePage />
+      ) : (
+        <MapContainer>
+          <MapArea>
+            {loading ? (
+              <LoadingMap />
+            ) : (
+              <GameMap
+                activities={activities}
+                completedActivityIds={completedActivityIds}
+                playerLevel={character.currentLevel}
+                onSelectNode={setSelectedActivity}
+              />
+            )}
+          </MapArea>
 
-        <ActivityDetailPanel
-          selectedActivity={selectedActivity}
-          completedActivityIds={completedActivityIds}
-          onComplete={handleCompleteActivity}
-        />
-      </MapContainer>
+          <ActivityDetailPanel
+            selectedActivity={selectedActivity}
+            completedActivityIds={completedActivityIds}
+            onComplete={handleCompleteActivity}
+          />
+        </MapContainer>
+      )}
     </GameLayout>
   );
 }
