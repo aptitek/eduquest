@@ -29,6 +29,13 @@
       "when": 1779603600000,
       "tag": "0003_uppercase_user_last_name",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779622200000,
+      "tag": "0004_cohort_invites",
+      "breakpoints": true
     }
   ]
 }

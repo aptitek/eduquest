@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { sign } from 'hono/jwt';
+import { sign, verify } from 'hono/jwt';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type {
   Address,
@@ -16,6 +16,7 @@ import { getDb } from '../db';
 import {
   addresses,
   campuses,
+  cohortInvites,
   cohorts,
   gameCharacters,
   schools,
@@ -50,6 +51,14 @@ export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>
 // Secret JWT par défaut en développement
 const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
+const debugCohortInvites: Array<{
+  id: string;
+  cohortId: string;
+  token: string;
+  expiresAt: string;
+  createdAt: string;
+  revokedAt?: string;
+}> = [];
 
 type AddressRecord = typeof addresses.$inferSelect;
 type CampusRecord = typeof campuses.$inferSelect;
@@ -85,6 +94,21 @@ type ManagementStudentUpdateBody = {
   institutionalEmailCohortId?: string;
 };
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'logoUrl'>>;
+type CohortInvitePayload = {
+  purpose: 'cohort_invite';
+  inviteId: string;
+  cohortId: string;
+  exp: number;
+};
+type ManagementCohortInvite = {
+  id: string;
+  cohortId: string;
+  url: string;
+  token: string;
+  expiresAt: string;
+  createdAt?: string;
+};
+type CohortInviteRecord = typeof cohortInvites.$inferSelect;
 
 function toIsoString(value?: Date | null) {
   return value?.toISOString?.();
@@ -200,6 +224,183 @@ function isDebugAuthEnabled(c: { env: Bindings }) {
   return !c.env.DATABASE_URL || c.env.ENABLE_DEBUG_AUTH === 'true';
 }
 
+function buildCohortInviteUrl(frontendUrl: string, token: string) {
+  const url = new URL(frontendUrl);
+  url.searchParams.set('cohortInvite', token);
+  return url.toString();
+}
+
+function toManagementCohortInvite(
+  invite: Pick<CohortInviteRecord, 'id' | 'cohortId' | 'token' | 'expiresAt' | 'createdAt'>,
+  frontendUrl: string
+): ManagementCohortInvite {
+  return {
+    id: invite.id,
+    cohortId: invite.cohortId,
+    token: invite.token,
+    url: buildCohortInviteUrl(frontendUrl, invite.token),
+    expiresAt: invite.expiresAt.toISOString(),
+    createdAt: toIsoString(invite.createdAt),
+  };
+}
+
+function toDebugManagementCohortInvite(
+  invite: (typeof debugCohortInvites)[number],
+  frontendUrl: string
+): ManagementCohortInvite {
+  return {
+    id: invite.id,
+    cohortId: invite.cohortId,
+    token: invite.token,
+    url: buildCohortInviteUrl(frontendUrl, invite.token),
+    expiresAt: invite.expiresAt,
+    createdAt: invite.createdAt,
+  };
+}
+
+async function listActiveCohortInvites(
+  databaseUrl: string | undefined,
+  cohortId: string,
+  frontendUrl: string
+): Promise<ManagementCohortInvite[]> {
+  const now = Date.now();
+
+  if (!databaseUrl) {
+    return debugCohortInvites
+      .filter(
+        (invite) =>
+          invite.cohortId === cohortId &&
+          !invite.revokedAt &&
+          new Date(invite.expiresAt).getTime() > now
+      )
+      .map((invite) => toDebugManagementCohortInvite(invite, frontendUrl));
+  }
+
+  const records = await getDb(databaseUrl)
+    .select()
+    .from(cohortInvites)
+    .where(eq(cohortInvites.cohortId, cohortId))
+    .orderBy(desc(cohortInvites.createdAt));
+
+  return records
+    .filter((invite) => !invite.revokedAt && invite.expiresAt && invite.expiresAt.getTime() > now)
+    .map((invite) => toManagementCohortInvite(invite, frontendUrl));
+}
+
+async function resolveCohortInvite(
+  inviteToken: string | undefined,
+  jwtSecret: string
+): Promise<CohortInvitePayload | null> {
+  if (!inviteToken) return null;
+
+  try {
+    const payload = (await verify(inviteToken, jwtSecret, 'HS256')) as Partial<CohortInvitePayload>;
+    if (
+      payload.purpose !== 'cohort_invite' ||
+      !payload.inviteId ||
+      !payload.cohortId ||
+      !payload.exp
+    ) {
+      return null;
+    }
+    return payload as CohortInvitePayload;
+  } catch (error: any) {
+    console.warn('Invalid cohort invite token:', error.message);
+    return null;
+  }
+}
+
+async function assignStudentToInvitedCohort(
+  databaseUrl: string | undefined,
+  invite: CohortInvitePayload | null,
+  studentId: string
+) {
+  if (!databaseUrl || !invite) return;
+
+  const db = getDb(databaseUrl);
+  const [inviteRecord] = await db
+    .select()
+    .from(cohortInvites)
+    .where(eq(cohortInvites.id, invite.inviteId))
+    .limit(1);
+
+  if (
+    !inviteRecord ||
+    inviteRecord.cohortId !== invite.cohortId ||
+    inviteRecord.revokedAt ||
+    inviteRecord.expiresAt.getTime() <= Date.now()
+  ) {
+    return;
+  }
+
+  const [cohortRecord] = await db
+    .select()
+    .from(cohorts)
+    .where(eq(cohorts.id, invite.cohortId))
+    .limit(1);
+
+  if (!cohortRecord) return;
+
+  const existingMembership = await db
+    .select()
+    .from(studentCohorts)
+    .where(
+      and(eq(studentCohorts.studentId, studentId), eq(studentCohorts.cohortId, invite.cohortId))
+    )
+    .limit(1);
+
+  if (existingMembership.length === 0) {
+    await db.insert(studentCohorts).values({
+      studentId,
+      cohortId: invite.cohortId,
+    });
+  }
+
+  await db
+    .update(students)
+    .set({
+      schoolId: cohortRecord.schoolId,
+      updatedAt: new Date(),
+    })
+    .where(eq(students.id, studentId));
+}
+
+function assignDebugProfileToInvitedCohort(
+  invite: CohortInvitePayload | null,
+  identifier?: string | null
+) {
+  if (!invite) return;
+
+  const backup = getDebugBackup();
+  const inviteRecord = debugCohortInvites.find((item) => item.id === invite.inviteId);
+  if (
+    !inviteRecord ||
+    inviteRecord.revokedAt ||
+    inviteRecord.cohortId !== invite.cohortId ||
+    new Date(inviteRecord.expiresAt).getTime() <= Date.now()
+  ) {
+    return;
+  }
+
+  const profile = getDebugProfile(identifier);
+  const cohort = backup.cohorts.find((item) => item.id === invite.cohortId);
+  if (!cohort) return;
+
+  const memberships = profile.student.cohortMemberships || [];
+  if (!memberships.some((membership) => membership.cohortId === invite.cohortId)) {
+    memberships.push({
+      studentId: profile.student.id,
+      cohortId: cohort.id,
+      cohort,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  profile.student.cohortMemberships = memberships;
+  profile.student.schoolId = cohort.schoolId;
+  profile.student.school = cohort.school;
+}
+
 async function getManagementBackup(databaseUrl?: string): Promise<ManagementBackup> {
   if (!databaseUrl) return getDebugBackup();
 
@@ -297,6 +498,7 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
 authRouter.get('/github', (c) => {
   const clientId = c.env.GITHUB_CLIENT_ID;
   const redirectUri = c.env.GITHUB_REDIRECT_URI || 'http://localhost:8787/api/auth/github/callback';
+  const inviteToken = c.req.query('invite');
 
   if (!clientId) {
     return c.json(
@@ -311,7 +513,7 @@ authRouter.get('/github', (c) => {
 
   const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
     redirectUri
-  )}&scope=user:email`;
+  )}&scope=user:email${inviteToken ? `&state=${encodeURIComponent(inviteToken)}` : ''}`;
 
   return c.redirect(githubAuthUrl);
 });
@@ -319,6 +521,7 @@ authRouter.get('/github', (c) => {
 // 2. GET /api/auth/github/callback : Callback GitHub OAuth
 authRouter.get('/github/callback', async (c) => {
   const code = c.req.query('code');
+  const inviteToken = c.req.query('state');
   const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
   const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
 
@@ -399,8 +602,10 @@ authRouter.get('/github/callback', async (c) => {
     // D. Gestion de l'utilisateur en Base de Données (si connectée)
     const databaseUrl = c.env.DATABASE_URL;
     let userId = `user_${githubUser.id}`;
+    let authenticatedStudentId: string | undefined;
     const isAptitek = githubUser.login.toLowerCase() === 'aptitek';
     let isAdmin: boolean = isAptitek;
+    const cohortInvite = await resolveCohortInvite(inviteToken, jwtSecret);
 
     if (databaseUrl) {
       try {
@@ -448,6 +653,39 @@ authRouter.get('/github/callback', async (c) => {
               updatedAt: new Date(),
             })
             .where(eq(users.id, userId));
+
+          const existingStudents = await db
+            .select()
+            .from(students)
+            .where(eq(students.userId, userId))
+            .limit(1);
+
+          if (existingStudents[0]) {
+            authenticatedStudentId = existingStudents[0].id;
+          } else if (cohortInvite) {
+            const [newStudent] = await db
+              .insert(students)
+              .values({
+                userId,
+                schoolId: defaultSchoolId,
+              })
+              .returning();
+
+            authenticatedStudentId = newStudent.id;
+
+            await db.insert(gameCharacters).values({
+              studentId: newStudent.id,
+              characterClass: 'Mage Frontend',
+              stats: {
+                str: 10,
+                dex: 10,
+                int: 10,
+                cha: 10,
+                xp: 0,
+              },
+              currentLevel: 1,
+            });
+          }
         } else {
           // Création d'un nouvel utilisateur (Auto-registration)
           const [newUser] = await db
@@ -475,6 +713,8 @@ authRouter.get('/github/callback', async (c) => {
             })
             .returning();
 
+          authenticatedStudentId = newStudent.id;
+
           // Création du personnage JDR avec stats de départ
           await db.insert(gameCharacters).values({
             studentId: newStudent.id,
@@ -488,6 +728,10 @@ authRouter.get('/github/callback', async (c) => {
             },
             currentLevel: 1,
           });
+        }
+
+        if (authenticatedStudentId) {
+          await assignStudentToInvitedCohort(databaseUrl, cohortInvite, authenticatedStudentId);
         }
       } catch (dbError: any) {
         console.error(
@@ -551,6 +795,145 @@ authRouter.get('/management', async (c) => {
   return c.json({
     success: true,
     backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  const cohortId = c.req.param('cohortId');
+  const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+
+  return c.json({
+    success: true,
+    invites: await listActiveCohortInvites(c.env.DATABASE_URL, cohortId, frontendUrl),
+  });
+});
+
+authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  const cohortId = c.req.param('cohortId');
+  const backup = !c.env.DATABASE_URL ? getDebugBackup() : undefined;
+  const cohortExists = c.env.DATABASE_URL
+    ? (
+        await getDb(c.env.DATABASE_URL)
+          .select()
+          .from(cohorts)
+          .where(eq(cohorts.id, cohortId))
+          .limit(1)
+      ).length > 0
+    : backup?.cohorts.some((cohort) => cohort.id === cohortId);
+
+  if (!cohortExists) {
+    return c.json(
+      {
+        success: false,
+        error: 'Cohort not found',
+      },
+      404
+    );
+  }
+
+  const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+  const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+  const inviteId = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const token = await sign(
+    {
+      purpose: 'cohort_invite',
+      inviteId,
+      cohortId,
+      exp: Math.floor(expiresAt.getTime() / 1000),
+    },
+    jwtSecret
+  );
+  const createdAt = new Date();
+
+  if (c.env.DATABASE_URL) {
+    await getDb(c.env.DATABASE_URL).insert(cohortInvites).values({
+      id: inviteId,
+      cohortId,
+      token,
+      expiresAt,
+      createdAt,
+    });
+  } else {
+    debugCohortInvites.push({
+      id: inviteId,
+      cohortId,
+      token,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: createdAt.toISOString(),
+    });
+  }
+
+  return c.json({
+    success: true,
+    invite: {
+      id: inviteId,
+      cohortId,
+      url: buildCohortInviteUrl(frontendUrl, token),
+      token,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: createdAt.toISOString(),
+    },
+  });
+});
+
+authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  const cohortId = c.req.param('cohortId');
+  const inviteId = c.req.param('inviteId');
+  const revokedAt = new Date();
+
+  if (c.env.DATABASE_URL) {
+    await getDb(c.env.DATABASE_URL)
+      .update(cohortInvites)
+      .set({ revokedAt })
+      .where(and(eq(cohortInvites.id, inviteId), eq(cohortInvites.cohortId, cohortId)));
+  } else {
+    const invite = debugCohortInvites.find(
+      (item) => item.id === inviteId && item.cohortId === cohortId
+    );
+    if (invite) invite.revokedAt = revokedAt.toISOString();
+  }
+
+  return c.json({
+    success: true,
+    invites: await listActiveCohortInvites(
+      c.env.DATABASE_URL,
+      cohortId,
+      c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL
+    ),
   });
 });
 
@@ -871,6 +1254,7 @@ authRouter.get('/mock', async (c) => {
 
   const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
   const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+  const cohortInvite = await resolveCohortInvite(c.req.query('invite'), jwtSecret);
 
   const requestedMockStudent = c.req.query('studentId') || c.req.query('username');
   const mockUsername =
@@ -880,6 +1264,7 @@ authRouter.get('/mock', async (c) => {
   const isAptitek = mockUsername.toLowerCase() === 'aptitek';
 
   if (!isAptitek) {
+    assignDebugProfileToInvitedCohort(cohortInvite, requestedMockStudent);
     const { user } = getDebugProfile(requestedMockStudent);
     const token = await sign(
       {
@@ -906,6 +1291,7 @@ authRouter.get('/mock', async (c) => {
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
   const mockName = isAptitek ? 'Aptitek Master' : 'Archmage Coder';
   let userId = isAptitek ? 'user_mock_aptitek' : 'user_mock_1337';
+  let authenticatedStudentId: string | undefined;
   let isAdmin: boolean = isAptitek;
 
   const databaseUrl = c.env.DATABASE_URL;
@@ -952,6 +1338,13 @@ authRouter.get('/mock', async (c) => {
             updatedAt: new Date(),
           })
           .where(eq(users.id, userId));
+
+        const existingStudents = await db
+          .select()
+          .from(students)
+          .where(eq(students.userId, userId))
+          .limit(1);
+        authenticatedStudentId = existingStudents[0]?.id;
       } else {
         const [newUser] = await db
           .insert(users)
@@ -977,6 +1370,8 @@ authRouter.get('/mock', async (c) => {
           })
           .returning();
 
+        authenticatedStudentId = newStudent.id;
+
         await db.insert(gameCharacters).values({
           studentId: newStudent.id,
           characterClass: 'Mage Frontend',
@@ -989,6 +1384,10 @@ authRouter.get('/mock', async (c) => {
           },
           currentLevel: 1,
         });
+      }
+
+      if (authenticatedStudentId) {
+        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, authenticatedStudentId);
       }
     } catch (dbError: any) {
       console.error('DB mock registration failed, playing offline mode:', dbError.message);

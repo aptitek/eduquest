@@ -69,6 +69,17 @@ export const cohorts = pgTable('cohorts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+export const cohortInvites = pgTable('cohort_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id')
+    .notNull()
+    .references(() => cohorts.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Table des guildes (groupes d'étudiants / de jeu). Chaque guilde appartient à une seule cohort.
 export const guilds = pgTable('guilds', {
   id: uuid('id').primaryKey().defaultRandom(),

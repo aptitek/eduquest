@@ -3,6 +3,10 @@ import { useGameStore } from '../game/gameStore';
 
 export const BACKEND_BASE_URL = 'http://localhost:8787';
 
+function getCohortInviteToken() {
+  return new URLSearchParams(window.location.search).get('cohortInvite');
+}
+
 export function useAuth() {
   const { user, student, character, setUserSession, logout: clearStoreSession } = useGameStore();
   const [loadingSession, setLoadingSession] = useState(() => {
@@ -93,12 +97,17 @@ export function useAuth() {
 
   // Déclencheurs de Redirection
   const loginWithGithub = useCallback(() => {
-    window.location.href = `${BACKEND_BASE_URL}/api/auth/github`;
+    const url = new URL(`${BACKEND_BASE_URL}/api/auth/github`);
+    const cohortInvite = getCohortInviteToken();
+    if (cohortInvite) url.searchParams.set('invite', cohortInvite);
+    window.location.href = url.toString();
   }, []);
 
   const loginWithMock = useCallback((studentId?: string) => {
     const url = new URL(`${BACKEND_BASE_URL}/api/auth/mock`);
     if (studentId) url.searchParams.set('studentId', studentId);
+    const cohortInvite = getCohortInviteToken();
+    if (cohortInvite) url.searchParams.set('invite', cohortInvite);
     window.location.href = url.toString();
   }, []);
 
