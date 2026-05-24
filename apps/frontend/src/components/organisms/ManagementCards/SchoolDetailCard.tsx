@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import { EditableSchoolLogo } from '../../molecules/EditableSchoolLogo';
 import type { SchoolRow } from '../../../features/management/types';
-import { formatAddress, formatDate } from '../../../features/management/utils';
+import { formatAddress } from '../../../features/management/utils';
 import aptitekLogoUrl from '../../../assets/logo.svg';
-import { DetailItem } from './DetailItem';
 
 export function SchoolDetailCard({
   school,
@@ -99,12 +98,6 @@ export function SchoolDetailCard({
             />
           </div>
 
-          <div className="mt-auto">
-            <DetailItem
-              label={t('management.schools.createdAt')}
-              value={formatDate(school.createdAt)}
-            />
-          </div>
         </div>
       </div>
     </EditableFieldContext.Provider>

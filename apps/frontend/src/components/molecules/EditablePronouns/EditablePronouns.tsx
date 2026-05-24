@@ -1,5 +1,11 @@
 import { cn } from '../../../utils/cn';
-import { formatPronouns, parsePronouns } from '../../../utils/pronouns';
+import {
+  formatPronouns,
+  getPronounLabel,
+  getPronounSearchText,
+  normalizePronoun,
+  parsePronouns,
+} from '../../../utils/pronouns';
 import { BadgeDropdown } from '../BadgeDropdown';
 
 export interface EditablePronounsProps {
@@ -10,6 +16,7 @@ export interface EditablePronounsProps {
   searchPlaceholder?: string;
   removeLabel?: string;
   emptyFilterHint?: string;
+  t: (key: string) => string;
   className?: string;
   showPencil?: boolean;
 }
@@ -22,6 +29,7 @@ export function EditablePronouns({
   searchPlaceholder,
   removeLabel,
   emptyFilterHint,
+  t,
   className,
   showPencil: showPencilProp,
 }: EditablePronounsProps) {
@@ -41,6 +49,9 @@ export function EditablePronouns({
         badgeClassName="border-gaming-border"
         selectedMaxWidth="max-w-[7.5rem] sm:max-w-[9rem]"
         showArrow={showPencilProp}
+        renderBadge={(pronoun) => getPronounLabel(pronoun, t)}
+        getOptionText={(pronoun) => getPronounSearchText(pronoun, t)}
+        normalizeInput={normalizePronoun}
       />
     </span>
   );

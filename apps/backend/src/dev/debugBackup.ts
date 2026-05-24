@@ -229,7 +229,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       lastName: 'MOREL',
       displayName: 'Lina Morel',
       birthDate: '2001-04-12',
-      pronouns: 'She/Her',
+      pronouns: 'she, her',
       bio: 'Frontend apprentice who likes polishing tiny UI states.',
       avatarUrl:
         'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
@@ -299,7 +299,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       lastName: 'BENALI',
       displayName: 'Samir Benali',
       birthDate: '1999-11-03',
-      pronouns: 'He/Him',
+      pronouns: 'he, him',
       bio: 'Fullstack ranger focused on API contracts and deployment rituals.',
       avatarUrl:
         'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
@@ -367,7 +367,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       lastName: 'CHEN',
       displayName: 'Noa Chen',
       birthDate: '2000-07-29',
-      pronouns: 'They/Them',
+      pronouns: 'they, them',
       bio: 'Data alchemist testing analytics-heavy workflows and long labels.',
       avatarUrl:
         'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',

@@ -7,11 +7,10 @@ import { SplitEditableText } from '../../molecules/SplitEditableText';
 import { EditablePronouns } from '../../molecules/EditablePronouns';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown/BadgeDropdown';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { en } from '../../../locales/en';
-import { fr } from '../../../locales/fr';
 import { Cohort, User } from '@eduquest/shared';
 import { Github, Cake, Quote, Trash2 } from 'lucide-react';
 import { cn } from '../../../utils/cn';
+import { formatPronounsForDisplay, PRONOUN_OPTION_IDS } from '../../../utils/pronouns';
 
 export interface InstitutionalProfileCardProps {
   user: User;
@@ -70,13 +69,10 @@ export function InstitutionalProfileCard({
   getCohortInstitutionalEmailDomain,
   className,
 }: InstitutionalProfileCardProps) {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const ic = (key: string) => t(`profile.institutionalCard.${key}`);
-
-  const pronounOptions =
-    locale === 'fr'
-      ? fr.profile.institutionalCard.pronounOptions
-      : en.profile.institutionalCard.pronounOptions;
+  const displayPronouns = (value?: string) =>
+    value ? formatPronounsForDisplay(value, t) || ic('emptyValue') : ic('emptyValue');
 
   const [nameDraft, setNameDraft] = useState<Partial<NameFields>>({});
   const [cohortSchoolDraft, setCohortSchoolDraft] = useState<string | null>(null);
@@ -337,16 +333,17 @@ export function InstitutionalProfileCard({
                       (
                     </span>
                     {readOnly ? (
-                      <span>{currentUser.pronouns || ic('emptyValue')}</span>
+                      <span>{displayPronouns(currentUser.pronouns)}</span>
                     ) : (
                       <EditablePronouns
                         value={currentUser.pronouns || ''}
                         onChange={(v) => persistField('pronouns', v)}
-                        options={pronounOptions}
+                        options={PRONOUN_OPTION_IDS}
                         placeholder={ic('addPronounsShort')}
                         searchPlaceholder={ic('filterPronouns')}
                         removeLabel={ic('removePronoun')}
                         emptyFilterHint={ic('pressEnterToAddPronoun')}
+                        t={t}
                         className={metaMuted}
                       />
                     )}
@@ -360,16 +357,17 @@ export function InstitutionalProfileCard({
               {stackPronouns && (
                 <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
                   {readOnly ? (
-                    <span>{currentUser.pronouns || ic('emptyValue')}</span>
+                    <span>{displayPronouns(currentUser.pronouns)}</span>
                   ) : (
                     <EditablePronouns
                       value={currentUser.pronouns || ''}
                       onChange={(v) => persistField('pronouns', v)}
-                      options={pronounOptions}
+                      options={PRONOUN_OPTION_IDS}
                       placeholder={ic('addPronounsShort')}
                       searchPlaceholder={ic('filterPronouns')}
                       removeLabel={ic('removePronoun')}
                       emptyFilterHint={ic('pressEnterToAddPronoun')}
+                      t={t}
                       className={metaMuted}
                     />
                   )}

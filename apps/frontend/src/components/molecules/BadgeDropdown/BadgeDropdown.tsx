@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import type { CSSProperties, ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { useEditableFieldContext } from '../../atoms/EditableText/EditableFieldContext';
@@ -20,10 +21,14 @@ export interface BadgeDropdownProps {
   fullWidth?: boolean;
   showArrow?: boolean;
   renderBadge?: (item: string) => ReactNode;
+  getOptionText?: (item: string) => string;
+  normalizeInput?: (item: string) => string;
 }
 
 const DEFAULT_BADGE_CLASS =
   'badge badge-outline bg-gaming-base border-gaming-border text-text-secondary gap-1 text-xs py-2 px-2 font-medium';
+const PANEL_WIDTH = 320;
+const PANEL_MARGIN = 16;
 
 export function BadgeDropdown({
   options,
@@ -40,11 +45,14 @@ export function BadgeDropdown({
   fullWidth,
   showArrow: showArrowProp,
   renderBadge,
+  getOptionText,
+  normalizeInput,
 }: BadgeDropdownProps) {
   const { showPencil } = useEditableFieldContext();
   const showArrow = showArrowProp ?? showPencil;
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,10 +68,46 @@ export function BadgeDropdown({
   const visibleOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return catalog;
-    return catalog.filter((item) => item.toLowerCase().includes(normalizedQuery));
-  }, [catalog, query]);
+    return catalog.filter((item) =>
+      (getOptionText ? getOptionText(item) : item).toLowerCase().includes(normalizedQuery)
+    );
+  }, [catalog, getOptionText, query]);
 
   const selected = value.filter(Boolean);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePanelPosition = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const width = Math.min(PANEL_WIDTH, window.innerWidth - PANEL_MARGIN * 2);
+      const left = Math.min(
+        Math.max(PANEL_MARGIN, rect.right - width),
+        window.innerWidth - width - PANEL_MARGIN
+      );
+      const shouldOpenUp = rect.bottom + 328 > window.innerHeight && rect.top > 328;
+
+      setPanelStyle({
+        position: 'fixed',
+        top: shouldOpenUp ? rect.top - 4 : rect.bottom + 4,
+        left,
+        width,
+        transform: shouldOpenUp ? 'translateY(-100%)' : undefined,
+      });
+    };
+
+    updatePanelPosition();
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -92,7 +136,7 @@ export function BadgeDropdown({
   }, [isOpen]);
 
   const commitSelection = (item: string) => {
-    const trimmed = item.trim();
+    const trimmed = (normalizeInput ? normalizeInput(item) : item).trim();
     if (!trimmed) return;
 
     if (!multiple) {
@@ -116,9 +160,68 @@ export function BadgeDropdown({
 
     const trimmed = query.trim();
     if (!trimmed) return;
-    const existing = catalog.find((item) => item.toLowerCase() === trimmed.toLowerCase());
+    const existing = catalog.find((item) => {
+      const optionText = getOptionText ? getOptionText(item) : item;
+      return (
+        item.toLowerCase() === trimmed.toLowerCase() ||
+        optionText.toLowerCase() === trimmed.toLowerCase()
+      );
+    });
     commitSelection(existing || trimmed);
   };
+
+  const dropdownPanel =
+    isOpen && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={panelRef}
+            className="z-[80] max-h-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
+            style={panelStyle}
+            role="listbox"
+            aria-multiselectable={multiple}
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={searchPlaceholder}
+              className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
+            />
+
+            <div className="flex max-h-64 flex-wrap gap-1 overflow-y-auto">
+              {visibleOptions.length > 0 ? (
+                visibleOptions.map((item) => {
+                  const isSelected = selected.includes(item);
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => commitSelection(item)}
+                      className={cn(
+                        badgeClass,
+                        'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
+                        isSelected && 'badge-primary border-primary text-primary-content'
+                      )}
+                    >
+                      {renderBadge ? renderBadge(item) : item}
+                      {isSelected && <Check size={11} aria-hidden />}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="w-full px-1 py-1 text-xs text-text-muted">
+                  {query.trim() ? emptyFilterHint : '—'}
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div
@@ -169,54 +272,7 @@ export function BadgeDropdown({
           />
         )}
       </button>
-
-      {isOpen && (
-        <div
-          ref={panelRef}
-          className="absolute right-0 top-full z-50 mt-1 max-h-80 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
-          role="listbox"
-          aria-multiselectable={multiple}
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={searchPlaceholder}
-            className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
-          />
-
-          <div className="flex max-h-64 flex-wrap gap-1 overflow-y-auto">
-            {visibleOptions.length > 0 ? (
-              visibleOptions.map((item) => {
-                const isSelected = selected.includes(item);
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    onClick={() => commitSelection(item)}
-                    className={cn(
-                      badgeClass,
-                      'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
-                      isSelected && 'badge-primary border-primary text-primary-content'
-                    )}
-                  >
-                    {renderBadge ? renderBadge(item) : item}
-                    {isSelected && <Check size={11} aria-hidden />}
-                  </button>
-                );
-              })
-            ) : (
-              <p className="w-full px-1 py-1 text-xs text-text-muted">
-                {query.trim() ? emptyFilterHint : '—'}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {dropdownPanel}
     </div>
   );
 }

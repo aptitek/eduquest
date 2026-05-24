@@ -5,7 +5,7 @@ import { TruncatedText } from '../../components/atoms/TruncatedText';
 import { SchoolLogoBadge } from '../../components/molecules/SchoolLogoBadge';
 import type { CohortRow, SchoolRow, StudentRow } from './types';
 import { formatAddress, formatGrade, formatSchoolYear } from './utils';
-import { parsePronouns } from '../../utils/pronouns';
+import { formatPronounsForDisplay, getPronounLabel, parsePronouns } from '../../utils/pronouns';
 
 export function useManagementColumns(t: (key: string) => string) {
   const studentColumns = useMemo<ColumnDef<StudentRow>[]>(
@@ -42,7 +42,7 @@ export function useManagementColumns(t: (key: string) => string) {
       },
       {
         id: 'pronouns',
-        accessorFn: (row) => parsePronouns(row.user.pronouns || '').join(' '),
+        accessorFn: (row) => formatPronounsForDisplay(row.user.pronouns || '', t),
         header: t('management.students.pronouns'),
         cell: ({ row }) => {
           const pronouns = parsePronouns(row.original.user.pronouns || '');
@@ -55,7 +55,7 @@ export function useManagementColumns(t: (key: string) => string) {
                   key={pronoun}
                   className="badge badge-sm badge-outline shrink-0 border-gaming-border text-text-secondary"
                 >
-                  {pronoun}
+                  {getPronounLabel(pronoun, t)}
                 </span>
               ))}
             </div>
