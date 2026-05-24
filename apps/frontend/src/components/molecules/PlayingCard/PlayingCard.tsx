@@ -21,10 +21,10 @@ export function PlayingCard({ recto, verso, flipLabel, className }: PlayingCardP
           isFlipped && '[transform:rotateY(180deg)]'
         )}
       >
-        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-gaming-border bg-gaming-card p-5 shadow-xl [backface-visibility:hidden]">
+        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-gaming-border bg-gaming-card shadow-xl [backface-visibility:hidden]">
           {recto}
         </div>
-        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-gaming-border bg-gaming-card p-5 shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-gaming-border bg-gaming-card shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)]">
           {verso}
         </div>
       </div>

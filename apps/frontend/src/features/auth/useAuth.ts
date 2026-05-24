@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../game/gameStore';
 
-const BACKEND_BASE_URL = 'http://localhost:8787';
+export const BACKEND_BASE_URL = 'http://localhost:8787';
 
 export function useAuth() {
   const { user, student, character, setUserSession, logout: clearStoreSession } = useGameStore();
@@ -34,7 +34,7 @@ export function useAuth() {
 
         const data = await response.json();
         if (data.success && data.user && data.student && data.character) {
-          setUserSession(data.user, data.student, data.character);
+          setUserSession(data.user, data.student, data.character, data.battles || []);
         } else {
           throw new Error('Malformed server session payload');
         }
@@ -96,8 +96,10 @@ export function useAuth() {
     window.location.href = `${BACKEND_BASE_URL}/api/auth/github`;
   }, []);
 
-  const loginWithMock = useCallback(() => {
-    window.location.href = `${BACKEND_BASE_URL}/api/auth/mock`;
+  const loginWithMock = useCallback((studentId?: string) => {
+    const url = new URL(`${BACKEND_BASE_URL}/api/auth/mock`);
+    if (studentId) url.searchParams.set('studentId', studentId);
+    window.location.href = url.toString();
   }, []);
 
   const logout = useCallback(() => {

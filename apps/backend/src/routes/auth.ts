@@ -1,9 +1,16 @@
 import { Hono } from 'hono';
 import { sign } from 'hono/jwt';
 import { and, desc, eq } from 'drizzle-orm';
+import type { CohortGrade, GameBattle, GameCharacter, Student, User } from '@eduquest/shared';
 import { getDb } from '../db';
 import { users, students, gameCharacters, schools, cohorts, studentCohorts } from '../db/schema';
 import { authMiddleware, UserPayload } from '../middleware/auth';
+import {
+  findDebugProfile,
+  getDebugBackup,
+  getDebugProfile,
+  getDebugStudentOptions,
+} from '../dev/debugBackup';
 
 type Bindings = {
   DATABASE_URL?: string;
@@ -131,7 +138,7 @@ authRouter.get('/github/callback', async (c) => {
     const databaseUrl = c.env.DATABASE_URL;
     let userId = `user_${githubUser.id}`;
     const isAptitek = githubUser.login.toLowerCase() === 'aptitek';
-    let isAdmin = isAptitek;
+    let isAdmin: boolean = isAptitek;
 
     if (databaseUrl) {
       try {
@@ -144,7 +151,7 @@ authRouter.get('/github/callback', async (c) => {
           const [newSchool] = await db
             .insert(schools)
             .values({
-              name: 'Aptitek School',
+              name: 'Aptitek',
               emailDomain: 'school.edu',
             })
             .returning();
@@ -248,19 +255,57 @@ authRouter.get('/github/callback', async (c) => {
   }
 });
 
+authRouter.get('/mock-students', (c) => {
+  return c.json({
+    success: true,
+    students: getDebugStudentOptions(),
+  });
+});
+
+authRouter.get('/debug-backup', (c) => {
+  return c.json({
+    success: true,
+    backup: getDebugBackup(),
+  });
+});
+
 // 3. GET /api/auth/mock : Bypass développeur pour environnement local
 authRouter.get('/mock', async (c) => {
   const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
   const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
 
-  const mockUsername = c.req.query('username') || 'wizard1337';
+  const requestedMockStudent = c.req.query('studentId') || c.req.query('username');
+  const mockUsername = c.req.query('username') || getDebugProfile(requestedMockStudent).user.githubUsername || 'wizard1337';
   const isAptitek = mockUsername.toLowerCase() === 'aptitek';
+
+  if (!isAptitek) {
+    const { user } = getDebugProfile(requestedMockStudent);
+    const token = await sign(
+      {
+        id: user.id,
+        email: user.email,
+        githubUsername: user.githubUsername,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        displayName: user.displayName,
+        birthDate: user.birthDate,
+        bio: user.bio,
+        pronouns: user.pronouns,
+        avatarUrl: user.avatarUrl,
+        githubAvatarUrl: user.githubAvatarUrl,
+        isAdmin: false,
+      },
+      jwtSecret
+    );
+    return c.redirect(`${frontendUrl}/?token=${token}`);
+  }
+
   const mockEmail = isAptitek ? 'aptitek@github.com' : 'wizard@github.com';
   const mockAvatar =
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
   const mockName = isAptitek ? 'Aptitek Master' : 'Archmage Coder';
   let userId = isAptitek ? 'user_mock_aptitek' : 'user_mock_1337';
-  let isAdmin = isAptitek;
+  let isAdmin: boolean = isAptitek;
 
   const databaseUrl = c.env.DATABASE_URL;
   if (databaseUrl) {
@@ -274,7 +319,7 @@ authRouter.get('/mock', async (c) => {
         const [newSchool] = await db
           .insert(schools)
           .values({
-            name: 'Aptitek School',
+            name: 'Aptitek',
             emailDomain: 'school.edu',
           })
           .returning();
@@ -375,9 +420,10 @@ authRouter.get('/me', authMiddleware, async (c) => {
   }
 
   const databaseUrl = c.env.DATABASE_URL;
+  const debugProfile = findDebugProfile(userPayload.id) || findDebugProfile(userPayload.email);
 
   // Données utilisateur réelles ou fallback JWT
-  let userObj = {
+  let userObj: User = debugProfile?.user || {
     id: userPayload.id,
     email: userPayload.email,
     githubUsername: userPayload.githubUsername,
@@ -393,13 +439,13 @@ authRouter.get('/me', authMiddleware, async (c) => {
   };
 
   // Données de simulation par défaut (Offline/Resilient fallback)
-  let studentObj = {
+  let studentObj: Student = debugProfile?.student || {
     id: 'stud_mock_1',
     userId: userPayload.id,
     schoolId: 'school_mock_1',
     school: {
       id: 'school_mock_1',
-      name: 'Aptitek School',
+      name: 'Aptitek',
       emailDomain: 'school.edu',
     },
     cohortMemberships: [
@@ -412,7 +458,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
           schoolId: 'school_mock_1',
           school: {
             id: 'school_mock_1',
-            name: 'Aptitek School',
+            name: 'Aptitek',
             emailDomain: 'school.edu',
           },
           schoolYear: '2025-2026',
@@ -424,7 +470,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
     ],
   };
 
-  let characterObj = {
+  let characterObj: GameCharacter = debugProfile?.character || {
     studentId: 'stud_mock_1',
     characterClass: 'Mage Frontend',
     stats: {
@@ -436,9 +482,10 @@ authRouter.get('/me', authMiddleware, async (c) => {
     },
     currentLevel: 1,
   };
+  const battleObj: GameBattle[] = debugProfile?.battles || [];
 
   // Si DB est configurée, charger les données réelles
-  if (databaseUrl) {
+  if (databaseUrl && !debugProfile) {
     try {
       const db = getDb(databaseUrl);
 
@@ -538,7 +585,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
                 school: cohortSchoolObj,
                 campusId: cohortRecord.campusId || undefined,
                 schoolYear: cohortRecord.schoolYear,
-                grade: cohortRecord.grade,
+                grade: cohortRecord.grade as CohortGrade,
                 level: cohortRecord.level,
                 name: cohortRecord.name,
                 majorSpeciality: cohortRecord.majorSpeciality || undefined,
@@ -588,6 +635,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
     user: userObj,
     student: studentObj,
     character: characterObj,
+    battles: battleObj,
   });
 });
 
@@ -671,7 +719,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     schoolId: 'school_mock_1',
     school: {
       id: 'school_mock_1',
-      name: 'Aptitek School',
+      name: 'Aptitek',
       emailDomain: 'school.edu',
     },
     cohortMemberships: [
@@ -687,7 +735,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           schoolId: 'school_mock_1',
           school: {
             id: 'school_mock_1',
-            name: 'Aptitek School',
+            name: 'Aptitek',
             emailDomain: 'school.edu',
           },
           schoolYear: '2025-2026',

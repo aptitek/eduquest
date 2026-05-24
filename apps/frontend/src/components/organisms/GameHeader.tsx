@@ -84,68 +84,69 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
         </div>
       </div>
 
-      {/* HUD - Profil du Joueur */}
-      <div className="bg-gaming-card border border-gaming-border p-6 rounded-lg flex flex-col md:flex-row justify-between gap-6 items-center shadow-lg">
-        <div className="flex items-center gap-4">
-          <div className="avatar online">
-            <div className="w-16 rounded-lg border border-status-boss/30">
-              <img src={user?.avatarUrl || user?.githubAvatarUrl} alt="Avatar" />
+      {currentView !== 'management' && (
+        <div className="bg-gaming-card border border-gaming-border p-6 rounded-lg flex flex-col md:flex-row justify-between gap-6 items-center shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="avatar online">
+              <div className="w-16 rounded-lg border border-status-boss/30">
+                <img src={user?.avatarUrl || user?.githubAvatarUrl} alt="Avatar" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-text-primary font-display">
+                  {t('header.apprenticeCoder')}
+                </h2>
+                <span className="px-2 py-1 rounded bg-gaming-base text-xs text-text-secondary uppercase tracking-widest border border-gaming-border">
+                  {character.characterClass}
+                </span>
+              </div>
+              <p className="text-sm text-text-secondary">
+                {t('header.guildLabel')} :{' '}
+                <span className="text-status-boss font-semibold">{t('header.guildName')}</span>
+              </p>
             </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-text-primary font-display">
-                {t('header.apprenticeCoder')}
-              </h2>
-              <span className="px-2 py-1 rounded bg-gaming-base text-xs text-text-secondary uppercase tracking-widest border border-gaming-border">
-                {character.characterClass}
+
+          {/* Progression du niveau */}
+          <div className="flex-1 max-w-md w-full">
+            <div className="flex justify-between text-xs font-semibold mb-1">
+              <span className="text-status-boss">
+                {t('common.level')} {character.currentLevel}
+              </span>
+              <span className="text-text-muted">
+                {currentXp} / {xpNeeded} {t('common.xp')}
               </span>
             </div>
-            <p className="text-sm text-text-secondary">
-              {t('header.guildLabel')} :{' '}
-              <span className="text-status-boss font-semibold">{t('header.guildName')}</span>
-            </p>
+            <div className="w-full h-3 bg-gaming-base rounded-full border border-gaming-border overflow-hidden">
+              <div
+                ref={progressBarRef}
+                className="h-full bg-gradient-to-r from-status-quest to-status-boss transition-all duration-500"
+              ></div>
+            </div>
           </div>
-        </div>
 
-        {/* Progression du niveau */}
-        <div className="flex-1 max-w-md w-full">
-          <div className="flex justify-between text-xs font-semibold mb-1">
-            <span className="text-status-boss">
-              {t('common.level')} {character.currentLevel}
-            </span>
-            <span className="text-text-muted">
-              {currentXp} / {xpNeeded} {t('common.xp')}
-            </span>
-          </div>
-          <div className="w-full h-3 bg-gaming-base rounded-full border border-gaming-border overflow-hidden">
-            <div
-              ref={progressBarRef}
-              className="h-full bg-gradient-to-r from-status-quest to-status-boss transition-all duration-500"
-            ></div>
-          </div>
-        </div>
-
-        {/* Fiche de statistiques JDR */}
-        <div className="grid grid-cols-4 gap-3 bg-gaming-base/60 p-3 rounded-lg border border-gaming-border">
-          <div className="text-center px-2">
-            <div className="text-xs text-text-muted uppercase">STR</div>
-            <div className="text-sm font-bold text-text-secondary">{character.stats.str}</div>
-          </div>
-          <div className="text-center px-2">
-            <div className="text-xs text-text-muted uppercase">DEX</div>
-            <div className="text-sm font-bold text-text-secondary">{character.stats.dex}</div>
-          </div>
-          <div className="text-center px-2">
-            <div className="text-xs text-text-muted uppercase">INT</div>
-            <div className="text-sm font-bold text-status-boss">{character.stats.int}</div>
-          </div>
-          <div className="text-center px-2">
-            <div className="text-xs text-text-muted uppercase">CHA</div>
-            <div className="text-sm font-bold text-text-secondary">{character.stats.cha}</div>
+          {/* Fiche de statistiques JDR */}
+          <div className="grid grid-cols-4 gap-3 bg-gaming-base/60 p-3 rounded-lg border border-gaming-border">
+            <div className="text-center px-2">
+              <div className="text-xs text-text-muted uppercase">STR</div>
+              <div className="text-sm font-bold text-text-secondary">{character.stats.str}</div>
+            </div>
+            <div className="text-center px-2">
+              <div className="text-xs text-text-muted uppercase">DEX</div>
+              <div className="text-sm font-bold text-text-secondary">{character.stats.dex}</div>
+            </div>
+            <div className="text-center px-2">
+              <div className="text-xs text-text-muted uppercase">INT</div>
+              <div className="text-sm font-bold text-status-boss">{character.stats.int}</div>
+            </div>
+            <div className="text-center px-2">
+              <div className="text-xs text-text-muted uppercase">CHA</div>
+              <div className="text-sm font-bold text-text-secondary">{character.stats.cha}</div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

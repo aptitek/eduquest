@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { useEditableFieldContext } from '../../atoms/EditableText/EditableFieldContext';
@@ -16,6 +17,8 @@ export interface BadgeDropdownProps {
   className?: string;
   badgeClassName?: string;
   selectedMaxWidth?: string;
+  selectedWrap?: boolean;
+  fullWidth?: boolean;
   showArrow?: boolean;
   renderBadge?: (item: string) => ReactNode;
 }
@@ -34,6 +37,8 @@ export function BadgeDropdown({
   className,
   badgeClassName,
   selectedMaxWidth = 'max-w-[11rem]',
+  selectedWrap,
+  fullWidth,
   showArrow: showArrowProp,
   renderBadge,
 }: BadgeDropdownProps) {
@@ -41,7 +46,9 @@ export function BadgeDropdown({
   const showArrow = showArrowProp ?? showPencil;
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const badgeClass = cn(DEFAULT_BADGE_CLASS, badgeClassName);
@@ -59,13 +66,39 @@ export function BadgeDropdown({
   }, [catalog, query]);
 
   const selected = value.filter(Boolean);
+  const updateDropdownPosition = useCallback(() => {
+    const anchor = rootRef.current;
+    if (!anchor) return;
+
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = Math.min(320, Math.max(224, rect.width));
+    const left = Math.min(
+      Math.max(8, rect.right - menuWidth),
+      window.innerWidth - menuWidth - 8
+    );
+    const availableBelow = window.innerHeight - rect.bottom - 12;
+    const availableAbove = rect.top - 12;
+    const opensAbove = availableBelow < 180 && availableAbove > availableBelow;
+
+    setDropdownStyle({
+      position: 'fixed',
+      left,
+      top: opensAbove ? undefined : rect.bottom + 4,
+      bottom: opensAbove ? window.innerHeight - rect.top + 4 : undefined,
+      width: menuWidth,
+      maxHeight: Math.max(160, Math.min(320, opensAbove ? availableAbove : availableBelow)),
+      zIndex: 1000,
+    });
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
-    inputRef.current?.focus();
+    updateDropdownPosition();
+    requestAnimationFrame(() => inputRef.current?.focus());
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) {
         setIsOpen(false);
         setQuery('');
       }
@@ -80,11 +113,15 @@ export function BadgeDropdown({
 
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, updateDropdownPosition]);
 
   const commitSelection = (item: string) => {
     const trimmed = item.trim();
@@ -116,20 +153,30 @@ export function BadgeDropdown({
   };
 
   return (
-    <div ref={rootRef} className={cn('relative inline-flex min-w-0 max-w-full', className)}>
+    <div
+      ref={rootRef}
+      className={cn(
+        'relative min-w-0 max-w-full',
+        fullWidth ? 'flex w-full' : 'inline-flex',
+        className
+      )}
+    >
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className={cn(
           'inline-flex max-w-full items-center gap-1 rounded-sm transition-[background-color,box-shadow]',
-          'hover:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60'
+          'hover:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60',
+          fullWidth && 'w-full justify-between'
         )}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
         <span
           className={cn(
-            'inline-flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden',
+            'inline-flex min-w-0 max-w-full items-center gap-1 overflow-hidden',
+            selectedWrap ? 'flex-wrap' : 'flex-nowrap',
+            fullWidth && 'flex-1',
             selectedMaxWidth
           )}
         >
@@ -155,9 +202,11 @@ export function BadgeDropdown({
         )}
       </button>
 
-      {isOpen && (
+      {isOpen && dropdownStyle && createPortal(
         <div
-          className="absolute right-0 top-full z-50 mt-1 w-[14rem] max-w-[min(14rem,90vw)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-lg"
+          ref={panelRef}
+          className="rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
+          style={dropdownStyle}
           role="listbox"
           aria-multiselectable={multiple}
         >
@@ -171,7 +220,7 @@ export function BadgeDropdown({
             className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
           />
 
-          <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+          <div className="flex flex-wrap gap-1 overflow-y-auto" style={{ maxHeight: 'calc(100% - 2.5rem)' }}>
             {visibleOptions.length > 0 ? (
               visibleOptions.map((item) => {
                 const isSelected = selected.includes(item);
@@ -199,7 +248,8 @@ export function BadgeDropdown({
               </p>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
