@@ -405,11 +405,11 @@ export function InstitutionalProfileCard({
               {displayedCohortGroups.map((group) => (
                 <div
                   key={group.schoolName}
-                  className="border-b border-gaming-border p-3 last:border-b-0"
+                  className="border-b border-gaming-border p-2.5 last:border-b-0"
                 >
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
                     <div
-                      className="flex h-8 w-16 shrink-0 items-center justify-center rounded-lg border border-gaming-border bg-gaming-card px-2"
+                      className="flex h-8 w-16 shrink-0 items-center justify-center rounded-lg border border-gaming-border bg-gaming-card px-1"
                       title={group.schoolName}
                     >
                       {renderCohortSchoolBadge ? (
@@ -450,7 +450,7 @@ export function InstitutionalProfileCard({
                         )}
                       </div>
 
-                      <div className="mt-2 flex min-w-0 flex-col gap-2">
+                      <div className="mt-1.5 flex min-w-0 flex-col gap-1.5">
                         {group.cohortIds.map((cohortId) => (
                           <div key={cohortId} className="flex min-w-0 items-center gap-2">
                             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
@@ -476,8 +476,8 @@ export function InstitutionalProfileCard({
               ))}
 
               {canEditCohorts && (
-                <div className="border-t border-gaming-border p-3">
-                  <div className="flex flex-col gap-2">
+                <div className="border-t border-gaming-border p-2.5">
+                  <div className="flex flex-col gap-1.5">
                     <BadgeDropdown
                       options={addableSchoolOptions}
                       value={cohortSchoolDraft ? [cohortSchoolDraft] : []}
@@ -487,7 +487,7 @@ export function InstitutionalProfileCard({
                       searchPlaceholder={ic('filterSchool')}
                       emptyFilterHint={ic('chooseSchool')}
                       className="w-full"
-                      badgeClassName="btn btn-sm btn-outline h-8 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-3 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
+                      badgeClassName="btn btn-xs btn-outline h-6 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-2 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
                       selectedMaxWidth="max-w-full"
                       fullWidth
                       renderBadge={(school) =>
@@ -506,7 +506,7 @@ export function InstitutionalProfileCard({
                         searchPlaceholder={ic('filterCohorts')}
                         emptyFilterHint={ic('chooseCohort')}
                         className="w-full"
-                        badgeClassName="btn btn-sm btn-outline h-8 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-3 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
+                        badgeClassName="btn btn-xs btn-outline h-6 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-2 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
                         selectedMaxWidth="max-w-full"
                         fullWidth
                         renderBadge={renderSelectedCohortBadge || renderCohortBadge}

@@ -1,5 +1,5 @@
 import { BACKEND_BASE_URL } from '../auth/useAuth';
-import type { User } from '@eduquest/shared';
+import type { School, User } from '@eduquest/shared';
 import type { DebugBackup } from './types';
 
 type ManagementResponse =
@@ -49,12 +49,39 @@ export type ManagementStudentUpdate = {
   institutionalEmailCohortId?: string;
 };
 
+export type ManagementSchoolUpdate = Partial<Pick<School, 'logoUrl'>>;
+
 export async function updateManagementStudent(
   token: string,
   studentId: string,
   update: ManagementStudentUpdate
 ): Promise<DebugBackup> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/students/${studentId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(update),
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Management update failed.' : data.error || 'Management update failed.'
+    );
+  }
+
+  return data.backup;
+}
+
+export async function updateManagementSchool(
+  token: string,
+  schoolId: string,
+  update: ManagementSchoolUpdate
+): Promise<DebugBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/schools/${schoolId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

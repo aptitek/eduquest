@@ -105,6 +105,7 @@ async function normalizeAvatarFile(file: File): Promise<File> {
 
 export function EditableAvatar({
   src,
+  githubFallbackSrc,
   onUpload,
   onReset,
   isEditing,
@@ -118,6 +119,7 @@ export function EditableAvatar({
   const [optimisticSrc, setOptimisticSrc] = useState<string | null>(null);
   const avatarSizeClass = size <= 88 ? 'h-[5.5rem] w-[5.5rem]' : 'h-24 w-24';
   const cameraSize = size <= 88 ? 28 : 32;
+  const canReset = Boolean(optimisticSrc || (src && src !== githubFallbackSrc));
 
   useEffect(() => {
     if (!optimisticSrc) return;
@@ -213,14 +215,14 @@ export function EditableAvatar({
         {isEditing && (
           <div
             className={cn(
-              'absolute inset-0 flex items-center justify-center rounded-full bg-gaming-base/80 opacity-0 transition-opacity group-hover:opacity-100',
+              'absolute inset-0 flex items-center justify-center rounded-full bg-primary/95 text-primary-content opacity-0 transition-opacity group-hover:opacity-100',
               avatarSizeClass
             )}
           >
             {isUploading ? (
-              <span className="loading loading-spinner text-text-primary"></span>
+              <span className="loading loading-spinner text-primary-content"></span>
             ) : (
-              <Camera className="text-text-primary" size={cameraSize} />
+              <Camera className="text-primary-content drop-shadow" size={cameraSize} />
             )}
           </div>
         )}
@@ -236,7 +238,7 @@ export function EditableAvatar({
           />
         )}
 
-        {isEditing && (
+        {isEditing && canReset && (
           <button
             type="button"
             title={t('profile.institutionalCard.resetAvatar')}

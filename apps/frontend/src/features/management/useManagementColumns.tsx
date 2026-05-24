@@ -23,7 +23,7 @@ export function useManagementColumns(t: (key: string) => string) {
 
           return (
             <div className="avatar rounded-full ring-2 ring-solarized-blue/30 ring-offset-2 ring-offset-gaming-card">
-              <div className="w-10 rounded-full">
+              <div className="w-8 rounded-full">
                 <img src={avatarUrl} alt={row.original.displayName} />
               </div>
             </div>

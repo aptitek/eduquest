@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
+import { EditableSchoolLogo } from '../../molecules/EditableSchoolLogo';
 import type { SchoolRow } from '../../../features/management/types';
 import { formatAddress, formatDate } from '../../../features/management/utils';
 import aptitekLogoUrl from '../../../assets/logo.svg';
 import { DetailItem } from './DetailItem';
 
-export function SchoolDetailCard({ school, t }: { school: SchoolRow; t: (key: string) => string }) {
+export function SchoolDetailCard({
+  school,
+  t,
+  onUploadLogo,
+  onResetLogo,
+}: {
+  school: SchoolRow;
+  t: (key: string) => string;
+  onUploadLogo?: (file: File) => Promise<void>;
+  onResetLogo?: () => Promise<void>;
+}) {
   const [draft, setDraft] = useState({
     name: school.name,
     website: school.website || '',
@@ -33,19 +44,30 @@ export function SchoolDetailCard({ school, t }: { school: SchoolRow; t: (key: st
         </div>
 
         <div className="flex h-full flex-col gap-5">
-          <div className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-5">
-            {resolvedLogoUrl ? (
-              <img
-                src={resolvedLogoUrl}
-                alt={school.name}
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <span className="text-center text-lg font-display font-semibold text-text-secondary">
-                {school.name}
-              </span>
-            )}
-          </div>
+          {onUploadLogo && onResetLogo ? (
+            <EditableSchoolLogo
+              src={resolvedLogoUrl}
+              name={school.name}
+              isEditing
+              canReset={Boolean(school.logoUrl)}
+              onUpload={onUploadLogo}
+              onReset={onResetLogo}
+            />
+          ) : (
+            <div className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-2">
+              {resolvedLogoUrl ? (
+                <img
+                  src={resolvedLogoUrl}
+                  alt={school.name}
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <span className="px-3 text-center text-lg font-display font-semibold text-text-secondary">
+                  {school.name}
+                </span>
+              )}
+            </div>
+          )}
 
           <div>
             <EditableText

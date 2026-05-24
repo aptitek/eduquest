@@ -76,7 +76,7 @@ export const fr = {
     errors: {
       missingSession: 'Votre session est introuvable. Veuillez vous reconnecter.',
       loadFailed: 'Les données de gestion n’ont pas pu être chargées.',
-      updateFailed: 'Le profil étudiant n’a pas pu être mis à jour.',
+      updateFailed: "L'élément de gestion sélectionné n'a pas pu être mis à jour.",
     },
     schools: {
       logo: 'Logo',
@@ -87,6 +87,7 @@ export const fr = {
       students: 'Étudiants',
       emailDomain: 'Domaine e-mail',
       createdAt: 'Créé',
+      resetLogo: "Réinitialiser le logo de l'école",
     },
     cohorts: {
       name: 'Cohorte',

@@ -78,7 +78,7 @@ export const en: TranslationKeys = {
     errors: {
       missingSession: 'Your session is missing. Please sign in again.',
       loadFailed: 'Management data could not be loaded.',
-      updateFailed: 'The student profile could not be updated.',
+      updateFailed: 'The selected management record could not be updated.',
     },
     schools: {
       logo: 'Logo',
@@ -89,6 +89,7 @@ export const en: TranslationKeys = {
       students: 'Students',
       emailDomain: 'Email domain',
       createdAt: 'Created',
+      resetLogo: 'Reset school logo',
     },
     cohorts: {
       name: 'Cohort',

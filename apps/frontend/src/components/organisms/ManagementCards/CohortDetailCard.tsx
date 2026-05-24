@@ -70,17 +70,17 @@ export function CohortDetailCard({
         <div className="flex h-full flex-col gap-5">
           <div className="flex w-full flex-col items-center gap-2">
             <div
-              className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-5"
+              className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-2"
               title={cohort.schoolName}
             >
               {resolvedLogoUrl ? (
                 <img
                   src={resolvedLogoUrl}
                   alt={cohort.schoolName}
-                  className="max-h-full max-w-full object-contain"
+                  className="h-full w-full object-contain"
                 />
               ) : (
-                <span className="text-center text-sm font-display font-semibold text-text-secondary">
+                <span className="px-3 text-center text-sm font-display font-semibold text-text-secondary">
                   {cohort.schoolName}
                 </span>
               )}

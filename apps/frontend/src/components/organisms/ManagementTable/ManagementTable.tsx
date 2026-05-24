@@ -56,12 +56,36 @@ export function ManagementTable<TData extends { id: string }>({
     getRowId: (row) => row.id,
   });
   const visibleColumnIds = table.getAllLeafColumns().map((column) => column.id);
+  const visibleColumns = table.getVisibleLeafColumns();
+  const [zoomedColumnId, setZoomedColumnId] = useState<string | null>(null);
+  const zoomWeight = visibleColumns.length > 4 ? 2.4 : 1.8;
+  const totalColumnWeight = visibleColumns.reduce(
+    (total, column) => total + (column.id === zoomedColumnId ? zoomWeight : 1),
+    0
+  );
   const schoolColumn = visibleColumnIds.includes('school') ? table.getColumn('school') : undefined;
   const selectedSchools = (schoolColumn?.getFilterValue() as string[] | undefined) ?? [];
   const handleRowKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, row: TData) => {
     if (!onRowSelect || (event.key !== 'Enter' && event.key !== ' ')) return;
     event.preventDefault();
     onRowSelect(row);
+  };
+  const isCropped = (element: HTMLElement) => {
+    if (element.scrollWidth > element.clientWidth + 1) return true;
+
+    return Array.from(element.querySelectorAll<HTMLElement>('*')).some(
+      (child) => child.scrollWidth > child.clientWidth + 1
+    );
+  };
+  const handleColumnZoom = (columnId: string, element: HTMLElement) => {
+    setZoomedColumnId(isCropped(element) ? columnId : null);
+  };
+  const clearColumnZoom = (columnId: string) => {
+    setZoomedColumnId((current) => (current === columnId ? null : current));
+  };
+  const getColumnWidth = (columnId: string) => {
+    const weight = columnId === zoomedColumnId ? zoomWeight : 1;
+    return `${(weight / totalColumnWeight) * 100}%`;
   };
 
   return (
@@ -96,15 +120,32 @@ export function ManagementTable<TData extends { id: string }>({
           />
         )}
       </div>
-      <div className="overflow-x-auto">
-        <table className="table w-full">
+      <div className="overflow-hidden">
+        <table className="table w-full table-fixed">
+          <colgroup>
+            {visibleColumns.map((column) => (
+              <col
+                key={column.id}
+                style={{
+                  width: getColumnWidth(column.id),
+                }}
+              />
+            ))}
+          </colgroup>
           <thead className="bg-gaming-base/60 text-text-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="overflow-hidden whitespace-nowrap font-display text-xs uppercase tracking-wider"
+                    className="overflow-hidden whitespace-nowrap font-display text-xs uppercase tracking-wider transition-[width] duration-200"
+                    style={{ width: getColumnWidth(header.column.id) }}
+                    onPointerEnter={(event) =>
+                      handleColumnZoom(header.column.id, event.currentTarget)
+                    }
+                    onPointerLeave={() => clearColumnZoom(header.column.id)}
+                    onFocus={(event) => handleColumnZoom(header.column.id, event.currentTarget)}
+                    onBlur={() => clearColumnZoom(header.column.id)}
                   >
                     {header.isPlaceholder ? null : (
                       <button
@@ -147,7 +188,14 @@ export function ManagementTable<TData extends { id: string }>({
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
-                    className="overflow-hidden whitespace-nowrap text-text-secondary"
+                    className="overflow-hidden whitespace-nowrap text-text-secondary transition-[width] duration-200"
+                    style={{ width: getColumnWidth(cell.column.id) }}
+                    onPointerEnter={(event) =>
+                      handleColumnZoom(cell.column.id, event.currentTarget)
+                    }
+                    onPointerLeave={() => clearColumnZoom(cell.column.id)}
+                    onFocus={(event) => handleColumnZoom(cell.column.id, event.currentTarget)}
+                    onBlur={() => clearColumnZoom(cell.column.id)}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>

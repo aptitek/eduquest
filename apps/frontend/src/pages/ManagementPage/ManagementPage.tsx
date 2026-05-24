@@ -14,7 +14,9 @@ import { InstitutionalProfileCard } from '../../components/organisms/Institution
 import { useGameStore } from '../../features/game/gameStore';
 import {
   fetchManagementBackup,
+  type ManagementSchoolUpdate,
   type ManagementStudentUpdate,
+  updateManagementSchool,
   updateManagementStudent,
 } from '../../features/management/api';
 import { useManagementColumns } from '../../features/management/useManagementColumns';
@@ -204,6 +206,26 @@ export function ManagementPage() {
     (selectedStudentMembership?.cohortId
       ? cohortRows.find((cohort) => cohort.id === selectedStudentMembership.cohortId)
       : undefined);
+  const updateSelectedSchool = async (update: ManagementSchoolUpdate, shouldThrow = false) => {
+    if (!selectedSchoolRow) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setManagementErrorKey('management.errors.missingSession');
+      if (shouldThrow) throw new Error('management.errors.missingSession');
+      return;
+    }
+
+    setManagementErrorKey(null);
+    try {
+      const backup = await updateManagementSchool(token, selectedSchoolRow.id, update);
+      setDebugBackup(backup);
+    } catch (error) {
+      console.warn('Could not update management school.', error);
+      setManagementErrorKey('management.errors.updateFailed');
+      if (shouldThrow) throw error;
+    }
+  };
   const updateSelectedStudent = async (update: ManagementStudentUpdate, shouldThrow = false) => {
     if (!selectedStudentRow) return;
 
@@ -225,7 +247,15 @@ export function ManagementPage() {
     }
   };
   const selectedCardContent = selectedSchoolRow ? (
-    <SchoolDetailCard school={selectedSchoolRow} t={t} />
+    <SchoolDetailCard
+      school={selectedSchoolRow}
+      t={t}
+      onUploadLogo={async (file) => {
+        const logoUrl = await readFileAsDataUrl(file);
+        await updateSelectedSchool({ logoUrl }, true);
+      }}
+      onResetLogo={() => updateSelectedSchool({ logoUrl: '' }, true)}
+    />
   ) : selectedCohortRow ? (
     <CohortDetailCard cohort={selectedCohortRow} campusOptions={campusOptions} t={t} />
   ) : selectedStudentRow ? (
@@ -274,7 +304,13 @@ export function ManagementPage() {
         }}
         renderCohortSchoolBadge={(schoolName) => {
           const school = schoolRows.find((item) => item.name === schoolName);
-          return <SchoolLogoBadge name={schoolName} logoUrl={school?.logoUrl} />;
+          return (
+            <SchoolLogoBadge
+              name={schoolName}
+              logoUrl={school?.logoUrl}
+              className="h-full w-full object-contain"
+            />
+          );
         }}
         getCohortSchoolName={(cohortId) =>
           cohortRows.find((item) => item.id === cohortId)?.schoolName

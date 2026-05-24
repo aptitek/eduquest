@@ -84,6 +84,7 @@ type ManagementStudentUpdateBody = {
   institutionalEmail?: string;
   institutionalEmailCohortId?: string;
 };
+type ManagementSchoolUpdateBody = Partial<Pick<School, 'logoUrl'>>;
 
 function toIsoString(value?: Date | null) {
   return value?.toISOString?.();
@@ -781,6 +782,82 @@ authRouter.put('/management/students/:studentId', async (c) => {
         );
     }
   }
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.put('/management/schools/:schoolId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  let body: ManagementSchoolUpdateBody;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid JSON body',
+      },
+      400
+    );
+  }
+
+  const schoolId = c.req.param('schoolId');
+
+  if (!c.env.DATABASE_URL) {
+    const backup = getDebugBackup();
+    const school = backup.schools.find((item) => item.id === schoolId);
+    if (!school) {
+      return c.json(
+        {
+          success: false,
+          error: 'School not found',
+        },
+        404
+      );
+    }
+
+    if (body.logoUrl !== undefined) {
+      school.logoUrl = body.logoUrl || undefined;
+    }
+
+    return c.json({
+      success: true,
+      backup,
+    });
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const [schoolRecord] = await db.select().from(schools).where(eq(schools.id, schoolId)).limit(1);
+
+  if (!schoolRecord) {
+    return c.json(
+      {
+        success: false,
+        error: 'School not found',
+      },
+      404
+    );
+  }
+
+  const schoolUpdate: Partial<typeof schools.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if (body.logoUrl !== undefined) schoolUpdate.logoUrl = body.logoUrl || null;
+
+  await db.update(schools).set(schoolUpdate).where(eq(schools.id, schoolId));
 
   return c.json({
     success: true,
