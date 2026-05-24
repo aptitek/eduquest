@@ -179,7 +179,7 @@ export const DEBUG_ACTIVITIES: Activity[] = [
   {
     id: 'debug_activity_api_bridge',
     type: 'quest',
-    title: "Le Pont des API et des Contrats Typés",
+    title: 'Le Pont des API et des Contrats Typés',
     isGraded: true,
     x: 540,
     y: 410,
@@ -231,8 +231,10 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       birthDate: '2001-04-12',
       pronouns: 'She/Her',
       bio: 'Frontend apprentice who likes polishing tiny UI states.',
-      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
-      githubAvatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
+      avatarUrl:
+        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
+      githubAvatarUrl:
+        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
       userStatus: 'online',
       isAdmin: false,
       createdAt: '2026-01-01',
@@ -299,8 +301,10 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       birthDate: '1999-11-03',
       pronouns: 'He/Him',
       bio: 'Fullstack ranger focused on API contracts and deployment rituals.',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
-      githubAvatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
+      avatarUrl:
+        'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
+      githubAvatarUrl:
+        'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
       userStatus: 'busy',
       isAdmin: false,
       createdAt: '2026-01-01',
@@ -365,8 +369,10 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       birthDate: '2000-07-29',
       pronouns: 'They/Them',
       bio: 'Data alchemist testing analytics-heavy workflows and long labels.',
-      avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
-      githubAvatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
+      avatarUrl:
+        'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
+      githubAvatarUrl:
+        'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
       userStatus: 'offline',
       isAdmin: false,
       createdAt: '2026-01-01',
@@ -435,7 +441,8 @@ export function getDebugStudentOptions() {
     displayName: user.displayName || user.email,
     email: user.email,
     schoolName: student.school?.name,
-    cohortNames: student.cohortMemberships?.map((membership) => membership.cohort?.name).filter(Boolean) || [],
+    cohortNames:
+      student.cohortMemberships?.map((membership) => membership.cohort?.name).filter(Boolean) || [],
     level: character.currentLevel,
   }));
 }

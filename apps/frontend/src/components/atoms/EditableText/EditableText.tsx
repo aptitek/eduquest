@@ -127,10 +127,7 @@ export function EditableText({
     'focus:ring-1 focus:ring-primary/25 rounded-sm min-w-[2ch] max-w-full'
   );
 
-  const inlineTextareaClass = cn(
-    inlineInputClass,
-    'w-full min-h-[4.5rem] resize-y block'
-  );
+  const inlineTextareaClass = cn(inlineInputClass, 'w-full min-h-[4.5rem] resize-y block');
 
   const fieldInputClass = cn(
     'input input-bordered input-sm focus:outline-none w-full',
@@ -143,8 +140,7 @@ export function EditableText({
     'hover:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60'
   );
 
-  const inputWidthCh = (len: number, hintLen = 0) =>
-    `${Math.max(len || 1, hintLen || 3, 3)}ch`;
+  const inputWidthCh = (len: number, hintLen = 0) => `${Math.max(len || 1, hintLen || 3, 3)}ch`;
 
   const wrapWithPencil = (content: React.ReactNode) => {
     if (!showPencil) return content;

@@ -3,7 +3,11 @@ import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { PlayingCard } from '../../components/molecules/PlayingCard';
 import { ManagementTable } from '../../components/organisms/ManagementTable';
-import { CardSkeleton, CohortDetailCard, SchoolDetailCard } from '../../components/organisms/ManagementCards';
+import {
+  CardSkeleton,
+  CohortDetailCard,
+  SchoolDetailCard,
+} from '../../components/organisms/ManagementCards';
 import { CohortDropdownBadge, CohortListBadge } from '../../components/molecules/CohortBadge';
 import { SchoolLogoBadge } from '../../components/molecules/SchoolLogoBadge';
 import { InstitutionalProfileCard } from '../../components/organisms/InstitutionalProfileCard/InstitutionalProfileCard';
@@ -19,10 +23,7 @@ import type {
   SelectedManagementEntity,
   StudentRow,
 } from '../../features/management/types';
-import {
-  calculateAge,
-  getLatestCohortMembership,
-} from '../../features/management/utils';
+import { calculateAge, getLatestCohortMembership } from '../../features/management/utils';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 
@@ -32,7 +33,9 @@ export function ManagementPage() {
   const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<SelectedManagementEntity | null>(null);
-  const [studentCohortSelections, setStudentCohortSelections] = useState<Record<string, string[]>>({});
+  const [studentCohortSelections, setStudentCohortSelections] = useState<Record<string, string[]>>(
+    {}
+  );
   const [debugBackup, setDebugBackup] = useState<DebugBackup | null>(null);
 
   useEffect(() => {
@@ -62,8 +65,12 @@ export function ManagementPage() {
 
     return debugBackup.schools.map((school) => {
       const campus = debugBackup.campuses.find((item) => item.schoolId === school.id);
-      const cohortCount = debugBackup.cohorts.filter((cohort) => cohort.schoolId === school.id).length;
-      const studentCount = debugBackup.students.filter((profile) => profile.student.schoolId === school.id).length;
+      const cohortCount = debugBackup.cohorts.filter(
+        (cohort) => cohort.schoolId === school.id
+      ).length;
+      const studentCount = debugBackup.students.filter(
+        (profile) => profile.student.schoolId === school.id
+      ).length;
 
       return {
         ...school,
@@ -79,8 +86,14 @@ export function ManagementPage() {
 
     return debugBackup.cohorts.map((cohort) => ({
       ...cohort,
-      schoolName: cohort.school?.name || debugBackup.schools.find((school) => school.id === cohort.schoolId)?.name || '-',
-      campusName: cohort.campus?.name || debugBackup.campuses.find((campus) => campus.id === cohort.campusId)?.name || '-',
+      schoolName:
+        cohort.school?.name ||
+        debugBackup.schools.find((school) => school.id === cohort.schoolId)?.name ||
+        '-',
+      campusName:
+        cohort.campus?.name ||
+        debugBackup.campuses.find((campus) => campus.id === cohort.campusId)?.name ||
+        '-',
       studentCount: debugBackup.students.filter((profile) =>
         profile.student.cohortMemberships?.some((membership) => membership.cohortId === cohort.id)
       ).length,
@@ -93,7 +106,8 @@ export function ManagementPage() {
         .filter(({ user: rowUser }) => !rowUser.isAdmin)
         .map(({ user: rowUser, student: rowStudent, character: rowCharacter }) => {
           const latestMembership = getLatestCohortMembership(rowStudent.cohortMemberships);
-          const selectedSchool = latestMembership?.cohort?.school || rowStudent.school || schoolRows[0];
+          const selectedSchool =
+            latestMembership?.cohort?.school || rowStudent.school || schoolRows[0];
 
           return {
             ...rowStudent,
@@ -155,16 +169,20 @@ export function ManagementPage() {
     selectedEntity?.tab === 'students'
       ? studentRows.find((row) => row.id === selectedEntity.id)
       : undefined;
-  const selectedStudentMembership = getLatestCohortMembership(selectedStudentRow?.cohortMemberships);
+  const selectedStudentMembership = getLatestCohortMembership(
+    selectedStudentRow?.cohortMemberships
+  );
   const selectedStudentInitialCohortIds =
-    selectedStudentRow?.cohortMemberships?.map((membership) => membership.cohortId).filter(Boolean) || [];
+    selectedStudentRow?.cohortMemberships
+      ?.map((membership) => membership.cohortId)
+      .filter(Boolean) || [];
   const selectedStudentCohortIds = selectedStudentRow
-    ? studentCohortSelections[selectedStudentRow.id] ??
+    ? (studentCohortSelections[selectedStudentRow.id] ??
       (selectedStudentInitialCohortIds.length > 0
         ? selectedStudentInitialCohortIds
         : selectedStudentMembership?.cohortId
           ? [selectedStudentMembership.cohortId]
-          : [])
+          : []))
     : [];
   const selectedStudentCohort =
     cohortRows.find((cohort) => cohort.id === selectedStudentCohortIds[0]) ||
@@ -207,14 +225,20 @@ export function ManagementPage() {
           const school = schoolRows.find((item) => item.name === schoolName);
           return <SchoolLogoBadge name={schoolName} logoUrl={school?.logoUrl} />;
         }}
-        getCohortSchoolName={(cohortId) => cohortRows.find((item) => item.id === cohortId)?.schoolName}
+        getCohortSchoolName={(cohortId) =>
+          cohortRows.find((item) => item.id === cohortId)?.schoolName
+        }
         getCohortInstitutionalEmail={(cohortId) =>
-          selectedStudentRow.cohortMemberships?.find((membership) => membership.cohortId === cohortId)
-            ?.institutionalEmail
+          selectedStudentRow.cohortMemberships?.find(
+            (membership) => membership.cohortId === cohortId
+          )?.institutionalEmail
         }
         getCohortInstitutionalEmailDomain={(cohortId) => {
           const cohort = cohortRows.find((item) => item.id === cohortId);
-          return cohort?.school?.emailDomain || schoolRows.find((school) => school.id === cohort?.schoolId)?.emailDomain;
+          return (
+            cohort?.school?.emailDomain ||
+            schoolRows.find((school) => school.id === cohort?.schoolId)?.emailDomain
+          );
         }}
         className="max-w-none border-0 bg-transparent shadow-none rounded-none"
       />
@@ -294,18 +318,18 @@ export function ManagementPage() {
           </div>
         </div>
 
-          <PlayingCard
-            flipLabel={t('management.card.flip')}
-            recto={selectedCardContent}
-            verso={
-              <div className="flex h-full min-h-[18rem] flex-col items-center justify-center p-5 text-center text-text-muted">
-                <span className="text-xs font-display uppercase tracking-widest">
-                  {t('management.card.versoEmpty')}
-                </span>
-              </div>
-            }
-            className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
-          />
+        <PlayingCard
+          flipLabel={t('management.card.flip')}
+          recto={selectedCardContent}
+          verso={
+            <div className="flex h-full min-h-[18rem] flex-col items-center justify-center p-5 text-center text-text-muted">
+              <span className="text-xs font-display uppercase tracking-widest">
+                {t('management.card.versoEmpty')}
+              </span>
+            </div>
+          }
+          className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
+        />
       </section>
     </GameLayout>
   );

@@ -6,7 +6,9 @@ export interface CompoundBadgeProps {
 }
 
 export function CompoundBadge({ parts, className }: CompoundBadgeProps) {
-  const visibleParts = parts.filter((part) => part !== undefined && part !== null && part !== false && part !== '');
+  const visibleParts = parts.filter(
+    (part) => part !== undefined && part !== null && part !== false && part !== ''
+  );
 
   if (visibleParts.length === 0) return null;
 

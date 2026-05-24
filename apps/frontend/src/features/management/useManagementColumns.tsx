@@ -144,11 +144,7 @@ export function useManagementColumns(t: (key: string) => string) {
         header: t('management.schools.address'),
         cell: ({ getValue }) => {
           const address = getValue<string>();
-          return (
-            <span className="block max-w-full truncate whitespace-nowrap">
-              {address}
-            </span>
-          );
+          return <span className="block max-w-full truncate whitespace-nowrap">{address}</span>;
         },
       },
       {
@@ -185,7 +181,10 @@ export function useManagementColumns(t: (key: string) => string) {
         accessorKey: 'schoolYear',
         header: t('management.cohorts.schoolYear'),
         cell: ({ getValue }) => (
-          <span className="badge badge-sm badge-outline border-gaming-border text-text-secondary" title={getValue<string>()}>
+          <span
+            className="badge badge-sm badge-outline border-gaming-border text-text-secondary"
+            title={getValue<string>()}
+          >
             {formatSchoolYear(getValue<string>())}
           </span>
         ),
@@ -194,7 +193,10 @@ export function useManagementColumns(t: (key: string) => string) {
         accessorKey: 'grade',
         header: t('management.cohorts.grade'),
         cell: ({ getValue }) => (
-          <span className="badge badge-sm border-gaming-border bg-gaming-base text-text-secondary" title={formatGrade(getValue<CohortGrade>())}>
+          <span
+            className="badge badge-sm border-gaming-border bg-gaming-base text-text-secondary"
+            title={formatGrade(getValue<CohortGrade>())}
+          >
             {formatGrade(getValue<CohortGrade>())}
           </span>
         ),
@@ -203,7 +205,10 @@ export function useManagementColumns(t: (key: string) => string) {
         accessorKey: 'level',
         header: t('management.cohorts.level'),
         cell: ({ getValue }) => (
-          <span className="badge badge-sm badge-outline border-gaming-border text-text-secondary" title={String(getValue<number>())}>
+          <span
+            className="badge badge-sm badge-outline border-gaming-border text-text-secondary"
+            title={String(getValue<number>())}
+          >
             {getValue<number>()}
           </span>
         ),

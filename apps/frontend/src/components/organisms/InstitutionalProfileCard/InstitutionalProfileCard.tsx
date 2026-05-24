@@ -113,13 +113,8 @@ export function InstitutionalProfileCard({
   const roleLabel = user.isAdmin ? ic('adminRole') : ic('studentRole');
   const fixedInstitutionalDomain = institutionalEmailDomain || 'school.edu';
   const getInstitutionalEmailLocalPart = (email?: string, domain = fixedInstitutionalDomain) =>
-    email?.endsWith(`@${domain}`)
-      ? email.slice(0, -domain.length - 1)
-      : email?.split('@')[0] || '';
-  const suggestedInstitutionalEmailLocalPart = [
-    currentUser.firstName,
-    currentUser.lastName,
-  ]
+    email?.endsWith(`@${domain}`) ? email.slice(0, -domain.length - 1) : email?.split('@')[0] || '';
+  const suggestedInstitutionalEmailLocalPart = [currentUser.firstName, currentUser.lastName]
     .map((part) =>
       (part || '')
         .trim()
@@ -131,9 +126,7 @@ export function InstitutionalProfileCard({
     )
     .filter(Boolean)
     .join('.');
-  const cohortCode = cohort
-    ? `${cohort.grade.charAt(0).toUpperCase()}${cohort.level}`
-    : undefined;
+  const cohortCode = cohort ? `${cohort.grade.charAt(0).toUpperCase()}${cohort.level}` : undefined;
   const selectedCohortValues = selectedCohorts?.filter(Boolean) || [];
   const getCohortOptionSchoolName = (cohortId: string) =>
     getCohortSchoolName?.(cohortId) || schoolName || ic('school');
@@ -144,14 +137,12 @@ export function InstitutionalProfileCard({
     new Set(remainingCohortOptions.map((option) => getCohortOptionSchoolName(option)))
   );
   const addableCohortOptions = cohortSchoolDraft
-    ? remainingCohortOptions.filter((option) => getCohortOptionSchoolName(option) === cohortSchoolDraft)
+    ? remainingCohortOptions.filter(
+        (option) => getCohortOptionSchoolName(option) === cohortSchoolDraft
+      )
     : [];
   const cohortRows =
-    selectedCohortValues.length > 0
-      ? selectedCohortValues
-      : cohort
-        ? ['current-cohort']
-        : [];
+    selectedCohortValues.length > 0 ? selectedCohortValues : cohort ? ['current-cohort'] : [];
   const renderCohortContent = (cohortId: string) => {
     if (cohortId !== 'current-cohort' && renderCohortBadge) {
       return renderCohortBadge(cohortId);
@@ -175,7 +166,10 @@ export function InstitutionalProfileCard({
       : renderCohortContent(cohortId);
   const canEditCohorts = Boolean(onCohortsChange);
   const showCohortList =
-    cohortRows.length > 0 || Boolean(institutionalEmail) || Boolean(onInstitutionalEmailChange) || canEditCohorts;
+    cohortRows.length > 0 ||
+    Boolean(institutionalEmail) ||
+    Boolean(onInstitutionalEmailChange) ||
+    canEditCohorts;
   const cohortGroups = cohortRows.reduce<
     { schoolName: string; cohortIds: string[]; institutionalEmail?: string; emailDomain: string }[]
   >((groups, cohortId) => {
@@ -231,109 +225,126 @@ export function InstitutionalProfileCard({
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: true }}>
-    <div
-      className={cn(
-        'card bg-gaming-card shadow-xl border border-gaming-border max-w-3xl w-full mx-auto font-body relative overflow-hidden',
-        className
-      )}
-    >
-      {!hideRoleBadge && onRoleChange ? (
-        <div className="absolute top-0 left-0 z-20 rounded-br-xl bg-gaming-card shadow-md">
-          <BadgeDropdown
-            options={[ic('studentRole'), ic('adminRole')]}
-            value={[roleLabel]}
-            onChange={(next) => {
-              const nextRole = next[0];
-              if (!nextRole) return;
-              onRoleChange(nextRole === ic('adminRole'));
-            }}
-            multiple={false}
-            placeholder={roleLabel}
-            searchPlaceholder={ic('filterRole')}
-            removeLabel={ic('removeRole')}
-            emptyFilterHint={ic('chooseRole')}
-            badgeClassName={cn(
-              'rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
-              user.isAdmin ? 'badge-primary' : 'badge-ghost'
-            )}
-            selectedMaxWidth="max-w-[10rem]"
-          />
-        </div>
-      ) : !hideRoleBadge ? (
-        <div
-          className={cn(
-            'badge absolute top-0 left-0 z-10 rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
-            user.isAdmin ? 'badge-primary' : 'badge-ghost'
-          )}
-        >
-          {roleLabel}
-        </div>
-      ) : null}
-
-      <div className={cn('card-body gap-4 p-4 sm:p-5', hideRoleBadge ? 'pt-4' : 'pt-7')}>
-        <div className="flex gap-4 items-start">
-          <div className="shrink-0" style={{ width: AVATAR_SIZE }}>
-            <EditableAvatar
-              src={currentUser.avatarUrl || currentUser.githubAvatarUrl || ''}
-              githubFallbackSrc={user.githubAvatarUrl || ''}
-              isEditing
-              size={AVATAR_SIZE}
-              onUpload={async (file) => {
-                if (onUploadAvatar) await onUploadAvatar(file);
+      <div
+        className={cn(
+          'card bg-gaming-card shadow-xl border border-gaming-border max-w-3xl w-full mx-auto font-body relative overflow-hidden',
+          className
+        )}
+      >
+        {!hideRoleBadge && onRoleChange ? (
+          <div className="absolute top-0 left-0 z-20 rounded-br-xl bg-gaming-card shadow-md">
+            <BadgeDropdown
+              options={[ic('studentRole'), ic('adminRole')]}
+              value={[roleLabel]}
+              onChange={(next) => {
+                const nextRole = next[0];
+                if (!nextRole) return;
+                onRoleChange(nextRole === ic('adminRole'));
               }}
-              onReset={async () => {
-                if (onResetAvatar) await onResetAvatar();
-                else await onUpdateProfile({ avatarUrl: user.githubAvatarUrl });
-              }}
+              multiple={false}
+              placeholder={roleLabel}
+              searchPlaceholder={ic('filterRole')}
+              removeLabel={ic('removeRole')}
+              emptyFilterHint={ic('chooseRole')}
+              badgeClassName={cn(
+                'rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
+                user.isAdmin ? 'badge-primary' : 'badge-ghost'
+              )}
+              selectedMaxWidth="max-w-[10rem]"
             />
           </div>
+        ) : !hideRoleBadge ? (
+          <div
+            className={cn(
+              'badge absolute top-0 left-0 z-10 rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
+              user.isAdmin ? 'badge-primary' : 'badge-ghost'
+            )}
+          >
+            {roleLabel}
+          </div>
+        ) : null}
 
-          <div className="flex-1 min-w-0 flex flex-col gap-2 pt-0.5">
-            <div className="flex items-baseline gap-2 min-w-0 w-full">
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <SplitEditableText
-                  displayText={collapsedName}
-                  className="text-xl sm:text-2xl font-display font-bold text-text-primary leading-tight"
-                  emptyLabel={ic('clickToEdit')}
-                  fields={[
-                    {
-                      key: 'displayName',
-                      label: ic('displayName'),
-                      placeholder: ic('displayName'),
-                      emptyHint: firstLastHint,
-                    },
-                    {
-                      key: 'firstName',
-                      label: ic('firstName'),
-                      placeholder: ic('firstName'),
-                    },
-                    {
-                      key: 'lastName',
-                      label: ic('lastName'),
-                      placeholder: ic('lastName'),
-                    },
-                  ]}
-                  values={{
-                    displayName: currentUser.displayName || '',
-                    firstName: currentUser.firstName || '',
-                    lastName: currentUser.lastName || '',
-                  }}
-                  onChange={(key, value) =>
-                    setNameDraft((prev) => ({ ...prev, [key]: value }))
-                  }
-                  onCollapse={saveNameDraft}
-                />
-              </div>
-              {!stackPronouns && (
-                <span
-                  className={cn(
-                    metaMuted,
-                    'ml-auto flex flex-nowrap items-center justify-end gap-0.5 min-w-0 overflow-visible max-w-[48%] sm:max-w-[42%]'
-                  )}
-                >
-                  <span className="select-none shrink-0" aria-hidden>
-                    (
+        <div className={cn('card-body gap-4 p-4 sm:p-5', hideRoleBadge ? 'pt-4' : 'pt-7')}>
+          <div className="flex gap-4 items-start">
+            <div className="shrink-0" style={{ width: AVATAR_SIZE }}>
+              <EditableAvatar
+                src={currentUser.avatarUrl || currentUser.githubAvatarUrl || ''}
+                githubFallbackSrc={user.githubAvatarUrl || ''}
+                isEditing
+                size={AVATAR_SIZE}
+                onUpload={async (file) => {
+                  if (onUploadAvatar) await onUploadAvatar(file);
+                }}
+                onReset={async () => {
+                  if (onResetAvatar) await onResetAvatar();
+                  else await onUpdateProfile({ avatarUrl: user.githubAvatarUrl });
+                }}
+              />
+            </div>
+
+            <div className="flex-1 min-w-0 flex flex-col gap-2 pt-0.5">
+              <div className="flex items-baseline gap-2 min-w-0 w-full">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <SplitEditableText
+                    displayText={collapsedName}
+                    className="text-xl sm:text-2xl font-display font-bold text-text-primary leading-tight"
+                    emptyLabel={ic('clickToEdit')}
+                    fields={[
+                      {
+                        key: 'displayName',
+                        label: ic('displayName'),
+                        placeholder: ic('displayName'),
+                        emptyHint: firstLastHint,
+                      },
+                      {
+                        key: 'firstName',
+                        label: ic('firstName'),
+                        placeholder: ic('firstName'),
+                      },
+                      {
+                        key: 'lastName',
+                        label: ic('lastName'),
+                        placeholder: ic('lastName'),
+                      },
+                    ]}
+                    values={{
+                      displayName: currentUser.displayName || '',
+                      firstName: currentUser.firstName || '',
+                      lastName: currentUser.lastName || '',
+                    }}
+                    onChange={(key, value) => setNameDraft((prev) => ({ ...prev, [key]: value }))}
+                    onCollapse={saveNameDraft}
+                  />
+                </div>
+                {!stackPronouns && (
+                  <span
+                    className={cn(
+                      metaMuted,
+                      'ml-auto flex flex-nowrap items-center justify-end gap-0.5 min-w-0 overflow-visible max-w-[48%] sm:max-w-[42%]'
+                    )}
+                  >
+                    <span className="select-none shrink-0" aria-hidden>
+                      (
+                    </span>
+                    <EditablePronouns
+                      value={currentUser.pronouns || ''}
+                      onChange={(v) => persistField('pronouns', v)}
+                      options={pronounOptions}
+                      placeholder={ic('addPronounsShort')}
+                      searchPlaceholder={ic('filterPronouns')}
+                      removeLabel={ic('removePronoun')}
+                      emptyFilterHint={ic('pressEnterToAddPronoun')}
+                      className={metaMuted}
+                    />
+                    <span className="select-none shrink-0" aria-hidden>
+                      )
+                    </span>
                   </span>
+                )}
+              </div>
+
+              {stackPronouns && (
+                <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
                   <EditablePronouns
                     value={currentUser.pronouns || ''}
                     onChange={(v) => persistField('pronouns', v)}
@@ -344,48 +355,29 @@ export function InstitutionalProfileCard({
                     emptyFilterHint={ic('pressEnterToAddPronoun')}
                     className={metaMuted}
                   />
-                  <span className="select-none shrink-0" aria-hidden>
-                    )
-                  </span>
-                </span>
+                </div>
               )}
             </div>
+          </div>
 
-            {stackPronouns && (
-              <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
-                <EditablePronouns
-                  value={currentUser.pronouns || ''}
-                  onChange={(v) => persistField('pronouns', v)}
-                  options={pronounOptions}
-                  placeholder={ic('addPronounsShort')}
-                  searchPlaceholder={ic('filterPronouns')}
-                  removeLabel={ic('removePronoun')}
-                  emptyFilterHint={ic('pressEnterToAddPronoun')}
-                  className={metaMuted}
-                />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
+            {user.githubUsername && (
+              <div className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary gap-1 text-xs py-2 px-2 font-medium shrink-0">
+                <Github size={12} aria-hidden />
+                {user.githubUsername}
               </div>
             )}
+            <EditableText
+              value={currentUser.email || ''}
+              onChange={(v) => persistField('email', v)}
+              placeholder={ic('addEmail')}
+              inputType="email"
+              className="text-sm text-text-muted min-w-0 flex-1 max-w-full"
+            />
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
-          {user.githubUsername && (
-            <div className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary gap-1 text-xs py-2 px-2 font-medium shrink-0">
-              <Github size={12} aria-hidden />
-              {user.githubUsername}
-            </div>
-          )}
-          <EditableText
-            value={currentUser.email || ''}
-            onChange={(v) => persistField('email', v)}
-            placeholder={ic('addEmail')}
-            inputType="email"
-            className="text-sm text-text-muted min-w-0 flex-1 max-w-full"
-          />
-        </div>
-
-        {showCohortList && (
-          <div className="min-w-0 overflow-hidden rounded-xl border border-gaming-border bg-gaming-base/20">
+          {showCohortList && (
+            <div className="min-w-0 overflow-hidden rounded-xl border border-gaming-border bg-gaming-base/20">
               {displayedCohortGroups.map((group) => (
                 <div
                   key={group.schoolName}
@@ -409,13 +401,18 @@ export function InstitutionalProfileCard({
                       <div className="min-w-0">
                         {onInstitutionalEmailChange ? (
                           <EditableText
-                            value={getInstitutionalEmailLocalPart(group.institutionalEmail, group.emailDomain)}
+                            value={getInstitutionalEmailLocalPart(
+                              group.institutionalEmail,
+                              group.emailDomain
+                            )}
                             onChange={(value) =>
                               onInstitutionalEmailChange(
                                 value.trim() ? `${value.trim()}@${group.emailDomain}` : ''
                               )
                             }
-                            placeholder={suggestedInstitutionalEmailLocalPart || ic('institutionalEmail')}
+                            placeholder={
+                              suggestedInstitutionalEmailLocalPart || ic('institutionalEmail')
+                            }
                             variant="field"
                             suffix={`@${group.emailDomain}`}
                             truncate={false}
@@ -494,42 +491,34 @@ export function InstitutionalProfileCard({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 min-w-0 w-full max-w-[14rem]">
+            <Cake size={14} className="shrink-0 text-text-muted" aria-hidden />
+            <EditableText
+              value={currentUser.birthDate || ''}
+              onChange={(v) => persistField('birthDate', v)}
+              placeholder={ic('birthDate')}
+              inputType="date"
+              truncate={false}
+              className={cn(metaMuted, 'text-xs leading-tight flex-1 min-w-0 whitespace-nowrap')}
+            />
           </div>
-        )}
 
-        <div className="flex items-center gap-1.5 min-w-0 w-full max-w-[14rem]">
-          <Cake
-            size={14}
-            className="shrink-0 text-text-muted"
-            aria-hidden
-          />
-          <EditableText
-            value={currentUser.birthDate || ''}
-            onChange={(v) => persistField('birthDate', v)}
-            placeholder={ic('birthDate')}
-            inputType="date"
-            truncate={false}
-            className={cn(metaMuted, 'text-xs leading-tight flex-1 min-w-0 whitespace-nowrap')}
-          />
-        </div>
-
-        <div className="flex gap-2.5 border-l-4 border-primary/35 pl-3 sm:pl-4 min-w-0">
-          <Quote
-            size={28}
-            className="shrink-0 text-text-muted/60 mt-0.5"
-            aria-hidden
-          />
-          <EditableText
-            multiline
-            value={currentUser.bio || ''}
-            onChange={(v) => persistField('bio', v)}
-            placeholder={ic('writeBio')}
-            truncate={false}
-            className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap w-full min-h-[2.75rem] min-w-0"
-          />
+          <div className="flex gap-2.5 border-l-4 border-primary/35 pl-3 sm:pl-4 min-w-0">
+            <Quote size={28} className="shrink-0 text-text-muted/60 mt-0.5" aria-hidden />
+            <EditableText
+              multiline
+              value={currentUser.bio || ''}
+              onChange={(v) => persistField('bio', v)}
+              placeholder={ic('writeBio')}
+              truncate={false}
+              className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap w-full min-h-[2.75rem] min-w-0"
+            />
+          </div>
         </div>
       </div>
-    </div>
     </EditableFieldContext.Provider>
   );
 }

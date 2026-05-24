@@ -72,10 +72,7 @@ export function BadgeDropdown({
 
     const rect = anchor.getBoundingClientRect();
     const menuWidth = Math.min(320, Math.max(224, rect.width));
-    const left = Math.min(
-      Math.max(8, rect.right - menuWidth),
-      window.innerWidth - menuWidth - 8
-    );
+    const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
     const availableBelow = window.innerHeight - rect.bottom - 12;
     const availableAbove = rect.top - 12;
     const opensAbove = availableBelow < 180 && availableAbove > availableBelow;
@@ -202,55 +199,60 @@ export function BadgeDropdown({
         )}
       </button>
 
-      {isOpen && dropdownStyle && createPortal(
-        <div
-          ref={panelRef}
-          className="rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
-          style={dropdownStyle}
-          role="listbox"
-          aria-multiselectable={multiple}
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={searchPlaceholder}
-            className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
-          />
+      {isOpen &&
+        dropdownStyle &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
+            style={dropdownStyle}
+            role="listbox"
+            aria-multiselectable={multiple}
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={searchPlaceholder}
+              className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
+            />
 
-          <div className="flex flex-wrap gap-1 overflow-y-auto" style={{ maxHeight: 'calc(100% - 2.5rem)' }}>
-            {visibleOptions.length > 0 ? (
-              visibleOptions.map((item) => {
-                const isSelected = selected.includes(item);
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    onClick={() => commitSelection(item)}
-                    className={cn(
-                      badgeClass,
-                      'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
-                      isSelected && 'badge-primary border-primary text-primary-content'
-                    )}
-                  >
-                    {renderBadge ? renderBadge(item) : item}
-                    {isSelected && <Check size={11} aria-hidden />}
-                  </button>
-                );
-              })
-            ) : (
-              <p className="w-full px-1 py-1 text-xs text-text-muted">
-                {query.trim() ? emptyFilterHint : '—'}
-              </p>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+            <div
+              className="flex flex-wrap gap-1 overflow-y-auto"
+              style={{ maxHeight: 'calc(100% - 2.5rem)' }}
+            >
+              {visibleOptions.length > 0 ? (
+                visibleOptions.map((item) => {
+                  const isSelected = selected.includes(item);
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => commitSelection(item)}
+                      className={cn(
+                        badgeClass,
+                        'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
+                        isSelected && 'badge-primary border-primary text-primary-content'
+                      )}
+                    >
+                      {renderBadge ? renderBadge(item) : item}
+                      {isSelected && <Check size={11} aria-hidden />}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="w-full px-1 py-1 text-xs text-text-muted">
+                  {query.trim() ? emptyFilterHint : '—'}
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

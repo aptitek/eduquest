@@ -24,7 +24,7 @@ const ALLOWED_TYPES = [
   'image/jpg',
   'image/webp',
   'image/gif',
-  'image/svg+xml'
+  'image/svg+xml',
 ];
 const MAX_DIMENSION = 512;
 
@@ -52,11 +52,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-function canvasToBlob(
-  canvas: HTMLCanvasElement,
-  type: string,
-  quality: number
-): Promise<Blob> {
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -195,19 +191,19 @@ export function EditableAvatar({
 
   return (
     <div className="flex flex-col items-center gap-1.5 w-full">
-      <div 
+      <div
         className={`relative avatar rounded-full group ${isEditing && !isUploading ? 'cursor-pointer' : ''}`}
         onClick={handleContainerClick}
       >
-        <div 
+        <div
           className="rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base overflow-hidden"
           style={{ width: size, height: size }}
         >
           <img src={optimisticSrc || src} alt="Avatar" className="w-full h-full object-cover" />
         </div>
-        
+
         {isEditing && (
-          <div 
+          <div
             className="absolute inset-0 rounded-full bg-gaming-base/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ width: size, height: size }}
           >
@@ -220,10 +216,10 @@ export function EditableAvatar({
         )}
 
         {isEditing && (
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
-            className="hidden" 
+            className="hidden"
             accept={ALLOWED_TYPES.join(',')}
             onChange={handleFileChange}
             disabled={isUploading}

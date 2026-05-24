@@ -236,9 +236,7 @@ export function AccountDropdown() {
                 </div>
                 <div className="flex gap-2">
                   <div className="tooltip tooltip-top">
-                    <span className="tooltip-content z-50">
-                      {t('common.languageFrench')}
-                    </span>
+                    <span className="tooltip-content z-50">{t('common.languageFrench')}</span>
                     <button
                       onClick={() => setLocale('fr')}
                       className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
@@ -252,9 +250,7 @@ export function AccountDropdown() {
                     </button>
                   </div>
                   <div className="tooltip tooltip-top">
-                    <span className="tooltip-content z-50">
-                      {t('common.languageEnglish')}
-                    </span>
+                    <span className="tooltip-content z-50">{t('common.languageEnglish')}</span>
                     <button
                       onClick={() => setLocale('en')}
                       className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
@@ -269,7 +265,9 @@ export function AccountDropdown() {
                   </div>
                   <div className="tooltip tooltip-top">
                     <span className="tooltip-content z-50">
-                      {theme === 'dark' ? t('common.switchToLightTheme') : t('common.switchToDarkTheme')}
+                      {theme === 'dark'
+                        ? t('common.switchToLightTheme')
+                        : t('common.switchToDarkTheme')}
                     </span>
                     <button
                       type="button"

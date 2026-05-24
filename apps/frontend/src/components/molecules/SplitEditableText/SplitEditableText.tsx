@@ -74,11 +74,7 @@ export function SplitEditableText({
   }, [isExpanded]);
 
   const pencil = showPencil ? (
-    <Pencil
-      size={12}
-      className="shrink-0 text-text-muted/70 pointer-events-none"
-      aria-hidden
-    />
+    <Pencil size={12} className="shrink-0 text-text-muted/70 pointer-events-none" aria-hidden />
   ) : null;
 
   const surfaceClass = cn(
@@ -119,14 +115,10 @@ export function SplitEditableText({
   }
 
   return (
-    <span
-      ref={panelRef}
-      className="inline-flex items-baseline flex-wrap gap-x-1 max-w-full"
-    >
+    <span ref={panelRef} className="inline-flex items-baseline flex-wrap gap-x-1 max-w-full">
       {fields.map((field, index) => {
         const value = values[field.key] ?? '';
-        const placeholder =
-          field.placeholder ?? (!value ? field.emptyHint : undefined);
+        const placeholder = field.placeholder ?? (!value ? field.emptyHint : undefined);
 
         return (
           <span key={field.key} className="inline-flex items-baseline">
@@ -147,11 +139,7 @@ export function SplitEditableText({
               }}
               className={inputClass(value, placeholder)}
               style={{
-                width: `${Math.max(
-                  value.length || 1,
-                  placeholder?.length || 3,
-                  3
-                )}ch`,
+                width: `${Math.max(value.length || 1, placeholder?.length || 3, 3)}ch`,
               }}
             />
           </span>

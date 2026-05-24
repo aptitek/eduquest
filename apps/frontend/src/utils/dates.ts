@@ -35,8 +35,7 @@ export function getHumanizedDateLabel(value?: string) {
   }
 
   const now = new Date();
-  const months =
-    (date.getFullYear() - now.getFullYear()) * 12 + (date.getMonth() - now.getMonth());
+  const months = (date.getFullYear() - now.getFullYear()) * 12 + (date.getMonth() - now.getMonth());
   const absoluteMonths = Math.abs(months);
 
   if (absoluteMonths < 12) {

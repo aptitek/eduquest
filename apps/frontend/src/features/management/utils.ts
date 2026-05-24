@@ -25,7 +25,12 @@ export function calculateAge(birthDate?: string) {
 
 export function formatAddress(address?: Address) {
   if (!address) return '-';
-  return [address.line1, address.line2, [address.postalCode, address.city].filter(Boolean).join(' '), address.country]
+  return [
+    address.line1,
+    address.line2,
+    [address.postalCode, address.city].filter(Boolean).join(' '),
+    address.country,
+  ]
     .filter(Boolean)
     .join(', ');
 }

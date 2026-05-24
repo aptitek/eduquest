@@ -25,15 +25,26 @@ export function CohortDetailCard({
     majorSpeciality: cohort.majorSpeciality || '',
     minorSpeciality: cohort.minorSpeciality || '',
   });
-  const resolvedLogoUrl = cohort.school?.logoUrl || (cohort.schoolName === 'Aptitek' ? aptitekLogoUrl : undefined);
-  const schoolYearOptions = Array.from(new Set([cohort.schoolYear, ...mockCohorts.map((item) => item.schoolYear)]));
+  const resolvedLogoUrl =
+    cohort.school?.logoUrl || (cohort.schoolName === 'Aptitek' ? aptitekLogoUrl : undefined);
+  const schoolYearOptions = Array.from(
+    new Set([cohort.schoolYear, ...mockCohorts.map((item) => item.schoolYear)])
+  );
   const gradeOptions = ['Licence', 'Bachelor', 'Engineer', 'Master', 'Doctorate'];
   const levelOptions = ['1', '2', '3', '4', '5'];
   const majorOptions = Array.from(
-    new Set([cohort.majorSpeciality, ...mockCohorts.map((item) => item.majorSpeciality)].filter((value): value is string => Boolean(value)))
+    new Set(
+      [cohort.majorSpeciality, ...mockCohorts.map((item) => item.majorSpeciality)].filter(
+        (value): value is string => Boolean(value)
+      )
+    )
   );
   const minorOptions = Array.from(
-    new Set([cohort.minorSpeciality, ...mockCohorts.map((item) => item.minorSpeciality)].filter((value): value is string => Boolean(value)))
+    new Set(
+      [cohort.minorSpeciality, ...mockCohorts.map((item) => item.minorSpeciality)].filter(
+        (value): value is string => Boolean(value)
+      )
+    )
   );
 
   useEffect(() => {
@@ -63,7 +74,11 @@ export function CohortDetailCard({
               title={cohort.schoolName}
             >
               {resolvedLogoUrl ? (
-                <img src={resolvedLogoUrl} alt={cohort.schoolName} className="max-h-full max-w-full object-contain" />
+                <img
+                  src={resolvedLogoUrl}
+                  alt={cohort.schoolName}
+                  className="max-h-full max-w-full object-contain"
+                />
               ) : (
                 <span className="text-center text-sm font-display font-semibold text-text-secondary">
                   {cohort.schoolName}
@@ -75,7 +90,9 @@ export function CohortDetailCard({
               <BadgeDropdown
                 options={campusOptions}
                 value={[draft.campusName]}
-                onChange={(next) => setDraft((current) => ({ ...current, campusName: next[0] || current.campusName }))}
+                onChange={(next) =>
+                  setDraft((current) => ({ ...current, campusName: next[0] || current.campusName }))
+                }
                 multiple={false}
                 placeholder={t('management.cohorts.campus')}
                 searchPlaceholder={t('management.cohorts.campus')}
@@ -110,7 +127,9 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={schoolYearOptions}
               value={[draft.schoolYear]}
-              onChange={(next) => setDraft((current) => ({ ...current, schoolYear: next[0] || current.schoolYear }))}
+              onChange={(next) =>
+                setDraft((current) => ({ ...current, schoolYear: next[0] || current.schoolYear }))
+              }
               multiple={false}
               placeholder={t('management.cohorts.schoolYear')}
               searchPlaceholder={t('management.cohorts.schoolYear')}
@@ -122,7 +141,9 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={gradeOptions}
               value={[draft.grade]}
-              onChange={(next) => setDraft((current) => ({ ...current, grade: next[0] || current.grade }))}
+              onChange={(next) =>
+                setDraft((current) => ({ ...current, grade: next[0] || current.grade }))
+              }
               multiple={false}
               placeholder={t('management.cohorts.grade')}
               searchPlaceholder={t('management.cohorts.grade')}
@@ -134,7 +155,9 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={levelOptions}
               value={[draft.level]}
-              onChange={(next) => setDraft((current) => ({ ...current, level: next[0] || current.level }))}
+              onChange={(next) =>
+                setDraft((current) => ({ ...current, level: next[0] || current.level }))
+              }
               multiple={false}
               placeholder={t('management.cohorts.level')}
               searchPlaceholder={t('management.cohorts.level')}
@@ -149,7 +172,9 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={majorOptions}
               value={draft.majorSpeciality ? [draft.majorSpeciality] : []}
-              onChange={(next) => setDraft((current) => ({ ...current, majorSpeciality: next[0] || '' }))}
+              onChange={(next) =>
+                setDraft((current) => ({ ...current, majorSpeciality: next[0] || '' }))
+              }
               multiple={false}
               placeholder="Major"
               searchPlaceholder="Major"
@@ -161,7 +186,9 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={minorOptions}
               value={draft.minorSpeciality ? [draft.minorSpeciality] : []}
-              onChange={(next) => setDraft((current) => ({ ...current, minorSpeciality: next[0] || '' }))}
+              onChange={(next) =>
+                setDraft((current) => ({ ...current, minorSpeciality: next[0] || '' }))
+              }
               multiple={false}
               placeholder="Minor"
               searchPlaceholder="Minor"

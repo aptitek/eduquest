@@ -4,7 +4,14 @@ export function SchoolLogoBadge({ name, logoUrl }: { name: string; logoUrl?: str
   const resolvedLogoUrl = logoUrl || (name === 'Aptitek' ? aptitekLogoUrl : undefined);
 
   if (resolvedLogoUrl) {
-    return <img src={resolvedLogoUrl} alt={name} title={name} className="h-4 w-auto max-w-none object-contain" />;
+    return (
+      <img
+        src={resolvedLogoUrl}
+        alt={name}
+        title={name}
+        className="h-4 w-auto max-w-none object-contain"
+      />
+    );
   }
 
   return (

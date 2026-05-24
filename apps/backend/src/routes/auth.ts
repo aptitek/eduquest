@@ -242,7 +242,7 @@ authRouter.get('/github/callback', async (c) => {
       githubUsername: githubUser.login,
       displayName: githubUser.name || githubUser.login,
       githubAvatarUrl: avatarUrl,
-              avatarUrl: avatarUrl,
+      avatarUrl: avatarUrl,
       isAdmin,
     };
     const token = await sign(payload, jwtSecret);
@@ -275,7 +275,10 @@ authRouter.get('/mock', async (c) => {
   const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
 
   const requestedMockStudent = c.req.query('studentId') || c.req.query('username');
-  const mockUsername = c.req.query('username') || getDebugProfile(requestedMockStudent).user.githubUsername || 'wizard1337';
+  const mockUsername =
+    c.req.query('username') ||
+    getDebugProfile(requestedMockStudent).user.githubUsername ||
+    'wizard1337';
   const isAptitek = mockUsername.toLowerCase() === 'aptitek';
 
   if (!isAptitek) {
@@ -400,7 +403,7 @@ authRouter.get('/mock', async (c) => {
     githubUsername: mockUsername,
     displayName: mockName,
     githubAvatarUrl: mockAvatar,
-            avatarUrl: mockAvatar,
+    avatarUrl: mockAvatar,
     isAdmin,
   };
 
@@ -704,8 +707,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     firstName: body.firstName ?? userPayload.firstName,
     lastName: body.lastName ?? userPayload.lastName,
     displayName: body.displayName ?? userPayload.displayName,
-    birthDate:
-      body.birthDate === null ? undefined : body.birthDate ?? userPayload.birthDate,
+    birthDate: body.birthDate === null ? undefined : (body.birthDate ?? userPayload.birthDate),
     bio: body.bio ?? userPayload.bio,
     pronouns: body.pronouns ?? userPayload.pronouns,
     avatarUrl: body.avatarUrl ?? userPayload.avatarUrl,

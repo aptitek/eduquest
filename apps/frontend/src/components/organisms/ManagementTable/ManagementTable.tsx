@@ -152,10 +152,12 @@ export function ManagementTable<TData extends { id: string }>({
   );
 
   return (
-    <div className={cn(
-      'overflow-hidden rounded-xl border border-gaming-border bg-gaming-card shadow-lg',
-      flushTop && 'rounded-tl-none'
-    )}>
+    <div
+      className={cn(
+        'overflow-hidden rounded-xl border border-gaming-border bg-gaming-card shadow-lg',
+        flushTop && 'rounded-tl-none'
+      )}
+    >
       <div className="flex flex-col gap-2 border-b border-gaming-border bg-gaming-card p-3 sm:flex-row sm:items-center">
         <input
           type="search"
@@ -233,7 +235,8 @@ export function ManagementTable<TData extends { id: string }>({
                 className={cn(
                   'border-gaming-border hover:bg-gaming-base/40',
                   onRowSelect && 'cursor-pointer',
-                  selectedRowId === row.original.id && 'bg-gaming-base/60 outline outline-1 outline-solarized-blue/50'
+                  selectedRowId === row.original.id &&
+                    'bg-gaming-base/60 outline outline-1 outline-solarized-blue/50'
                 )}
                 aria-selected={selectedRowId === row.original.id}
               >

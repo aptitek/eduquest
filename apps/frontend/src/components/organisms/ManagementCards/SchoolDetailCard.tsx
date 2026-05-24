@@ -12,7 +12,8 @@ export function SchoolDetailCard({ school, t }: { school: SchoolRow; t: (key: st
     emailDomain: school.emailDomain || '',
     address: formatAddress(school.address),
   });
-  const resolvedLogoUrl = school.logoUrl || (school.name === 'Aptitek' ? aptitekLogoUrl : undefined);
+  const resolvedLogoUrl =
+    school.logoUrl || (school.name === 'Aptitek' ? aptitekLogoUrl : undefined);
 
   useEffect(() => {
     setDraft({
@@ -34,7 +35,11 @@ export function SchoolDetailCard({ school, t }: { school: SchoolRow; t: (key: st
         <div className="flex h-full flex-col gap-5">
           <div className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-5">
             {resolvedLogoUrl ? (
-              <img src={resolvedLogoUrl} alt={school.name} className="max-h-full max-w-full object-contain" />
+              <img
+                src={resolvedLogoUrl}
+                alt={school.name}
+                className="max-h-full max-w-full object-contain"
+              />
             ) : (
               <span className="text-center text-lg font-display font-semibold text-text-secondary">
                 {school.name}
@@ -73,7 +78,10 @@ export function SchoolDetailCard({ school, t }: { school: SchoolRow; t: (key: st
           </div>
 
           <div className="mt-auto">
-            <DetailItem label={t('management.schools.createdAt')} value={formatDate(school.createdAt)} />
+            <DetailItem
+              label={t('management.schools.createdAt')}
+              value={formatDate(school.createdAt)}
+            />
           </div>
         </div>
       </div>

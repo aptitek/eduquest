@@ -3,17 +3,20 @@ trigger: always_on
 ---
 
 # PROJECT CONTEXT: EduQuest MVP
+
 EduQuest is a gamified LMS MVP functioning as an interactive node-based map (RPG/Battle Royale mechanics) where students complete activities before a "Storm" (time limit) consumes them.
 
 ## 1. TECH STACK & ARCHITECTURE
+
 - **Architecture:** Monorepo (Workspaces) strictly segr
-egating Front, Back, and Shared types.
+  egating Front, Back, and Shared types.
 - **Frontend (apps/frontend):** React, Vite, TypeScript, Tailwind CSS, DaisyUI.
 - **Backend (apps/backend):** Cloudflare Workers, Hono, Drizzle ORM, PostgreSQL.
 - **Auth:** GitHub SSO exclusively (Lucia Auth). No password management.
 - **Shared (packages/shared):** TypeScript types/interfaces and global game constants.
 
 ## 2. DESIGN PRINCIPLES (STRICT COMPLIANCE)
+
 - **KISS & DRY:** Keep it simple, do not repeat code. Single responsibility principle per file.
 - **Frontend Architecture:** Atomic Design (`atoms`, `molecules`, `organisms`, `templates`) combined with Feature-Sliced Design (`features/` for business logic).
 - **Styling:** ZERO custom CSS files. Use Tailwind CSS utility classes and DaisyUI semantic classes exclusively (e.g., `btn btn-primary`).
@@ -22,6 +25,7 @@ egating Front, Back, and Shared types.
 - **Database:** PostgreSQL with JSONB columns for flexible activity content and rules.
 
 ## 3. FILE TREE TOPOLOGY
+
 ```text
 eduquest-monorepo/
 ├── packages/shared/             # Source of truth for TS types
