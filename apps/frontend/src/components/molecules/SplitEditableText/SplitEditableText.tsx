@@ -137,10 +137,7 @@ export function SplitEditableText({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') collapse();
               }}
-              className={inputClass(value, placeholder)}
-              style={{
-                width: `${Math.max(value.length || 1, placeholder?.length || 3, 3)}ch`,
-              }}
+              className={cn(inputClass(value, placeholder), 'w-auto min-w-[3ch] max-w-full')}
             />
           </span>
         );

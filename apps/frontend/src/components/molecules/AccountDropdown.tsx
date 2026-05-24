@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { LogOut, ChevronDown, Languages, Check, Moon, Sun } from 'lucide-react';
-import { useAuth } from '../../features/auth/useAuth';
+import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
 import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
 import { useToastStore } from '../../features/toast/toastStore';
@@ -8,6 +8,8 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from '../organisms/InstitutionalProfileCard/InstitutionalProfileCard';
 import { StudentCohort, User } from '@eduquest/shared';
+import { cn } from '../../utils/cn';
+import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -32,15 +34,6 @@ function getInitialTheme(): ThemeMode {
   if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
 
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('profile.errors.avatarReadFailed'));
-    reader.readAsDataURL(file);
-  });
 }
 
 function getLatestCohortMembership(memberships?: StudentCohort[]) {
@@ -93,6 +86,17 @@ export function AccountDropdown() {
     user.avatarUrl ||
     user.githubAvatarUrl ||
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
+  const chevronClass = cn(
+    'text-text-muted transition-transform duration-300',
+    isOpen && 'rotate-180'
+  );
+  const localeButtonClass = (targetLocale: 'fr' | 'en') =>
+    cn(
+      'btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border',
+      locale === targetLocale
+        ? 'btn-primary text-primary-content shadow-sm'
+        : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
+    );
 
   const updateProfile = async (data: ProfileUpdate, shouldThrow = false) => {
     if (!user) {
@@ -112,7 +116,7 @@ export function AccountDropdown() {
     }
 
     try {
-      const response = await fetch('http://localhost:8787/api/auth/profile', {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -194,10 +198,7 @@ export function AccountDropdown() {
         <span className="hidden sm:block text-xs font-semibold text-text-primary font-display max-w-[120px] truncate">
           {username}
         </span>
-        <ChevronDown
-          size={14}
-          className={`text-text-muted transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
-        />
+        <ChevronDown size={14} className={chevronClass} />
       </button>
 
       {/* Dropdown Content */}
@@ -232,33 +233,19 @@ export function AccountDropdown() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs text-text-muted font-display font-semibold uppercase tracking-wider">
                   <Languages size={14} />
-                  <span>{t('common.language') || 'LANGUE'}</span>
+                  <span>{t('common.language')}</span>
                 </div>
                 <div className="flex gap-2">
                   <div className="tooltip tooltip-top">
                     <span className="tooltip-content z-50">{t('common.languageFrench')}</span>
-                    <button
-                      onClick={() => setLocale('fr')}
-                      className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
-                        locale === 'fr'
-                          ? 'btn-primary text-primary-content shadow-sm'
-                          : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
-                      }`}
-                    >
+                    <button onClick={() => setLocale('fr')} className={localeButtonClass('fr')}>
                       <span>FR</span>
                       {locale === 'fr' && <Check size={12} />}
                     </button>
                   </div>
                   <div className="tooltip tooltip-top">
                     <span className="tooltip-content z-50">{t('common.languageEnglish')}</span>
-                    <button
-                      onClick={() => setLocale('en')}
-                      className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
-                        locale === 'en'
-                          ? 'btn-primary text-primary-content shadow-sm'
-                          : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
-                      }`}
-                    >
+                    <button onClick={() => setLocale('en')} className={localeButtonClass('en')}>
                       <span>EN</span>
                       {locale === 'en' && <Check size={12} />}
                     </button>

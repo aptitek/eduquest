@@ -11,9 +11,12 @@ import {
 import { CohortDropdownBadge, CohortListBadge } from '../../components/molecules/CohortBadge';
 import { SchoolLogoBadge } from '../../components/molecules/SchoolLogoBadge';
 import { InstitutionalProfileCard } from '../../components/organisms/InstitutionalProfileCard/InstitutionalProfileCard';
-import { BACKEND_BASE_URL } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
-import { mockCohorts, mockSchools } from '../../features/management/mockData';
+import {
+  fetchManagementBackup,
+  type ManagementStudentUpdate,
+  updateManagementStudent,
+} from '../../features/management/api';
 import { useManagementColumns } from '../../features/management/useManagementColumns';
 import type {
   CohortRow,
@@ -26,6 +29,7 @@ import type {
 import { calculateAge, getLatestCohortMembership } from '../../features/management/utils';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
+import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
 
 export function ManagementPage() {
   const { t } = useTranslation();
@@ -33,35 +37,47 @@ export function ManagementPage() {
   const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<SelectedManagementEntity | null>(null);
-  const [studentCohortSelections, setStudentCohortSelections] = useState<Record<string, string[]>>(
-    {}
-  );
   const [debugBackup, setDebugBackup] = useState<DebugBackup | null>(null);
+  const [isManagementLoading, setIsManagementLoading] = useState(false);
+  const [managementErrorKey, setManagementErrorKey] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedEntity(null);
+    setSearchQuery('');
   }, [activeTab]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !user?.isAdmin) return;
+    if (!user?.isAdmin) return;
 
-    const loadDebugBackup = async () => {
+    let isMounted = true;
+    const loadManagementBackup = async () => {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) {
+        setManagementErrorKey('management.errors.missingSession');
+        return;
+      }
+
+      setIsManagementLoading(true);
+      setManagementErrorKey(null);
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/api/auth/debug-backup`);
-        const data = await response.json();
-        if (data.success && data.backup) {
-          setDebugBackup(data.backup);
-        }
+        const backup = await fetchManagementBackup(token);
+        if (isMounted) setDebugBackup(backup);
       } catch (error) {
-        console.warn('Could not load debug management backup.', error);
+        console.warn('Could not load management backup.', error);
+        if (isMounted) setManagementErrorKey('management.errors.loadFailed');
+      } finally {
+        if (isMounted) setIsManagementLoading(false);
       }
     };
 
-    loadDebugBackup();
+    loadManagementBackup();
+    return () => {
+      isMounted = false;
+    };
   }, [user?.isAdmin]);
 
   const schoolRows = useMemo<SchoolRow[]>(() => {
-    if (!debugBackup) return mockSchools;
+    if (!debugBackup) return [];
 
     return debugBackup.schools.map((school) => {
       const campus = debugBackup.campuses.find((item) => item.schoolId === school.id);
@@ -82,7 +98,7 @@ export function ManagementPage() {
   }, [debugBackup]);
 
   const cohortRows = useMemo<CohortRow[]>(() => {
-    if (!debugBackup) return mockCohorts;
+    if (!debugBackup) return [];
 
     return debugBackup.cohorts.map((cohort) => ({
       ...cohort,
@@ -176,20 +192,38 @@ export function ManagementPage() {
     selectedStudentRow?.cohortMemberships
       ?.map((membership) => membership.cohortId)
       .filter(Boolean) || [];
-  const selectedStudentCohortIds = selectedStudentRow
-    ? (studentCohortSelections[selectedStudentRow.id] ??
-      (selectedStudentInitialCohortIds.length > 0
-        ? selectedStudentInitialCohortIds
-        : selectedStudentMembership?.cohortId
-          ? [selectedStudentMembership.cohortId]
-          : []))
-    : [];
+  const selectedStudentCohortIds =
+    selectedStudentInitialCohortIds.length > 0
+      ? selectedStudentInitialCohortIds
+      : selectedStudentMembership?.cohortId
+        ? [selectedStudentMembership.cohortId]
+        : [];
   const selectedStudentCohort =
     cohortRows.find((cohort) => cohort.id === selectedStudentCohortIds[0]) ||
     selectedStudentMembership?.cohort ||
     (selectedStudentMembership?.cohortId
       ? cohortRows.find((cohort) => cohort.id === selectedStudentMembership.cohortId)
       : undefined);
+  const updateSelectedStudent = async (update: ManagementStudentUpdate, shouldThrow = false) => {
+    if (!selectedStudentRow) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setManagementErrorKey('management.errors.missingSession');
+      if (shouldThrow) throw new Error('management.errors.missingSession');
+      return;
+    }
+
+    setManagementErrorKey(null);
+    try {
+      const backup = await updateManagementStudent(token, selectedStudentRow.id, update);
+      setDebugBackup(backup);
+    } catch (error) {
+      console.warn('Could not update management student.', error);
+      setManagementErrorKey('management.errors.updateFailed');
+      if (shouldThrow) throw error;
+    }
+  };
   const selectedCardContent = selectedSchoolRow ? (
     <SchoolDetailCard school={selectedSchoolRow} t={t} />
   ) : selectedCohortRow ? (
@@ -198,21 +232,38 @@ export function ManagementPage() {
     <div className="h-full min-h-[18rem]">
       <InstitutionalProfileCard
         user={selectedStudentRow.user}
-        onUpdateProfile={async () => undefined}
+        onUpdateProfile={(data) => updateSelectedStudent({ user: data })}
+        onUploadAvatar={async (file) => {
+          const avatarUrl = await readFileAsDataUrl(file);
+          await updateSelectedStudent({ user: { avatarUrl } }, true);
+        }}
+        onResetAvatar={() =>
+          updateSelectedStudent(
+            { user: { avatarUrl: selectedStudentRow.user.githubAvatarUrl || '' } },
+            true
+          )
+        }
         hideRoleBadge
         stackPronouns
         institutionalEmail={selectedStudentMembership?.institutionalEmail}
         institutionalEmailDomain={selectedStudentRow.school?.emailDomain}
-        onInstitutionalEmailChange={async () => undefined}
+        onInstitutionalEmailChange={(institutionalEmail, cohortId) =>
+          updateSelectedStudent({
+            institutionalEmail,
+            institutionalEmailCohortId:
+              cohortId || selectedStudentMembership?.cohortId || selectedStudentCohortIds[0],
+          })
+        }
         cohort={selectedStudentCohort}
         cohortOptions={cohortRows.map((cohort) => cohort.id)}
         selectedCohorts={selectedStudentCohortIds}
-        onCohortsChange={(cohorts) => {
-          setStudentCohortSelections((current) => ({
-            ...current,
-            [selectedStudentRow.id]: cohorts,
-          }));
-        }}
+        onCohortsChange={(cohortIds) =>
+          updateSelectedStudent({
+            cohortIds,
+            institutionalEmailCohortId:
+              selectedStudentMembership?.cohortId || cohortIds[0] || selectedStudentCohortIds[0],
+          })
+        }
         renderCohortBadge={(cohortId) => {
           const cohort = cohortRows.find((item) => item.id === cohortId);
           return cohort ? <CohortDropdownBadge cohort={cohort} /> : cohortId;
@@ -264,6 +315,19 @@ export function ManagementPage() {
             <p className="text-sm text-text-muted">{t('management.subtitle')}</p>
           </div>
 
+          {isManagementLoading && (
+            <p className="text-sm text-text-muted">{t('management.loading')}</p>
+          )}
+
+          {managementErrorKey && (
+            <div
+              role="alert"
+              className="alert alert-warning border-gaming-border bg-gaming-base/60 text-text-secondary"
+            >
+              {t(managementErrorKey)}
+            </div>
+          )}
+
           <div className="flex flex-col">
             <div className="tabs tabs-lifted w-fit gap-1">
               {(['schools', 'cohorts', 'students'] as const).map((tab) => (
@@ -285,10 +349,12 @@ export function ManagementPage() {
 
             {activeTab === 'students' ? (
               <ManagementTable
+                key="students"
                 data={studentRows}
                 columns={studentColumns}
                 globalFilter={searchQuery}
                 onGlobalFilterChange={setSearchQuery}
+                searchLabel={t('management.filters.search')}
                 schoolFilterOptions={schoolFilterOptions}
                 selectedRowId={selectedEntity?.tab === 'students' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'students', id: row.id })}
@@ -296,20 +362,24 @@ export function ManagementPage() {
               />
             ) : activeTab === 'cohorts' ? (
               <ManagementTable
+                key="cohorts"
                 data={cohortRows}
                 columns={cohortColumns}
                 globalFilter={searchQuery}
                 onGlobalFilterChange={setSearchQuery}
+                searchLabel={t('management.filters.search')}
                 selectedRowId={selectedEntity?.tab === 'cohorts' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'cohorts', id: row.id })}
                 flushTop
               />
             ) : (
               <ManagementTable
+                key="schools"
                 data={schoolRows}
                 columns={schoolColumns}
                 globalFilter={searchQuery}
                 onGlobalFilterChange={setSearchQuery}
+                searchLabel={t('management.filters.search')}
                 selectedRowId={selectedEntity?.tab === 'schools' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'schools', id: row.id })}
                 flushTop

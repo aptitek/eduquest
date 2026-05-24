@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Activity, GameBattle } from '@eduquest/shared';
+import { BACKEND_BASE_URL } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -23,7 +24,7 @@ export function MapPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('eduquest_token');
-      const response = await fetch('http://localhost:8787/api/map', {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/map`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },

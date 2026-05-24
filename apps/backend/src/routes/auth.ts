@@ -1,9 +1,28 @@
 import { Hono } from 'hono';
 import { sign } from 'hono/jwt';
-import { and, desc, eq } from 'drizzle-orm';
-import type { CohortGrade, GameBattle, GameCharacter, Student, User } from '@eduquest/shared';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import type {
+  Address,
+  Campus,
+  Cohort,
+  CohortGrade,
+  GameBattle,
+  GameCharacter,
+  School,
+  Student,
+  User,
+} from '@eduquest/shared';
 import { getDb } from '../db';
-import { users, students, gameCharacters, schools, cohorts, studentCohorts } from '../db/schema';
+import {
+  addresses,
+  campuses,
+  cohorts,
+  gameCharacters,
+  schools,
+  studentCohorts,
+  students,
+  users,
+} from '../db/schema';
 import { authMiddleware, UserPayload } from '../middleware/auth';
 import {
   findDebugProfile,
@@ -19,6 +38,7 @@ type Bindings = {
   GITHUB_CLIENT_SECRET?: string;
   GITHUB_REDIRECT_URI?: string;
   FRONTEND_URL?: string;
+  ENABLE_DEBUG_AUTH?: string;
 };
 
 type Variables = {
@@ -30,6 +50,247 @@ export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>
 // Secret JWT par défaut en développement
 const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
+
+type AddressRecord = typeof addresses.$inferSelect;
+type CampusRecord = typeof campuses.$inferSelect;
+type CohortRecord = typeof cohorts.$inferSelect;
+type GameCharacterRecord = typeof gameCharacters.$inferSelect;
+type SchoolRecord = typeof schools.$inferSelect;
+type StudentCohortRecord = typeof studentCohorts.$inferSelect;
+type StudentRecord = typeof students.$inferSelect;
+type UserRecord = typeof users.$inferSelect;
+type ManagementBackup = {
+  addresses: Address[];
+  schools: School[];
+  campuses: Campus[];
+  cohorts: Cohort[];
+  students: { user: User; student: Student; character: GameCharacter }[];
+};
+type ManagementStudentUpdateBody = {
+  user?: Partial<
+    Pick<
+      User,
+      | 'displayName'
+      | 'firstName'
+      | 'lastName'
+      | 'email'
+      | 'avatarUrl'
+      | 'birthDate'
+      | 'bio'
+      | 'pronouns'
+    >
+  >;
+  cohortIds?: string[];
+  institutionalEmail?: string;
+  institutionalEmailCohortId?: string;
+};
+
+function toIsoString(value?: Date | null) {
+  return value?.toISOString?.();
+}
+
+function toAddress(record: AddressRecord): Address {
+  return {
+    id: record.id,
+    line1: record.line1,
+    line2: record.line2 || undefined,
+    postalCode: record.postalCode || undefined,
+    city: record.city,
+    country: record.country || undefined,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toSchool(record: SchoolRecord): School {
+  return {
+    id: record.id,
+    name: record.name,
+    logoUrl: record.logoUrl || undefined,
+    website: record.website || undefined,
+    emailDomain: record.emailDomain || undefined,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toCampus(record: CampusRecord, school?: School, address?: Address): Campus {
+  return {
+    id: record.id,
+    schoolId: record.schoolId,
+    school,
+    addressId: record.addressId || undefined,
+    address,
+    name: record.name,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toCohort(record: CohortRecord, school?: School, campus?: Campus): Cohort {
+  return {
+    id: record.id,
+    schoolId: record.schoolId,
+    school,
+    campusId: record.campusId || undefined,
+    campus,
+    schoolYear: record.schoolYear,
+    grade: record.grade as CohortGrade,
+    level: record.level,
+    name: record.name,
+    majorSpeciality: record.majorSpeciality || undefined,
+    minorSpeciality: record.minorSpeciality || undefined,
+    description: record.description || undefined,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toUser(record: UserRecord): User {
+  return {
+    id: record.id,
+    email: record.email,
+    githubSsoToken: record.githubSsoToken || undefined,
+    githubUsername: record.githubUsername || undefined,
+    firstName: record.firstName || undefined,
+    lastName: record.lastName || undefined,
+    displayName: record.displayName || undefined,
+    birthDate: record.birthDate || undefined,
+    pronouns: record.pronouns || undefined,
+    bio: record.bio || undefined,
+    avatarUrl: record.avatarUrl || undefined,
+    githubAvatarUrl: record.githubAvatarUrl || undefined,
+    userStatus: record.userStatus || undefined,
+    statusOverride: record.statusOverride || undefined,
+    isAdmin: record.isAdmin,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+    lastLogin: toIsoString(record.lastLogin),
+  };
+}
+
+function toGameCharacter(record: GameCharacterRecord): GameCharacter {
+  return {
+    studentId: record.studentId,
+    characterClass: record.characterClass || 'Adventurer',
+    stats: (record.stats || {}) as GameCharacter['stats'],
+    currentLevel: record.currentLevel,
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toStudent(
+  record: StudentRecord,
+  school: School | undefined,
+  memberships: Student['cohortMemberships']
+): Student {
+  return {
+    id: record.id,
+    userId: record.userId,
+    schoolId: record.schoolId || undefined,
+    school,
+    cohortMemberships: memberships,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function isDebugAuthEnabled(c: { env: Bindings }) {
+  return !c.env.DATABASE_URL || c.env.ENABLE_DEBUG_AUTH === 'true';
+}
+
+async function getManagementBackup(databaseUrl?: string): Promise<ManagementBackup> {
+  if (!databaseUrl) return getDebugBackup();
+
+  const db = getDb(databaseUrl);
+  const [
+    addressRecords,
+    schoolRecords,
+    campusRecords,
+    cohortRecords,
+    userRecords,
+    studentRecords,
+    studentCohortRecords,
+    characterRecords,
+  ] = await Promise.all([
+    db.select().from(addresses),
+    db.select().from(schools),
+    db.select().from(campuses),
+    db.select().from(cohorts),
+    db.select().from(users),
+    db.select().from(students),
+    db.select().from(studentCohorts),
+    db.select().from(gameCharacters),
+  ]);
+
+  const addressMap = new Map(addressRecords.map((record) => [record.id, toAddress(record)]));
+  const schoolMap = new Map(schoolRecords.map((record) => [record.id, toSchool(record)]));
+  const campusMap = new Map(
+    campusRecords.map((record) => [
+      record.id,
+      toCampus(
+        record,
+        schoolMap.get(record.schoolId),
+        record.addressId ? addressMap.get(record.addressId) : undefined
+      ),
+    ])
+  );
+  const cohortMap = new Map(
+    cohortRecords.map((record) => [
+      record.id,
+      toCohort(
+        record,
+        schoolMap.get(record.schoolId),
+        record.campusId ? campusMap.get(record.campusId) : undefined
+      ),
+    ])
+  );
+  const userMap = new Map(userRecords.map((record) => [record.id, toUser(record)]));
+  const characterMap = new Map(
+    characterRecords.map((record) => [record.studentId, toGameCharacter(record)])
+  );
+  const membershipsByStudent = studentCohortRecords.reduce<
+    Map<string, NonNullable<Student['cohortMemberships']>>
+  >((groups, membership: StudentCohortRecord) => {
+    const current = groups.get(membership.studentId) || [];
+    current.push({
+      studentId: membership.studentId,
+      cohortId: membership.cohortId,
+      cohort: cohortMap.get(membership.cohortId),
+      guildId: membership.guildId || undefined,
+      institutionalEmail: membership.institutionalEmail || undefined,
+      createdAt: toIsoString(membership.createdAt),
+    });
+    groups.set(membership.studentId, current);
+    return groups;
+  }, new Map());
+
+  const studentProfiles = studentRecords.flatMap((studentRecord) => {
+    const user = userMap.get(studentRecord.userId);
+    const character = characterMap.get(studentRecord.id);
+    if (!user || !character) return [];
+
+    return [
+      {
+        user,
+        student: toStudent(
+          studentRecord,
+          studentRecord.schoolId ? schoolMap.get(studentRecord.schoolId) : undefined,
+          membershipsByStudent.get(studentRecord.id) || []
+        ),
+        character,
+      },
+    ];
+  });
+
+  return {
+    addresses: Array.from(addressMap.values()),
+    schools: Array.from(schoolMap.values()),
+    campuses: Array.from(campusMap.values()),
+    cohorts: Array.from(cohortMap.values()),
+    students: studentProfiles,
+  };
+}
 
 // 1. GET /api/auth/github : Redirige vers GitHub OAuth
 authRouter.get('/github', (c) => {
@@ -256,6 +517,8 @@ authRouter.get('/github/callback', async (c) => {
 });
 
 authRouter.get('/mock-students', (c) => {
+  if (!isDebugAuthEnabled(c)) return c.notFound();
+
   return c.json({
     success: true,
     students: getDebugStudentOptions(),
@@ -263,14 +526,272 @@ authRouter.get('/mock-students', (c) => {
 });
 
 authRouter.get('/debug-backup', (c) => {
+  if (!isDebugAuthEnabled(c)) return c.notFound();
+
   return c.json({
     success: true,
     backup: getDebugBackup(),
   });
 });
 
+authRouter.use('/management/*', authMiddleware);
+authRouter.get('/management', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.put('/management/students/:studentId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  let body: ManagementStudentUpdateBody;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid JSON body',
+      },
+      400
+    );
+  }
+
+  const studentId = c.req.param('studentId');
+
+  if (!c.env.DATABASE_URL) {
+    const backup = getDebugBackup();
+    const profile = backup.students.find((item) => item.student.id === studentId);
+    if (!profile) {
+      return c.json(
+        {
+          success: false,
+          error: 'Student not found',
+        },
+        404
+      );
+    }
+
+    profile.user = {
+      ...profile.user,
+      ...body.user,
+    };
+
+    if (body.cohortIds) {
+      profile.student.cohortMemberships = body.cohortIds.map((cohortId) => {
+        const existing = profile.student.cohortMemberships?.find(
+          (membership) => membership.cohortId === cohortId
+        );
+        return {
+          studentId,
+          cohortId,
+          cohort: backup.cohorts.find((cohort) => cohort.id === cohortId),
+          institutionalEmail: existing?.institutionalEmail,
+          createdAt: existing?.createdAt,
+        };
+      });
+    }
+
+    if (body.institutionalEmail !== undefined) {
+      const targetMembership =
+        profile.student.cohortMemberships?.find(
+          (membership) => membership.cohortId === body.institutionalEmailCohortId
+        ) || profile.student.cohortMemberships?.[0];
+      if (targetMembership) {
+        targetMembership.institutionalEmail = body.institutionalEmail || undefined;
+      }
+    }
+
+    return c.json({
+      success: true,
+      backup,
+    });
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const [studentRecord] = await db
+    .select()
+    .from(students)
+    .where(eq(students.id, studentId))
+    .limit(1);
+
+  if (!studentRecord) {
+    return c.json(
+      {
+        success: false,
+        error: 'Student not found',
+      },
+      404
+    );
+  }
+
+  if (body.user && Object.keys(body.user).length > 0) {
+    const userUpdate: Partial<typeof users.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    if (body.user.displayName !== undefined) userUpdate.displayName = body.user.displayName;
+    if (body.user.firstName !== undefined) userUpdate.firstName = body.user.firstName;
+    if (body.user.lastName !== undefined) userUpdate.lastName = body.user.lastName;
+    if (body.user.email !== undefined) userUpdate.email = body.user.email;
+    if (body.user.avatarUrl !== undefined) userUpdate.avatarUrl = body.user.avatarUrl;
+    if (body.user.birthDate !== undefined) userUpdate.birthDate = body.user.birthDate || null;
+    if (body.user.bio !== undefined) userUpdate.bio = body.user.bio;
+    if (body.user.pronouns !== undefined) userUpdate.pronouns = body.user.pronouns;
+
+    await db.update(users).set(userUpdate).where(eq(users.id, studentRecord.userId));
+  }
+
+  let currentMemberships = await db
+    .select()
+    .from(studentCohorts)
+    .where(eq(studentCohorts.studentId, studentId));
+
+  if (body.cohortIds) {
+    const nextCohortIds = Array.from(new Set(body.cohortIds.filter(Boolean)));
+    const existingCohortIds = currentMemberships.map((membership) => membership.cohortId);
+    const addedCohortIds = nextCohortIds.filter(
+      (cohortId) => !existingCohortIds.includes(cohortId)
+    );
+    const removedCohortIds = existingCohortIds.filter(
+      (cohortId) => !nextCohortIds.includes(cohortId)
+    );
+
+    if (nextCohortIds.length > 0) {
+      const validCohorts = await db
+        .select()
+        .from(cohorts)
+        .where(inArray(cohorts.id, nextCohortIds));
+      if (validCohorts.length !== nextCohortIds.length) {
+        return c.json(
+          {
+            success: false,
+            error: 'One or more cohorts do not exist',
+          },
+          400
+        );
+      }
+    }
+
+    if (removedCohortIds.length > 0) {
+      await db
+        .delete(studentCohorts)
+        .where(
+          and(
+            eq(studentCohorts.studentId, studentId),
+            inArray(studentCohorts.cohortId, removedCohortIds)
+          )
+        );
+    }
+
+    if (addedCohortIds.length > 0) {
+      await db.insert(studentCohorts).values(
+        addedCohortIds.map((cohortId) => ({
+          studentId,
+          cohortId,
+        }))
+      );
+    }
+
+    currentMemberships = await db
+      .select()
+      .from(studentCohorts)
+      .where(eq(studentCohorts.studentId, studentId));
+
+    const primaryCohortId = nextCohortIds[0];
+    if (primaryCohortId) {
+      const [primaryCohort] = await db
+        .select()
+        .from(cohorts)
+        .where(eq(cohorts.id, primaryCohortId))
+        .limit(1);
+      await db
+        .update(students)
+        .set({
+          schoolId: primaryCohort?.schoolId,
+          updatedAt: new Date(),
+        })
+        .where(eq(students.id, studentId));
+    } else {
+      await db
+        .update(students)
+        .set({
+          schoolId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(students.id, studentId));
+    }
+  }
+
+  if (body.institutionalEmail !== undefined) {
+    const targetCohortId =
+      body.institutionalEmailCohortId || body.cohortIds?.[0] || currentMemberships[0]?.cohortId;
+
+    if (targetCohortId) {
+      const [targetCohort] = await db
+        .select()
+        .from(cohorts)
+        .where(eq(cohorts.id, targetCohortId))
+        .limit(1);
+      const [targetSchool] = targetCohort
+        ? await db.select().from(schools).where(eq(schools.id, targetCohort.schoolId)).limit(1)
+        : [];
+
+      if (body.institutionalEmail && targetSchool?.emailDomain) {
+        const domain = targetSchool.emailDomain.toLowerCase();
+        if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
+          return c.json(
+            {
+              success: false,
+              error: `Institutional email must end with @${domain}`,
+              errorKey: 'profile.errors.institutionalEmailDomain',
+            },
+            400
+          );
+        }
+      }
+
+      await db
+        .update(studentCohorts)
+        .set({
+          institutionalEmail: body.institutionalEmail || null,
+        })
+        .where(
+          and(eq(studentCohorts.studentId, studentId), eq(studentCohorts.cohortId, targetCohortId))
+        );
+    }
+  }
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
 // 3. GET /api/auth/mock : Bypass développeur pour environnement local
 authRouter.get('/mock', async (c) => {
+  if (!isDebugAuthEnabled(c)) return c.notFound();
+
   const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
   const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
 

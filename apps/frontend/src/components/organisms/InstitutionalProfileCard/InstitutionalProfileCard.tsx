@@ -15,16 +15,17 @@ import { cn } from '../../../utils/cn';
 
 export interface InstitutionalProfileCardProps {
   user: User;
-  onUpdateProfile: (data: Partial<User>) => Promise<void>;
+  onUpdateProfile?: (data: Partial<User>) => Promise<void>;
   onUploadAvatar?: (file: File) => Promise<void>;
   onResetAvatar?: () => Promise<void>;
   onRoleChange?: (isAdmin: boolean) => void;
+  readOnly?: boolean;
   schoolName?: string;
   schoolOptions?: string[];
   onSchoolChange?: (schoolName: string) => void;
   institutionalEmail?: string;
   institutionalEmailDomain?: string;
-  onInstitutionalEmailChange?: (email: string) => Promise<void> | void;
+  onInstitutionalEmailChange?: (email: string, cohortId?: string) => Promise<void> | void;
   cohort?: Pick<Cohort, 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality'>;
   hideRoleBadge?: boolean;
   stackPronouns?: boolean;
@@ -50,6 +51,7 @@ export function InstitutionalProfileCard({
   onUploadAvatar,
   onResetAvatar,
   onRoleChange,
+  readOnly,
   schoolName,
   institutionalEmail,
   institutionalEmailDomain,
@@ -87,6 +89,7 @@ export function InstitutionalProfileCard({
   const currentUser = useMemo(() => ({ ...user, ...nameDraft }), [user, nameDraft]);
 
   const persistField = async (key: keyof User, value: string) => {
+    if (!onUpdateProfile) return;
     const current = currentUser[key];
     if (value === (current ?? '')) return;
     await onUpdateProfile({ [key]: value });
@@ -104,7 +107,7 @@ export function InstitutionalProfileCard({
       : undefined;
 
   const saveNameDraft = async () => {
-    if (Object.keys(nameDraft).length === 0) return;
+    if (!onUpdateProfile || Object.keys(nameDraft).length === 0) return;
     await onUpdateProfile(nameDraft);
     setNameDraft({});
   };
@@ -164,7 +167,7 @@ export function InstitutionalProfileCard({
     cohortId !== 'current-cohort' && renderSelectedCohortBadge
       ? renderSelectedCohortBadge(cohortId)
       : renderCohortContent(cohortId);
-  const canEditCohorts = Boolean(onCohortsChange);
+  const canEditCohorts = Boolean(onCohortsChange) && !readOnly;
   const showCohortList =
     cohortRows.length > 0 ||
     Boolean(institutionalEmail) ||
@@ -224,14 +227,14 @@ export function InstitutionalProfileCard({
   };
 
   return (
-    <EditableFieldContext.Provider value={{ showPencil: true }}>
+    <EditableFieldContext.Provider value={{ showPencil: !readOnly }}>
       <div
         className={cn(
-          'card bg-gaming-card shadow-xl border border-gaming-border max-w-3xl w-full mx-auto font-body relative overflow-hidden',
+          'card bg-gaming-card shadow-xl border border-gaming-border max-w-3xl w-full mx-auto font-body relative overflow-visible',
           className
         )}
       >
-        {!hideRoleBadge && onRoleChange ? (
+        {!hideRoleBadge && onRoleChange && !readOnly ? (
           <div className="absolute top-0 left-0 z-20 rounded-br-xl bg-gaming-card shadow-md">
             <BadgeDropdown
               options={[ic('studentRole'), ic('adminRole')]}
@@ -266,18 +269,19 @@ export function InstitutionalProfileCard({
 
         <div className={cn('card-body gap-4 p-4 sm:p-5', hideRoleBadge ? 'pt-4' : 'pt-7')}>
           <div className="flex gap-4 items-start">
-            <div className="shrink-0" style={{ width: AVATAR_SIZE }}>
+            <div className="w-[5.5rem] shrink-0">
               <EditableAvatar
                 src={currentUser.avatarUrl || currentUser.githubAvatarUrl || ''}
                 githubFallbackSrc={user.githubAvatarUrl || ''}
-                isEditing
+                isEditing={!readOnly}
                 size={AVATAR_SIZE}
                 onUpload={async (file) => {
                   if (onUploadAvatar) await onUploadAvatar(file);
                 }}
                 onReset={async () => {
                   if (onResetAvatar) await onResetAvatar();
-                  else await onUpdateProfile({ avatarUrl: user.githubAvatarUrl });
+                  else if (onUpdateProfile)
+                    await onUpdateProfile({ avatarUrl: user.githubAvatarUrl });
                 }}
               />
             </div>
@@ -285,36 +289,42 @@ export function InstitutionalProfileCard({
             <div className="flex-1 min-w-0 flex flex-col gap-2 pt-0.5">
               <div className="flex items-baseline gap-2 min-w-0 w-full">
                 <div className="min-w-0 flex-1 overflow-hidden">
-                  <SplitEditableText
-                    displayText={collapsedName}
-                    className="text-xl sm:text-2xl font-display font-bold text-text-primary leading-tight"
-                    emptyLabel={ic('clickToEdit')}
-                    fields={[
-                      {
-                        key: 'displayName',
-                        label: ic('displayName'),
-                        placeholder: ic('displayName'),
-                        emptyHint: firstLastHint,
-                      },
-                      {
-                        key: 'firstName',
-                        label: ic('firstName'),
-                        placeholder: ic('firstName'),
-                      },
-                      {
-                        key: 'lastName',
-                        label: ic('lastName'),
-                        placeholder: ic('lastName'),
-                      },
-                    ]}
-                    values={{
-                      displayName: currentUser.displayName || '',
-                      firstName: currentUser.firstName || '',
-                      lastName: currentUser.lastName || '',
-                    }}
-                    onChange={(key, value) => setNameDraft((prev) => ({ ...prev, [key]: value }))}
-                    onCollapse={saveNameDraft}
-                  />
+                  {readOnly ? (
+                    <span className="block truncate text-xl font-display font-bold leading-tight text-text-primary sm:text-2xl">
+                      {collapsedName || ic('emptyValue')}
+                    </span>
+                  ) : (
+                    <SplitEditableText
+                      displayText={collapsedName}
+                      className="text-xl sm:text-2xl font-display font-bold text-text-primary leading-tight"
+                      emptyLabel={ic('clickToEdit')}
+                      fields={[
+                        {
+                          key: 'displayName',
+                          label: ic('displayName'),
+                          placeholder: ic('displayName'),
+                          emptyHint: firstLastHint,
+                        },
+                        {
+                          key: 'firstName',
+                          label: ic('firstName'),
+                          placeholder: ic('firstName'),
+                        },
+                        {
+                          key: 'lastName',
+                          label: ic('lastName'),
+                          placeholder: ic('lastName'),
+                        },
+                      ]}
+                      values={{
+                        displayName: currentUser.displayName || '',
+                        firstName: currentUser.firstName || '',
+                        lastName: currentUser.lastName || '',
+                      }}
+                      onChange={(key, value) => setNameDraft((prev) => ({ ...prev, [key]: value }))}
+                      onCollapse={saveNameDraft}
+                    />
+                  )}
                 </div>
                 {!stackPronouns && (
                   <span
@@ -326,6 +336,32 @@ export function InstitutionalProfileCard({
                     <span className="select-none shrink-0" aria-hidden>
                       (
                     </span>
+                    {readOnly ? (
+                      <span>{currentUser.pronouns || ic('emptyValue')}</span>
+                    ) : (
+                      <EditablePronouns
+                        value={currentUser.pronouns || ''}
+                        onChange={(v) => persistField('pronouns', v)}
+                        options={pronounOptions}
+                        placeholder={ic('addPronounsShort')}
+                        searchPlaceholder={ic('filterPronouns')}
+                        removeLabel={ic('removePronoun')}
+                        emptyFilterHint={ic('pressEnterToAddPronoun')}
+                        className={metaMuted}
+                      />
+                    )}
+                    <span className="select-none shrink-0" aria-hidden>
+                      )
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              {stackPronouns && (
+                <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
+                  {readOnly ? (
+                    <span>{currentUser.pronouns || ic('emptyValue')}</span>
+                  ) : (
                     <EditablePronouns
                       value={currentUser.pronouns || ''}
                       onChange={(v) => persistField('pronouns', v)}
@@ -336,25 +372,7 @@ export function InstitutionalProfileCard({
                       emptyFilterHint={ic('pressEnterToAddPronoun')}
                       className={metaMuted}
                     />
-                    <span className="select-none shrink-0" aria-hidden>
-                      )
-                    </span>
-                  </span>
-                )}
-              </div>
-
-              {stackPronouns && (
-                <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
-                  <EditablePronouns
-                    value={currentUser.pronouns || ''}
-                    onChange={(v) => persistField('pronouns', v)}
-                    options={pronounOptions}
-                    placeholder={ic('addPronounsShort')}
-                    searchPlaceholder={ic('filterPronouns')}
-                    removeLabel={ic('removePronoun')}
-                    emptyFilterHint={ic('pressEnterToAddPronoun')}
-                    className={metaMuted}
-                  />
+                  )}
                 </div>
               )}
             </div>
@@ -367,13 +385,19 @@ export function InstitutionalProfileCard({
                 {user.githubUsername}
               </div>
             )}
-            <EditableText
-              value={currentUser.email || ''}
-              onChange={(v) => persistField('email', v)}
-              placeholder={ic('addEmail')}
-              inputType="email"
-              className="text-sm text-text-muted min-w-0 flex-1 max-w-full"
-            />
+            {readOnly ? (
+              <span className="min-w-0 max-w-full flex-1 truncate text-sm text-text-muted">
+                {currentUser.email || ic('emptyValue')}
+              </span>
+            ) : (
+              <EditableText
+                value={currentUser.email || ''}
+                onChange={(v) => persistField('email', v)}
+                placeholder={ic('addEmail')}
+                inputType="email"
+                className="text-sm text-text-muted min-w-0 flex-1 max-w-full"
+              />
+            )}
           </div>
 
           {showCohortList && (
@@ -399,7 +423,7 @@ export function InstitutionalProfileCard({
 
                     <div className="min-w-0">
                       <div className="min-w-0">
-                        {onInstitutionalEmailChange ? (
+                        {onInstitutionalEmailChange && !readOnly ? (
                           <EditableText
                             value={getInstitutionalEmailLocalPart(
                               group.institutionalEmail,
@@ -407,7 +431,8 @@ export function InstitutionalProfileCard({
                             )}
                             onChange={(value) =>
                               onInstitutionalEmailChange(
-                                value.trim() ? `${value.trim()}@${group.emailDomain}` : ''
+                                value.trim() ? `${value.trim()}@${group.emailDomain}` : '',
+                                group.cohortIds[0]
                               )
                             }
                             placeholder={
@@ -420,7 +445,7 @@ export function InstitutionalProfileCard({
                           />
                         ) : (
                           <span className="block break-all text-sm text-text-muted">
-                            {group.institutionalEmail || '-'}
+                            {group.institutionalEmail || ic('emptyValue')}
                           </span>
                         )}
                       </div>
@@ -496,26 +521,38 @@ export function InstitutionalProfileCard({
 
           <div className="flex items-center gap-1.5 min-w-0 w-full max-w-[14rem]">
             <Cake size={14} className="shrink-0 text-text-muted" aria-hidden />
-            <EditableText
-              value={currentUser.birthDate || ''}
-              onChange={(v) => persistField('birthDate', v)}
-              placeholder={ic('birthDate')}
-              inputType="date"
-              truncate={false}
-              className={cn(metaMuted, 'text-xs leading-tight flex-1 min-w-0 whitespace-nowrap')}
-            />
+            {readOnly ? (
+              <span className={cn(metaMuted, 'min-w-0 flex-1 truncate text-xs leading-tight')}>
+                {currentUser.birthDate || ic('emptyValue')}
+              </span>
+            ) : (
+              <EditableText
+                value={currentUser.birthDate || ''}
+                onChange={(v) => persistField('birthDate', v)}
+                placeholder={ic('birthDate')}
+                inputType="date"
+                truncate={false}
+                className={cn(metaMuted, 'text-xs leading-tight flex-1 min-w-0 whitespace-nowrap')}
+              />
+            )}
           </div>
 
           <div className="flex gap-2.5 border-l-4 border-primary/35 pl-3 sm:pl-4 min-w-0">
             <Quote size={28} className="shrink-0 text-text-muted/60 mt-0.5" aria-hidden />
-            <EditableText
-              multiline
-              value={currentUser.bio || ''}
-              onChange={(v) => persistField('bio', v)}
-              placeholder={ic('writeBio')}
-              truncate={false}
-              className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap w-full min-h-[2.75rem] min-w-0"
-            />
+            {readOnly ? (
+              <p className="min-h-[2.75rem] w-full min-w-0 whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
+                {currentUser.bio || ic('emptyValue')}
+              </p>
+            ) : (
+              <EditableText
+                multiline
+                value={currentUser.bio || ''}
+                onChange={(v) => persistField('bio', v)}
+                placeholder={ic('writeBio')}
+                truncate={false}
+                className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap w-full min-h-[2.75rem] min-w-0"
+              />
+            )}
           </div>
         </div>
       </div>

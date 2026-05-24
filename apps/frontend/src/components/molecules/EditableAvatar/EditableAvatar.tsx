@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Camera, RotateCcw } from 'lucide-react';
 import { useToastStore } from '../../../features/toast/toastStore';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { cn } from '../../../utils/cn';
 
 export interface EditableAvatarProps {
   src: string;
@@ -115,6 +116,8 @@ export function EditableAvatar({
   const showToast = useToastStore((s) => s.showToast);
   const [isUploading, setIsUploading] = useState(false);
   const [optimisticSrc, setOptimisticSrc] = useState<string | null>(null);
+  const avatarSizeClass = size <= 88 ? 'h-[5.5rem] w-[5.5rem]' : 'h-24 w-24';
+  const cameraSize = size <= 88 ? 28 : 32;
 
   useEffect(() => {
     if (!optimisticSrc) return;
@@ -192,25 +195,32 @@ export function EditableAvatar({
   return (
     <div className="flex flex-col items-center gap-1.5 w-full">
       <div
-        className={`relative avatar rounded-full group ${isEditing && !isUploading ? 'cursor-pointer' : ''}`}
+        className={cn(
+          'avatar group relative rounded-full',
+          isEditing && !isUploading && 'cursor-pointer'
+        )}
         onClick={handleContainerClick}
       >
         <div
-          className="rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base overflow-hidden"
-          style={{ width: size, height: size }}
+          className={cn(
+            'overflow-hidden rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base',
+            avatarSizeClass
+          )}
         >
           <img src={optimisticSrc || src} alt="Avatar" className="w-full h-full object-cover" />
         </div>
 
         {isEditing && (
           <div
-            className="absolute inset-0 rounded-full bg-gaming-base/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ width: size, height: size }}
+            className={cn(
+              'absolute inset-0 flex items-center justify-center rounded-full bg-gaming-base/80 opacity-0 transition-opacity group-hover:opacity-100',
+              avatarSizeClass
+            )}
           >
             {isUploading ? (
               <span className="loading loading-spinner text-text-primary"></span>
             ) : (
-              <Camera className="text-text-primary" size={Math.max(24, size / 3)} />
+              <Camera className="text-text-primary" size={cameraSize} />
             )}
           </div>
         )}

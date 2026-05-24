@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { useEditableFieldContext } from '../../atoms/EditableText/EditableFieldContext';
@@ -46,7 +45,6 @@ export function BadgeDropdown({
   const showArrow = showArrowProp ?? showPencil;
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,31 +64,8 @@ export function BadgeDropdown({
   }, [catalog, query]);
 
   const selected = value.filter(Boolean);
-  const updateDropdownPosition = useCallback(() => {
-    const anchor = rootRef.current;
-    if (!anchor) return;
-
-    const rect = anchor.getBoundingClientRect();
-    const menuWidth = Math.min(320, Math.max(224, rect.width));
-    const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
-    const availableBelow = window.innerHeight - rect.bottom - 12;
-    const availableAbove = rect.top - 12;
-    const opensAbove = availableBelow < 180 && availableAbove > availableBelow;
-
-    setDropdownStyle({
-      position: 'fixed',
-      left,
-      top: opensAbove ? undefined : rect.bottom + 4,
-      bottom: opensAbove ? window.innerHeight - rect.top + 4 : undefined,
-      width: menuWidth,
-      maxHeight: Math.max(160, Math.min(320, opensAbove ? availableAbove : availableBelow)),
-      zIndex: 1000,
-    });
-  }, []);
-
   useEffect(() => {
     if (!isOpen) return;
-    updateDropdownPosition();
     requestAnimationFrame(() => inputRef.current?.focus());
 
     const handlePointerDown = (event: MouseEvent) => {
@@ -110,15 +85,11 @@ export function BadgeDropdown({
 
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', updateDropdownPosition);
-    window.addEventListener('scroll', updateDropdownPosition, true);
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', updateDropdownPosition);
-      window.removeEventListener('scroll', updateDropdownPosition, true);
     };
-  }, [isOpen, updateDropdownPosition]);
+  }, [isOpen]);
 
   const commitSelection = (item: string) => {
     const trimmed = item.trim();
@@ -199,60 +170,53 @@ export function BadgeDropdown({
         )}
       </button>
 
-      {isOpen &&
-        dropdownStyle &&
-        createPortal(
-          <div
-            ref={panelRef}
-            className="rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
-            style={dropdownStyle}
-            role="listbox"
-            aria-multiselectable={multiple}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder={searchPlaceholder}
-              className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
-            />
+      {isOpen && (
+        <div
+          ref={panelRef}
+          className="absolute right-0 top-full z-50 mt-1 max-h-80 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
+          role="listbox"
+          aria-multiselectable={multiple}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleInputKeyDown}
+            placeholder={searchPlaceholder}
+            className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
+          />
 
-            <div
-              className="flex flex-wrap gap-1 overflow-y-auto"
-              style={{ maxHeight: 'calc(100% - 2.5rem)' }}
-            >
-              {visibleOptions.length > 0 ? (
-                visibleOptions.map((item) => {
-                  const isSelected = selected.includes(item);
-                  return (
-                    <button
-                      key={item}
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      onClick={() => commitSelection(item)}
-                      className={cn(
-                        badgeClass,
-                        'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
-                        isSelected && 'badge-primary border-primary text-primary-content'
-                      )}
-                    >
-                      {renderBadge ? renderBadge(item) : item}
-                      {isSelected && <Check size={11} aria-hidden />}
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="w-full px-1 py-1 text-xs text-text-muted">
-                  {query.trim() ? emptyFilterHint : '—'}
-                </p>
-              )}
-            </div>
-          </div>,
-          document.body
-        )}
+          <div className="flex max-h-64 flex-wrap gap-1 overflow-y-auto">
+            {visibleOptions.length > 0 ? (
+              visibleOptions.map((item) => {
+                const isSelected = selected.includes(item);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => commitSelection(item)}
+                    className={cn(
+                      badgeClass,
+                      'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
+                      isSelected && 'badge-primary border-primary text-primary-content'
+                    )}
+                  >
+                    {renderBadge ? renderBadge(item) : item}
+                    {isSelected && <Check size={11} aria-hidden />}
+                  </button>
+                );
+              })
+            ) : (
+              <p className="w-full px-1 py-1 text-xs text-text-muted">
+                {query.trim() ? emptyFilterHint : '—'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

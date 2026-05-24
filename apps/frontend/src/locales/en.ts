@@ -32,10 +32,19 @@ export const en: TranslationKeys = {
     apprenticeCoder: 'The Apprentice Coder',
     guildName: 'Frontend Mages',
     guildLabel: 'Guild',
+    userMenu: {
+      inGuildActivity: 'In guild activity',
+      profileSettings: 'Profile settings',
+      setStatus: 'Set status',
+      online: 'Online',
+      busy: 'Busy (do not disturb)',
+      offline: 'Offline (invisible)',
+    },
   },
   management: {
     title: 'Management',
     subtitle: 'Read-only administration overview.',
+    loading: 'Loading management data...',
     nav: 'Management',
     backToMap: 'Back to map',
     tabs: {
@@ -65,6 +74,11 @@ export const en: TranslationKeys = {
       allRoles: 'All roles',
       allSchools: 'All schools',
       noSchools: 'No schools found',
+    },
+    errors: {
+      missingSession: 'Your session is missing. Please sign in again.',
+      loadFailed: 'Management data could not be loaded.',
+      updateFailed: 'The student profile could not be updated.',
     },
     schools: {
       logo: 'Logo',
@@ -205,6 +219,7 @@ export const en: TranslationKeys = {
       removeSchool: 'Remove school',
       chooseRole: 'Choose a role',
       chooseSchool: 'Choose a school',
+      emptyValue: 'Not provided',
     },
     stats: {
       title: 'RPG Character Sheet',

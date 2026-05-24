@@ -140,8 +140,6 @@ export function EditableText({
     'hover:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60'
   );
 
-  const inputWidthCh = (len: number, hintLen = 0) => `${Math.max(len || 1, hintLen || 3, 3)}ch`;
-
   const wrapWithPencil = (content: React.ReactNode) => {
     if (!showPencil) return content;
     return (
@@ -178,16 +176,12 @@ export function EditableText({
         onChange={(e) => setTempValue(e.target.value)}
         onBlur={handleConfirm}
         onKeyDown={handleInputKeyDown}
-        className={variant === 'inline' ? inlineInputClass : fieldInputClass}
-        style={
-          variant === 'inline' && inputType === 'date'
-            ? { minWidth: '10.5rem' }
-            : variant === 'inline' && inputType === 'email'
-              ? { minWidth: '12rem', maxWidth: '100%' }
-              : variant === 'inline' && inputType === 'text'
-                ? { width: inputWidthCh(tempValue.length, placeholder?.length) }
-                : undefined
-        }
+        className={cn(
+          variant === 'inline' ? inlineInputClass : fieldInputClass,
+          variant === 'inline' && inputType === 'date' && 'min-w-[10.5rem]',
+          variant === 'inline' && inputType === 'email' && 'min-w-48 max-w-full',
+          variant === 'inline' && inputType === 'text' && 'w-auto min-w-[3ch]'
+        )}
       />
     );
 

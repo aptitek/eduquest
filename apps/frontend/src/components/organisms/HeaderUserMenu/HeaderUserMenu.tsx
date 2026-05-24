@@ -1,6 +1,8 @@
 import { User } from '@eduquest/shared';
 import { StatusIndicator } from '../../atoms/StatusIndicator';
 import { Settings, Circle, MinusCircle, Moon } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
+import { cn } from '../../../utils/cn';
 
 export interface HeaderUserMenuProps {
   user: User;
@@ -9,8 +11,11 @@ export interface HeaderUserMenuProps {
 }
 
 export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUserMenuProps) {
+  const { t } = useTranslation();
   const currentStatus = user.userStatus || 'offline';
   const isAutoBusy = currentStatus === 'busy' && !user.statusOverride;
+  const statusItemClass = (status: 'online' | 'offline' | 'busy') =>
+    cn('flex items-center gap-2 py-2', currentStatus === status && 'bg-gaming-base/60');
 
   // Map user status to StatusIndicator prop
   const getIndicatorStatus = () => {
@@ -49,7 +54,7 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
         {isAutoBusy ? (
           <div
             className="tooltip tooltip-left absolute bottom-0 right-0"
-            data-tip="In Guild Activity"
+            data-tip={t('header.userMenu.inGuildActivity')}
           >
             {indicator}
           </div>
@@ -71,12 +76,12 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
             className="flex items-center gap-2 py-2"
           >
             <Settings size={16} className="text-text-secondary" />
-            <span className="font-medium">Profile Settings</span>
+            <span className="font-medium">{t('header.userMenu.profileSettings')}</span>
           </a>
         </li>
         <div className="divider my-1"></div>
         <li className="menu-title px-4 py-1 text-xs uppercase tracking-wider text-text-muted">
-          Set Status
+          {t('header.userMenu.setStatus')}
         </li>
         <li>
           <a
@@ -84,10 +89,10 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
               (document.activeElement as HTMLElement)?.blur();
               onStatusChange('online');
             }}
-            className={`flex items-center gap-2 py-2 ${currentStatus === 'online' ? 'bg-gaming-base/60' : ''}`}
+            className={statusItemClass('online')}
           >
             <Circle size={14} className="text-status-completed fill-status-completed" />
-            <span>Online</span>
+            <span>{t('header.userMenu.online')}</span>
           </a>
         </li>
         <li>
@@ -96,10 +101,10 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
               (document.activeElement as HTMLElement)?.blur();
               onStatusChange('busy');
             }}
-            className={`flex items-center gap-2 py-2 ${currentStatus === 'busy' ? 'bg-gaming-base/60' : ''}`}
+            className={statusItemClass('busy')}
           >
             <MinusCircle size={14} className="text-status-boss fill-status-boss" />
-            <span>Busy (Do not disturb)</span>
+            <span>{t('header.userMenu.busy')}</span>
           </a>
         </li>
         <li>
@@ -108,10 +113,10 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
               (document.activeElement as HTMLElement)?.blur();
               onStatusChange('offline');
             }}
-            className={`flex items-center gap-2 py-2 ${currentStatus === 'offline' ? 'bg-gaming-base/60' : ''}`}
+            className={statusItemClass('offline')}
           >
             <Moon size={14} className="text-status-locked fill-status-locked" />
-            <span>Offline (Invisible)</span>
+            <span>{t('header.userMenu.offline')}</span>
           </a>
         </li>
       </ul>

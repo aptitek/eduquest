@@ -14,12 +14,16 @@ type Bindings = {
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
 
 // Middleware CORS pour autoriser les requêtes du Front-end local (Vite)
 app.use(
   '*',
   cors({
-    origin: '*',
+    origin: (origin, c) => {
+      const allowedOrigin = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+      return origin === allowedOrigin ? origin : allowedOrigin;
+    },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   })

@@ -30,10 +30,19 @@ export const fr = {
     apprenticeCoder: "L'Apprenti Codeur",
     guildName: 'Mages Frontend',
     guildLabel: 'Guilde',
+    userMenu: {
+      inGuildActivity: 'En activité de guilde',
+      profileSettings: 'Paramètres du profil',
+      setStatus: 'Définir le statut',
+      online: 'En ligne',
+      busy: 'Occupé (ne pas déranger)',
+      offline: 'Hors ligne (invisible)',
+    },
   },
   management: {
     title: 'Gestion',
     subtitle: "Vue d'administration en lecture seule.",
+    loading: 'Chargement des données de gestion...',
     nav: 'Gestion',
     backToMap: 'Retour à la carte',
     tabs: {
@@ -63,6 +72,11 @@ export const fr = {
       allRoles: 'Tous les rôles',
       allSchools: 'Toutes les écoles',
       noSchools: 'Aucune école trouvée',
+    },
+    errors: {
+      missingSession: 'Votre session est introuvable. Veuillez vous reconnecter.',
+      loadFailed: 'Les données de gestion n’ont pas pu être chargées.',
+      updateFailed: 'Le profil étudiant n’a pas pu être mis à jour.',
     },
     schools: {
       logo: 'Logo',
@@ -204,6 +218,7 @@ export const fr = {
       removeSchool: "Retirer l'école",
       chooseRole: 'Choisir un rôle',
       chooseSchool: 'Choisir une école',
+      emptyValue: 'Non renseigné',
     },
     stats: {
       title: 'Fiche de Personnage JDR',
