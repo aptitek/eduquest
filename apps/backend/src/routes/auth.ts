@@ -11,6 +11,7 @@ import type {
   School,
   Student,
   User,
+  UserSchoolMembership,
 } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
@@ -22,6 +23,7 @@ import {
   schools,
   studentCohorts,
   students,
+  userSchoolMemberships,
   users,
 } from '../db/schema';
 import { authMiddleware, UserPayload } from '../middleware/auth';
@@ -67,6 +69,7 @@ type GameCharacterRecord = typeof gameCharacters.$inferSelect;
 type SchoolRecord = typeof schools.$inferSelect;
 type StudentCohortRecord = typeof studentCohorts.$inferSelect;
 type StudentRecord = typeof students.$inferSelect;
+type UserSchoolMembershipRecord = typeof userSchoolMemberships.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 type ManagementBackup = {
   addresses: Address[];
@@ -92,6 +95,7 @@ type ManagementStudentUpdateBody = {
   cohortIds?: string[];
   institutionalEmail?: string;
   institutionalEmailCohortId?: string;
+  institutionalSchoolId?: string;
 };
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'logoUrl'>>;
 type CohortInvitePayload = {
@@ -171,7 +175,7 @@ function toCohort(record: CohortRecord, school?: School, campus?: Campus): Cohor
   };
 }
 
-function toUser(record: UserRecord): User {
+function toUser(record: UserRecord, schoolMemberships?: UserSchoolMembership[]): User {
   return {
     id: record.id,
     email: record.email,
@@ -188,9 +192,24 @@ function toUser(record: UserRecord): User {
     userStatus: record.userStatus || undefined,
     statusOverride: record.statusOverride || undefined,
     isAdmin: record.isAdmin,
+    schoolMemberships,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
     lastLogin: toIsoString(record.lastLogin),
+  };
+}
+
+function toUserSchoolMembership(
+  record: UserSchoolMembershipRecord,
+  school?: School
+): UserSchoolMembership {
+  return {
+    userId: record.userId,
+    schoolId: record.schoolId,
+    school,
+    institutionalEmail: record.institutionalEmail || undefined,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
   };
 }
 
@@ -222,6 +241,138 @@ function toStudent(
 
 function isDebugAuthEnabled(c: { env: Bindings }) {
   return !c.env.DATABASE_URL || c.env.ENABLE_DEBUG_AUTH === 'true';
+}
+
+function buildMembershipEmailFallback(userEmail: string, school?: School) {
+  const domain = school?.emailDomain || 'school.edu';
+  return `${userEmail.split('@')[0]}@${domain}`;
+}
+
+function getDebugProfileSchoolMemberships(user: User, student?: Student): UserSchoolMembership[] {
+  const membershipsBySchool = new Map<string, UserSchoolMembership>();
+
+  if (user.isAdmin) {
+    const aptitekSchool = getDebugBackup().schools.find((school) => school.name === 'Aptitek');
+    if (aptitekSchool) {
+      return [
+        {
+          userId: user.id,
+          schoolId: aptitekSchool.id,
+          school: aptitekSchool,
+          institutionalEmail: user.email,
+        },
+      ];
+    }
+  }
+
+  for (const membership of student?.cohortMemberships || []) {
+    const school = membership.cohort?.school || student?.school;
+    const schoolId = membership.cohort?.schoolId || school?.id || student?.schoolId;
+    if (!schoolId) continue;
+
+    membershipsBySchool.set(schoolId, {
+      userId: user.id,
+      schoolId,
+      school,
+      institutionalEmail: membership.institutionalEmail,
+      createdAt: membership.createdAt,
+    });
+  }
+
+  if (student?.schoolId && !membershipsBySchool.has(student.schoolId)) {
+    membershipsBySchool.set(student.schoolId, {
+      userId: user.id,
+      schoolId: student.schoolId,
+      school: student.school,
+      institutionalEmail: buildMembershipEmailFallback(user.email, student.school),
+    });
+  }
+
+  return Array.from(membershipsBySchool.values());
+}
+
+function attachDebugSchoolMemberships(profile: { user: User; student?: Student }) {
+  profile.user.schoolMemberships = getDebugProfileSchoolMemberships(profile.user, profile.student);
+}
+
+function setDebugUserSchoolInstitutionalEmail(
+  profile: { user: User; student?: Student },
+  school: School | undefined,
+  institutionalEmail: string
+) {
+  if (!school) return;
+  const memberships = profile.user.schoolMemberships || getDebugProfileSchoolMemberships(profile.user, profile.student);
+  const existing = memberships.find((membership) => membership.schoolId === school.id);
+  if (existing) {
+    existing.institutionalEmail = institutionalEmail || undefined;
+  } else {
+    memberships.push({
+      userId: profile.user.id,
+      schoolId: school.id,
+      school,
+      institutionalEmail: institutionalEmail || undefined,
+    });
+  }
+  profile.user.schoolMemberships = memberships;
+}
+
+async function upsertUserSchoolMembership(
+  databaseUrl: string,
+  userId: string,
+  schoolId: string,
+  institutionalEmail?: string
+) {
+  const db = getDb(databaseUrl);
+  await db
+    .insert(userSchoolMemberships)
+    .values({
+      userId,
+      schoolId,
+      institutionalEmail: institutionalEmail || null,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [userSchoolMemberships.userId, userSchoolMemberships.schoolId],
+      set: {
+        institutionalEmail: institutionalEmail || null,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+async function ensureUserSchoolMembership(databaseUrl: string, userId: string, schoolId: string) {
+  const db = getDb(databaseUrl);
+  await db
+    .insert(userSchoolMemberships)
+    .values({
+      userId,
+      schoolId,
+      updatedAt: new Date(),
+    })
+    .onConflictDoNothing();
+}
+
+async function loadUserSchoolMemberships(
+  databaseUrl: string,
+  userId: string
+): Promise<UserSchoolMembership[]> {
+  const db = getDb(databaseUrl);
+  const membershipRecords = await db
+    .select()
+    .from(userSchoolMemberships)
+    .where(eq(userSchoolMemberships.userId, userId));
+  const membershipSchoolIds = membershipRecords.map((membership) => membership.schoolId);
+  const membershipSchools =
+    membershipSchoolIds.length > 0
+      ? await db.select().from(schools).where(inArray(schools.id, membershipSchoolIds))
+      : [];
+  const membershipSchoolMap = new Map(
+    membershipSchools.map((school) => [school.id, toSchool(school)])
+  );
+
+  return membershipRecords.map((membership) =>
+    toUserSchoolMembership(membership, membershipSchoolMap.get(membership.schoolId))
+  );
 }
 
 function buildCohortInviteUrl(frontendUrl: string, token: string) {
@@ -363,6 +514,11 @@ async function assignStudentToInvitedCohort(
       updatedAt: new Date(),
     })
     .where(eq(students.id, studentId));
+
+  const [studentRecord] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
+  if (studentRecord) {
+    await ensureUserSchoolMembership(databaseUrl, studentRecord.userId, cohortRecord.schoolId);
+  }
 }
 
 function assignDebugProfileToInvitedCohort(
@@ -399,6 +555,7 @@ function assignDebugProfileToInvitedCohort(
   profile.student.cohortMemberships = memberships;
   profile.student.schoolId = cohort.schoolId;
   profile.student.school = cohort.school;
+  attachDebugSchoolMemberships(profile);
 }
 
 async function getManagementBackup(databaseUrl?: string): Promise<ManagementBackup> {
@@ -411,6 +568,7 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
     campusRecords,
     cohortRecords,
     userRecords,
+    userSchoolMembershipRecords,
     studentRecords,
     studentCohortRecords,
     characterRecords,
@@ -420,6 +578,7 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
     db.select().from(campuses),
     db.select().from(cohorts),
     db.select().from(users),
+    db.select().from(userSchoolMemberships),
     db.select().from(students),
     db.select().from(studentCohorts),
     db.select().from(gameCharacters),
@@ -447,7 +606,17 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
       ),
     ])
   );
-  const userMap = new Map(userRecords.map((record) => [record.id, toUser(record)]));
+  const schoolMembershipsByUser = userSchoolMembershipRecords.reduce<
+    Map<string, UserSchoolMembership[]>
+  >((groups, membership: UserSchoolMembershipRecord) => {
+    const current = groups.get(membership.userId) || [];
+    current.push(toUserSchoolMembership(membership, schoolMap.get(membership.schoolId)));
+    groups.set(membership.userId, current);
+    return groups;
+  }, new Map());
+  const userMap = new Map(
+    userRecords.map((record) => [record.id, toUser(record, schoolMembershipsByUser.get(record.id))])
+  );
   const characterMap = new Map(
     characterRecords.map((record) => [record.studentId, toGameCharacter(record)])
   );
@@ -1004,8 +1173,12 @@ authRouter.put('/management/students/:studentId', async (c) => {
         ) || profile.student.cohortMemberships?.[0];
       if (targetMembership) {
         targetMembership.institutionalEmail = body.institutionalEmail || undefined;
+        const targetSchool = targetMembership.cohort?.school || profile.student.school;
+        setDebugUserSchoolInstitutionalEmail(profile, targetSchool, body.institutionalEmail);
       }
     }
+
+    attachDebugSchoolMemberships(profile);
 
     return c.json({
       success: true,
@@ -1116,6 +1289,13 @@ authRouter.put('/management/students/:studentId', async (c) => {
           updatedAt: new Date(),
         })
         .where(eq(students.id, studentId));
+      if (primaryCohort?.schoolId) {
+        await ensureUserSchoolMembership(
+          c.env.DATABASE_URL,
+          studentRecord.userId,
+          primaryCohort.schoolId
+        );
+      }
     } else {
       await db
         .update(students)
@@ -1163,6 +1343,15 @@ authRouter.put('/management/students/:studentId', async (c) => {
         .where(
           and(eq(studentCohorts.studentId, studentId), eq(studentCohorts.cohortId, targetCohortId))
         );
+
+      if (targetSchool) {
+        await upsertUserSchoolMembership(
+          c.env.DATABASE_URL,
+          studentRecord.userId,
+          targetSchool.id,
+          body.institutionalEmail
+        );
+      }
     }
   }
 
@@ -1484,6 +1673,13 @@ authRouter.get('/me', authMiddleware, async (c) => {
   };
   const battleObj: GameBattle[] = debugProfile?.battles || [];
 
+  if (debugProfile) {
+    attachDebugSchoolMemberships(debugProfile);
+    userObj = debugProfile.user;
+  } else if (!databaseUrl) {
+    userObj.schoolMemberships = getDebugProfileSchoolMemberships(userObj, studentObj);
+  }
+
   // Si DB est configurée, charger les données réelles
   if (databaseUrl && !debugProfile) {
     try {
@@ -1511,6 +1707,8 @@ authRouter.get('/me', authMiddleware, async (c) => {
           githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
           isAdmin: userRecord.isAdmin,
         };
+
+        userObj.schoolMemberships = await loadUserSchoolMemberships(databaseUrl, userRecord.id);
       }
 
       const loadedStudents = await db
@@ -1661,6 +1859,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     email?: string;
     avatarUrl?: string;
     institutionalEmail?: string;
+    institutionalSchoolId?: string;
     birthDate?: string | null;
     bio?: string;
     pronouns?: string;
@@ -1680,7 +1879,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
 
   // Validation offline/resilience
   if (!databaseUrl) {
-    const defaultDomain = 'school.edu';
+    const defaultDomain = userPayload.isAdmin ? 'aptitek.io' : 'school.edu';
     if (
       body.institutionalEmail &&
       !body.institutionalEmail.toLowerCase().endsWith('@' + defaultDomain)
@@ -1697,7 +1896,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   }
 
   // Objets mis à jour pour la réponse
-  let userObj = {
+  let userObj: User = {
     id: userPayload.id,
     email: body.email ?? userPayload.email,
     githubUsername: body.githubUsername ?? userPayload.githubUsername,
@@ -1745,6 +1944,26 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       },
     ],
   };
+
+  userObj.schoolMemberships = [
+    {
+      userId: userObj.id,
+      schoolId: userPayload.isAdmin ? 'debug_school_aptitek' : 'school_mock_1',
+      school: userPayload.isAdmin
+        ? {
+            id: 'debug_school_aptitek',
+            name: 'Aptitek',
+            emailDomain: 'aptitek.io',
+          }
+        : studentObj.school,
+      institutionalEmail:
+        body.institutionalEmail ||
+        (userPayload.isAdmin
+          ? userPayload.email
+          : body.email?.split('@')[0] + '@school.edu' ||
+            userPayload.email.split('@')[0] + '@school.edu'),
+    },
+  ];
 
   let characterObj = {
     studentId: 'stud_mock_1',
@@ -1796,6 +2015,35 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           githubAvatarUrl: updatedUser.githubAvatarUrl || undefined,
           isAdmin: updatedUser.isAdmin,
         };
+      }
+
+      if (body.institutionalEmail !== undefined && userObj.isAdmin) {
+        const [targetSchool] = body.institutionalSchoolId
+          ? await db.select().from(schools).where(eq(schools.id, body.institutionalSchoolId)).limit(1)
+          : await db.select().from(schools).where(eq(schools.name, 'Aptitek')).limit(1);
+
+        if (targetSchool?.emailDomain && body.institutionalEmail) {
+          const domain = targetSchool.emailDomain.toLowerCase();
+          if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
+            return c.json(
+              {
+                success: false,
+                error: `Institutional email must end with @${domain}`,
+                errorKey: 'profile.errors.institutionalEmailDomain',
+              },
+              400
+            );
+          }
+        }
+
+        if (targetSchool) {
+          await upsertUserSchoolMembership(
+            databaseUrl,
+            userObj.id,
+            targetSchool.id,
+            body.institutionalEmail
+          );
+        }
       }
 
       // 2. Mise à jour de la table `students`
@@ -1866,6 +2114,15 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             )
             .returning();
           updatedMembership = savedMembership || latestMembership;
+        }
+
+        if (body.institutionalEmail !== undefined && latestCohortSchool) {
+          await upsertUserSchoolMembership(
+            databaseUrl,
+            userPayload.id,
+            latestCohortSchool.id,
+            body.institutionalEmail
+          );
         }
 
         const [updatedStudent] = await db
@@ -1960,6 +2217,10 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     } catch (dbError: any) {
       console.warn('Database error saving user profile, returning local updates:', dbError.message);
     }
+  }
+
+  if (databaseUrl) {
+    userObj.schoolMemberships = await loadUserSchoolMemberships(databaseUrl, userObj.id);
   }
 
   // 4. Génération d'un NOUVEAU Token JWT mis à jour

@@ -118,6 +118,24 @@ export const users = pgTable('users', {
   lastLogin: timestamp('last_login', { withTimezone: true }),
 });
 
+export const userSchoolMemberships = pgTable(
+  'user_school_memberships',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    schoolId: uuid('school_id')
+      .notNull()
+      .references(() => schools.id, { onDelete: 'cascade' }),
+    institutionalEmail: text('institutional_email').unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.schoolId] }),
+  })
+);
+
 // Table des profils étudiants
 export const students = pgTable('students', {
   id: uuid('id').primaryKey().defaultRandom(),

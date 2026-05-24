@@ -21,9 +21,19 @@ export interface User {
   userStatus?: UserStatus;
   statusOverride?: boolean;
   isAdmin: boolean;
+  schoolMemberships?: UserSchoolMembership[];
   createdAt?: string;
   updatedAt?: string;
   lastLogin?: string;
+}
+
+export interface UserSchoolMembership {
+  userId: string;
+  schoolId: string;
+  school?: School;
+  institutionalEmail?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Table `schools` : Établissement

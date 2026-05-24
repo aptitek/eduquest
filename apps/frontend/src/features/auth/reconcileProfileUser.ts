@@ -10,6 +10,8 @@ export function reconcileProfileUser(
   if (!apiUser) return merged;
 
   const result = { ...merged };
+  Object.assign(result, apiUser);
+
   for (const key of Object.keys(sent) as (keyof User)[]) {
     const apiValue = apiUser[key];
     if (apiValue !== undefined && apiValue !== null) {

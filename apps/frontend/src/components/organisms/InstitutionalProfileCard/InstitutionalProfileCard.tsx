@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { EditableText, EditableFieldContext } from '../../atoms/EditableText';
 import { CompoundBadge } from '../../atoms/CompoundBadge';
-import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
 import { EditableAvatar } from '../../molecules/EditableAvatar';
 import { SplitEditableText } from '../../molecules/SplitEditableText';
 import { EditablePronouns } from '../../molecules/EditablePronouns';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown/BadgeDropdown';
+import { SchoolLogoBadge } from '../../molecules/SchoolLogoBadge';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { Cohort, User } from '@eduquest/shared';
-import { Github, Cake, Quote, Trash2 } from 'lucide-react';
+import { Github, Cake, Quote } from 'lucide-react';
 import { cn } from '../../../utils/cn';
+import { formatUserDisplayName } from '../../../utils/displayName';
 import { formatPronounsForDisplay, PRONOUN_OPTION_IDS } from '../../../utils/pronouns';
 
 export interface InstitutionalProfileCardProps {
@@ -20,6 +21,7 @@ export interface InstitutionalProfileCardProps {
   onRoleChange?: (isAdmin: boolean) => void;
   readOnly?: boolean;
   schoolName?: string;
+  schoolLogoUrl?: string;
   schoolOptions?: string[];
   onSchoolChange?: (schoolName: string) => void;
   institutionalEmail?: string;
@@ -52,6 +54,7 @@ export function InstitutionalProfileCard({
   onRoleChange,
   readOnly,
   schoolName,
+  schoolLogoUrl,
   institutionalEmail,
   institutionalEmailDomain,
   onInstitutionalEmailChange,
@@ -91,15 +94,15 @@ export function InstitutionalProfileCard({
     await onUpdateProfile({ [key]: value });
   };
 
-  const collapsedName = currentUser.displayName?.trim()
-    ? currentUser.displayName.trim()
-    : [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ').trim() ||
-      currentUser.githubUsername ||
-      '';
+  const collapsedName = formatUserDisplayName(currentUser);
 
   const firstLastHint =
     currentUser.firstName && currentUser.lastName
-      ? `${currentUser.firstName} ${currentUser.lastName}`
+      ? formatUserDisplayName({
+          firstName: currentUser.firstName,
+          lastName: currentUser.lastName,
+          email: currentUser.email,
+        })
       : undefined;
 
   const saveNameDraft = async () => {
@@ -140,8 +143,13 @@ export function InstitutionalProfileCard({
         (option) => getCohortOptionSchoolName(option) === cohortSchoolDraft
       )
     : [];
-  const cohortRows =
-    selectedCohortValues.length > 0 ? selectedCohortValues : cohort ? ['current-cohort'] : [];
+  const cohortRows = user.isAdmin
+    ? []
+    : selectedCohortValues.length > 0
+      ? selectedCohortValues
+      : cohort
+        ? ['current-cohort']
+        : [];
   const renderCohortContent = (cohortId: string) => {
     if (cohortId !== 'current-cohort' && renderCohortBadge) {
       return renderCohortBadge(cohortId);
@@ -163,7 +171,7 @@ export function InstitutionalProfileCard({
     cohortId !== 'current-cohort' && renderSelectedCohortBadge
       ? renderSelectedCohortBadge(cohortId)
       : renderCohortContent(cohortId);
-  const canEditCohorts = Boolean(onCohortsChange) && !readOnly;
+  const canEditCohorts = Boolean(onCohortsChange) && !readOnly && !user.isAdmin;
   const showCohortList =
     cohortRows.length > 0 ||
     Boolean(institutionalEmail) ||
@@ -212,15 +220,15 @@ export function InstitutionalProfileCard({
             },
           ]
         : [];
+  const primaryCohortId = cohortRows[0];
+  const primaryCohortGroup = displayedCohortGroups[0];
   const addCohort = (nextCohort?: string) => {
     if (!nextCohort || !onCohortsChange) return;
     onCohortsChange([...selectedCohortValues, nextCohort]);
     setCohortSchoolDraft(null);
   };
-  const removeCohort = (cohortId: string) => {
-    if (!onCohortsChange || cohortId === 'current-cohort') return;
-    onCohortsChange(selectedCohortValues.filter((current) => current !== cohortId));
-  };
+  const showRoleBadge = !hideRoleBadge;
+  const showBadgeHeader = showRoleBadge || Boolean(primaryCohortId);
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: !readOnly }}>
@@ -230,40 +238,53 @@ export function InstitutionalProfileCard({
           className
         )}
       >
-        {!hideRoleBadge && onRoleChange && !readOnly ? (
-          <div className="absolute top-0 left-0 z-20 rounded-br-xl bg-gaming-card shadow-md">
-            <BadgeDropdown
-              options={[ic('studentRole'), ic('adminRole')]}
-              value={[roleLabel]}
-              onChange={(next) => {
-                const nextRole = next[0];
-                if (!nextRole) return;
-                onRoleChange(nextRole === ic('adminRole'));
-              }}
-              multiple={false}
-              placeholder={roleLabel}
-              searchPlaceholder={ic('filterRole')}
-              removeLabel={ic('removeRole')}
-              emptyFilterHint={ic('chooseRole')}
-              badgeClassName={cn(
-                'rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
-                user.isAdmin ? 'badge-primary' : 'badge-ghost'
+        {showBadgeHeader && (
+          <div className="flex items-center border-b border-gaming-border bg-gaming-base/40 px-4 py-2 sm:px-5">
+            <div className="badge badge-outline min-h-0 max-w-full gap-0 overflow-visible rounded-xl border-gaming-border bg-gaming-card p-0 text-xs font-semibold text-text-secondary shadow-sm">
+              {showRoleBadge && (
+                <span className="inline-flex min-w-0 items-center px-3 py-1.5">
+                  {onRoleChange && !readOnly ? (
+                    <BadgeDropdown
+                      options={[ic('studentRole'), ic('adminRole')]}
+                      value={[roleLabel]}
+                      onChange={(next) => {
+                        const nextRole = next[0];
+                        if (!nextRole) return;
+                        onRoleChange(nextRole === ic('adminRole'));
+                      }}
+                      multiple={false}
+                      placeholder={roleLabel}
+                      searchPlaceholder={ic('filterRole')}
+                      removeLabel={ic('removeRole')}
+                      emptyFilterHint={ic('chooseRole')}
+                      badgeClassName={cn(
+                        'h-auto min-h-0 border-0 bg-transparent px-0 py-0 text-xs font-semibold shadow-none',
+                        user.isAdmin ? 'text-primary' : 'text-text-secondary'
+                      )}
+                      selectedMaxWidth="max-w-[10rem]"
+                    />
+                  ) : (
+                    <span className={cn(user.isAdmin ? 'text-primary' : 'text-text-secondary')}>
+                      {roleLabel}
+                    </span>
+                  )}
+                </span>
               )}
-              selectedMaxWidth="max-w-[10rem]"
-            />
-          </div>
-        ) : !hideRoleBadge ? (
-          <div
-            className={cn(
-              'badge absolute top-0 left-0 z-10 rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
-              user.isAdmin ? 'badge-primary' : 'badge-ghost'
-            )}
-          >
-            {roleLabel}
-          </div>
-        ) : null}
 
-        <div className={cn('card-body gap-4 p-4 sm:p-5', hideRoleBadge ? 'pt-4' : 'pt-7')}>
+              {showRoleBadge && primaryCohortId && (
+                <span className="h-5 w-px shrink-0 bg-gaming-border" aria-hidden />
+              )}
+
+              {primaryCohortId && (
+                <span className="inline-flex min-w-0 items-center px-3 py-1.5">
+                  {renderSelectedCohortContent(primaryCohortId)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="card-body gap-4 p-4 sm:p-5">
           <div className="flex gap-4 items-start">
             <div className="w-[5.5rem] shrink-0">
               <EditableAvatar
@@ -378,7 +399,7 @@ export function InstitutionalProfileCard({
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
             {user.githubUsername && (
-              <div className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary gap-1 text-xs py-2 px-2 font-medium shrink-0">
+              <div className="badge badge-outline flex h-10 min-w-20 shrink-0 items-center justify-center gap-1 rounded-lg border-gaming-border bg-gaming-base px-3 text-xs font-medium text-text-secondary">
                 <Github size={12} aria-hidden />
                 {user.githubUsername}
               </div>
@@ -399,79 +420,44 @@ export function InstitutionalProfileCard({
           </div>
 
           {showCohortList && (
-            <div className="min-w-0 overflow-hidden rounded-xl border border-gaming-border bg-gaming-base/20">
-              {displayedCohortGroups.map((group) => (
-                <div
-                  key={group.schoolName}
-                  className="border-b border-gaming-border p-2.5 last:border-b-0"
-                >
-                  <div className="flex flex-col gap-2">
-                    <div
-                      className="flex h-8 w-16 shrink-0 items-center justify-center rounded-lg border border-gaming-border bg-gaming-card px-1"
-                      title={group.schoolName}
-                    >
-                      {renderCohortSchoolBadge ? (
-                        renderCohortSchoolBadge(group.schoolName)
-                      ) : (
-                        <span className="truncate text-xs font-semibold text-text-secondary">
-                          {group.schoolName}
-                        </span>
-                      )}
-                    </div>
+            <div className="min-w-0">
+              {primaryCohortGroup && (
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                  <span className="badge badge-outline flex h-10 min-w-20 shrink-0 items-center justify-center rounded-lg border-gaming-border bg-gaming-card px-3 text-text-secondary">
+                    <SchoolLogoBadge
+                      name={primaryCohortGroup.schoolName}
+                      logoUrl={schoolLogoUrl}
+                      className="h-5 max-h-full w-auto max-w-[5rem] object-contain"
+                    />
+                  </span>
 
-                    <div className="min-w-0">
-                      <div className="min-w-0">
-                        {onInstitutionalEmailChange && !readOnly ? (
-                          <EditableText
-                            value={getInstitutionalEmailLocalPart(
-                              group.institutionalEmail,
-                              group.emailDomain
-                            )}
-                            onChange={(value) =>
-                              onInstitutionalEmailChange(
-                                value.trim() ? `${value.trim()}@${group.emailDomain}` : '',
-                                group.cohortIds[0]
-                              )
-                            }
-                            placeholder={
-                              suggestedInstitutionalEmailLocalPart || ic('institutionalEmail')
-                            }
-                            variant="field"
-                            suffix={`@${group.emailDomain}`}
-                            truncate={false}
-                            className="text-sm text-text-muted"
-                          />
-                        ) : (
-                          <span className="block break-all text-sm text-text-muted">
-                            {group.institutionalEmail || ic('emptyValue')}
-                          </span>
+                  <div className="min-w-0 flex-1">
+                    {onInstitutionalEmailChange && !readOnly ? (
+                      <EditableText
+                        value={getInstitutionalEmailLocalPart(
+                          primaryCohortGroup.institutionalEmail,
+                          primaryCohortGroup.emailDomain
                         )}
-                      </div>
-
-                      <div className="mt-1.5 flex min-w-0 flex-col gap-1.5">
-                        {group.cohortIds.map((cohortId) => (
-                          <div key={cohortId} className="flex min-w-0 items-center gap-2">
-                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                              {renderSelectedCohortContent(cohortId)}
-                            </div>
-
-                            {canEditCohorts && cohortId !== 'current-cohort' && (
-                              <HoldToConfirmButton
-                                onConfirm={() => removeCohort(cohortId)}
-                                holdDuration={900}
-                                className="btn-xs min-h-0 shrink-0 px-2"
-                                variant="btn-ghost text-error hover:bg-error/10"
-                              >
-                                <Trash2 size={13} aria-hidden />
-                              </HoldToConfirmButton>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                        onChange={(value) =>
+                          onInstitutionalEmailChange(
+                            value.trim() ? `${value.trim()}@${primaryCohortGroup.emailDomain}` : '',
+                            primaryCohortGroup.cohortIds[0]
+                          )
+                        }
+                        placeholder={suggestedInstitutionalEmailLocalPart || ic('institutionalEmail')}
+                        variant="field"
+                        suffix={`@${primaryCohortGroup.emailDomain}`}
+                        truncate={false}
+                        className="text-sm text-text-muted min-w-0 flex-1 max-w-full"
+                      />
+                    ) : (
+                      <span className="block break-all text-sm text-text-muted">
+                        {primaryCohortGroup.institutionalEmail || ic('emptyValue')}
+                      </span>
+                    )}
                   </div>
                 </div>
-              ))}
+              )}
 
               {canEditCohorts && (
                 <div className="border-t border-gaming-border p-2.5">

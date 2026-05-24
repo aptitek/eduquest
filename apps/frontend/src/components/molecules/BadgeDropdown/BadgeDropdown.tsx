@@ -175,6 +175,7 @@ export function BadgeDropdown({
       ? createPortal(
           <div
             ref={panelRef}
+            onMouseDown={(event) => event.stopPropagation()}
             className="z-[80] max-h-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
             style={panelStyle}
             role="listbox"

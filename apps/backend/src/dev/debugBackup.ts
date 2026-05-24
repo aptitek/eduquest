@@ -9,6 +9,7 @@ import type {
   School,
   Student,
   User,
+  UserSchoolMembership,
 } from '@eduquest/shared';
 
 type DebugStudentProfile = {
@@ -227,7 +228,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       githubUsername: 'lina-morel',
       firstName: 'Lina',
       lastName: 'MOREL',
-      displayName: 'Lina Morel',
+      displayName: 'Lina MOREL',
       birthDate: '2001-04-12',
       pronouns: 'she, her',
       bio: 'Frontend apprentice who likes polishing tiny UI states.',
@@ -297,7 +298,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       githubUsername: 'samir-benali',
       firstName: 'Samir',
       lastName: 'BENALI',
-      displayName: 'Samir Benali',
+      displayName: 'Samir BENALI',
       birthDate: '1999-11-03',
       pronouns: 'he, him',
       bio: 'Fullstack ranger focused on API contracts and deployment rituals.',
@@ -365,7 +366,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       githubUsername: 'noa-chen',
       firstName: 'Noa',
       lastName: 'CHEN',
-      displayName: 'Noa Chen',
+      displayName: 'Noa CHEN',
       birthDate: '2000-07-29',
       pronouns: 'they, them',
       bio: 'Data alchemist testing analytics-heavy workflows and long labels.',
@@ -448,6 +449,10 @@ export function getDebugStudentOptions() {
 }
 
 export function getDebugBackup() {
+  for (const profile of DEBUG_STUDENT_PROFILES) {
+    profile.user.schoolMemberships = getDebugSchoolMemberships(profile);
+  }
+
   return {
     addresses: DEBUG_ADDRESSES,
     schools: DEBUG_SCHOOLS,
@@ -457,6 +462,34 @@ export function getDebugBackup() {
     activities: DEBUG_ACTIVITIES,
     students: DEBUG_STUDENT_PROFILES,
   };
+}
+
+function getDebugSchoolMemberships(profile: DebugStudentProfile): UserSchoolMembership[] {
+  const membershipsBySchool = new Map<string, UserSchoolMembership>();
+
+  for (const membership of profile.student.cohortMemberships || []) {
+    const school = membership.cohort?.school || profile.student.school;
+    const schoolId = membership.cohort?.schoolId || school?.id || profile.student.schoolId;
+    if (!schoolId) continue;
+
+    membershipsBySchool.set(schoolId, {
+      userId: profile.user.id,
+      schoolId,
+      school,
+      institutionalEmail: membership.institutionalEmail,
+      createdAt: membership.createdAt,
+    });
+  }
+
+  if (profile.student.schoolId && !membershipsBySchool.has(profile.student.schoolId)) {
+    membershipsBySchool.set(profile.student.schoolId, {
+      userId: profile.user.id,
+      schoolId: profile.student.schoolId,
+      school: profile.student.school,
+    });
+  }
+
+  return Array.from(membershipsBySchool.values());
 }
 
 export function getDebugProfile(identifier?: string | null) {

@@ -9,6 +9,7 @@ import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from '../organisms/InstitutionalProfileCard/InstitutionalProfileCard';
 import { StudentCohort, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
+import { formatUserDisplayName } from '../../utils/displayName';
 import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,6 +24,7 @@ type ProfileResponse = {
 
 type ProfileUpdate = Partial<User> & {
   institutionalEmail?: string;
+  institutionalSchoolId?: string;
 };
 
 type ThemeMode = 'dark' | 'light';
@@ -55,8 +57,20 @@ export function AccountDropdown() {
   const [institutionalEmailOverride, setInstitutionalEmailOverride] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const latestCohortMembership = getLatestCohortMembership(student?.cohortMemberships);
-  const latestCohort = latestCohortMembership?.cohort;
-  const latestSchool = latestCohort?.school || student?.school;
+  const latestCohort = user?.isAdmin ? undefined : latestCohortMembership?.cohort;
+  const adminSchoolMembership = user?.schoolMemberships?.find(
+    (membership) => membership.school?.name === 'Aptitek'
+  );
+  const latestSchool = user?.isAdmin
+    ? adminSchoolMembership?.school || {
+        id: 'debug_school_aptitek',
+        name: 'Aptitek',
+        emailDomain: 'aptitek.io',
+      }
+    : latestCohort?.school || student?.school;
+  const latestSchoolMembership = user?.schoolMemberships?.find(
+    (membership) => membership.schoolId === latestSchool?.id
+  );
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -76,12 +90,11 @@ export function AccountDropdown() {
 
   useEffect(() => {
     setInstitutionalEmailOverride(null);
-  }, [latestCohortMembership?.institutionalEmail]);
+  }, [latestSchoolMembership?.institutionalEmail]);
 
   if (!user) return null;
 
-  const username =
-    user.displayName || user.firstName || user.githubUsername || user.email.split('@')[0];
+  const username = formatUserDisplayName(user);
   const avatarUrl =
     user.avatarUrl ||
     user.githubAvatarUrl ||
@@ -170,7 +183,7 @@ export function AccountDropdown() {
     const snapshot = institutionalEmailOverride;
     setInstitutionalEmailOverride(institutionalEmail);
     try {
-      await updateProfile({ institutionalEmail }, true);
+      await updateProfile({ institutionalEmail, institutionalSchoolId: latestSchool?.id }, true);
     } catch {
       setInstitutionalEmailOverride(snapshot);
     }
@@ -218,11 +231,14 @@ export function AccountDropdown() {
                 onUpdateProfile={handleUpdateProfile}
                 onUploadAvatar={handleUploadAvatar}
                 institutionalEmail={
-                  institutionalEmailOverride ?? latestCohortMembership?.institutionalEmail
+                  institutionalEmailOverride ??
+                  latestSchoolMembership?.institutionalEmail ??
+                  latestCohortMembership?.institutionalEmail
                 }
                 institutionalEmailDomain={latestSchool?.emailDomain || 'school.edu'}
                 onInstitutionalEmailChange={handleInstitutionalEmailChange}
                 schoolName={latestSchool?.name}
+                schoolLogoUrl={latestSchool?.logoUrl}
                 cohort={latestCohort}
                 className="shadow-none border-none rounded-none border-b border-gaming-border"
               />
