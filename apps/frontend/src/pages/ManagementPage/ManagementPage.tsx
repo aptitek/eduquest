@@ -240,25 +240,26 @@ export function ManagementPage() {
             <p className="text-sm text-text-muted">{t('management.subtitle')}</p>
           </div>
 
-          <div className="tabs tabs-boxed w-fit bg-gaming-card border border-gaming-border p-1">
-            {(['schools', 'cohorts', 'students'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  'tab font-display font-semibold',
-                  activeTab === tab
-                    ? 'tab-active bg-gaming-base text-text-primary'
-                    : 'text-text-muted hover:text-text-secondary'
-                )}
-              >
-                {t(`management.tabs.${tab}`)}
-              </button>
-            ))}
-          </div>
+          <div className="flex flex-col">
+            <div className="tabs tabs-lifted w-fit gap-1">
+              {(['schools', 'cohorts', 'students'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'tab rounded-t-xl border-gaming-border px-6 font-display font-semibold',
+                    activeTab === tab
+                      ? 'tab-active bg-gaming-card text-text-primary'
+                      : 'bg-gaming-base/40 text-text-muted hover:text-text-secondary'
+                  )}
+                >
+                  {t(`management.tabs.${tab}`)}
+                </button>
+              ))}
+            </div>
 
-          {activeTab === 'students' ? (
+            {activeTab === 'students' ? (
               <ManagementTable
                 data={studentRows}
                 columns={studentColumns}
@@ -267,6 +268,7 @@ export function ManagementPage() {
                 schoolFilterOptions={schoolFilterOptions}
                 selectedRowId={selectedEntity?.tab === 'students' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'students', id: row.id })}
+                flushTop
               />
             ) : activeTab === 'cohorts' ? (
               <ManagementTable
@@ -276,6 +278,7 @@ export function ManagementPage() {
                 onGlobalFilterChange={setSearchQuery}
                 selectedRowId={selectedEntity?.tab === 'cohorts' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'cohorts', id: row.id })}
+                flushTop
               />
             ) : (
               <ManagementTable
@@ -285,8 +288,10 @@ export function ManagementPage() {
                 onGlobalFilterChange={setSearchQuery}
                 selectedRowId={selectedEntity?.tab === 'schools' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'schools', id: row.id })}
+                flushTop
               />
             )}
+          </div>
         </div>
 
           <PlayingCard

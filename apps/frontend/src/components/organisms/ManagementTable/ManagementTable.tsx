@@ -106,6 +106,7 @@ export function ManagementTable<TData extends { id: string }>({
   schoolFilterOptions = [],
   selectedRowId,
   onRowSelect,
+  flushTop,
 }: {
   data: TData[];
   columns: ColumnDef<TData>[];
@@ -114,6 +115,7 @@ export function ManagementTable<TData extends { id: string }>({
   schoolFilterOptions?: string[];
   selectedRowId?: string;
   onRowSelect?: (row: TData) => void;
+  flushTop?: boolean;
 }) {
   const { t } = useTranslation();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -150,7 +152,10 @@ export function ManagementTable<TData extends { id: string }>({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gaming-border bg-gaming-card shadow-lg">
+    <div className={cn(
+      'overflow-hidden rounded-xl border border-gaming-border bg-gaming-card shadow-lg',
+      flushTop && 'rounded-tl-none'
+    )}>
       <div className="flex flex-col gap-2 border-b border-gaming-border bg-gaming-card p-3 sm:flex-row sm:items-center">
         <input
           type="search"
