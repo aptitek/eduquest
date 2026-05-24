@@ -22,7 +22,7 @@ export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>
 
 // Secret JWT par défaut en développement
 const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';
-const DEFAULT_FRONTEND_URL = 'http://localhost:5174';
+const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
 
 // 1. GET /api/auth/github : Redirige vers GitHub OAuth
 authRouter.get('/github', (c) => {
@@ -157,7 +157,7 @@ authRouter.get('/github/callback', async (c) => {
         const existingUsers = await db
           .select()
           .from(users)
-          .where(eq(users.githubEmail, primaryEmail))
+          .where(eq(users.email, primaryEmail))
           .limit(1);
 
         if (existingUsers.length > 0) {
@@ -172,8 +172,9 @@ authRouter.get('/github/callback', async (c) => {
               lastLogin: new Date(),
               githubSsoToken: accessToken,
               githubUsername: githubUser.login,
-              githubName: githubUser.name || githubUser.login,
-              githubAvatar: avatarUrl,
+              displayName: githubUser.name || githubUser.login,
+              githubAvatarUrl: avatarUrl,
+              avatarUrl: avatarUrl,
               isAdmin: isAptitek ? true : userRecord.isAdmin,
               updatedAt: new Date(),
             })
@@ -183,11 +184,12 @@ authRouter.get('/github/callback', async (c) => {
           const [newUser] = await db
             .insert(users)
             .values({
-              githubEmail: primaryEmail,
+              email: primaryEmail,
               githubSsoToken: accessToken,
               githubUsername: githubUser.login,
-              githubName: githubUser.name || githubUser.login,
-              githubAvatar: avatarUrl,
+              displayName: githubUser.name || githubUser.login,
+              githubAvatarUrl: avatarUrl,
+              avatarUrl: avatarUrl,
               isAdmin: isAptitek,
             })
             .returning();
@@ -203,9 +205,6 @@ authRouter.get('/github/callback', async (c) => {
               guildId: undefined, // Pas de guilde par défaut pour éviter violations FK si table non seedée
               schoolId: defaultSchoolId,
               institutionalEmail: `${githubUser.login.toLowerCase()}@school.edu`,
-              photoUrl:
-                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80', // Default in-game portrait
-              pronouns: ['They/Them'],
             })
             .returning();
 
@@ -234,10 +233,11 @@ authRouter.get('/github/callback', async (c) => {
     // E. Signature du JWT Token
     const payload: UserPayload = {
       id: userId,
-      githubEmail: primaryEmail,
+      email: primaryEmail,
       githubUsername: githubUser.login,
-      githubName: githubUser.name || githubUser.login,
-      githubAvatar: avatarUrl,
+      displayName: githubUser.name || githubUser.login,
+      githubAvatarUrl: avatarUrl,
+              avatarUrl: avatarUrl,
       isAdmin,
     };
     const token = await sign(payload, jwtSecret);
@@ -288,7 +288,7 @@ authRouter.get('/mock', async (c) => {
       const existingUsers = await db
         .select()
         .from(users)
-        .where(eq(users.githubEmail, mockEmail))
+        .where(eq(users.email, mockEmail))
         .limit(1);
 
       if (existingUsers.length > 0) {
@@ -301,8 +301,9 @@ authRouter.get('/mock', async (c) => {
           .set({
             lastLogin: new Date(),
             githubUsername: mockUsername,
-            githubName: mockName,
-            githubAvatar: mockAvatar,
+            displayName: mockName,
+            githubAvatarUrl: mockAvatar,
+            avatarUrl: mockAvatar,
             isAdmin: isAptitek ? true : userRecord.isAdmin,
             updatedAt: new Date(),
           })
@@ -311,11 +312,12 @@ authRouter.get('/mock', async (c) => {
         const [newUser] = await db
           .insert(users)
           .values({
-            githubEmail: mockEmail,
+            email: mockEmail,
             githubSsoToken: 'mock-sso-token',
             githubUsername: mockUsername,
-            githubName: mockName,
-            githubAvatar: mockAvatar,
+            displayName: mockName,
+            githubAvatarUrl: mockAvatar,
+            avatarUrl: mockAvatar,
             isAdmin: isAptitek,
           })
           .returning();
@@ -330,8 +332,6 @@ authRouter.get('/mock', async (c) => {
             guildId: undefined,
             schoolId: defaultSchoolId,
             institutionalEmail: isAptitek ? 'aptitek@school.edu' : 'wizard@school.edu',
-            photoUrl: mockAvatar,
-            pronouns: ['He/Him'],
           })
           .returning();
 
@@ -355,10 +355,11 @@ authRouter.get('/mock', async (c) => {
 
   const payload: UserPayload = {
     id: userId,
-    githubEmail: mockEmail,
+    email: mockEmail,
     githubUsername: mockUsername,
-    githubName: mockName,
-    githubAvatar: mockAvatar,
+    displayName: mockName,
+    githubAvatarUrl: mockAvatar,
+            avatarUrl: mockAvatar,
     isAdmin,
   };
 
@@ -379,10 +380,11 @@ authRouter.get('/me', authMiddleware, async (c) => {
   // Données utilisateur réelles ou fallback JWT
   let userObj = {
     id: userPayload.id,
-    githubEmail: userPayload.githubEmail,
+    email: userPayload.email,
     githubUsername: userPayload.githubUsername,
-    githubName: userPayload.githubName,
-    githubAvatar: userPayload.githubAvatar,
+    displayName: userPayload.displayName,
+    avatarUrl: userPayload.avatarUrl,
+    githubAvatarUrl: userPayload.githubAvatarUrl,
     isAdmin: userPayload.isAdmin,
   };
 
@@ -397,10 +399,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
       name: 'EduQuest Academy',
       emailDomain: 'school.edu',
     },
-    institutionalEmail: userPayload.githubEmail.split('@')[0] + '@school.edu',
-    pronouns: ['They/Them'],
-    photoUrl:
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+    institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
   };
 
   let characterObj = {
@@ -431,10 +430,11 @@ authRouter.get('/me', authMiddleware, async (c) => {
         const userRecord = loadedUsers[0];
         userObj = {
           id: userRecord.id,
-          githubEmail: userRecord.githubEmail,
+          email: userRecord.email,
           githubUsername: userRecord.githubUsername || undefined,
-          githubName: userRecord.githubName || undefined,
-          githubAvatar: userRecord.githubAvatar || undefined,
+          displayName: userRecord.displayName || undefined,
+          avatarUrl: userRecord.avatarUrl || undefined,
+          githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
           isAdmin: userRecord.isAdmin,
         };
       }
@@ -472,8 +472,6 @@ authRouter.get('/me', authMiddleware, async (c) => {
           schoolId: studentRecord.schoolId || undefined,
           school: schoolObj,
           institutionalEmail: studentRecord.institutionalEmail || studentObj.institutionalEmail,
-          pronouns: (studentRecord.pronouns as string[]) || [],
-          photoUrl: studentRecord.photoUrl || studentObj.photoUrl,
         };
 
         const loadedCharacters = await db
@@ -520,10 +518,12 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
 
   let body: {
-    githubName?: string;
+    displayName?: string;
+    firstName?: string;
+    lastName?: string;
     githubUsername?: string;
-    githubEmail?: string;
-    githubAvatar?: string;
+    email?: string;
+    avatarUrl?: string;
     institutionalEmail?: string;
     birthDate?: string | null;
     internalDescription?: string;
@@ -541,21 +541,28 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   // Validation offline/resilience
   if (!databaseUrl) {
     const defaultDomain = 'school.edu';
-    if (body.institutionalEmail && !body.institutionalEmail.toLowerCase().endsWith('@' + defaultDomain)) {
-      return c.json({
-        success: false,
-        error: `Institutional email must end with @${defaultDomain}`
-      }, 400);
+    if (
+      body.institutionalEmail &&
+      !body.institutionalEmail.toLowerCase().endsWith('@' + defaultDomain)
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: `Institutional email must end with @${defaultDomain}`,
+        },
+        400
+      );
     }
   }
 
   // Objets mis à jour pour la réponse
   let userObj = {
     id: userPayload.id,
-    githubEmail: body.githubEmail || userPayload.githubEmail,
+    email: body.email || userPayload.email,
     githubUsername: body.githubUsername || userPayload.githubUsername,
-    githubName: body.githubName || userPayload.githubName,
-    githubAvatar: body.githubAvatar || userPayload.githubAvatar,
+    displayName: body.displayName || userPayload.displayName,
+    avatarUrl: body.avatarUrl || userPayload.avatarUrl,
+    githubAvatarUrl: userPayload.githubAvatarUrl,
     isAdmin: userPayload.isAdmin, // Interdit à l'utilisateur de modifier isAdmin
   };
 
@@ -571,16 +578,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     },
     institutionalEmail:
       body.institutionalEmail ||
-      body.githubEmail?.split('@')[0] + '@school.edu' ||
-      userPayload.githubEmail.split('@')[0] + '@school.edu',
-    pronouns: body.pronouns || ['They/Them'],
-    photoUrl:
-      body.photoUrl ||
-      body.githubAvatar ||
-      userPayload.githubAvatar ||
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-    birthDate: body.birthDate || null,
-    internalDescription: body.internalDescription || '',
+      body.email?.split('@')[0] + '@school.edu' ||
+      userPayload.email.split('@')[0] + '@school.edu',
   };
 
   let characterObj = {
@@ -604,10 +603,12 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       const [updatedUser] = await db
         .update(users)
         .set({
-          githubName: body.githubName,
+          displayName: body.displayName,
+          firstName: body.firstName,
+          lastName: body.lastName,
           githubUsername: body.githubUsername,
-          githubEmail: body.githubEmail,
-          githubAvatar: body.githubAvatar,
+          email: body.email,
+          avatarUrl: body.avatarUrl,
           updatedAt: new Date(),
         })
         .where(eq(users.id, userPayload.id))
@@ -616,10 +617,11 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       if (updatedUser) {
         userObj = {
           id: updatedUser.id,
-          githubEmail: updatedUser.githubEmail,
+          email: updatedUser.email,
           githubUsername: updatedUser.githubUsername || undefined,
-          githubName: updatedUser.githubName || undefined,
-          githubAvatar: updatedUser.githubAvatar || undefined,
+          displayName: updatedUser.displayName || undefined,
+          avatarUrl: updatedUser.avatarUrl || undefined,
+          githubAvatarUrl: updatedUser.githubAvatarUrl || undefined,
           isAdmin: updatedUser.isAdmin,
         };
       }
@@ -647,10 +649,13 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             if (schoolRecord.emailDomain) {
               const domain = schoolRecord.emailDomain.toLowerCase();
               if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
-                return c.json({
-                  success: false,
-                  error: `Institutional email must end with @${domain}`
-                }, 400);
+                return c.json(
+                  {
+                    success: false,
+                    error: `Institutional email must end with @${domain}`,
+                  },
+                  400
+                );
               }
             }
           }
@@ -660,10 +665,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           .update(students)
           .set({
             institutionalEmail: body.institutionalEmail,
-            birthDate: body.birthDate || null,
-            internalDescription: body.internalDescription,
-            photoUrl: body.photoUrl,
-            pronouns: body.pronouns || [],
             updatedAt: new Date(),
           })
           .where(eq(students.id, studentId))
@@ -694,10 +695,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             schoolId: updatedStudent.schoolId || undefined,
             school: schoolObj,
             institutionalEmail: updatedStudent.institutionalEmail || undefined,
-            pronouns: (updatedStudent.pronouns as string[]) || [],
-            photoUrl: updatedStudent.photoUrl || undefined,
-            birthDate: updatedStudent.birthDate || undefined,
-            internalDescription: updatedStudent.internalDescription || undefined,
           } as any;
         }
 
@@ -728,10 +725,11 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   // 4. Génération d'un NOUVEAU Token JWT mis à jour
   const newPayload: UserPayload = {
     id: userObj.id,
-    githubEmail: userObj.githubEmail,
+    email: userObj.email,
     githubUsername: userObj.githubUsername,
-    githubName: userObj.githubName,
-    githubAvatar: userObj.githubAvatar,
+    displayName: userObj.displayName,
+    avatarUrl: userObj.avatarUrl,
+    githubAvatarUrl: userObj.githubAvatarUrl,
     isAdmin: userObj.isAdmin,
   };
 

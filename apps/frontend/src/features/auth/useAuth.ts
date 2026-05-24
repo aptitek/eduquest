@@ -5,7 +5,15 @@ const BACKEND_BASE_URL = 'http://localhost:8787';
 
 export function useAuth() {
   const { user, student, character, setUserSession, logout: clearStoreSession } = useGameStore();
-  const [loadingSession, setLoadingSession] = useState(true);
+  const [loadingSession, setLoadingSession] = useState(() => {
+    // Si l'utilisateur est déjà présent en mémoire, pas de chargement
+    if (useGameStore.getState().user) return false;
+    // Si on a un token dans l'URL ou en localStorage, on va devoir le vérifier
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    const savedToken = localStorage.getItem('eduquest_token');
+    return !!(tokenFromUrl || savedToken);
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Vérifie la validité du token local
@@ -44,6 +52,12 @@ export function useAuth() {
 
   // Initialisation et parsing URL
   useEffect(() => {
+    // Si l'utilisateur est déjà connecté en mémoire, pas besoin de revérifier
+    if (user) {
+      setLoadingSession(false);
+      return;
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
     const errorFromUrl = urlParams.get('error');
@@ -75,7 +89,7 @@ export function useAuth() {
         setLoadingSession(false);
       }
     }
-  }, [verifySession]);
+  }, [verifySession, user]);
 
   // Déclencheurs de Redirection
   const loginWithGithub = useCallback(() => {

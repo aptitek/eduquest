@@ -1,13 +1,31 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from '../molecules/AccountDropdown';
+import { StatusIndicator } from '../atoms/StatusIndicator';
+import { useAuth } from '../../features/auth/useAuth';
 import iconUrl from '../../assets/icon.svg';
 
 export function GameHeader() {
   const { student, character } = useGameStore();
+  const { user } = useAuth();
   const { t } = useTranslation();
   const progressBarRef = useRef<HTMLDivElement>(null);
+
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const currentXp = character?.stats.xp || 0;
   const xpNeeded = (character?.currentLevel || 1) * 100;
@@ -38,6 +56,11 @@ export function GameHeader() {
 
         {/* Partie Droite : Account Dropdown */}
         <div className="flex gap-3 items-center">
+          {!isOnline && (
+            <div className="tooltip tooltip-left" data-tip={t('header.connectionLost')}>
+              <StatusIndicator status="error" isPulsing={true} />
+            </div>
+          )}
           <AccountDropdown />
         </div>
       </div>
@@ -47,7 +70,7 @@ export function GameHeader() {
         <div className="flex items-center gap-4">
           <div className="avatar online">
             <div className="w-16 rounded-lg border border-status-boss/30">
-              <img src={student.photoUrl} alt="Avatar" />
+              <img src={user?.avatarUrl || user?.githubAvatarUrl} alt="Avatar" />
             </div>
           </div>
           <div>

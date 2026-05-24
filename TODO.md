@@ -11,11 +11,16 @@
 
 ---
 
+# IMPORTANT
+
+[x] Login is broken.
+[x] Make the login page skipped when the user is already logged in.
+
 # Frontend
 
 ## Components
 
-[ ] RULE : All components should have a skeletton counterpart for when the data is loading from the API. 
+[ ] RULE : All components should have a skeletton counterpart for when the data is loading from the API.
 
 [ ] Make a status indicator component. Make it a coloured circle with optional pulse animation. It should be a new atom.
 [ ] Add an instance of the status indicator component in the top right of the header when connection to local API is broken.
@@ -24,10 +29,14 @@
 [ ] Make or find a badge dropdown component. It should be a simple dropdown with a list of badge and a selected badge, it will extends a normal dropdown or badge component (whichever is most relevant). It should have a pen when in edit mode. It should be reusable and generic. It should support a group version where the field should be a list of badges. And a single version where the field is a single badge.
 [ ] Make or find a simple editable avatar component that extends a normal avatar component. It should have a pen when in edit mode. It should have a reset button when editable. It should also have a status indicator that drop-down with the statuses (either badge or new atom if necessary)
 [ ] Make or find a confirm button that will extends normal button but will have a coloured aura when hovered. When pressed it will have a coloured border that will surround the button slowly. When the border is full the button will be "pressed". If the user releases the mouse button and the border is not full the button will not be "pressed". When released the border will shrink slowly, pressing again will resume the growth.
+
 ---
-[ ] Make or find a editable card component. It should accept a list of fields to edit and display them in a card format. It should be reusable and generic. 
+
+[ ] Make or find a editable card component. It should accept a list of fields to edit and display them in a card format. It should be reusable and generic.
 [ ] The card component should have two modes: read mode and edit mode. It will feature complex layout of other atoms like editable text, badge dropdown, editable avatar, etc.
+
 ---
+
 [ ] Make or find a component for a table where the user can sort, filter and search. It should be paginated and accept custom component as list item.
 
 ## Languages
@@ -41,7 +50,6 @@
 [ ] Remove the emojis from the language files.
 [ ] Do not use emojis when using a tailwind icon is possible. It's ugly.
 [ ] Make missing strings bright red in the frontend for debugging purposes.
-
 
 # Account Dropdown
 
@@ -57,7 +65,6 @@
 [ ] Add a birth date field in the profile card.
 [ ] Add a pronouns field in the profile card.
 [ ] Add a short bio field in the profile card.
-
 
 # Admin
 
@@ -75,8 +82,8 @@ Those pages are only accessible to admins !
 [ ] The confirm button will have a add (green +) add icon, (orange pen) edit icon, (red trashcan) delete icon.
 
 ---
+
 [ ] Make a new page : Schools. It will list all schools.
-[ ] Make a school card component. It will display the school logo like an avatar but rectangular and inline, and name and be similarly editable as the user profile card. Same goes for all database fields in the table rows. 
+[ ] Make a school card component. It will display the school logo like an avatar but rectangular and inline, and name and be similarly editable as the user profile card. Same goes for all database fields in the table rows.
 
 ---
-

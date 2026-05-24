@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import { User as UserIcon, LogOut, ChevronDown, Languages, Shield, Check } from 'lucide-react';
+import { LogOut, ChevronDown, Languages, Check } from 'lucide-react';
 import { useAuth } from '../../features/auth/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useGameStore } from '../../features/game/gameStore';
+import { StatusIndicator } from '../atoms/StatusIndicator';
+import { InstitutionalProfileCard } from '../organisms/InstitutionalProfileCard/InstitutionalProfileCard';
+import { User } from '@eduquest/shared';
+
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function AccountDropdown() {
   const { user, logout } = useAuth();
   const { t, locale, setLocale } = useTranslation();
-  const { setActiveView } = useGameStore();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -25,23 +27,36 @@ export function AccountDropdown() {
 
   if (!user) return null;
 
-  const username = user.githubName || user.githubUsername || user.githubEmail.split('@')[0];
+  const username =
+    user.displayName || user.firstName || user.githubUsername || user.email.split('@')[0];
   const avatarUrl =
-    user.githubAvatar ||
+    user.avatarUrl ||
+    user.githubAvatarUrl ||
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
+
+  const handleUpdateProfile = async (data: Partial<User>) => {
+    // TODO: Connect to real API when available
+    console.log('Update profile requested:', data);
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Trigger Button using DaisyUI 'btn' styling */}
+      {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="btn btn-ghost hover:bg-gaming-base/40 border border-gaming-border hover:border-solarized-blue/50 flex items-center gap-2.5 h-auto min-h-0 py-1.5 px-3 rounded-xl transition-all select-none cursor-pointer focus:outline-none normal-case"
       >
-        {/* DaisyUI Round Avatar with Online Status & Rings */}
-        <div className="avatar online">
-          <div className="w-8 rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base">
-            <img src={avatarUrl} alt={username} />
+        {/* Avatar with Status Indicator */}
+        <div className="relative">
+          <div className="avatar">
+            <div className="w-8 rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base">
+              <img src={avatarUrl} alt={username} />
+            </div>
           </div>
+          <StatusIndicator
+            status="success"
+            className="absolute -bottom-0.5 -right-0.5 border-2 border-gaming-base w-3.5 h-3.5"
+          />
         </div>
         <span className="hidden sm:block text-xs font-semibold text-text-primary font-display max-w-[120px] truncate">
           {username}
@@ -52,7 +67,7 @@ export function AccountDropdown() {
         />
       </button>
 
-      {/* Dropdown Content Card styled with DaisyUI classes */}
+      {/* Dropdown Content */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -60,96 +75,62 @@ export function AccountDropdown() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="card card-compact absolute right-0 mt-2 w-64 bg-gaming-card border border-gaming-border rounded-xl shadow-2xl z-50 overflow-hidden"
+            className="absolute right-0 mt-2 w-[500px] max-w-[90vw] bg-gaming-card border border-gaming-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col"
           >
-            <div className="card-body p-0">
-              {/* Header Identity Section with a larger round Daisy Avatar */}
-              <div className="p-4 bg-gaming-base/40 border-b border-gaming-border flex items-center gap-3">
-                <div className="avatar">
-                  <div className="w-10 rounded-full ring ring-solarized-blue/10">
-                    <img src={avatarUrl} alt={username} />
-                  </div>
-                </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-xs font-bold text-text-primary truncate font-display">
-                    {username}
-                  </span>
-                  <span className="text-[10px] text-text-muted truncate font-body">
-                    {user.githubEmail}
-                  </span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Shield
-                      size={10}
-                      className={user.isAdmin ? 'text-status-campfire' : 'text-solarized-blue'}
-                    />
-                    <span className="text-[9px] uppercase tracking-wider font-semibold font-display text-text-secondary">
-                      {user.isAdmin
-                        ? t('common.admin') || 'ADMIN'
-                        : t('common.student') || 'APPRENTI'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+            {/* Editable Profile Card Area */}
+            <div className="flex-1 max-h-[70vh] overflow-y-auto">
+              <InstitutionalProfileCard
+                user={user}
+                onUpdateProfile={handleUpdateProfile}
+                className="shadow-none border-none rounded-none border-b border-gaming-border"
+              />
+            </div>
 
-              {/* Menu Actions using DaisyUI 'menu' component */}
-              <ul className="menu menu-sm p-1.5 border-b border-gaming-border flex flex-col gap-0.5">
-                <li>
-                  <button
-                    onClick={() => {
-                      setActiveView('profile');
-                      setIsOpen(false);
-                    }}
-                    className="px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-gaming-base/60 flex items-center gap-2.5 transition-colors font-display font-semibold"
-                  >
-                    <UserIcon size={14} className="text-solarized-blue" />
-                    <span>{t('auth.profile') || 'Mon Profil'}</span>
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => {
-                      setIsOpen(false);
-                      logout();
-                    }}
-                    className="px-3 py-2 rounded-lg text-xs text-status-campfire hover:bg-solarized-red/10 flex items-center gap-2.5 transition-colors font-display font-semibold"
-                  >
-                    <LogOut size={14} />
-                    <span>{t('auth.logout')}</span>
-                  </button>
-                </li>
-              </ul>
-
-              {/* Language Switch Section with DaisyUI buttons */}
-              <div className="p-3 bg-gaming-base/20 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-[10px] text-text-muted font-display font-semibold uppercase tracking-wider">
-                  <Languages size={12} />
+            {/* Footer: Language Selector & Disconnect */}
+            <div className="p-3 bg-gaming-base/20 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-text-muted font-display font-semibold uppercase tracking-wider">
+                  <Languages size={14} />
                   <span>{t('common.language') || 'LANGUE'}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="flex gap-2">
                   <button
                     onClick={() => setLocale('fr')}
-                    className={`btn btn-xs py-1.5 px-2 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
+                    className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
                       locale === 'fr'
                         ? 'btn-primary text-white shadow-sm'
                         : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
                     }`}
                   >
                     <span>FR</span>
-                    {locale === 'fr' && <Check size={10} />}
+                    {locale === 'fr' && <Check size={12} />}
                   </button>
                   <button
                     onClick={() => setLocale('en')}
-                    className={`btn btn-xs py-1.5 px-2 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
+                    className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
                       locale === 'en'
                         ? 'btn-primary text-white shadow-sm'
                         : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
                     }`}
                   >
                     <span>EN</span>
-                    {locale === 'en' && <Check size={10} />}
+                    {locale === 'en' && <Check size={12} />}
                   </button>
                 </div>
               </div>
+
+              <div className="divider my-0"></div>
+
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  logout();
+                }}
+                className="w-full btn btn-sm btn-ghost text-status-campfire hover:bg-solarized-red/10 flex items-center justify-center gap-2 transition-colors font-display font-semibold"
+              >
+                <LogOut size={16} />
+                <span>{t('auth.logout')}</span>
+              </button>
             </div>
           </motion.div>
         )}

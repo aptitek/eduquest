@@ -8,6 +8,7 @@ import {
   jsonb,
   date,
   doublePrecision,
+  pgEnum,
 } from 'drizzle-orm/pg-core';
 
 // ==========================================
@@ -37,13 +38,23 @@ export const guilds = pgTable('guilds', {
 });
 
 // Table centrale des utilisateurs
+export const userStatusEnum = pgEnum('user_status', ['online', 'offline', 'busy']);
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  githubEmail: text('github_email').unique().notNull(),
+  email: text('email').unique().notNull(),
   githubSsoToken: text('github_sso_token'),
-  githubUsername: text('github_username'),
-  githubName: text('github_name'),
-  githubAvatar: text('github_avatar'),
+  githubUsername: text('github_username').unique(),
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  displayName: text('display_name'),
+  birthDate: date('birth_date'),
+  pronouns: text('pronouns'),
+  bio: text('bio'),
+  avatarUrl: text('avatar_url'),
+  githubAvatarUrl: text('github_avatar_url'),
+  userStatus: userStatusEnum('user_status').default('offline'),
+  statusOverride: boolean('status_override').default(false),
   isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -60,10 +71,6 @@ export const students = pgTable('students', {
   guildId: uuid('guild_id').references(() => guilds.id),
   schoolId: uuid('school_id').references(() => schools.id),
   institutionalEmail: text('institutional_email').unique(),
-  birthDate: date('birth_date'),
-  internalDescription: text('internal_description'), //TODO: delete
-  photoUrl: text('photo_url'), //TODO delete (replaced by avatar in user table)
-  pronouns: jsonb('pronouns').default('[]'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });

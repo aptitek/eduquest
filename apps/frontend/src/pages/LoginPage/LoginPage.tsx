@@ -45,6 +45,9 @@ export function LoginPage() {
         {/* Separator Line */}
         <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-gaming-border to-transparent" />
 
+        {/* TODO: Make it dynamic to the user's preferred language, using useTranslation hook.  */}
+        {/* TODO: Review that description. and make something more attractive and engaging once we style the website with the new theme.  */}
+
         {/* RPG Lore Description Box */}
         <div className="bg-gaming-base/60 border border-gaming-border p-4 rounded-xl text-xs text-text-secondary leading-relaxed flex flex-col gap-2 relative">
           <div className="flex items-center gap-2 text-status-quest font-semibold font-display">
@@ -84,6 +87,7 @@ export function LoginPage() {
             <span>{t('auth.loginWithGithub')}</span>
           </motion.button>
 
+          {/*TODO: Connect as a mock student instead */}
           {/* Local Developer Bypass CTA */}
           <motion.button
             whileHover={{ scale: 1.02 }}
@@ -101,6 +105,8 @@ export function LoginPage() {
           {t('auth.bypassWarning')}
         </div>
       </motion.div>
+
+      {/*TODO: Remove duplicate logo, site. Just one clickable logo with an alt text. */}
 
       {/* Retro HUD Footer */}
       <motion.div
@@ -121,18 +127,6 @@ export function LoginPage() {
             className="h-6 w-auto opacity-70 hover:opacity-100 transition-opacity"
           />
         </a>
-        <div className="flex items-center gap-1.5 justify-center flex-wrap text-center">
-          <span>{t('layout.footer')}</span>
-          <span>—</span>
-          <a
-            href="https://aptitek.io"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-solarized-blue hover:underline font-semibold pointer-events-auto normal-case"
-          >
-            aptitek.io
-          </a>
-        </div>
       </motion.div>
     </div>
   );

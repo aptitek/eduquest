@@ -9,11 +9,10 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 import { MapContainer, MapArea, LoadingMap } from '../../components/organisms/MapContainer';
 import { GameMap } from '../../components/organisms/GameMap';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
-import { ProfilePage } from '../Profile/ProfilePage';
 
 export function MapPage() {
   const { t } = useTranslation();
-  const { student, character, activities, battles, setActivities, addBattle, gainXp, activeView } =
+  const { student, character, activities, battles, setActivities, addBattle, gainXp } =
     useGameStore();
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
@@ -40,6 +39,7 @@ export function MapPage() {
       }
     } catch (error: any) {
       console.warn('Backend injoignable ou en erreur. Utilisation des mocks locaux.');
+      //TODO: Move that in the backend please....
       setActivities([
         {
           id: 'act_1',
@@ -126,30 +126,26 @@ export function MapPage() {
     <GameLayout>
       <GameHeader />
 
-      {activeView === 'profile' ? (
-        <ProfilePage />
-      ) : (
-        <MapContainer>
-          <MapArea>
-            {loading ? (
-              <LoadingMap />
-            ) : (
-              <GameMap
-                activities={activities}
-                completedActivityIds={completedActivityIds}
-                playerLevel={character.currentLevel}
-                onSelectNode={setSelectedActivity}
-              />
-            )}
-          </MapArea>
+      <MapContainer>
+        <MapArea>
+          {loading ? (
+            <LoadingMap />
+          ) : (
+            <GameMap
+              activities={activities}
+              completedActivityIds={completedActivityIds}
+              playerLevel={character.currentLevel}
+              onSelectNode={setSelectedActivity}
+            />
+          )}
+        </MapArea>
 
-          <ActivityDetailPanel
-            selectedActivity={selectedActivity}
-            completedActivityIds={completedActivityIds}
-            onComplete={handleCompleteActivity}
-          />
-        </MapContainer>
-      )}
+        <ActivityDetailPanel
+          selectedActivity={selectedActivity}
+          completedActivityIds={completedActivityIds}
+          onComplete={handleCompleteActivity}
+        />
+      </MapContainer>
     </GameLayout>
   );
 }

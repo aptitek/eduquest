@@ -2,14 +2,24 @@
 // 1. PARTIE ADMINISTRATIVE & UTILISATEURS
 // ==========================================
 
+export type UserStatus = 'online' | 'offline' | 'busy';
+
 // Table `users` : Données de connexion et administration
 export interface User {
   id: string;
-  githubEmail: string;
+  email: string;
   githubSsoToken?: string;
   githubUsername?: string;
-  githubName?: string;
-  githubAvatar?: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  birthDate?: string;
+  pronouns?: string;
+  bio?: string;
+  avatarUrl?: string;
+  githubAvatarUrl?: string;
+  userStatus?: UserStatus;
+  statusOverride?: boolean;
   isAdmin: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -46,10 +56,6 @@ export interface Student {
   schoolId?: string;
   school?: School;
   institutionalEmail?: string;
-  birthDate?: string;
-  internalDescription?: string;
-  photoUrl?: string;
-  pronouns?: string[]; // Stocké sous forme de JSONB (ex: ["He/Him", "They/Them"])
   createdAt?: string;
   updatedAt?: string;
 }

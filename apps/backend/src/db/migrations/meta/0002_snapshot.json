@@ -65,12 +65,8 @@
           "name": "audit_logs_user_id_users_id_fk",
           "tableFrom": "audit_logs",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -222,12 +218,8 @@
           "name": "game_battles_student_id_students_id_fk",
           "tableFrom": "game_battles",
           "tableTo": "students",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["student_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -235,12 +227,8 @@
           "name": "game_battles_activity_id_game_activities_id_fk",
           "tableFrom": "game_battles",
           "tableTo": "game_activities",
-          "columnsFrom": [
-            "activity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["activity_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -295,12 +283,8 @@
           "name": "game_characters_student_id_students_id_fk",
           "tableFrom": "game_characters",
           "tableTo": "students",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["student_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -341,12 +325,8 @@
           "name": "game_decks_school_id_schools_id_fk",
           "tableFrom": "game_decks",
           "tableTo": "schools",
-          "columnsFrom": [
-            "school_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["school_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -419,12 +399,8 @@
           "name": "guilds_school_id_schools_id_fk",
           "tableFrom": "guilds",
           "tableTo": "schools",
-          "columnsFrom": [
-            "school_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["school_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -530,12 +506,8 @@
           "name": "student_skills_history_student_id_students_id_fk",
           "tableFrom": "student_skills_history",
           "tableTo": "students",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["student_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -543,12 +515,8 @@
           "name": "student_skills_history_evaluated_by_users_id_fk",
           "tableFrom": "student_skills_history",
           "tableTo": "users",
-          "columnsFrom": [
-            "evaluated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["evaluated_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -640,12 +608,8 @@
           "name": "students_user_id_users_id_fk",
           "tableFrom": "students",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -653,12 +617,8 @@
           "name": "students_guild_id_guilds_id_fk",
           "tableFrom": "students",
           "tableTo": "guilds",
-          "columnsFrom": [
-            "guild_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["guild_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -666,12 +626,8 @@
           "name": "students_school_id_schools_id_fk",
           "tableFrom": "students",
           "tableTo": "schools",
-          "columnsFrom": [
-            "school_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["school_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -681,16 +637,12 @@
         "students_user_id_unique": {
           "name": "students_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         },
         "students_institutional_email_unique": {
           "name": "students_institutional_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "institutional_email"
-          ]
+          "columns": ["institutional_email"]
         }
       },
       "policies": {},
@@ -773,9 +725,7 @@
         "users_github_email_unique": {
           "name": "users_github_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "github_email"
-          ]
+          "columns": ["github_email"]
         }
       },
       "policies": {},

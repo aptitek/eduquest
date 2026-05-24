@@ -3,11 +3,14 @@ import { MiddlewareHandler } from 'hono';
 
 export type UserPayload = {
   id: string;
-  githubEmail: string;
+  email: string;
   isAdmin: boolean;
   githubUsername?: string;
-  githubName?: string;
-  githubAvatar?: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  avatarUrl?: string;
+  githubAvatarUrl?: string;
 };
 
 const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';

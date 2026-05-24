@@ -7,13 +7,11 @@ interface GameState {
   character: GameCharacter | null;
   activities: Activity[];
   battles: GameBattle[];
-  activeView: 'map' | 'profile';
   setUserSession: (user: User, student: Student, character: GameCharacter) => void;
   setActivities: (activities: Activity[]) => void;
   setBattles: (battles: GameBattle[]) => void;
   addBattle: (battle: GameBattle) => void;
   gainXp: (amount: number) => void;
-  setActiveView: (view: 'map' | 'profile') => void;
   logout: () => void;
 }
 
@@ -23,14 +21,12 @@ export const useGameStore = create<GameState>((set) => ({
   character: null,
   activities: [],
   battles: [],
-  activeView: 'map',
 
   setUserSession: (user, student, character) => set({ user, student, character }),
   setActivities: (activities) => set({ activities }),
   setBattles: (battles) => set({ battles }),
   addBattle: (battle) => set((state) => ({ battles: [...state.battles, battle] })),
-  setActiveView: (view) => set({ activeView: view }),
-  logout: () => set({ user: null, student: null, character: null, battles: [], activeView: 'map' }),
+  logout: () => set({ user: null, student: null, character: null, battles: [] }),
 
   gainXp: (amount) =>
     set((state) => {
