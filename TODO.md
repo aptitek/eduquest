@@ -10,7 +10,7 @@
 [ ] Create github action to deploy the frontend on cloudflare pages
 
 ---
-
+1
 # IMPORTANT
 
 [x] Login is broken.
@@ -20,7 +20,7 @@
 
 ## Components
 
-[ ] RULE : All components should have a skeletton counterpart for when the data is loading from the API.
+[x] RULE : All components should have a skeletton counterpart for when the data is loading from the API.
 
 [ ] Make a status indicator component. Make it a coloured circle with optional pulse animation. It should be a new atom.
 [ ] Add an instance of the status indicator component in the top right of the header when connection to local API is broken.

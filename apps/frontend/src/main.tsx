@@ -5,8 +5,17 @@ import { MapPage } from './pages/MapPage/MapPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import { useAuth } from './features/auth/useAuth';
 import { useTranslation } from './hooks/useTranslation';
+import { ToastViewport } from './components/atoms/ToastViewport';
 import { motion } from 'framer-motion';
 import { Gamepad2 } from 'lucide-react';
+
+const savedTheme = localStorage.getItem('eduquest_theme');
+document.documentElement.dataset.theme =
+  savedTheme === 'dark' || savedTheme === 'light'
+    ? savedTheme
+    : window.matchMedia('(prefers-color-scheme: light)').matches
+      ? 'light'
+      : 'dark';
 
 function App() {
   const { t } = useTranslation();
@@ -26,7 +35,7 @@ function App() {
             duration: 3,
             ease: 'easeInOut',
           }}
-          className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center shadow-[0_0_30px_rgba(211,54,130,0.5)] border border-white/10 text-white"
+          className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center shadow-lg border border-status-boss/20 text-solarized-base3"
         >
           <Gamepad2 size={32} />
         </motion.div>
@@ -69,5 +78,6 @@ function App() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
+    <ToastViewport />
   </React.StrictMode>
 );

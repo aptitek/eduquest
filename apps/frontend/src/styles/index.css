@@ -42,6 +42,18 @@
     --color-status-boss: var(--color-solarized-magenta);
   }
 
+  [data-theme='light'] {
+    --color-bg-base: var(--color-solarized-base3);
+    --color-bg-card: var(--color-solarized-base2);
+
+    --color-text-primary: var(--color-solarized-base03);
+    --color-text-secondary: var(--color-solarized-base00);
+    --color-text-muted: var(--color-solarized-base01);
+    --color-border: var(--color-solarized-base1);
+
+    --color-gaming-grid: color-mix(in srgb, var(--color-solarized-base1) 24%, transparent);
+  }
+
   body {
     background-color: var(--color-bg-base);
     color: var(--color-text-primary);

@@ -8,6 +8,7 @@ interface GameState {
   activities: Activity[];
   battles: GameBattle[];
   setUserSession: (user: User, student: Student, character: GameCharacter) => void;
+  patchUser: (patch: Partial<User>) => void;
   setActivities: (activities: Activity[]) => void;
   setBattles: (battles: GameBattle[]) => void;
   addBattle: (battle: GameBattle) => void;
@@ -23,6 +24,8 @@ export const useGameStore = create<GameState>((set) => ({
   battles: [],
 
   setUserSession: (user, student, character) => set({ user, student, character }),
+  patchUser: (patch) =>
+    set((state) => (state.user ? { user: { ...state.user, ...patch } } : {})),
   setActivities: (activities) => set({ activities }),
   setBattles: (battles) => set({ battles }),
   addBattle: (battle) => set((state) => ({ battles: [...state.battles, battle] })),

@@ -144,7 +144,7 @@ authRouter.get('/github/callback', async (c) => {
           const [newSchool] = await db
             .insert(schools)
             .values({
-              name: 'EduQuest Academy',
+              name: 'Aptitek School',
               emailDomain: 'school.edu',
             })
             .returning();
@@ -276,7 +276,7 @@ authRouter.get('/mock', async (c) => {
         const [newSchool] = await db
           .insert(schools)
           .values({
-            name: 'EduQuest Academy',
+            name: 'Aptitek School',
             emailDomain: 'school.edu',
           })
           .returning();
@@ -372,7 +372,10 @@ authRouter.get('/me', authMiddleware, async (c) => {
   const userPayload = c.get('user') as UserPayload;
 
   if (!userPayload) {
-    return c.json({ success: false, error: 'Unauthorized' }, 401);
+    return c.json(
+      { success: false, error: 'Unauthorized', errorKey: 'profile.errors.unauthorized' },
+      401
+    );
   }
 
   const databaseUrl = c.env.DATABASE_URL;
@@ -396,7 +399,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
     schoolId: 'school_mock_1',
     school: {
       id: 'school_mock_1',
-      name: 'EduQuest Academy',
+      name: 'Aptitek School',
       emailDomain: 'school.edu',
     },
     institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
@@ -511,7 +514,10 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   const userPayload = c.get('user') as UserPayload;
 
   if (!userPayload) {
-    return c.json({ success: false, error: 'Unauthorized' }, 401);
+    return c.json(
+      { success: false, error: 'Unauthorized', errorKey: 'profile.errors.unauthorized' },
+      401
+    );
   }
 
   const databaseUrl = c.env.DATABASE_URL;
@@ -526,16 +532,20 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     avatarUrl?: string;
     institutionalEmail?: string;
     birthDate?: string | null;
+    bio?: string;
+    pronouns?: string;
     internalDescription?: string;
     photoUrl?: string;
-    pronouns?: string[];
     characterClass?: string;
   };
 
   try {
     body = await c.req.json();
   } catch (e) {
-    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+    return c.json(
+      { success: false, error: 'Invalid JSON body', errorKey: 'profile.errors.invalidPayload' },
+      400
+    );
   }
 
   // Validation offline/resilience
@@ -549,6 +559,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         {
           success: false,
           error: `Institutional email must end with @${defaultDomain}`,
+          errorKey: 'profile.errors.institutionalEmailDomain',
         },
         400
       );
@@ -558,12 +569,17 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   // Objets mis à jour pour la réponse
   let userObj = {
     id: userPayload.id,
-    email: body.email || userPayload.email,
-    githubUsername: body.githubUsername || userPayload.githubUsername,
-    displayName: body.displayName || userPayload.displayName,
-    avatarUrl: body.avatarUrl || userPayload.avatarUrl,
+    email: body.email ?? userPayload.email,
+    githubUsername: body.githubUsername ?? userPayload.githubUsername,
+    firstName: body.firstName,
+    lastName: body.lastName,
+    displayName: body.displayName ?? userPayload.displayName,
+    birthDate: body.birthDate ?? undefined,
+    bio: body.bio,
+    pronouns: body.pronouns,
+    avatarUrl: body.avatarUrl ?? userPayload.avatarUrl,
     githubAvatarUrl: userPayload.githubAvatarUrl,
-    isAdmin: userPayload.isAdmin, // Interdit à l'utilisateur de modifier isAdmin
+    isAdmin: userPayload.isAdmin,
   };
 
   let studentObj = {
@@ -573,7 +589,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     schoolId: 'school_mock_1',
     school: {
       id: 'school_mock_1',
-      name: 'EduQuest Academy',
+      name: 'Aptitek School',
       emailDomain: 'school.edu',
     },
     institutionalEmail:
@@ -609,6 +625,9 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           githubUsername: body.githubUsername,
           email: body.email,
           avatarUrl: body.avatarUrl,
+          birthDate: body.birthDate === null ? null : body.birthDate,
+          bio: body.bio,
+          pronouns: body.pronouns,
           updatedAt: new Date(),
         })
         .where(eq(users.id, userPayload.id))
@@ -619,7 +638,12 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           id: updatedUser.id,
           email: updatedUser.email,
           githubUsername: updatedUser.githubUsername || undefined,
+          firstName: updatedUser.firstName || undefined,
+          lastName: updatedUser.lastName || undefined,
           displayName: updatedUser.displayName || undefined,
+          birthDate: updatedUser.birthDate || undefined,
+          bio: updatedUser.bio || undefined,
+          pronouns: updatedUser.pronouns || undefined,
           avatarUrl: updatedUser.avatarUrl || undefined,
           githubAvatarUrl: updatedUser.githubAvatarUrl || undefined,
           isAdmin: updatedUser.isAdmin,
@@ -653,6 +677,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                   {
                     success: false,
                     error: `Institutional email must end with @${domain}`,
+                    errorKey: 'profile.errors.institutionalEmailDomain',
                   },
                   400
                 );

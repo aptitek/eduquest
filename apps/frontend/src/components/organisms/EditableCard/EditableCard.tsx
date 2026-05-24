@@ -36,7 +36,7 @@ export function EditableCard({
   };
 
   return (
-    <div className={cn('card bg-base-100 shadow-xl border border-base-300', className)}>
+    <div className={cn('card bg-gaming-card shadow-xl border border-gaming-border', className)}>
       <div className="card-body p-6 gap-6">
         <div className="flex justify-between items-start gap-4">
           <div className="flex gap-4 items-center flex-1">

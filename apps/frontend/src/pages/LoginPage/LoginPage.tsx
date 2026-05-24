@@ -11,7 +11,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-gaming-base flex flex-col justify-center items-center p-4 relative overflow-hidden font-body selection:bg-status-boss/30 selection:text-text-primary">
       {/* Dynamic Background Grid Effects */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(88,110,117,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(88,110,117,0.05)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-gaming-grid)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-gaming-grid)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
       {/* Ambient Neon Glows */}
       <div className="absolute w-[500px] h-[500px] rounded-full bg-status-quest/10 blur-[120px] top-[-10%] left-[-10%] pointer-events-none" />
@@ -29,9 +29,9 @@ export function LoginPage() {
           <motion.div
             animate={{ scale: [1, 1.05, 1] }}
             transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center font-bold text-gaming-base shadow-[0_0_20px_rgba(211,54,130,0.4)] mb-2"
+            className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center font-bold text-solarized-base3 shadow-lg mb-2"
           >
-            <Gamepad2 size={28} className="text-white" />
+            <Gamepad2 size={28} />
           </motion.div>
 
           <h1 className="text-3xl font-bold font-display tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-text-primary via-solarized-blue to-status-boss">
@@ -78,10 +78,10 @@ export function LoginPage() {
         <div className="flex flex-col gap-3 w-full mt-2">
           {/* GitHub Real OAuth CTA */}
           <motion.button
-            whileHover={{ scale: 1.02, boxShadow: '0 0 15px rgba(38,139,210,0.3)' }}
+            whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={loginWithGithub}
-            className="w-full py-3.5 px-4 rounded-xl bg-solarized-blue text-gaming-base font-bold font-display flex items-center justify-center gap-3 transition-all hover:bg-solarized-blue/90 shadow-md cursor-pointer text-white"
+            className="w-full py-3.5 px-4 rounded-xl bg-solarized-blue text-gaming-base font-bold font-display flex items-center justify-center gap-3 transition-all hover:bg-solarized-blue/90 shadow-md cursor-pointer"
           >
             <Github size={20} />
             <span>{t('auth.loginWithGithub')}</span>

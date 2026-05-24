@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { LogOut, ChevronDown, Languages, Check } from 'lucide-react';
+import { LogOut, ChevronDown, Languages, Check, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../features/auth/useAuth';
+import { useGameStore } from '../../features/game/gameStore';
+import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
+import { useToastStore } from '../../features/toast/toastStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from '../organisms/InstitutionalProfileCard/InstitutionalProfileCard';
@@ -8,10 +11,41 @@ import { User } from '@eduquest/shared';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
+type ProfileResponse = {
+  success?: boolean;
+  error?: string;
+  errorKey?: string;
+  token?: string;
+  user?: Partial<User>;
+};
+
+type ThemeMode = 'dark' | 'light';
+
+const THEME_STORAGE_KEY = 'eduquest_theme';
+
+function getInitialTheme(): ThemeMode {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
+
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('profile.errors.avatarReadFailed'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function AccountDropdown() {
   const { user, logout } = useAuth();
+  const patchUser = useGameStore((s) => s.patchUser);
+  const showToast = useToastStore((s) => s.showToast);
   const { t, locale, setLocale } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -25,6 +59,11 @@ export function AccountDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   if (!user) return null;
 
   const username =
@@ -34,9 +73,72 @@ export function AccountDropdown() {
     user.githubAvatarUrl ||
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
 
-  const handleUpdateProfile = async (data: Partial<User>) => {
-    // TODO: Connect to real API when available
-    console.log('Update profile requested:', data);
+  const updateProfile = async (data: Partial<User>, shouldThrow = false) => {
+    if (!user) {
+      if (shouldThrow) throw new Error('profile.errors.updateFailed');
+      return;
+    }
+
+    const snapshot = { ...user };
+    patchUser(data);
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      patchUser(snapshot);
+      showToast({ messageKey: 'profile.errors.unauthorized', type: 'error' });
+      if (shouldThrow) throw new Error('profile.errors.unauthorized');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8787/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as ProfileResponse;
+
+      if (!response.ok || !json.success) {
+        const messageKey = json.errorKey || 'profile.errors.updateFailed';
+        patchUser(snapshot);
+        showToast({
+          messageKey,
+          fallback: json.error || t('profile.errors.updateFailed'),
+          type: 'error',
+        });
+        if (shouldThrow) throw new Error(messageKey);
+        return;
+      }
+
+      if (json.token) {
+        localStorage.setItem('eduquest_token', json.token);
+      }
+
+      const optimistic = useGameStore.getState().user!;
+      const reconciled = reconcileProfileUser(optimistic, data, json.user);
+      patchUser(reconciled);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('profile.errors.')) {
+        if (shouldThrow) throw error;
+        return;
+      }
+
+      const messageKey = 'profile.errors.network';
+      patchUser(snapshot);
+      showToast({ messageKey, type: 'error' });
+      if (shouldThrow) throw new Error(messageKey);
+    }
+  };
+
+  const handleUpdateProfile = (data: Partial<User>) => updateProfile(data);
+
+  const handleUploadAvatar = async (file: File) => {
+    const avatarUrl = await readFileAsDataUrl(file);
+    await updateProfile({ avatarUrl }, true);
   };
 
   return (
@@ -82,6 +184,7 @@ export function AccountDropdown() {
               <InstitutionalProfileCard
                 user={user}
                 onUpdateProfile={handleUpdateProfile}
+                onUploadAvatar={handleUploadAvatar}
                 className="shadow-none border-none rounded-none border-b border-gaming-border"
               />
             </div>
@@ -94,28 +197,55 @@ export function AccountDropdown() {
                   <span>{t('common.language') || 'LANGUE'}</span>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setLocale('fr')}
-                    className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
-                      locale === 'fr'
-                        ? 'btn-primary text-white shadow-sm'
-                        : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
-                    }`}
-                  >
-                    <span>FR</span>
-                    {locale === 'fr' && <Check size={12} />}
-                  </button>
-                  <button
-                    onClick={() => setLocale('en')}
-                    className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
-                      locale === 'en'
-                        ? 'btn-primary text-white shadow-sm'
-                        : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
-                    }`}
-                  >
-                    <span>EN</span>
-                    {locale === 'en' && <Check size={12} />}
-                  </button>
+                  <div className="tooltip tooltip-top">
+                    <span className="tooltip-content z-50">
+                      {t('common.languageFrench')}
+                    </span>
+                    <button
+                      onClick={() => setLocale('fr')}
+                      className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
+                        locale === 'fr'
+                          ? 'btn-primary text-primary-content shadow-sm'
+                          : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
+                      }`}
+                    >
+                      <span>FR</span>
+                      {locale === 'fr' && <Check size={12} />}
+                    </button>
+                  </div>
+                  <div className="tooltip tooltip-top">
+                    <span className="tooltip-content z-50">
+                      {t('common.languageEnglish')}
+                    </span>
+                    <button
+                      onClick={() => setLocale('en')}
+                      className={`btn btn-xs py-1.5 px-3 h-auto min-h-0 font-bold font-display flex items-center justify-center gap-1 transition-all cursor-pointer border-gaming-border ${
+                        locale === 'en'
+                          ? 'btn-primary text-primary-content shadow-sm'
+                          : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
+                      }`}
+                    >
+                      <span>EN</span>
+                      {locale === 'en' && <Check size={12} />}
+                    </button>
+                  </div>
+                  <div className="tooltip tooltip-top">
+                    <span className="tooltip-content z-50">
+                      {theme === 'dark' ? t('common.switchToLightTheme') : t('common.switchToDarkTheme')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+                      aria-label={
+                        theme === 'dark'
+                          ? t('common.switchToLightTheme')
+                          : t('common.switchToDarkTheme')
+                      }
+                      className="btn btn-xs btn-ghost py-1.5 px-2 h-auto min-h-0 bg-gaming-base/40 border border-gaming-border text-text-muted hover:text-text-secondary"
+                    >
+                      {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -126,7 +256,7 @@ export function AccountDropdown() {
                   setIsOpen(false);
                   logout();
                 }}
-                className="w-full btn btn-sm btn-ghost text-status-campfire hover:bg-solarized-red/10 flex items-center justify-center gap-2 transition-colors font-display font-semibold"
+                className="w-full btn btn-sm btn-ghost text-status-campfire hover:bg-status-boss/10 flex items-center justify-center gap-2 transition-colors font-display font-semibold"
               >
                 <LogOut size={16} />
                 <span>{t('auth.logout')}</span>

@@ -29,14 +29,14 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
   const indicator = (
     <StatusIndicator
       status={getIndicatorStatus()}
-      className="absolute bottom-0 right-0 border-2 border-base-100 w-3.5 h-3.5"
+      className="absolute bottom-0 right-0 border-2 border-gaming-card w-3.5 h-3.5"
     />
   );
 
   return (
     <div className="dropdown dropdown-end">
       <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar relative">
-        <div className="w-10 rounded-full bg-base-300">
+        <div className="w-10 rounded-full bg-gaming-base">
           <img 
             alt="User Avatar" 
             src={user.avatarUrl || user.githubAvatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
@@ -53,7 +53,7 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
       </div>
       <ul
         tabIndex={0}
-        className="menu menu-sm dropdown-content bg-base-100 border border-base-200 rounded-box z-[50] mt-3 w-56 p-2 shadow-xl"
+        className="menu menu-sm dropdown-content bg-gaming-card border border-gaming-border rounded-box z-[50] mt-3 w-56 p-2 shadow-xl"
       >
         <li>
           <a onClick={() => {
@@ -63,12 +63,12 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
             }} 
             className="flex items-center gap-2 py-2"
           >
-            <Settings size={16} className="text-base-content/70" />
+            <Settings size={16} className="text-text-secondary" />
             <span className="font-medium">Profile Settings</span>
           </a>
         </li>
         <div className="divider my-1"></div>
-        <li className="menu-title px-4 py-1 text-xs uppercase tracking-wider text-base-content/50">
+        <li className="menu-title px-4 py-1 text-xs uppercase tracking-wider text-text-muted">
           Set Status
         </li>
         <li>
@@ -76,9 +76,9 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
               (document.activeElement as HTMLElement)?.blur();
               onStatusChange('online');
             }} 
-            className={`flex items-center gap-2 py-2 ${currentStatus === 'online' ? 'bg-base-200' : ''}`}
+            className={`flex items-center gap-2 py-2 ${currentStatus === 'online' ? 'bg-gaming-base/60' : ''}`}
           >
-            <Circle size={14} className="text-success fill-success" />
+            <Circle size={14} className="text-status-completed fill-status-completed" />
             <span>Online</span>
           </a>
         </li>
@@ -87,9 +87,9 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
               (document.activeElement as HTMLElement)?.blur();
               onStatusChange('busy');
             }} 
-            className={`flex items-center gap-2 py-2 ${currentStatus === 'busy' ? 'bg-base-200' : ''}`}
+            className={`flex items-center gap-2 py-2 ${currentStatus === 'busy' ? 'bg-gaming-base/60' : ''}`}
           >
-            <MinusCircle size={14} className="text-error fill-error" />
+            <MinusCircle size={14} className="text-status-boss fill-status-boss" />
             <span>Busy (Do not disturb)</span>
           </a>
         </li>
@@ -98,9 +98,9 @@ export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUs
               (document.activeElement as HTMLElement)?.blur();
               onStatusChange('offline');
             }} 
-            className={`flex items-center gap-2 py-2 ${currentStatus === 'offline' ? 'bg-base-200' : ''}`}
+            className={`flex items-center gap-2 py-2 ${currentStatus === 'offline' ? 'bg-gaming-base/60' : ''}`}
           >
-            <Moon size={14} className="text-neutral fill-neutral" />
+            <Moon size={14} className="text-status-locked fill-status-locked" />
             <span>Offline (Invisible)</span>
           </a>
         </li>
