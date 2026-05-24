@@ -101,6 +101,7 @@ export interface StudentCohort {
   cohort?: Cohort;
   guildId?: string;
   guild?: Guild;
+  institutionalEmail?: string;
   createdAt?: string;
 }
 
@@ -110,8 +111,7 @@ export interface Student {
   userId: string;
   schoolId?: string;
   school?: School;
-  cohorts?: Cohort[];
-  institutionalEmail?: string;
+  cohortMemberships?: StudentCohort[];
   createdAt?: string;
   updatedAt?: string;
 }

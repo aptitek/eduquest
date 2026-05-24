@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { sign } from 'hono/jwt';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { getDb } from '../db';
-import { users, students, gameCharacters, schools } from '../db/schema';
+import { users, students, gameCharacters, schools, cohorts, studentCohorts } from '../db/schema';
 import { authMiddleware, UserPayload } from '../middleware/auth';
 
 type Bindings = {
@@ -203,7 +203,6 @@ authRouter.get('/github/callback', async (c) => {
             .values({
               userId: newUser.id,
               schoolId: defaultSchoolId,
-              institutionalEmail: `${githubUser.login.toLowerCase()}@school.edu`,
             })
             .returning();
 
@@ -329,7 +328,6 @@ authRouter.get('/mock', async (c) => {
           .values({
             userId: newUser.id,
             schoolId: defaultSchoolId,
-            institutionalEmail: isAptitek ? 'aptitek@school.edu' : 'wizard@school.edu',
           })
           .returning();
 
@@ -404,7 +402,26 @@ authRouter.get('/me', authMiddleware, async (c) => {
       name: 'Aptitek School',
       emailDomain: 'school.edu',
     },
-    institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
+    cohortMemberships: [
+      {
+        studentId: 'stud_mock_1',
+        cohortId: 'cohort_mock_1',
+        institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
+        cohort: {
+          id: 'cohort_mock_1',
+          schoolId: 'school_mock_1',
+          school: {
+            id: 'school_mock_1',
+            name: 'Aptitek School',
+            emailDomain: 'school.edu',
+          },
+          schoolYear: '2025-2026',
+          grade: 'bachelor',
+          level: 3,
+          name: 'Frontend Mages',
+        },
+      },
+    ],
   };
 
   let characterObj = {
@@ -475,12 +492,71 @@ authRouter.get('/me', authMiddleware, async (c) => {
           }
         }
 
+        const latestMemberships = await db
+          .select()
+          .from(studentCohorts)
+          .where(eq(studentCohorts.studentId, studentRecord.id))
+          .orderBy(desc(studentCohorts.createdAt))
+          .limit(1);
+
+        const cohortMemberships = [];
+        for (const membership of latestMemberships) {
+          const loadedCohorts = await db
+            .select()
+            .from(cohorts)
+            .where(eq(cohorts.id, membership.cohortId))
+            .limit(1);
+
+          if (loadedCohorts.length > 0) {
+            const cohortRecord = loadedCohorts[0];
+            let cohortSchoolObj: any = undefined;
+            if (cohortRecord.schoolId) {
+              const loadedCohortSchools = await db
+                .select()
+                .from(schools)
+                .where(eq(schools.id, cohortRecord.schoolId))
+                .limit(1);
+              if (loadedCohortSchools.length > 0) {
+                cohortSchoolObj = {
+                  id: loadedCohortSchools[0].id,
+                  name: loadedCohortSchools[0].name,
+                  logoUrl: loadedCohortSchools[0].logoUrl || undefined,
+                  emailDomain: loadedCohortSchools[0].emailDomain || undefined,
+                };
+              }
+            }
+
+            cohortMemberships.push({
+              studentId: membership.studentId,
+              cohortId: membership.cohortId,
+              guildId: membership.guildId || undefined,
+              institutionalEmail: membership.institutionalEmail || undefined,
+              createdAt: membership.createdAt?.toISOString?.() || undefined,
+              cohort: {
+                id: cohortRecord.id,
+                schoolId: cohortRecord.schoolId,
+                school: cohortSchoolObj,
+                campusId: cohortRecord.campusId || undefined,
+                schoolYear: cohortRecord.schoolYear,
+                grade: cohortRecord.grade,
+                level: cohortRecord.level,
+                name: cohortRecord.name,
+                majorSpeciality: cohortRecord.majorSpeciality || undefined,
+                minorSpeciality: cohortRecord.minorSpeciality || undefined,
+                description: cohortRecord.description || undefined,
+              },
+            });
+          }
+        }
+
+        const latestCohortSchool = cohortMemberships[0]?.cohort?.school;
+
         studentObj = {
           id: studentRecord.id,
           userId: studentRecord.userId,
-          schoolId: studentRecord.schoolId || undefined,
-          school: schoolObj,
-          institutionalEmail: studentRecord.institutionalEmail || studentObj.institutionalEmail,
+          schoolId: latestCohortSchool?.id || studentRecord.schoolId || undefined,
+          school: latestCohortSchool || schoolObj,
+          cohortMemberships,
         };
 
         const loadedCharacters = await db
@@ -598,10 +674,29 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       name: 'Aptitek School',
       emailDomain: 'school.edu',
     },
-    institutionalEmail:
-      body.institutionalEmail ||
-      body.email?.split('@')[0] + '@school.edu' ||
-      userPayload.email.split('@')[0] + '@school.edu',
+    cohortMemberships: [
+      {
+        studentId: 'stud_mock_1',
+        cohortId: 'cohort_mock_1',
+        institutionalEmail:
+          body.institutionalEmail ||
+          body.email?.split('@')[0] + '@school.edu' ||
+          userPayload.email.split('@')[0] + '@school.edu',
+        cohort: {
+          id: 'cohort_mock_1',
+          schoolId: 'school_mock_1',
+          school: {
+            id: 'school_mock_1',
+            name: 'Aptitek School',
+            emailDomain: 'school.edu',
+          },
+          schoolYear: '2025-2026',
+          grade: 'bachelor',
+          level: 3,
+          name: 'Frontend Mages',
+        },
+      },
+    ],
   };
 
   let characterObj = {
@@ -667,35 +762,68 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         const studentRecord = existingStudents[0];
         const studentId = studentRecord.id;
 
-        // Perform validation against school's emailDomain if schoolId is present
-        if (body.institutionalEmail && studentRecord.schoolId) {
-          const loadedSchools = await db
+        const latestMemberships = await db
+          .select()
+          .from(studentCohorts)
+          .where(eq(studentCohorts.studentId, studentId))
+          .orderBy(desc(studentCohorts.createdAt))
+          .limit(1);
+
+        const latestMembership = latestMemberships[0];
+        let latestCohort: any = undefined;
+        let latestCohortSchool: any = undefined;
+        if (latestMembership) {
+          const loadedCohorts = await db
             .select()
-            .from(schools)
-            .where(eq(schools.id, studentRecord.schoolId))
+            .from(cohorts)
+            .where(eq(cohorts.id, latestMembership.cohortId))
             .limit(1);
-          if (loadedSchools.length > 0) {
-            const schoolRecord = loadedSchools[0];
-            if (schoolRecord.emailDomain) {
-              const domain = schoolRecord.emailDomain.toLowerCase();
-              if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
-                return c.json(
-                  {
-                    success: false,
-                    error: `Institutional email must end with @${domain}`,
-                    errorKey: 'profile.errors.institutionalEmailDomain',
-                  },
-                  400
-                );
-              }
-            }
+          latestCohort = loadedCohorts[0];
+
+          if (latestCohort?.schoolId) {
+            const loadedSchools = await db
+              .select()
+              .from(schools)
+              .where(eq(schools.id, latestCohort.schoolId))
+              .limit(1);
+            latestCohortSchool = loadedSchools[0];
           }
+        }
+
+        if (body.institutionalEmail && latestCohortSchool?.emailDomain) {
+          const domain = latestCohortSchool.emailDomain.toLowerCase();
+          if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
+            return c.json(
+              {
+                success: false,
+                error: `Institutional email must end with @${domain}`,
+                errorKey: 'profile.errors.institutionalEmailDomain',
+              },
+              400
+            );
+          }
+        }
+
+        let updatedMembership = latestMembership;
+        if (body.institutionalEmail !== undefined && latestMembership) {
+          const [savedMembership] = await db
+            .update(studentCohorts)
+            .set({
+              institutionalEmail: body.institutionalEmail,
+            })
+            .where(
+              and(
+                eq(studentCohorts.studentId, studentId),
+                eq(studentCohorts.cohortId, latestMembership.cohortId)
+              )
+            )
+            .returning();
+          updatedMembership = savedMembership || latestMembership;
         }
 
         const [updatedStudent] = await db
           .update(students)
           .set({
-            institutionalEmail: body.institutionalEmail,
             updatedAt: new Date(),
           })
           .where(eq(students.id, studentId))
@@ -719,12 +847,47 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             }
           }
 
+          const latestSchoolObj = latestCohortSchool
+            ? {
+                id: latestCohortSchool.id,
+                name: latestCohortSchool.name,
+                logoUrl: latestCohortSchool.logoUrl || undefined,
+                emailDomain: latestCohortSchool.emailDomain || undefined,
+              }
+            : undefined;
+
+          const cohortMemberships =
+            updatedMembership && latestCohort
+              ? [
+                  {
+                    studentId: updatedMembership.studentId,
+                    cohortId: updatedMembership.cohortId,
+                    guildId: updatedMembership.guildId || undefined,
+                    institutionalEmail: updatedMembership.institutionalEmail || undefined,
+                    createdAt: updatedMembership.createdAt?.toISOString?.() || undefined,
+                    cohort: {
+                      id: latestCohort.id,
+                      schoolId: latestCohort.schoolId,
+                      school: latestSchoolObj,
+                      campusId: latestCohort.campusId || undefined,
+                      schoolYear: latestCohort.schoolYear,
+                      grade: latestCohort.grade,
+                      level: latestCohort.level,
+                      name: latestCohort.name,
+                      majorSpeciality: latestCohort.majorSpeciality || undefined,
+                      minorSpeciality: latestCohort.minorSpeciality || undefined,
+                      description: latestCohort.description || undefined,
+                    },
+                  },
+                ]
+              : [];
+
           studentObj = {
             id: updatedStudent.id,
             userId: updatedStudent.userId,
-            schoolId: updatedStudent.schoolId || undefined,
-            school: schoolObj,
-            institutionalEmail: updatedStudent.institutionalEmail || undefined,
+            schoolId: latestSchoolObj?.id || updatedStudent.schoolId || undefined,
+            school: latestSchoolObj || schoolObj,
+            cohortMemberships,
           } as any;
         }
 

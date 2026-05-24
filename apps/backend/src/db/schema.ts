@@ -115,7 +115,6 @@ export const students = pgTable('students', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   schoolId: uuid('school_id').references(() => schools.id),
-  institutionalEmail: text('institutional_email').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -133,6 +132,7 @@ export const studentCohorts = pgTable(
       .notNull()
       .references(() => cohorts.id, { onDelete: 'cascade' }),
     guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'set null' }),
+    institutionalEmail: text('institutional_email').unique(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({

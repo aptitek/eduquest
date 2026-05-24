@@ -197,6 +197,7 @@ export const en: TranslationKeys = {
       ],
       birthDate: 'Birth date',
       addEmail: 'Add email',
+      institutionalEmail: 'Institutional email',
       writeBio: 'Write a bio…',
       adminRole: 'Administrator',
       studentRole: 'Student',

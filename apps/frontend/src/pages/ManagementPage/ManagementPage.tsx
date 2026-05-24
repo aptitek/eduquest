@@ -9,11 +9,21 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Address, Campus, Cohort, CohortGrade, School, Student, User } from '@eduquest/shared';
+import {
+  Address,
+  Campus,
+  Cohort,
+  CohortGrade,
+  School,
+  Student,
+  StudentCohort,
+  User,
+} from '@eduquest/shared';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { PlayingCard } from '../../components/molecules/PlayingCard';
 import { BadgeDropdown } from '../../components/molecules/BadgeDropdown';
+import { InstitutionalProfileCard } from '../../components/organisms/InstitutionalProfileCard/InstitutionalProfileCard';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
@@ -41,6 +51,24 @@ type CohortRow = Cohort & {
   campusName: string;
   studentCount: number;
 };
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Could not read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getLatestCohortMembership(memberships?: StudentCohort[]) {
+  if (!memberships || memberships.length === 0) return undefined;
+  return [...memberships].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  })[0];
+}
 
 const mockAddresses: Address[] = [
   {
@@ -243,27 +271,32 @@ function ManagementTable<TData>({
 
 export function ManagementPage() {
   const { t } = useTranslation();
-  const { user, student, character } = useGameStore();
+  const { user, student, character, patchUser } = useGameStore();
   const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSchoolName, setSelectedSchoolName] = useState('');
+  const latestCohortMembership = getLatestCohortMembership(student?.cohortMemberships);
+  const latestCohort = latestCohortMembership?.cohort || mockCohorts[0];
+  const latestSchool = latestCohort?.school || student?.school || mockSchools[0];
+  const displayedSchoolName = selectedSchoolName || latestSchool.name;
 
   const studentRows = useMemo<StudentRow[]>(() => {
     if (!user || !student || !character) return [];
-    const selectedSchoolId = student.schoolId || mockSchools[0]?.id;
-    const selectedSchool = mockSchools.find((school) => school.id === selectedSchoolId);
+    const latestMembership = getLatestCohortMembership(student.cohortMemberships);
+    const selectedSchool = latestMembership?.cohort?.school || student.school || mockSchools[0];
 
     return [
       {
         ...student,
-        schoolId: selectedSchoolId,
-        school: selectedSchool || student.school,
+        schoolId: selectedSchool.id,
+        school: selectedSchool,
         user,
         displayName:
           user.displayName ||
           [user.firstName, user.lastName].filter(Boolean).join(' ') ||
           user.githubUsername ||
           user.email,
-        email: student.institutionalEmail || user.email,
+        email: latestMembership?.institutionalEmail || user.email,
         level: character.currentLevel,
         age: calculateAge(user.birthDate),
       },
@@ -563,10 +596,29 @@ export function ManagementPage() {
           <PlayingCard
             flipLabel={t('management.card.flip')}
             recto={
-              <div className="flex h-full min-h-[18rem] flex-col items-center justify-center text-center text-text-muted">
-                <span className="text-xs font-display uppercase tracking-widest">
-                  {t('management.card.rectoEmpty')}
-                </span>
+              <div className="h-full min-h-[18rem]">
+                {user ? (
+                  <InstitutionalProfileCard
+                    user={user}
+                    onUpdateProfile={async (patch) => patchUser(patch)}
+                    onUploadAvatar={async (file) => {
+                      const avatarUrl = await readFileAsDataUrl(file);
+                      patchUser({ avatarUrl });
+                    }}
+                    onResetAvatar={async () => patchUser({ avatarUrl: user.githubAvatarUrl })}
+                    schoolName={selectedSchoolName}
+                    schoolOptions={mockSchools.map((school) => school.name)}
+                    onSchoolChange={setSelectedSchoolName}
+                    cohort={mockCohorts[0]}
+                    className="max-w-none border-0 bg-transparent shadow-none rounded-none"
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center text-center text-text-muted">
+                    <span className="text-xs font-display uppercase tracking-widest">
+                      {t('management.card.rectoEmpty')}
+                    </span>
+                  </div>
+                )}
               </div>
             }
             verso={

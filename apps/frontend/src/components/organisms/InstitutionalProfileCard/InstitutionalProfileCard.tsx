@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { EditableText, EditableFieldContext } from '../../atoms/EditableText';
+import { CompoundBadge } from '../../atoms/CompoundBadge';
 import { EditableAvatar } from '../../molecules/EditableAvatar';
 import { SplitEditableText } from '../../molecules/SplitEditableText';
 import { EditablePronouns } from '../../molecules/EditablePronouns';
@@ -7,7 +8,7 @@ import { BadgeDropdown } from '../../molecules/BadgeDropdown';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { en } from '../../../locales/en';
 import { fr } from '../../../locales/fr';
-import { User } from '@eduquest/shared';
+import { Cohort, User } from '@eduquest/shared';
 import { Github, Cake, Quote } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import logoUrl from '../../../assets/logo.svg';
@@ -21,6 +22,16 @@ export interface InstitutionalProfileCardProps {
   schoolName?: string;
   schoolOptions?: string[];
   onSchoolChange?: (schoolName: string) => void;
+  institutionalEmail?: string;
+  institutionalEmailDomain?: string;
+  onInstitutionalEmailChange?: (email: string) => Promise<void> | void;
+  cohort?: Pick<Cohort, 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality'>;
+  hideRoleBadge?: boolean;
+  stackPronouns?: boolean;
+  cohortOptions?: string[];
+  selectedCohorts?: string[];
+  onCohortsChange?: (cohorts: string[]) => void;
+  renderCohortBadge?: (cohort: string) => React.ReactNode;
   className?: string;
 }
 
@@ -37,6 +48,16 @@ export function InstitutionalProfileCard({
   schoolName,
   schoolOptions,
   onSchoolChange,
+  institutionalEmail,
+  institutionalEmailDomain,
+  onInstitutionalEmailChange,
+  cohort,
+  hideRoleBadge,
+  stackPronouns,
+  cohortOptions,
+  selectedCohorts,
+  onCohortsChange,
+  renderCohortBadge,
   className,
 }: InstitutionalProfileCardProps) {
   const { t, locale } = useTranslation();
@@ -81,6 +102,29 @@ export function InstitutionalProfileCard({
   const metaMuted = 'text-sm text-text-muted';
   const roleLabel = user.isAdmin ? ic('adminRole') : ic('studentRole');
   const selectedSchoolName = schoolName || ic('school');
+  const fixedInstitutionalDomain = institutionalEmailDomain || 'school.edu';
+  const institutionalEmailLocalPart =
+    institutionalEmail?.endsWith(`@${fixedInstitutionalDomain}`)
+      ? institutionalEmail.slice(0, -fixedInstitutionalDomain.length - 1)
+      : institutionalEmail?.split('@')[0] || '';
+  const suggestedInstitutionalEmailLocalPart = [
+    currentUser.firstName,
+    currentUser.lastName,
+  ]
+    .map((part) =>
+      (part || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    )
+    .filter(Boolean)
+    .join('.');
+  const cohortCode = cohort
+    ? `${cohort.grade.charAt(0).toUpperCase()}${cohort.level}`
+    : undefined;
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: true }}>
@@ -90,8 +134,8 @@ export function InstitutionalProfileCard({
         className
       )}
     >
-      {onRoleChange ? (
-        <div className="absolute top-0 right-0 z-20 rounded-bl-xl bg-gaming-card shadow-md">
+      {!hideRoleBadge && onRoleChange ? (
+        <div className="absolute top-0 left-0 z-20 rounded-br-xl bg-gaming-card shadow-md">
           <BadgeDropdown
             options={[ic('studentRole'), ic('adminRole')]}
             value={[roleLabel]}
@@ -106,20 +150,33 @@ export function InstitutionalProfileCard({
             removeLabel={ic('removeRole')}
             emptyFilterHint={ic('chooseRole')}
             badgeClassName={cn(
-              'rounded-none rounded-bl-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
+              'rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
               user.isAdmin ? 'badge-primary' : 'badge-ghost'
             )}
             selectedMaxWidth="max-w-[10rem]"
           />
         </div>
-      ) : (
+      ) : !hideRoleBadge ? (
         <div
           className={cn(
-            'badge absolute top-0 right-0 z-10 rounded-none rounded-bl-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
+            'badge absolute top-0 left-0 z-10 rounded-none rounded-br-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
             user.isAdmin ? 'badge-primary' : 'badge-ghost'
           )}
         >
           {roleLabel}
+        </div>
+      ) : null}
+
+      {!user.isAdmin && cohort && (
+        <div className="absolute top-0 right-0 z-10 rounded-bl-xl bg-gaming-card shadow-md">
+          <CompoundBadge
+            parts={
+              cohort.name
+                ? [cohortCode, cohort.name]
+                : [cohortCode, cohort.majorSpeciality, cohort.minorSpeciality]
+            }
+            className="rounded-none rounded-bl-xl border-0"
+          />
         </div>
       )}
 
@@ -177,15 +234,35 @@ export function InstitutionalProfileCard({
                   onCollapse={saveNameDraft}
                 />
               </div>
-              <span
-                className={cn(
-                  metaMuted,
-                  'ml-auto flex flex-nowrap items-center justify-end gap-0.5 min-w-0 overflow-visible max-w-[48%] sm:max-w-[42%]'
-                )}
-              >
-                <span className="select-none shrink-0" aria-hidden>
-                  (
+              {!stackPronouns && (
+                <span
+                  className={cn(
+                    metaMuted,
+                    'ml-auto flex flex-nowrap items-center justify-end gap-0.5 min-w-0 overflow-visible max-w-[48%] sm:max-w-[42%]'
+                  )}
+                >
+                  <span className="select-none shrink-0" aria-hidden>
+                    (
+                  </span>
+                  <EditablePronouns
+                    value={currentUser.pronouns || ''}
+                    onChange={(v) => persistField('pronouns', v)}
+                    options={pronounOptions}
+                    placeholder={ic('addPronounsShort')}
+                    searchPlaceholder={ic('filterPronouns')}
+                    removeLabel={ic('removePronoun')}
+                    emptyFilterHint={ic('pressEnterToAddPronoun')}
+                    className={metaMuted}
+                  />
+                  <span className="select-none shrink-0" aria-hidden>
+                    )
+                  </span>
                 </span>
+              )}
+            </div>
+
+            {stackPronouns && (
+              <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
                 <EditablePronouns
                   value={currentUser.pronouns || ''}
                   onChange={(v) => persistField('pronouns', v)}
@@ -196,11 +273,8 @@ export function InstitutionalProfileCard({
                   emptyFilterHint={ic('pressEnterToAddPronoun')}
                   className={metaMuted}
                 />
-                <span className="select-none shrink-0" aria-hidden>
-                  )
-                </span>
-              </span>
-            </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
               {user.githubUsername && (
@@ -218,35 +292,71 @@ export function InstitutionalProfileCard({
               />
             </div>
 
-            {onSchoolChange && schoolOptions?.length ? (
+            {cohortOptions && onCohortsChange && (
               <BadgeDropdown
-                options={schoolOptions}
-                value={[selectedSchoolName]}
-                onChange={(next) => {
-                  const nextSchool = next[0];
-                  if (nextSchool) onSchoolChange(nextSchool);
-                }}
-                multiple={false}
-                placeholder={selectedSchoolName}
-                searchPlaceholder={ic('filterSchool')}
-                removeLabel={ic('removeSchool')}
-                emptyFilterHint={ic('chooseSchool')}
+                options={cohortOptions}
+                value={selectedCohorts || []}
+                onChange={onCohortsChange}
+                multiple
+                placeholder={ic('cohorts')}
+                searchPlaceholder={ic('filterCohorts')}
+                emptyFilterHint={ic('chooseCohort')}
                 badgeClassName="border-gaming-border bg-gaming-card text-text-secondary"
-                selectedMaxWidth="max-w-[11rem]"
-                renderBadge={(school) => (
-                  <img
-                    src={logoUrl}
-                    alt={school}
-                    title={school}
-                    className="h-4 w-auto max-w-none object-contain"
-                  />
-                )}
+                selectedMaxWidth="max-w-full"
+                renderBadge={renderCohortBadge}
+                showArrow
               />
-            ) : (
-              <div className="badge badge-outline px-2 py-1 bg-gaming-card w-fit h-auto" title={ic('school')}>
-                <img src={logoUrl} alt={ic('school')} className="h-4 w-auto max-w-none object-contain" />
-              </div>
             )}
+
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              {onSchoolChange && schoolOptions?.length ? (
+                <BadgeDropdown
+                  options={schoolOptions}
+                  value={[selectedSchoolName]}
+                  onChange={(next) => {
+                    const nextSchool = next[0];
+                    if (nextSchool) onSchoolChange(nextSchool);
+                  }}
+                  multiple={false}
+                  placeholder={selectedSchoolName}
+                  searchPlaceholder={ic('filterSchool')}
+                  removeLabel={ic('removeSchool')}
+                  emptyFilterHint={ic('chooseSchool')}
+                  badgeClassName="border-gaming-border bg-gaming-card text-text-secondary"
+                  selectedMaxWidth="max-w-[11rem]"
+                  renderBadge={(school) => (
+                    <img
+                      src={logoUrl}
+                      alt={school}
+                      title={school}
+                      className="h-4 w-auto max-w-none object-contain"
+                    />
+                  )}
+                />
+              ) : (
+                <div className="badge badge-outline px-2 py-1 bg-gaming-card w-fit h-auto" title={ic('school')}>
+                  <img src={logoUrl} alt={ic('school')} className="h-4 w-auto max-w-none object-contain" />
+                </div>
+              )}
+
+              {onInstitutionalEmailChange && (
+                <div className="min-w-[13rem] flex-1 max-w-full">
+                  <EditableText
+                    value={institutionalEmailLocalPart}
+                    onChange={(value) =>
+                      onInstitutionalEmailChange(
+                        value.trim() ? `${value.trim()}@${fixedInstitutionalDomain}` : ''
+                      )
+                    }
+                    placeholder={suggestedInstitutionalEmailLocalPart || ic('institutionalEmail')}
+                    variant="field"
+                    suffix={`@${fixedInstitutionalDomain}`}
+                    truncate={false}
+                    className="text-sm text-text-muted"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

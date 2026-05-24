@@ -197,6 +197,7 @@ export const fr = {
       ],
       birthDate: 'Date de naissance',
       addEmail: 'Ajouter un e-mail',
+      institutionalEmail: 'E-mail institutionnel',
       writeBio: 'Écrivez une bio…',
       adminRole: 'Administrateur',
       studentRole: 'Étudiant',

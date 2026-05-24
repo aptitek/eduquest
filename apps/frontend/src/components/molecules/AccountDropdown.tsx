@@ -7,7 +7,7 @@ import { useToastStore } from '../../features/toast/toastStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from '../organisms/InstitutionalProfileCard/InstitutionalProfileCard';
-import { User } from '@eduquest/shared';
+import { StudentCohort, User } from '@eduquest/shared';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,6 +17,10 @@ type ProfileResponse = {
   errorKey?: string;
   token?: string;
   user?: Partial<User>;
+};
+
+type ProfileUpdate = Partial<User> & {
+  institutionalEmail?: string;
 };
 
 type ThemeMode = 'dark' | 'light';
@@ -39,14 +43,27 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function getLatestCohortMembership(memberships?: StudentCohort[]) {
+  if (!memberships || memberships.length === 0) return undefined;
+  return [...memberships].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  })[0];
+}
+
 export function AccountDropdown() {
-  const { user, logout } = useAuth();
+  const { user, student, logout } = useAuth();
   const patchUser = useGameStore((s) => s.patchUser);
   const showToast = useToastStore((s) => s.showToast);
   const { t, locale, setLocale } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [institutionalEmailOverride, setInstitutionalEmailOverride] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const latestCohortMembership = getLatestCohortMembership(student?.cohortMemberships);
+  const latestCohort = latestCohortMembership?.cohort;
+  const latestSchool = latestCohort?.school || student?.school;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -64,6 +81,10 @@ export function AccountDropdown() {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
+  useEffect(() => {
+    setInstitutionalEmailOverride(null);
+  }, [latestCohortMembership?.institutionalEmail]);
+
   if (!user) return null;
 
   const username =
@@ -73,7 +94,7 @@ export function AccountDropdown() {
     user.githubAvatarUrl ||
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
 
-  const updateProfile = async (data: Partial<User>, shouldThrow = false) => {
+  const updateProfile = async (data: ProfileUpdate, shouldThrow = false) => {
     if (!user) {
       if (shouldThrow) throw new Error('profile.errors.updateFailed');
       return;
@@ -141,6 +162,16 @@ export function AccountDropdown() {
     await updateProfile({ avatarUrl }, true);
   };
 
+  const handleInstitutionalEmailChange = async (institutionalEmail: string) => {
+    const snapshot = institutionalEmailOverride;
+    setInstitutionalEmailOverride(institutionalEmail);
+    try {
+      await updateProfile({ institutionalEmail }, true);
+    } catch {
+      setInstitutionalEmailOverride(snapshot);
+    }
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Trigger Button */}
@@ -185,6 +216,13 @@ export function AccountDropdown() {
                 user={user}
                 onUpdateProfile={handleUpdateProfile}
                 onUploadAvatar={handleUploadAvatar}
+                institutionalEmail={
+                  institutionalEmailOverride ?? latestCohortMembership?.institutionalEmail
+                }
+                institutionalEmailDomain={latestSchool?.emailDomain || 'school.edu'}
+                onInstitutionalEmailChange={handleInstitutionalEmailChange}
+                schoolName={latestSchool?.name}
+                cohort={latestCohort}
                 className="shadow-none border-none rounded-none border-b border-gaming-border"
               />
             </div>
