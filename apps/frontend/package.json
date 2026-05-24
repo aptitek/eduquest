@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@eduquest/shared": "*",
+    "@tanstack/react-table": "^8.21.3",
     "clsx": "^2.1.1",
     "daisyui": "^5.5.20",
     "framer-motion": "^11.0.3",

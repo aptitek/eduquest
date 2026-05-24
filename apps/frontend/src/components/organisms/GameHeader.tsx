@@ -4,9 +4,14 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from '../molecules/AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { useAuth } from '../../features/auth/useAuth';
+import { Settings } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
-export function GameHeader() {
+interface GameHeaderProps {
+  currentView?: 'map' | 'management';
+}
+
+export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const { student, character } = useGameStore();
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -54,8 +59,22 @@ export function GameHeader() {
           </h1>
         </div>
 
-        {/* Partie Droite : Account Dropdown */}
+        {/* Partie Droite : Navigation & Account Dropdown */}
         <div className="flex gap-3 items-center">
+          {user?.isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.hash = currentView === 'management' ? '' : 'management';
+              }}
+              className="btn btn-sm btn-ghost border border-gaming-border bg-gaming-base/40 text-text-secondary hover:text-text-primary hover:bg-gaming-base gap-2 font-display"
+            >
+              <Settings size={14} />
+              <span className="hidden sm:inline">
+                {currentView === 'management' ? t('management.backToMap') : t('management.nav')}
+              </span>
+            </button>
+          )}
           {!isOnline && (
             <div className="tooltip tooltip-left" data-tip={t('header.connectionLost')}>
               <StatusIndicator status="error" isPulsing={true} />

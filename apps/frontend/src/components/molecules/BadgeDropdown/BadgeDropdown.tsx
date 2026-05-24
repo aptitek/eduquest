@@ -152,30 +152,34 @@ export function BadgeDropdown({
   }, [open]);
 
   const selectedBadges = value.map((item) => (
-    <span key={item} className={cn(selectedBadgeClass, 'relative shrink-0 pr-5')}>
+    <span key={item} className={cn(selectedBadgeClass, 'relative shrink-0', multiple && 'pr-5')}>
       {item}
-      <button
-        type="button"
-        onClick={() => remove(item)}
-        aria-label={`${removeLabel}: ${item}`}
-        className="btn btn-circle btn-xs absolute right-0.5 top-1/2 h-3.5 w-3.5 min-h-0 -translate-y-1/2 p-0 bg-gaming-card border border-gaming-border text-text-muted hover:text-status-boss hover:border-status-boss/50 shadow-sm"
-      >
-        <Trash2 size={8} strokeWidth={2.5} />
-      </button>
+      {multiple && (
+        <button
+          type="button"
+          onClick={() => remove(item)}
+          aria-label={`${removeLabel}: ${item}`}
+          className="btn btn-circle btn-xs absolute right-0.5 top-1/2 h-3.5 w-3.5 min-h-0 -translate-y-1/2 p-0 bg-gaming-card border border-gaming-border text-text-muted hover:text-status-boss hover:border-status-boss/50 shadow-sm"
+        >
+          <Trash2 size={8} strokeWidth={2.5} />
+        </button>
+      )}
     </span>
   ));
 
   const expandedSelectedBadges = value.map((item) => (
-    <span key={item} className={cn(selectedBadgeClass, 'relative shrink-0 pr-5')}>
+    <span key={item} className={cn(selectedBadgeClass, 'relative shrink-0', multiple && 'pr-5')}>
       {item}
-      <button
-        type="button"
-        onClick={() => remove(item)}
-        aria-label={`${removeLabel}: ${item}`}
-        className="btn btn-circle btn-xs absolute right-0.5 top-1/2 h-3.5 w-3.5 min-h-0 -translate-y-1/2 p-0 bg-gaming-card border border-gaming-border text-text-muted hover:text-status-boss hover:border-status-boss/50 shadow-sm"
-      >
-        <Trash2 size={8} strokeWidth={2.5} />
-      </button>
+      {multiple && (
+        <button
+          type="button"
+          onClick={() => remove(item)}
+          aria-label={`${removeLabel}: ${item}`}
+          className="btn btn-circle btn-xs absolute right-0.5 top-1/2 h-3.5 w-3.5 min-h-0 -translate-y-1/2 p-0 bg-gaming-card border border-gaming-border text-text-muted hover:text-status-boss hover:border-status-boss/50 shadow-sm"
+        >
+          <Trash2 size={8} strokeWidth={2.5} />
+        </button>
+      )}
     </span>
   ));
 

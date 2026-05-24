@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 import { MapPage } from './pages/MapPage/MapPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
+import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
 import { useTranslation } from './hooks/useTranslation';
 import { ToastViewport } from './components/atoms/ToastViewport';
@@ -17,9 +18,20 @@ document.documentElement.dataset.theme =
       ? 'light'
       : 'dark';
 
+function getHashRoute() {
+  return window.location.hash.replace(/^#\/?/, '');
+}
+
 function App() {
   const { t } = useTranslation();
   const { user, loadingSession } = useAuth();
+  const [route, setRoute] = React.useState(getHashRoute);
+
+  React.useEffect(() => {
+    const handleHashChange = () => setRoute(getHashRoute());
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   if (loadingSession) {
     return (
@@ -70,6 +82,10 @@ function App() {
   // Force authentication to access the app
   if (!user) {
     return <LoginPage />;
+  }
+
+  if (route === 'management' && user.isAdmin) {
+    return <ManagementPage />;
   }
 
   return <MapPage />;

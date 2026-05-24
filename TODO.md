@@ -22,18 +22,18 @@
 
 [x] RULE : All components should have a skeletton counterpart for when the data is loading from the API.
 
-[ ] Make a status indicator component. Make it a coloured circle with optional pulse animation. It should be a new atom.
+[x] Make a status indicator component. Make it a coloured circle with optional pulse animation. It should be a new atom.
 [ ] Add an instance of the status indicator component in the top right of the header when connection to local API is broken.
-[ ] Make or search for an editable text component editable via a click with a pen icon next to the field when editable. A simple click on either the pen icon or the field should toggle allow the user to edit the field.
-[ ] The text component should accept a optional prefix or suffix to be displayed next to the text (like for the fixed email domain)
-[ ] Make or find a badge dropdown component. It should be a simple dropdown with a list of badge and a selected badge, it will extends a normal dropdown or badge component (whichever is most relevant). It should have a pen when in edit mode. It should be reusable and generic. It should support a group version where the field should be a list of badges. And a single version where the field is a single badge.
-[ ] Make or find a simple editable avatar component that extends a normal avatar component. It should have a pen when in edit mode. It should have a reset button when editable. It should also have a status indicator that drop-down with the statuses (either badge or new atom if necessary)
-[ ] Make or find a confirm button that will extends normal button but will have a coloured aura when hovered. When pressed it will have a coloured border that will surround the button slowly. When the border is full the button will be "pressed". If the user releases the mouse button and the border is not full the button will not be "pressed". When released the border will shrink slowly, pressing again will resume the growth.
+[x] Make or search for an editable text component editable via a click with a pen icon next to the field when editable. A simple click on either the pen icon or the field should toggle allow the user to edit the field.
+[x] The text component should accept a optional prefix or suffix to be displayed next to the text (like for the fixed email domain)
+[x] Make or find a badge dropdown component. It should be a simple dropdown with a list of badge and a selected badge, it will extends a normal dropdown or badge component (whichever is most relevant). It should have a pen when in edit mode. It should be reusable and generic. It should support a group version where the field should be a list of badges. And a single version where the field is a single badge.
+[x] Make or find a simple editable avatar component that extends a normal avatar component. It should have a pen when in edit mode. It should have a reset button when editable. It should also have a status indicator that drop-down with the statuses (either badge or new atom if necessary)
+[x] Make or find a confirm button that will extends normal button but will have a coloured aura when hovered. When pressed it will have a coloured border that will surround the button slowly. When the border is full the button will be "pressed". If the user releases the mouse button and the border is not full the button will not be "pressed". When released the border will shrink slowly, pressing again will resume the growth.
 
 ---
 
-[ ] Make or find a editable card component. It should accept a list of fields to edit and display them in a card format. It should be reusable and generic.
-[ ] The card component should have two modes: read mode and edit mode. It will feature complex layout of other atoms like editable text, badge dropdown, editable avatar, etc.
+[x] Make or find a editable card component. It should accept a list of fields to edit and display them in a card format. It should be reusable and generic.
+[x] The card component should have two modes: read mode and edit mode. It will feature complex layout of other atoms like editable text, badge dropdown, editable avatar, etc.
 
 ---
 

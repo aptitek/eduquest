@@ -3,6 +3,7 @@ import { EditableText, EditableFieldContext } from '../../atoms/EditableText';
 import { EditableAvatar } from '../../molecules/EditableAvatar';
 import { SplitEditableText } from '../../molecules/SplitEditableText';
 import { EditablePronouns } from '../../molecules/EditablePronouns';
+import { BadgeDropdown } from '../../molecules/BadgeDropdown';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { en } from '../../../locales/en';
 import { fr } from '../../../locales/fr';
@@ -16,6 +17,10 @@ export interface InstitutionalProfileCardProps {
   onUpdateProfile: (data: Partial<User>) => Promise<void>;
   onUploadAvatar?: (file: File) => Promise<void>;
   onResetAvatar?: () => Promise<void>;
+  onRoleChange?: (isAdmin: boolean) => void;
+  schoolName?: string;
+  schoolOptions?: string[];
+  onSchoolChange?: (schoolName: string) => void;
   className?: string;
 }
 
@@ -28,6 +33,10 @@ export function InstitutionalProfileCard({
   onUpdateProfile,
   onUploadAvatar,
   onResetAvatar,
+  onRoleChange,
+  schoolName,
+  schoolOptions,
+  onSchoolChange,
   className,
 }: InstitutionalProfileCardProps) {
   const { t, locale } = useTranslation();
@@ -71,6 +80,7 @@ export function InstitutionalProfileCard({
 
   const metaMuted = 'text-sm text-text-muted';
   const roleLabel = user.isAdmin ? ic('adminRole') : ic('studentRole');
+  const selectedSchoolName = schoolName || ic('school');
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: true }}>
@@ -80,14 +90,38 @@ export function InstitutionalProfileCard({
         className
       )}
     >
-      <div
-        className={cn(
-          'badge absolute top-0 right-0 z-10 rounded-none rounded-bl-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
-          user.isAdmin ? 'badge-primary' : 'badge-ghost'
-        )}
-      >
-        {roleLabel}
-      </div>
+      {onRoleChange ? (
+        <div className="absolute top-0 right-0 z-20 rounded-bl-xl bg-gaming-card shadow-md">
+          <BadgeDropdown
+            options={[ic('studentRole'), ic('adminRole')]}
+            value={[roleLabel]}
+            onChange={(next) => {
+              const nextRole = next[0];
+              if (!nextRole) return;
+              onRoleChange(nextRole === ic('adminRole'));
+            }}
+            multiple={false}
+            placeholder={roleLabel}
+            searchPlaceholder={ic('filterRole')}
+            removeLabel={ic('removeRole')}
+            emptyFilterHint={ic('chooseRole')}
+            badgeClassName={cn(
+              'rounded-none rounded-bl-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
+              user.isAdmin ? 'badge-primary' : 'badge-ghost'
+            )}
+            selectedMaxWidth="max-w-[10rem]"
+          />
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'badge absolute top-0 right-0 z-10 rounded-none rounded-bl-xl border-0 px-3 py-2 text-xs font-semibold shadow-md',
+            user.isAdmin ? 'badge-primary' : 'badge-ghost'
+          )}
+        >
+          {roleLabel}
+        </div>
+      )}
 
       <div className="card-body gap-3 p-4 sm:p-5 pt-7">
         <div className="flex gap-3 items-start">
@@ -184,9 +218,27 @@ export function InstitutionalProfileCard({
               />
             </div>
 
-            <div className="badge badge-outline px-2 py-1 bg-gaming-card w-fit h-auto" title={ic('school')}>
-              <img src={logoUrl} alt={ic('school')} className="h-4 w-auto max-w-none object-contain" />
-            </div>
+            {onSchoolChange && schoolOptions?.length ? (
+              <BadgeDropdown
+                options={schoolOptions}
+                value={[selectedSchoolName]}
+                onChange={(next) => {
+                  const nextSchool = next[0];
+                  if (nextSchool) onSchoolChange(nextSchool);
+                }}
+                multiple={false}
+                placeholder={selectedSchoolName}
+                searchPlaceholder={ic('filterSchool')}
+                removeLabel={ic('removeSchool')}
+                emptyFilterHint={ic('chooseSchool')}
+                badgeClassName="border-gaming-border bg-gaming-card text-text-secondary"
+                selectedMaxWidth="max-w-[11rem]"
+              />
+            ) : (
+              <div className="badge badge-outline px-2 py-1 bg-gaming-card w-fit h-auto" title={ic('school')}>
+                <img src={logoUrl} alt={ic('school')} className="h-4 w-auto max-w-none object-contain" />
+              </div>
+            )}
           </div>
         </div>
 
