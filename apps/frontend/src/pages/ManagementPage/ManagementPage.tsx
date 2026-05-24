@@ -1,16 +1,26 @@
 import { useMemo, useState } from 'react';
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
-import { School, Student, User } from '@eduquest/shared';
+import {
+  ColumnDef,
+  ColumnFiltersState,
+  SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import { Address, Campus, Cohort, CohortGrade, School, Student, User } from '@eduquest/shared';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { PlayingCard } from '../../components/molecules/PlayingCard';
+import { BadgeDropdown } from '../../components/molecules/BadgeDropdown';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { parsePronouns } from '../../utils/pronouns';
+import logoUrl from '../../assets/logo.svg';
 
-type ManagementTab = 'students' | 'schools';
-type RoleFilter = 'all' | 'admin' | 'student';
+type ManagementTab = 'schools' | 'cohorts' | 'students';
 
 type StudentRow = Student & {
   user: User;
@@ -20,19 +30,71 @@ type StudentRow = Student & {
   age?: number;
 };
 
-const mockSchools: School[] = [
+type SchoolRow = School & {
+  address?: Address;
+  cohortCount: number;
+  studentCount: number;
+};
+
+type CohortRow = Cohort & {
+  schoolName: string;
+  campusName: string;
+  studentCount: number;
+};
+
+const mockAddresses: Address[] = [
   {
-    id: 'school_aptitek',
-    name: 'Aptitek School',
-    emailDomain: 'aptitek.io',
+    id: 'address_aptitek_paris',
+    line1: '10 rue de la Tech',
+    postalCode: '75001',
+    city: 'Paris',
+    country: 'France',
     createdAt: '2026-01-01',
   },
 ];
 
-function formatDate(value?: string) {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
-}
+const mockSchools: SchoolRow[] = [
+  {
+    id: 'school_aptitek',
+    name: 'Aptitek School',
+    website: 'https://aptitek.io',
+    emailDomain: 'aptitek.io',
+    address: mockAddresses[0],
+    cohortCount: 1,
+    studentCount: 1,
+    createdAt: '2026-01-01',
+  },
+];
+
+const mockCampuses: Campus[] = [
+  {
+    id: 'campus_aptitek_paris',
+    schoolId: 'school_aptitek',
+    addressId: 'address_aptitek_paris',
+    address: mockAddresses[0],
+    name: 'Paris',
+    createdAt: '2026-01-01',
+  },
+];
+
+const mockCohorts: CohortRow[] = [
+  {
+    id: 'cohort_frontend_mages',
+    schoolId: 'school_aptitek',
+    campusId: 'campus_aptitek_paris',
+    schoolName: 'Aptitek School',
+    campusName: mockCampuses[0].name,
+    schoolYear: '2025-2026',
+    grade: 'bachelor',
+    level: 3,
+    name: 'Frontend Mages',
+    majorSpeciality: 'Frontend',
+    minorSpeciality: 'UX',
+    description: 'Students focused on interface craft and client-side quests.',
+    studentCount: 1,
+    createdAt: '2026-01-01',
+  },
+];
 
 function calculateAge(birthDate?: string) {
   if (!birthDate) return undefined;
@@ -48,21 +110,90 @@ function calculateAge(birthDate?: string) {
   return age;
 }
 
+function SchoolLogoBadge({ name }: { name: string }) {
+  return (
+    <img src={logoUrl} alt={name} title={name} className="h-4 w-auto max-w-none object-contain" />
+  );
+}
+
+function formatAddress(address?: Address) {
+  if (!address) return '-';
+  return [address.line1, address.line2, [address.postalCode, address.city].filter(Boolean).join(' '), address.country]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatSchoolYear(value: string) {
+  const years = value.match(/\d{4}/g);
+  if (!years || years.length < 2) return value;
+  return `${years[0].slice(-2)}-${years[1].slice(-2)}`;
+}
+
+function formatGrade(value: CohortGrade) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function ManagementTable<TData>({
   data,
   columns,
+  globalFilter,
+  onGlobalFilterChange,
+  schoolFilterOptions = [],
 }: {
   data: TData[];
   columns: ColumnDef<TData>[];
+  globalFilter: string;
+  onGlobalFilterChange: (value: string) => void;
+  schoolFilterOptions?: string[];
 }) {
+  const { t } = useTranslation();
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
   const table = useReactTable({
     data,
     columns,
+    state: {
+      columnFilters,
+      globalFilter,
+      sorting,
+    },
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange,
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
+  const schoolColumn = table.getColumn('school');
+  const selectedSchools = (schoolColumn?.getFilterValue() as string[] | undefined) ?? [];
 
   return (
     <div className="overflow-hidden rounded-xl border border-gaming-border bg-gaming-card shadow-lg">
+      <div className="flex flex-col gap-2 border-b border-gaming-border bg-gaming-card p-3 sm:flex-row sm:items-center">
+        <input
+          type="search"
+          value={globalFilter}
+          onChange={(event) => table.setGlobalFilter(event.target.value)}
+          placeholder={t('management.filters.searchPlaceholder')}
+          className="input input-bordered input-sm min-w-0 flex-1 bg-gaming-base border-gaming-border text-text-primary"
+        />
+        {schoolColumn && schoolFilterOptions.length > 0 && (
+          <BadgeDropdown
+            options={schoolFilterOptions}
+            value={selectedSchools}
+            onChange={(next) => schoolColumn.setFilterValue(next.length > 0 ? next : undefined)}
+            multiple
+            placeholder={t('management.filters.allSchools')}
+            searchPlaceholder={t('management.filters.school')}
+            emptyFilterHint={t('management.filters.noSchools')}
+            badgeClassName="border-gaming-border bg-gaming-base text-text-secondary"
+            selectedMaxWidth="max-w-[16rem]"
+            showArrow
+            renderBadge={(school) => <SchoolLogoBadge name={school} />}
+          />
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="table">
           <thead className="bg-gaming-base/60 text-text-muted">
@@ -70,9 +201,24 @@ function ManagementTable<TData>({
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th key={header.id} className="font-display text-xs uppercase tracking-wider">
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.isPlaceholder ? null : (
+                      <button
+                        type="button"
+                        onClick={header.column.getToggleSortingHandler()}
+                        disabled={!header.column.getCanSort()}
+                        className={cn(
+                          'inline-flex items-center gap-1 uppercase tracking-wider',
+                          header.column.getCanSort() && 'cursor-pointer hover:text-text-primary',
+                          !header.column.getCanSort() && 'cursor-default'
+                        )}
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {{
+                          asc: '↑',
+                          desc: '↓',
+                        }[header.column.getIsSorted() as string] ?? null}
+                      </button>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -98,10 +244,8 @@ function ManagementTable<TData>({
 export function ManagementPage() {
   const { t } = useTranslation();
   const { user, student, character } = useGameStore();
-  const [activeTab, setActiveTab] = useState<ManagementTab>('students');
+  const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const [schoolFilter, setSchoolFilter] = useState('all');
 
   const studentRows = useMemo<StudentRow[]>(() => {
     if (!user || !student || !character) return [];
@@ -125,52 +269,18 @@ export function ManagementPage() {
       },
     ];
   }, [character, student, user]);
-
   const schoolFilterOptions = useMemo(
-    () => ['all', ...mockSchools.map((school) => school.name)],
-    []
+    () => Array.from(new Set(studentRows.map((row) => row.school?.name || 'Aptitek School'))),
+    [studentRows]
   );
-
-  const filteredStudentRows = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-
-    return studentRows.filter((row) => {
-      const pronouns = parsePronouns(row.user.pronouns || '').join(' ');
-      const schoolName = row.school?.name || 'Aptitek School';
-      const role = row.user.isAdmin ? 'admin' : 'student';
-      const haystack = [
-        row.displayName,
-        row.email,
-        row.user.githubUsername,
-        schoolName,
-        pronouns,
-        String(row.age ?? ''),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      const matchesSearch = !normalizedSearch || haystack.includes(normalizedSearch);
-      const matchesRole = roleFilter === 'all' || roleFilter === role;
-      const matchesSchool = schoolFilter === 'all' || schoolFilter === schoolName;
-
-      return matchesSearch && matchesRole && matchesSchool;
-    });
-  }, [roleFilter, schoolFilter, searchQuery, studentRows]);
-
-  const filteredSchools = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    return mockSchools.filter((school) => {
-      const haystack = [school.name, school.emailDomain].filter(Boolean).join(' ').toLowerCase();
-      return !normalizedSearch || haystack.includes(normalizedSearch);
-    });
-  }, [searchQuery]);
 
   const studentColumns = useMemo<ColumnDef<StudentRow>[]>(
     () => [
       {
         id: 'avatar',
         header: t('management.students.avatar'),
+        enableSorting: false,
+        enableGlobalFilter: false,
         cell: ({ row }) => {
           const avatarUrl =
             row.original.user.avatarUrl ||
@@ -197,6 +307,7 @@ export function ManagementPage() {
       },
       {
         id: 'pronouns',
+        accessorFn: (row) => parsePronouns(row.user.pronouns || '').join(' '),
         header: t('management.students.pronouns'),
         cell: ({ row }) => {
           const pronouns = parsePronouns(row.original.user.pronouns || '');
@@ -221,11 +332,20 @@ export function ManagementPage() {
         header: t('management.students.email'),
       },
       {
-        accessorKey: 'school.name',
+        id: 'school',
+        accessorFn: (row) => row.school?.name || 'Aptitek School',
         header: t('management.students.school'),
+        filterFn: (row, columnId, filterValue) => {
+          const selected = filterValue as string[] | undefined;
+          if (!selected || selected.length === 0) return true;
+          return selected.includes(row.getValue<string>(columnId));
+        },
         cell: ({ row }) => (
-          <span className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary">
-            {row.original.school?.name || 'Aptitek School'}
+          <span
+            className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary"
+            title={row.original.school?.name || 'Aptitek School'}
+          >
+            <SchoolLogoBadge name={row.original.school?.name || 'Aptitek School'} />
           </span>
         ),
       },
@@ -238,21 +358,144 @@ export function ManagementPage() {
     [t]
   );
 
-  const schoolColumns = useMemo<ColumnDef<School>[]>(
+  const schoolColumns = useMemo<ColumnDef<SchoolRow>[]>(
     () => [
+      {
+        id: 'logo',
+        header: t('management.schools.logo'),
+        enableSorting: false,
+        enableGlobalFilter: false,
+        cell: ({ row }) => (
+          <span className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary">
+            <SchoolLogoBadge name={row.original.name} />
+          </span>
+        ),
+      },
       {
         accessorKey: 'name',
         header: t('management.schools.name'),
+        cell: ({ getValue }) => (
+          <span className="font-display font-semibold text-text-primary">
+            {getValue<string>()}
+          </span>
+        ),
       },
       {
-        accessorKey: 'emailDomain',
-        header: t('management.schools.emailDomain'),
-        cell: ({ getValue }) => getValue<string | undefined>() || '-',
+        accessorKey: 'website',
+        header: t('management.schools.website'),
+        cell: ({ getValue }) => {
+          const website = getValue<string | undefined>();
+          if (!website) return '-';
+          return (
+            <a
+              href={website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-solarized-blue hover:underline"
+            >
+              {website.replace(/^https?:\/\//, '')}
+            </a>
+          );
+        },
       },
       {
-        accessorKey: 'createdAt',
-        header: t('management.schools.createdAt'),
-        cell: ({ getValue }) => formatDate(getValue<string | undefined>()),
+        id: 'address',
+        accessorFn: (row) => formatAddress(row.address),
+        header: t('management.schools.address'),
+        cell: ({ getValue }) => {
+          const address = getValue<string>();
+          return (
+            <span className="block max-w-[16rem] truncate" title={address}>
+              {address}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: 'cohortCount',
+        header: t('management.schools.cohorts'),
+      },
+      {
+        accessorKey: 'studentCount',
+        header: t('management.schools.students'),
+      },
+    ],
+    [t]
+  );
+
+  const cohortColumns = useMemo<ColumnDef<CohortRow>[]>(
+    () => [
+      {
+        accessorKey: 'schoolName',
+        header: t('management.cohorts.school'),
+        cell: ({ getValue }) => (
+          <span className="badge badge-outline bg-gaming-base border-gaming-border text-text-secondary">
+            <SchoolLogoBadge name={getValue<string>()} />
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'campusName',
+        header: t('management.cohorts.campus'),
+      },
+      {
+        accessorKey: 'schoolYear',
+        header: t('management.cohorts.schoolYear'),
+        cell: ({ getValue }) => (
+          <span className="badge badge-sm badge-outline border-gaming-border text-text-secondary">
+            {formatSchoolYear(getValue<string>())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'grade',
+        header: t('management.cohorts.grade'),
+        cell: ({ getValue }) => (
+          <span className="badge badge-sm bg-gaming-base border-gaming-border text-text-secondary">
+            {formatGrade(getValue<CohortGrade>())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'level',
+        header: t('management.cohorts.level'),
+        cell: ({ getValue }) => (
+          <span className="badge badge-sm badge-outline border-gaming-border text-text-secondary">
+            {getValue<number>()}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'name',
+        header: t('management.cohorts.name'),
+        cell: ({ getValue }) => (
+          <span className="font-display font-semibold text-text-primary">
+            {getValue<string>()}
+          </span>
+        ),
+      },
+      {
+        id: 'speciality',
+        accessorFn: (row) => [row.majorSpeciality, row.minorSpeciality].filter(Boolean).join(' '),
+        header: t('management.cohorts.speciality'),
+        cell: ({ row }) => (
+          <div className="flex flex-wrap gap-1">
+            {row.original.majorSpeciality && (
+              <span className="badge badge-sm badge-outline border-gaming-border text-text-secondary">
+                {row.original.majorSpeciality}
+              </span>
+            )}
+            {row.original.minorSpeciality && (
+              <span className="badge badge-sm badge-ghost text-text-muted">
+                {row.original.minorSpeciality}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'studentCount',
+        header: t('management.cohorts.students'),
       },
     ],
     [t]
@@ -275,7 +518,7 @@ export function ManagementPage() {
         </div>
 
         <div className="tabs tabs-boxed w-fit bg-gaming-card border border-gaming-border p-1">
-          {(['students', 'schools'] as const).map((tab) => (
+          {(['schools', 'cohorts', 'students'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -292,64 +535,29 @@ export function ManagementPage() {
           ))}
         </div>
 
-        <div className="rounded-xl border border-gaming-border bg-gaming-card p-3 shadow-md">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <label className="form-control flex-1">
-              <span className="label-text text-xs font-display uppercase tracking-wider text-text-muted">
-                {t('management.filters.search')}
-              </span>
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={t('management.filters.searchPlaceholder')}
-                className="input input-bordered input-sm bg-gaming-base border-gaming-border text-text-primary"
-              />
-            </label>
-
-            {activeTab === 'students' && (
-              <>
-                <label className="form-control w-full lg:w-40">
-                  <span className="label-text text-xs font-display uppercase tracking-wider text-text-muted">
-                    {t('management.filters.role')}
-                  </span>
-                  <select
-                    value={roleFilter}
-                    onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
-                    className="select select-bordered select-sm bg-gaming-base border-gaming-border text-text-primary"
-                  >
-                    <option value="all">{t('management.filters.allRoles')}</option>
-                    <option value="admin">{t('profile.institutionalCard.adminRole')}</option>
-                    <option value="student">{t('profile.institutionalCard.studentRole')}</option>
-                  </select>
-                </label>
-
-                <label className="form-control w-full lg:w-48">
-                  <span className="label-text text-xs font-display uppercase tracking-wider text-text-muted">
-                    {t('management.filters.school')}
-                  </span>
-                  <select
-                    value={schoolFilter}
-                    onChange={(event) => setSchoolFilter(event.target.value)}
-                    className="select select-bordered select-sm bg-gaming-base border-gaming-border text-text-primary"
-                  >
-                    {schoolFilterOptions.map((school) => (
-                      <option key={school} value={school}>
-                        {school === 'all' ? t('management.filters.allSchools') : school}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            )}
-          </div>
-        </div>
-
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
           {activeTab === 'students' ? (
-            <ManagementTable data={filteredStudentRows} columns={studentColumns} />
+            <ManagementTable
+              data={studentRows}
+              columns={studentColumns}
+              globalFilter={searchQuery}
+              onGlobalFilterChange={setSearchQuery}
+              schoolFilterOptions={schoolFilterOptions}
+            />
+          ) : activeTab === 'cohorts' ? (
+            <ManagementTable
+              data={mockCohorts}
+              columns={cohortColumns}
+              globalFilter={searchQuery}
+              onGlobalFilterChange={setSearchQuery}
+            />
           ) : (
-            <ManagementTable data={filteredSchools} columns={schoolColumns} />
+            <ManagementTable
+              data={mockSchools}
+              columns={schoolColumns}
+              globalFilter={searchQuery}
+              onGlobalFilterChange={setSearchQuery}
+            />
           )}
 
           <PlayingCard

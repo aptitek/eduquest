@@ -31,15 +31,61 @@ export interface School {
   id: string;
   name: string;
   logoUrl?: string;
+  website?: string;
   emailDomain?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-// Table `guilds` : Groupes de JDR des élèves
+// Table `addresses` : Adresses postales réutilisables
+export interface Address {
+  id: string;
+  line1: string;
+  line2?: string;
+  postalCode?: string;
+  city: string;
+  country?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Table `campuses` : Sites rattachés à une école
+export interface Campus {
+  id: string;
+  schoolId: string;
+  school?: School;
+  addressId?: string;
+  address?: Address;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CohortGrade = 'licence' | 'bachelor' | 'engineer' | 'master' | 'doctorate';
+
+// Table `cohorts` : Classes d'étudiants au sein d'une école
+export interface Cohort {
+  id: string;
+  schoolId: string;
+  school?: School;
+  campusId?: string;
+  campus?: Campus;
+  schoolYear: string;
+  grade: CohortGrade;
+  level: number;
+  name: string;
+  majorSpeciality?: string;
+  minorSpeciality?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Table `guilds` : Groupes de JDR restreints à une cohort
 export interface Guild {
   id: string;
-  schoolId?: string;
+  cohortId: string;
+  cohort?: Cohort;
   name: string;
   description?: string;
   iconUrl?: string;
@@ -48,13 +94,23 @@ export interface Guild {
   updatedAt?: string;
 }
 
+// Table `student_cohorts` : Association étudiants/classes, avec une guilde max par cohort
+export interface StudentCohort {
+  studentId: string;
+  cohortId: string;
+  cohort?: Cohort;
+  guildId?: string;
+  guild?: Guild;
+  createdAt?: string;
+}
+
 // Table `students` : Profil élève lié à un utilisateur
 export interface Student {
   id: string;
   userId: string;
-  guildId?: string;
   schoolId?: string;
   school?: School;
+  cohorts?: Cohort[];
   institutionalEmail?: string;
   createdAt?: string;
   updatedAt?: string;

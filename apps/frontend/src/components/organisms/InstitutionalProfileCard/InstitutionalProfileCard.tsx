@@ -233,6 +233,14 @@ export function InstitutionalProfileCard({
                 emptyFilterHint={ic('chooseSchool')}
                 badgeClassName="border-gaming-border bg-gaming-card text-text-secondary"
                 selectedMaxWidth="max-w-[11rem]"
+                renderBadge={(school) => (
+                  <img
+                    src={logoUrl}
+                    alt={school}
+                    title={school}
+                    className="h-4 w-auto max-w-none object-contain"
+                  />
+                )}
               />
             ) : (
               <div className="badge badge-outline px-2 py-1 bg-gaming-card w-fit h-auto" title={ic('school')}>

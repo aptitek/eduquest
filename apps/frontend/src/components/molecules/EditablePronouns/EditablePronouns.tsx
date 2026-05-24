@@ -1,6 +1,4 @@
-import { Pencil } from 'lucide-react';
 import { cn } from '../../../utils/cn';
-import { useEditableFieldContext } from '../../atoms/EditableText/EditableFieldContext';
 import { formatPronouns, parsePronouns } from '../../../utils/pronouns';
 import { BadgeDropdown } from '../BadgeDropdown';
 
@@ -27,9 +25,6 @@ export function EditablePronouns({
   className,
   showPencil: showPencilProp,
 }: EditablePronounsProps) {
-  const { showPencil: showPencilContext } = useEditableFieldContext();
-  const showPencil = showPencilProp ?? showPencilContext;
-
   const selected = parsePronouns(value);
 
   return (
@@ -45,14 +40,8 @@ export function EditablePronouns({
         emptyFilterHint={emptyFilterHint}
         badgeClassName="border-gaming-border"
         selectedMaxWidth="max-w-[7.5rem] sm:max-w-[9rem]"
+        showArrow={showPencilProp}
       />
-      {showPencil && (
-        <Pencil
-          size={12}
-          className="shrink-0 text-text-muted/70 pointer-events-none"
-          aria-hidden
-        />
-      )}
     </span>
   );
 }

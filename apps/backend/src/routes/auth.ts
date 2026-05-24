@@ -202,7 +202,6 @@ authRouter.get('/github/callback', async (c) => {
             .insert(students)
             .values({
               userId: newUser.id,
-              guildId: undefined, // Pas de guilde par défaut pour éviter violations FK si table non seedée
               schoolId: defaultSchoolId,
               institutionalEmail: `${githubUser.login.toLowerCase()}@school.edu`,
             })
@@ -329,7 +328,6 @@ authRouter.get('/mock', async (c) => {
           .insert(students)
           .values({
             userId: newUser.id,
-            guildId: undefined,
             schoolId: defaultSchoolId,
             institutionalEmail: isAptitek ? 'aptitek@school.edu' : 'wizard@school.edu',
           })
@@ -385,7 +383,12 @@ authRouter.get('/me', authMiddleware, async (c) => {
     id: userPayload.id,
     email: userPayload.email,
     githubUsername: userPayload.githubUsername,
+    firstName: userPayload.firstName,
+    lastName: userPayload.lastName,
     displayName: userPayload.displayName,
+    birthDate: userPayload.birthDate,
+    bio: userPayload.bio,
+    pronouns: userPayload.pronouns,
     avatarUrl: userPayload.avatarUrl,
     githubAvatarUrl: userPayload.githubAvatarUrl,
     isAdmin: userPayload.isAdmin,
@@ -395,7 +398,6 @@ authRouter.get('/me', authMiddleware, async (c) => {
   let studentObj = {
     id: 'stud_mock_1',
     userId: userPayload.id,
-    guildId: 'mages',
     schoolId: 'school_mock_1',
     school: {
       id: 'school_mock_1',
@@ -435,7 +437,12 @@ authRouter.get('/me', authMiddleware, async (c) => {
           id: userRecord.id,
           email: userRecord.email,
           githubUsername: userRecord.githubUsername || undefined,
+          firstName: userRecord.firstName || undefined,
+          lastName: userRecord.lastName || undefined,
           displayName: userRecord.displayName || undefined,
+          birthDate: userRecord.birthDate || undefined,
+          bio: userRecord.bio || undefined,
+          pronouns: userRecord.pronouns || undefined,
           avatarUrl: userRecord.avatarUrl || undefined,
           githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
           isAdmin: userRecord.isAdmin,
@@ -471,7 +478,6 @@ authRouter.get('/me', authMiddleware, async (c) => {
         studentObj = {
           id: studentRecord.id,
           userId: studentRecord.userId,
-          guildId: studentRecord.guildId || 'mages', // Fallback visuel
           schoolId: studentRecord.schoolId || undefined,
           school: schoolObj,
           institutionalEmail: studentRecord.institutionalEmail || studentObj.institutionalEmail,
@@ -571,12 +577,13 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     id: userPayload.id,
     email: body.email ?? userPayload.email,
     githubUsername: body.githubUsername ?? userPayload.githubUsername,
-    firstName: body.firstName,
-    lastName: body.lastName,
+    firstName: body.firstName ?? userPayload.firstName,
+    lastName: body.lastName ?? userPayload.lastName,
     displayName: body.displayName ?? userPayload.displayName,
-    birthDate: body.birthDate ?? undefined,
-    bio: body.bio,
-    pronouns: body.pronouns,
+    birthDate:
+      body.birthDate === null ? undefined : body.birthDate ?? userPayload.birthDate,
+    bio: body.bio ?? userPayload.bio,
+    pronouns: body.pronouns ?? userPayload.pronouns,
     avatarUrl: body.avatarUrl ?? userPayload.avatarUrl,
     githubAvatarUrl: userPayload.githubAvatarUrl,
     isAdmin: userPayload.isAdmin,
@@ -585,7 +592,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   let studentObj = {
     id: 'stud_mock_1',
     userId: userPayload.id,
-    guildId: 'mages',
     schoolId: 'school_mock_1',
     school: {
       id: 'school_mock_1',
@@ -716,7 +722,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           studentObj = {
             id: updatedStudent.id,
             userId: updatedStudent.userId,
-            guildId: updatedStudent.guildId || 'mages',
             schoolId: updatedStudent.schoolId || undefined,
             school: schoolObj,
             institutionalEmail: updatedStudent.institutionalEmail || undefined,
@@ -752,7 +757,12 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     id: userObj.id,
     email: userObj.email,
     githubUsername: userObj.githubUsername,
+    firstName: userObj.firstName,
+    lastName: userObj.lastName,
     displayName: userObj.displayName,
+    birthDate: userObj.birthDate,
+    bio: userObj.bio,
+    pronouns: userObj.pronouns,
     avatarUrl: userObj.avatarUrl,
     githubAvatarUrl: userObj.githubAvatarUrl,
     isAdmin: userObj.isAdmin,

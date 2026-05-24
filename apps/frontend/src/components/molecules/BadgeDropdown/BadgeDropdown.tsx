@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '../../../utils/cn';
+import { useEditableFieldContext } from '../../atoms/EditableText/EditableFieldContext';
 
 export interface BadgeDropdownProps {
   options: string[];
@@ -13,12 +15,13 @@ export interface BadgeDropdownProps {
   emptyFilterHint?: string;
   className?: string;
   badgeClassName?: string;
-  /** Max width of the selected-badges row before ellipsis + hover tooltip */
   selectedMaxWidth?: string;
+  showArrow?: boolean;
+  renderBadge?: (item: string) => ReactNode;
 }
 
-const DEFAULT_SELECTED_BADGE =
-  'badge badge-sm badge-outline gap-1 font-normal text-text-secondary';
+const DEFAULT_BADGE_CLASS =
+  'badge badge-outline bg-gaming-base border-gaming-border text-text-secondary gap-1 text-xs py-2 px-2 font-medium';
 
 export function BadgeDropdown({
   options,
@@ -27,119 +30,51 @@ export function BadgeDropdown({
   multiple = true,
   placeholder = '+',
   searchPlaceholder = 'Search…',
-  removeLabel = 'Remove',
   emptyFilterHint = 'Press Enter to add',
   className,
   badgeClassName,
-  selectedMaxWidth = 'max-w-[9rem] sm:max-w-[11rem]',
+  selectedMaxWidth = 'max-w-[11rem]',
+  showArrow: showArrowProp,
+  renderBadge,
 }: BadgeDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const [filterQuery, setFilterQuery] = useState('');
-  const [isOverflowing, setIsOverflowing] = useState(false);
-  const [expandedSelected, setExpandedSelected] = useState(false);
+  const { showPencil } = useEditableFieldContext();
+  const showArrow = showArrowProp ?? showPencil;
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
-  const filterRef = useRef<HTMLInputElement>(null);
-  const selectedContainerRef = useRef<HTMLDivElement>(null);
-  const selectedMeasureRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const selectedBadgeClass = cn(DEFAULT_SELECTED_BADGE, badgeClassName);
-  const poolBadgeClass = cn(
-    'badge badge-sm badge-outline font-normal hover:badge-primary hover:text-primary-content hover:border-primary cursor-pointer transition-colors',
-    badgeClassName
-  );
+  const badgeClass = cn(DEFAULT_BADGE_CLASS, badgeClassName);
 
   const catalog = useMemo(() => {
-    const fromOptions = options.filter((o) => o.trim());
-    const customs = value.filter((v) => !fromOptions.includes(v));
-    return [...fromOptions, ...customs];
+    const cleanOptions = options.map((option) => option.trim()).filter(Boolean);
+    const customValues = value.filter((item) => item.trim() && !cleanOptions.includes(item));
+    return [...cleanOptions, ...customValues];
   }, [options, value]);
 
-  const available = useMemo(() => {
-    const pool = catalog.filter((o) => !value.includes(o));
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return pool;
-    return pool.filter((o) => o.toLowerCase().includes(q));
-  }, [catalog, value, filterQuery]);
+  const visibleOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return catalog;
+    return catalog.filter((item) => item.toLowerCase().includes(normalizedQuery));
+  }, [catalog, query]);
 
-  const summary = value.join(', ');
-
-  const checkOverflow = useCallback(() => {
-    const container = selectedContainerRef.current;
-    const measure = selectedMeasureRef.current;
-    if (!container || !measure || value.length === 0) {
-      setIsOverflowing(false);
-      return;
-    }
-    const nextOverflowing = measure.scrollWidth > container.clientWidth;
-    setIsOverflowing(nextOverflowing);
-  }, [value]);
+  const selected = value.filter(Boolean);
 
   useEffect(() => {
-    checkOverflow();
-    const container = selectedContainerRef.current;
-    if (!container) return;
-    const ro = new ResizeObserver(checkOverflow);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [checkOverflow, value, selectedMaxWidth]);
+    if (!isOpen) return;
+    inputRef.current?.focus();
 
-  const add = (item: string) => {
-    const trimmed = item.trim();
-    if (!trimmed || value.includes(trimmed)) return;
-    if (multiple) {
-      onChange([...value, trimmed]);
-    } else {
-      onChange([trimmed]);
-      setOpen(false);
-    }
-    setFilterQuery('');
-  };
-
-  const remove = (item: string) => {
-    const next = value.filter((v) => v !== item);
-    onChange(next);
-  };
-
-  const togglePanel = (showSelected = false) => {
-    setOpen((current) => {
-      const nextOpen = showSelected ? true : !current;
-      setExpandedSelected(showSelected && nextOpen);
-      if (!nextOpen) setFilterQuery('');
-      return nextOpen;
-    });
-  };
-
-  const handleFilterKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const trimmed = filterQuery.trim();
-    if (!trimmed) return;
-
-    const exact = available.find((o) => o.toLowerCase() === trimmed.toLowerCase());
-    if (exact) {
-      add(exact);
-      return;
-    }
-    add(trimmed);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    filterRef.current?.focus();
-
-    const handlePointerDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setExpandedSelected(false);
-        setFilterQuery('');
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+        setQuery('');
       }
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setExpandedSelected(false);
-        setFilterQuery('');
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        setQuery('');
       }
     };
 
@@ -149,138 +84,125 @@ export function BadgeDropdown({
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open]);
+  }, [isOpen]);
 
-  const selectedBadges = value.map((item) => (
-    <span key={item} className={cn(selectedBadgeClass, 'relative shrink-0', multiple && 'pr-5')}>
-      {item}
-      {multiple && (
-        <button
-          type="button"
-          onClick={() => remove(item)}
-          aria-label={`${removeLabel}: ${item}`}
-          className="btn btn-circle btn-xs absolute right-0.5 top-1/2 h-3.5 w-3.5 min-h-0 -translate-y-1/2 p-0 bg-gaming-card border border-gaming-border text-text-muted hover:text-status-boss hover:border-status-boss/50 shadow-sm"
-        >
-          <Trash2 size={8} strokeWidth={2.5} />
-        </button>
-      )}
-    </span>
-  ));
+  const commitSelection = (item: string) => {
+    const trimmed = item.trim();
+    if (!trimmed) return;
 
-  const expandedSelectedBadges = value.map((item) => (
-    <span key={item} className={cn(selectedBadgeClass, 'relative shrink-0', multiple && 'pr-5')}>
-      {item}
-      {multiple && (
-        <button
-          type="button"
-          onClick={() => remove(item)}
-          aria-label={`${removeLabel}: ${item}`}
-          className="btn btn-circle btn-xs absolute right-0.5 top-1/2 h-3.5 w-3.5 min-h-0 -translate-y-1/2 p-0 bg-gaming-card border border-gaming-border text-text-muted hover:text-status-boss hover:border-status-boss/50 shadow-sm"
-        >
-          <Trash2 size={8} strokeWidth={2.5} />
-        </button>
-      )}
-    </span>
-  ));
+    if (!multiple) {
+      onChange([trimmed]);
+      setIsOpen(false);
+      setQuery('');
+      return;
+    }
+
+    onChange(
+      selected.includes(trimmed)
+        ? selected.filter((current) => current !== trimmed)
+        : [...selected, trimmed]
+    );
+    setQuery('');
+  };
+
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const existing = catalog.find((item) => item.toLowerCase() === trimmed.toLowerCase());
+    commitSelection(existing || trimmed);
+  };
 
   return (
-    <div
-      ref={rootRef}
-      className={cn('inline-flex items-center gap-1 min-w-0 max-w-full', className)}
-    >
-      {value.length > 0 && (
-        <div className={cn('relative min-w-0', selectedMaxWidth)}>
-          <div
-            ref={selectedContainerRef}
-            className={cn('relative min-w-0 w-full overflow-hidden', selectedMaxWidth)}
-          >
-            <div
-              ref={selectedMeasureRef}
-              className="absolute left-0 top-0 flex flex-nowrap gap-1 invisible h-px overflow-hidden pointer-events-none"
-              aria-hidden
-            >
-              {selectedBadges}
-            </div>
-            {isOverflowing ? (
-              <button
-                type="button"
-                onClick={() => togglePanel(true)}
-                className={cn(
-                  'badge badge-sm badge-outline w-full max-w-full cursor-pointer justify-start truncate font-normal text-text-secondary',
-                  badgeClassName
-                )}
-                title={summary}
-              >
-                {summary}
-                <span aria-hidden>…</span>
-              </button>
-            ) : (
-              <div className="flex flex-nowrap items-center gap-1">{selectedBadges}</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="relative inline-flex shrink-0">
-        <button
-          type="button"
-          onClick={() => togglePanel(false)}
-          aria-expanded={open}
-          aria-haspopup="listbox"
+    <div ref={rootRef} className={cn('relative inline-flex min-w-0 max-w-full', className)}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className={cn(
+          'inline-flex max-w-full items-center gap-1 rounded-sm transition-[background-color,box-shadow]',
+          'hover:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60'
+        )}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+      >
+        <span
           className={cn(
-            'badge badge-sm badge-ghost font-normal cursor-pointer hover:badge-ghost hover:bg-gaming-base/60',
-            value.length === 0 && 'opacity-70'
+            'inline-flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden',
+            selectedMaxWidth
           )}
         >
-          {value.length === 0 ? (
-            <span>{placeholder}</span>
+          {selected.length > 0 ? (
+            selected.map((item) => (
+              <span key={item} className={cn(badgeClass, 'shrink-0')}>
+                {renderBadge ? renderBadge(item) : item}
+              </span>
+            ))
           ) : (
-            <Plus size={12} aria-hidden />
+            <span className={cn(badgeClass, 'opacity-70')}>{placeholder}</span>
           )}
-        </button>
-
-        {open && (
-          <div
-            className="absolute right-0 top-full z-50 mt-1 w-[14rem] max-w-[min(14rem,90vw)] rounded-lg border border-gaming-border bg-gaming-card shadow-lg p-2"
-            role="listbox"
-            aria-multiselectable={multiple}
-          >
-            {expandedSelected && value.length > 0 && (
-              <div className="mb-2 flex max-h-28 flex-wrap gap-1 overflow-y-auto border-b border-gaming-border pb-2">
-                {expandedSelectedBadges}
-              </div>
+        </span>
+        {showArrow && (
+          <ChevronDown
+            size={12}
+            className={cn(
+              'shrink-0 text-text-muted/70 transition-transform',
+              isOpen && 'rotate-180'
             )}
-            <input
-              ref={filterRef}
-              type="text"
-              value={filterQuery}
-              placeholder={searchPlaceholder}
-              onChange={(e) => setFilterQuery(e.target.value)}
-              onKeyDown={handleFilterKeyDown}
-              className="input input-bordered input-xs w-full h-8 min-h-0 mb-2 text-sm"
-            />
-            <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
-              {available.length === 0 ? (
-                <p className="text-xs text-text-muted px-1 py-1 w-full">
-                  {filterQuery.trim() ? emptyFilterHint : '—'}
-                </p>
-              ) : (
-                available.map((item) => (
+            aria-hidden
+          />
+        )}
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute right-0 top-full z-50 mt-1 w-[14rem] max-w-[min(14rem,90vw)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-lg"
+          role="listbox"
+          aria-multiselectable={multiple}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleInputKeyDown}
+            placeholder={searchPlaceholder}
+            className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
+          />
+
+          <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+            {visibleOptions.length > 0 ? (
+              visibleOptions.map((item) => {
+                const isSelected = selected.includes(item);
+                return (
                   <button
                     key={item}
                     type="button"
                     role="option"
-                    onClick={() => add(item)}
-                    className={poolBadgeClass}
+                    aria-selected={isSelected}
+                    onClick={() => commitSelection(item)}
+                    className={cn(
+                      badgeClass,
+                      'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
+                      isSelected && 'badge-primary border-primary text-primary-content'
+                    )}
                   >
-                    {item}
+                    {renderBadge ? renderBadge(item) : item}
+                    {isSelected && <Check size={11} aria-hidden />}
                   </button>
-                ))
-              )}
-            </div>
+                );
+              })
+            ) : (
+              <p className="w-full px-1 py-1 text-xs text-text-muted">
+                {query.trim() ? emptyFilterHint : '—'}
+              </p>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default BadgeDropdown;

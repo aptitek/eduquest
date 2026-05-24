@@ -9,6 +9,9 @@ export type UserPayload = {
   firstName?: string;
   lastName?: string;
   displayName?: string;
+  birthDate?: string;
+  bio?: string;
+  pronouns?: string;
   avatarUrl?: string;
   githubAvatarUrl?: string;
 };

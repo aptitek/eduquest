@@ -9,6 +9,7 @@ import {
   date,
   doublePrecision,
   pgEnum,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // ==========================================
@@ -20,15 +21,60 @@ export const schools = pgTable('schools', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   logoUrl: text('logo_url'),
+  website: text('website'),
   emailDomain: text('email_domain'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-// Table des guildes (groupes d'étudiants / de jeu)
+// Table des adresses postales
+export const addresses = pgTable('addresses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  line1: text('line_1').notNull(),
+  line2: text('line_2'),
+  postalCode: text('postal_code'),
+  city: text('city').notNull(),
+  country: text('country'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Table des campus/sites rattachés à une école
+export const campuses = pgTable('campuses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  schoolId: uuid('school_id')
+    .notNull()
+    .references(() => schools.id, { onDelete: 'cascade' }),
+  addressId: uuid('address_id').references(() => addresses.id, { onDelete: 'set null' }),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Table des cohorts/classes d'étudiants. Chaque cohort appartient à une seule école.
+export const cohorts = pgTable('cohorts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  schoolId: uuid('school_id')
+    .notNull()
+    .references(() => schools.id, { onDelete: 'cascade' }),
+  campusId: uuid('campus_id').references(() => campuses.id, { onDelete: 'set null' }),
+  schoolYear: text('school_year').notNull(),
+  grade: text('grade').notNull(),
+  level: integer('level').notNull(),
+  name: text('name').notNull(),
+  majorSpeciality: text('major_speciality'),
+  minorSpeciality: text('minor_speciality'),
+  description: text('description'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Table des guildes (groupes d'étudiants / de jeu). Chaque guilde appartient à une seule cohort.
 export const guilds = pgTable('guilds', {
   id: uuid('id').primaryKey().defaultRandom(),
-  schoolId: uuid('school_id').references(() => schools.id),
+  cohortId: uuid('cohort_id')
+    .notNull()
+    .references(() => cohorts.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
   iconUrl: text('icon_url'),
@@ -68,12 +114,31 @@ export const students = pgTable('students', {
     .unique()
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  guildId: uuid('guild_id').references(() => guilds.id),
   schoolId: uuid('school_id').references(() => schools.id),
   institutionalEmail: text('institutional_email').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
+
+// Association plusieurs-à-plusieurs entre étudiants et cohorts.
+// Les admins ne sont pas membres de cohorts car l'association passe par `students`.
+// Un étudiant ne peut avoir qu'une seule guilde par cohort car la PK est (student_id, cohort_id).
+export const studentCohorts = pgTable(
+  'student_cohorts',
+  {
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => cohorts.id, { onDelete: 'cascade' }),
+    guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.studentId, table.cohortId] }),
+  })
+);
 
 // Table de l'historique des compétences élève (Radar)
 export const studentSkillsHistory = pgTable('student_skills_history', {
