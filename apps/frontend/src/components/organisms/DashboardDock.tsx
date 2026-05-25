@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
-import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge';
+import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
@@ -141,6 +141,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             label="Milestone"
             centerContent={boostButton}
             goldIndicator={goldIndicator}
+            rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
             className="mb-2 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
           />
 
@@ -180,10 +181,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
           targetPoints={1000}
           milestones={GAUGE_MILESTONES}
           label="Milestone"
-          variant="circle"
           centerContent={boostButton}
           goldIndicator={goldIndicator}
-          className="mb-0"
+          rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
+          className="mb-0 h-40 w-40 shrink-0"
         />
 
         <GuildMemberDeck
