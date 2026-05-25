@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
+import { FullSizePlayingCardModal } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
@@ -19,6 +20,7 @@ import {
   buildFaceDownDeckCards,
   buildGaugeMilestones,
   buildGuildMemberCards,
+  buildMockGuildCardHands,
   buildPodiumCards,
   getLatestCohortMembership,
 } from './DashboardDock/dashboardDockData';
@@ -29,6 +31,7 @@ export interface DashboardDockProps {
 
 export function DashboardDock({ className }: DashboardDockProps) {
   const [showBonusCards, setShowBonusCards] = useState(false);
+  const [guildHandModalCardIndex, setGuildHandModalCardIndex] = useState<number | null>(null);
   const { user, student, character } = useGameStore();
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
@@ -79,6 +82,22 @@ export function DashboardDock({ className }: DashboardDockProps) {
     illustrationUrl: playerAvatar,
     illustrationAlt: playerName,
   };
+  const guildMemberCards = buildGuildMemberCards(t, characterCard);
+  const guildHandModalHands = buildMockGuildCardHands(t, {
+    guild: playerGuild,
+    guildName: playerGuild.name || t('dashboard.dock.playerGuild'),
+    playerName,
+    playerAvatar,
+    characterLevel: character.currentLevel,
+    characterClassLabel: t(`game.classes.${character.characterClass}`),
+    activeCardIndex: guildHandModalCardIndex ?? 0,
+  });
+  const openGuildHandModal = (_card: DashboardMiniCardProps, index: number) => {
+    setGuildHandModalCardIndex(index);
+  };
+  const closeGuildHandModal = () => {
+    setGuildHandModalCardIndex(null);
+  };
   const boostButton = (
     <HoldToConfirmButton
       onConfirm={() => undefined}
@@ -100,13 +119,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
   );
 
   return (
-    <aside
-      aria-label={t('dashboard.dock.ariaLabel')}
-      className={cn(
-        'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-dock backdrop-blur-xl lg:h-40',
-        className
-      )}
-    >
+    <>
+      <aside
+        aria-label={t('dashboard.dock.ariaLabel')}
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-dock backdrop-blur-xl lg:h-40',
+          className
+        )}
+      >
       <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 lg:block">
         <div className="flex h-full w-full items-end justify-center gap-2 overflow-visible xl:gap-3">
           <DashboardMiniDeck
@@ -177,9 +197,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
           <div className="shrink-0 xl:hidden">
             <GuildMemberDeck
               guild={playerGuild}
-              memberCards={buildGuildMemberCards(t, characterCard)}
+              memberCards={guildMemberCards}
               fallbackGuildName={t('dashboard.dock.playerGuild')}
               goldLabel={t('dashboard.dock.gold')}
+              onCardSelect={openGuildHandModal}
               compact
             />
           </div>
@@ -187,9 +208,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
           <div className="hidden shrink-0 xl:block">
             <GuildMemberDeck
               guild={playerGuild}
-              memberCards={buildGuildMemberCards(t, characterCard)}
+              memberCards={guildMemberCards}
               fallbackGuildName={t('dashboard.dock.playerGuild')}
               goldLabel={t('dashboard.dock.gold')}
+              onCardSelect={openGuildHandModal}
             />
           </div>
         </div>
@@ -226,13 +248,24 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
         <GuildMemberDeck
           guild={playerGuild}
-          memberCards={buildGuildMemberCards(t, characterCard)}
+          memberCards={guildMemberCards}
           fallbackGuildName={t('dashboard.dock.playerGuild')}
           goldLabel={t('dashboard.dock.gold')}
+          onCardSelect={openGuildHandModal}
           compact
         />
       </div>
-    </aside>
+      </aside>
+
+      <FullSizePlayingCardModal
+        isOpen={guildHandModalCardIndex !== null}
+        title={playerGuild.name || t('dashboard.dock.playerGuild')}
+        subtitle={t('dashboard.dock.cardHandModalSubtitle')}
+        closeLabel={t('dashboard.dock.closeCardHandModal')}
+        hands={guildHandModalHands}
+        onClose={closeGuildHandModal}
+      />
+    </>
   );
 }
 

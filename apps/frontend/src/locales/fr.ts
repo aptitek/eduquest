@@ -56,6 +56,9 @@ export const fr = {
       showPodiumCards: 'Afficher les cartes du podium',
       showBonusCards: 'Afficher les cartes bonus',
       newRibbon: 'Nouveau',
+      cardHandModalSubtitle:
+        'Prévisualisez la main de guilde en cartes pleine taille. Des données mock sont branchées pour tester le rendu.',
+      closeCardHandModal: 'Fermer la modale de main de cartes',
     },
     milestones: {
       spark: { label: 'Étincelle', description: 'Premier boost' },

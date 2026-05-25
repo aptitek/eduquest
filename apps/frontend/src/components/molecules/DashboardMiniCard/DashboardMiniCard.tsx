@@ -137,6 +137,7 @@ export interface DashboardMiniCardProps {
   ribbonLabel?: string;
   ribbonPosition?: CornerRibbonPosition;
   ribbonClassName?: string;
+  onClick?: () => void;
   className?: string;
 }
 
@@ -154,6 +155,7 @@ export function DashboardMiniCard({
   ribbonLabel,
   ribbonPosition = 'top-right',
   ribbonClassName,
+  onClick,
   className,
 }: DashboardMiniCardProps) {
   const resolvedIllustrationUrl = illustrationUrl || guild?.iconUrl;
@@ -164,9 +166,16 @@ export function DashboardMiniCard({
 
   return (
     <article
+      role={onClick ? 'button' : undefined}
       tabIndex={interactive ? 0 : -1}
       aria-hidden={interactive ? undefined : true}
       aria-label={interactive ? resolvedTitle : undefined}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (!onClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onClick();
+      }}
       className={cn(CARD_SURFACE_CLASS, accentStyles.border, accentStyles.ring, className)}
     >
       <div className={cn('absolute inset-0', accentStyles.bgSubtle)} />

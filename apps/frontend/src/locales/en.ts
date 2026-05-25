@@ -58,6 +58,8 @@ export const en: TranslationKeys = {
       showPodiumCards: 'Show podium cards',
       showBonusCards: 'Show bonus cards',
       newRibbon: 'New',
+      cardHandModalSubtitle: 'Preview the full-size guild hand. Mock data is wired for visual testing.',
+      closeCardHandModal: 'Close card hand modal',
     },
     milestones: {
       spark: { label: 'Spark', description: 'First boost' },

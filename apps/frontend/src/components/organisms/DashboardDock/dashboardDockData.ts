@@ -1,8 +1,19 @@
 import type { StudentCohort } from '@eduquest/shared';
 import type { DashboardMiniCardProps } from '../../molecules/DashboardMiniCard';
+import type { FullSizePlayingCardHand, FullSizePlayingCardStackItem } from '../../molecules/PlayingCard';
 import type { DockGuild } from './types';
 
 type Translate = (path: string) => string;
+
+interface MockGuildHandOptions {
+  guild: DockGuild;
+  guildName: string;
+  playerName: string;
+  playerAvatar: string;
+  characterLevel: number;
+  characterClassLabel: string;
+  activeCardIndex: number;
+}
 
 export const RIVAL_GUILDS = [
   {
@@ -142,6 +153,103 @@ export function buildGuildMemberCards(t: Translate, characterCard: DashboardMini
   ] as [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
 }
 
+export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOptions): [FullSizePlayingCardHand] {
+  const guildColor = resolveCardColor(options.guild.color);
+  const cards: [FullSizePlayingCardStackItem, ...FullSizePlayingCardStackItem[]] = [
+    {
+      id: 'guild',
+      front: {
+        title: options.guildName,
+        description:
+          'A tactical guild card that tracks collective momentum, shared gold, and the next reward push.',
+        color: guildColor,
+        illustrationUrl: options.guild.iconUrl,
+        ribbonText: t('dashboard.dock.playerGuild'),
+        stats: [
+          { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.totalPoints || 0, max: 250 },
+          { id: 'quests', label: 'Quest', value: 74 },
+          { id: 'support', label: 'Aid', value: 68 },
+          { id: 'focus', label: 'Focus', value: 82 },
+          { id: 'luck', label: 'Luck', value: 55 },
+        ],
+      },
+      back: {
+        title: `${options.guildName} strategy`,
+        description: 'Mock tactical notes for the next guild action. This side will later host real guild effects.',
+        color: guildColor,
+        ribbonText: 'Plan',
+        stats: [
+          { id: 'risk', label: 'Risk', value: 42 },
+          { id: 'gain', label: 'Gain', value: 86 },
+          { id: 'cost', label: 'Cost', value: 38 },
+          { id: 'tempo', label: 'Tempo', value: 72 },
+        ],
+      },
+    },
+    {
+      id: 'player',
+      front: {
+        title: options.playerName,
+        description: `${options.characterClassLabel} level ${options.characterLevel}. A reliable active member ready to turn boosts into progress.`,
+        color: 'var(--color-status-quest)',
+        illustrationUrl: options.playerAvatar,
+        ribbonText: `LVL ${options.characterLevel}`,
+        stats: [
+          { id: 'logic', label: 'Logic', value: 78 },
+          { id: 'speed', label: 'Speed', value: 63 },
+          { id: 'team', label: 'Team', value: 71 },
+          { id: 'xp', label: 'XP', value: Math.min(options.characterLevel * 8, 100) },
+          { id: 'focus', label: 'Focus', value: 84 },
+        ],
+      },
+    },
+    {
+      id: 'guide',
+      front: {
+        title: t('dashboard.dock.guildmate'),
+        description: 'Mock support member. This card previews how hidden guildmates will appear once real data is connected.',
+        color: 'var(--color-accent-guide)',
+        ribbonText: t('dashboard.dock.hiddenMember'),
+        stats: [
+          { id: 'logic', label: 'Logic', value: 54 },
+          { id: 'speed', label: 'Speed', value: 58 },
+          { id: 'team', label: 'Team', value: 90 },
+          { id: 'xp', label: 'XP', value: 46 },
+          { id: 'focus', label: 'Focus', value: 62 },
+        ],
+      },
+    },
+    {
+      id: 'specialist',
+      front: {
+        title: t('dashboard.dock.guildmate'),
+        description: 'Mock specialist member with a more technical profile and a strong reward conversion angle.',
+        color: 'var(--color-accent-specialist)',
+        ribbonText: t('dashboard.dock.hiddenMember'),
+        stats: [
+          { id: 'logic', label: 'Logic', value: 88 },
+          { id: 'speed', label: 'Speed', value: 49 },
+          { id: 'team', label: 'Team', value: 61 },
+          { id: 'xp', label: 'XP', value: 67 },
+          { id: 'focus', label: 'Focus', value: 76 },
+        ],
+      },
+    },
+  ];
+
+  return [
+    {
+      id: 'guild-hand',
+      title: options.guildName,
+      description: 'Mock full-size guild hand used to refine the modal layout, animation, and active-card highlight.',
+      cards,
+      activeCardIndex: options.activeCardIndex,
+      mainCardIndex: 0,
+      variant: 'fan',
+    },
+  ];
+}
+
 export function getLatestCohortMembership(memberships?: StudentCohort[]) {
   if (!memberships || memberships.length === 0) return undefined;
 
@@ -150,4 +258,21 @@ export function getLatestCohortMembership(memberships?: StudentCohort[]) {
     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return bTime - aTime;
   })[0];
+}
+
+function resolveCardColor(value: string | undefined) {
+  const colorMap: Record<string, string> = {
+    scholar: 'var(--color-accent-scholar)',
+    champion: 'var(--color-accent-champion)',
+    guide: 'var(--color-accent-guide)',
+    specialist: 'var(--color-accent-specialist)',
+    quest: 'var(--color-status-quest)',
+    campfire: 'var(--color-status-campfire)',
+    completed: 'var(--color-status-completed)',
+    boss: 'var(--color-status-boss)',
+    danger: 'var(--color-status-danger)',
+    neutral: 'var(--color-accent-neutral)',
+  };
+
+  return value ? colorMap[value] || value : 'var(--color-status-quest)';
 }

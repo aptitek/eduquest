@@ -8,9 +8,11 @@ export interface PlayingCardProps {
   verso: ReactNode;
   flipLabel: string;
   className?: string;
+  innerClassName?: string;
+  faceClassName?: string;
 }
 
-export function PlayingCard({ recto, verso, flipLabel, className }: PlayingCardProps) {
+export function PlayingCard({ recto, verso, flipLabel, className, innerClassName, faceClassName }: PlayingCardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
 
   return (
@@ -18,13 +20,24 @@ export function PlayingCard({ recto, verso, flipLabel, className }: PlayingCardP
       <div
         className={cn(
           'relative h-full min-h-[22rem] w-full transition-transform duration-500 [transform-style:preserve-3d]',
-          isFlipped && '[transform:rotateY(180deg)]'
+          isFlipped && '[transform:rotateY(180deg)]',
+          innerClassName
         )}
       >
-        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-gaming-border bg-gaming-card shadow-xl [backface-visibility:hidden]">
+        <div
+          className={cn(
+            'absolute inset-0 overflow-x-hidden overflow-y-auto rounded-[1.4rem] border border-gaming-border bg-gaming-card shadow-xl [backface-visibility:hidden]',
+            faceClassName
+          )}
+        >
           {recto}
         </div>
-        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto rounded-2xl border border-gaming-border bg-gaming-card shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div
+          className={cn(
+            'absolute inset-0 overflow-x-hidden overflow-y-auto rounded-[1.4rem] border border-gaming-border bg-gaming-card shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)]',
+            faceClassName
+          )}
+        >
           {verso}
         </div>
       </div>

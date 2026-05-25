@@ -9,6 +9,7 @@ export interface GuildMemberDeckProps {
   fallbackGuildName: string;
   goldLabel: string;
   compact?: boolean;
+  onCardSelect?: (card: DashboardMiniCardProps, index: number) => void;
 }
 
 export function GuildMemberDeck({
@@ -17,6 +18,7 @@ export function GuildMemberDeck({
   fallbackGuildName,
   goldLabel,
   compact = false,
+  onCardSelect,
 }: GuildMemberDeckProps) {
   const guildCard: DashboardMiniCardProps = {
     kind: 'guild',
@@ -32,6 +34,7 @@ export function GuildMemberDeck({
       stackSide="right"
       revealedCardCount={memberCards.length}
       expandOnHover
+      onCardSelect={onCardSelect}
       className={cn(
         'h-72 w-52 shrink-0 hover:w-[28rem] focus-within:w-[28rem]',
         compact && 'h-64 w-32 hover:w-32 focus:w-32 focus-within:w-32 sm:w-36'

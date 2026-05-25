@@ -1,12 +1,11 @@
 import { cn } from '../../../utils/cn';
+import { CardSpread } from '../CardSpread';
+import type { CardSpreadSide } from '../CardSpread';
 import { DashboardMiniCard } from './DashboardMiniCard';
 import type { DashboardMiniCardProps } from './DashboardMiniCard';
-import {
-  getFrontCardClassName,
-  getStackCardClassName,
-  type DashboardMiniDeckStackSide,
-  type DashboardMiniDeckVariant,
-} from './dashboardMiniDeckLayout';
+
+export type DashboardMiniDeckVariant = 'horizontal' | 'vertical';
+export type DashboardMiniDeckStackSide = CardSpreadSide;
 
 export interface DashboardMiniDeckProps {
   cards: readonly [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
@@ -18,6 +17,7 @@ export interface DashboardMiniDeckProps {
   className?: string;
   cardClassName?: string;
   stackCardClassName?: string;
+  onCardSelect?: (card: DashboardMiniCardProps, index: number) => void;
 }
 
 export function DashboardMiniDeck({
@@ -30,45 +30,28 @@ export function DashboardMiniDeck({
   className,
   cardClassName,
   stackCardClassName,
+  onCardSelect,
 }: DashboardMiniDeckProps) {
-  const [frontCard, ...stackCards] = cards;
-  const visibleStackCards = stackCards.slice(0, revealedCardCount ?? visibleStackCount);
-
   return (
-    <div
-      tabIndex={expandOnHover ? 0 : undefined}
-      className={cn(
-        'relative h-56 w-56 overflow-visible',
-        expandOnHover && 'group transition-[width] duration-300',
-        className
-      )}
-    >
-      {visibleStackCards.map((card, index) => {
-        const stackDepth = index + 1;
-
+    <CardSpread
+      items={cards}
+      shape={variant}
+      side={stackSide}
+      visibleSpreadCount={revealedCardCount ?? visibleStackCount}
+      emphasisIndex={0}
+      expandOnHover={expandOnHover}
+      className={cn('h-56 w-56', className)}
+      renderItem={({ item: card, index, isEmphasis }) => {
         return (
           <DashboardMiniCard
-            key={`${card.kind}-${card.title || card.guild?.name || card.characterClass || 'card'}-${index}`}
             {...card}
-            interactive={false}
-            className={cn(
-              getStackCardClassName({
-                depth: stackDepth,
-                variant,
-                stackSide,
-                expandOnHover,
-              }),
-              stackCardClassName
-            )}
+            interactive={isEmphasis ? card.interactive : Boolean(onCardSelect)}
+            onClick={isEmphasis ? (onCardSelect ? () => onCardSelect(card, 0) : card.onClick) : onCardSelect ? () => onCardSelect(card, index) : undefined}
+            className={cn(card.className, 'translate-y-0', isEmphasis ? cardClassName : stackCardClassName)}
           />
         );
-      })}
-
-      <DashboardMiniCard
-        {...frontCard}
-        className={cn(getFrontCardClassName({ variant, stackSide, expandOnHover }), cardClassName)}
-      />
-    </div>
+      }}
+    />
   );
 }
 
