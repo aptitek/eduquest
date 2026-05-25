@@ -1,4 +1,5 @@
 import type { Guild, StudentCohort } from '@eduquest/shared';
+import { Bell } from 'lucide-react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
 import {
   DashboardMiniCard,
@@ -6,6 +7,7 @@ import {
   DashboardMiniPodium,
 } from '../molecules/DashboardMiniCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge';
+import { GoldPile } from '../molecules/GoldPile';
 import { useGameStore } from '../../features/game/gameStore';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
@@ -52,7 +54,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
   const podiumCards = buildPodiumCards(playerGuild);
   const cohortDeckCards = buildFaceDownDeckCards(latestMembership?.cohort?.name || 'Cohort deck');
-  const guildDeckCards = buildGuildDeckCards(playerGuild);
   const characterCard: DashboardMiniCardProps = {
     kind: 'character',
     title: playerName,
@@ -70,8 +71,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
         className
       )}
     >
-      <div className="absolute inset-x-0 bottom-0 mx-auto h-72 max-w-7xl overflow-visible px-4">
-        <div className="grid h-full min-w-[80rem] grid-cols-[18rem_12rem_minmax(24rem,1fr)_12rem_9rem] items-end gap-4">
+      <div className="absolute inset-x-0 bottom-0 h-72 w-screen overflow-visible px-4">
+        <div className="grid h-full w-full grid-cols-[18rem_12rem_minmax(34rem,1fr)_5rem_18rem_9rem] items-end gap-4">
           <DashboardMiniPodium
             cards={podiumCards}
             className="max-w-none"
@@ -92,13 +93,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
             className="mb-8"
           />
 
-          <DashboardMiniDeck
-            cards={guildDeckCards}
-            cardClassName="translate-y-0"
-            stackCardClassName="translate-y-0"
-          />
+          <GoldPile amount={playerGuild.totalPoints || 0} className="translate-y-0" />
 
-          <DashboardMiniCard {...characterCard} className="translate-y-0" />
+          <GuildMemberDeck guild={playerGuild} memberCards={buildGuildMemberCards(characterCard)} />
+
+          <RewardTickerPlaceholder />
         </div>
       </div>
     </aside>
@@ -134,22 +133,24 @@ function buildFaceDownDeckCards(title: string) {
   })) as [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
 }
 
-function buildGuildDeckCards(playerGuild: DockGuild) {
+function buildGuildMemberCards(characterCard: DashboardMiniCardProps) {
   return [
+    characterCard,
     {
-      kind: 'guild' as const,
-      guild: playerGuild,
-      title: playerGuild?.name || 'Player guild',
-      subtitle: `${playerGuild?.totalPoints || 0} gold`,
-    },
-    ...RIVAL_GUILDS.map((guild) => ({
-      kind: 'guild' as const,
-      guild,
-      title: guild.name,
-      subtitle: `${guild.totalPoints || 0} gold`,
+      kind: 'character' as const,
+      title: 'Guildmate',
+      subtitle: 'Hidden member',
+      accentColor: '#859900',
       faceDown: true,
-    })),
-  ] as [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
+    },
+    {
+      kind: 'character' as const,
+      title: 'Guildmate',
+      subtitle: 'Hidden member',
+      accentColor: '#6c71c4',
+      faceDown: true,
+    },
+  ] as [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
 }
 
 function getLatestCohortMembership(memberships?: StudentCohort[]) {
@@ -160,6 +161,64 @@ function getLatestCohortMembership(memberships?: StudentCohort[]) {
     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return bTime - aTime;
   })[0];
+}
+
+function GuildMemberDeck({
+  guild,
+  memberCards,
+}: {
+  guild: DockGuild;
+  memberCards: readonly [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
+}) {
+  const guildCard: DashboardMiniCardProps = {
+    kind: 'guild',
+    guild,
+    title: guild.name || 'Player guild',
+    subtitle: `${guild.totalPoints || 0} gold`,
+  };
+
+  return (
+    <div className="group relative h-72 w-64 overflow-visible transition-[width] duration-300 hover:w-[34rem] focus-within:w-[34rem]">
+      {memberCards.map((card, index) => (
+        <DashboardMiniCard
+          key={`${card.title || 'member'}-${index}`}
+          {...card}
+          className={cn(
+            'absolute bottom-0 left-8 z-10 origin-bottom translate-y-0 transition-[left,transform] duration-300',
+            index === 0 &&
+              'translate-x-4 scale-95 rotate-[5deg] group-hover:left-36 group-hover:translate-x-0 group-hover:rotate-0',
+            index === 1 &&
+              'translate-x-8 scale-90 rotate-[9deg] group-hover:left-64 group-hover:translate-x-0 group-hover:rotate-0',
+            index === 2 &&
+              'translate-x-12 scale-[0.85] rotate-[13deg] group-hover:left-[24rem] group-hover:translate-x-0 group-hover:rotate-0'
+          )}
+        />
+      ))}
+      <DashboardMiniCard
+        {...guildCard}
+        className="absolute bottom-0 left-0 z-30 origin-bottom translate-y-0"
+      />
+    </div>
+  );
+}
+
+function RewardTickerPlaceholder() {
+  return (
+    <div className="flex h-44 w-full flex-col justify-between rounded-t-2xl border-x border-t border-gaming-border bg-gaming-card/95 p-3 shadow-2xl">
+      <div>
+        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-primary">
+          <Bell size={18} aria-hidden />
+        </div>
+        <p className="font-display text-sm font-bold text-text-primary">Reward ticker</p>
+        <p className="mt-1 text-[0.65rem] leading-relaxed text-text-muted">
+          Reward toast feed placeholder.
+        </p>
+      </div>
+      <div className="h-1.5 rounded-full bg-gaming-base">
+        <div className="h-full w-1/2 rounded-full bg-primary/40" />
+      </div>
+    </div>
+  );
 }
 
 export default DashboardDock;
