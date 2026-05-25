@@ -8,7 +8,6 @@ import { useGameStore } from '../../features/game/gameStore';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
-import { DashboardToastAreas } from './DashboardDock/DashboardToastAreas';
 import { FlipDeck } from './DashboardDock/FlipDeck';
 import { GuildMemberDeck } from './DashboardDock/GuildMemberDeck';
 import { Coins } from 'lucide-react';
@@ -193,8 +192,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
           compact
         />
       </div>
-
-      <DashboardToastAreas />
     </aside>
   );
 }
