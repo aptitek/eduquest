@@ -244,6 +244,7 @@ export const gameActivities = pgTable('game_activities', {
   x: integer('x').default(0).notNull(),
   y: integer('y').default(0).notNull(),
   requiredLevel: integer('required_level').default(1).notNull(),
+  unlockRule: jsonb('unlock_rule').default('{}'),
   basePoints: integer('base_points').default(0).notNull(),
   targetAttribute: gameTargetAttributeEnum('target_attribute'),
   bossMetadata: jsonb('boss_metadata').default('{}'), // projectUrl, gradingUrl
@@ -286,6 +287,48 @@ export const globalGauges = pgTable('global_gauges', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+export const globalGaugeMilestones = pgTable('global_gauge_milestones', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  gaugeId: uuid('gauge_id')
+    .notNull()
+    .references(() => globalGauges.id, { onDelete: 'cascade' }),
+  labelI18nKey: text('label_i18n_key').notNull(),
+  descriptionI18nKey: text('description_i18n_key'),
+  positionPercent: integer('position_percent'),
+  value: integer('value'),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export const cohortRewardCards = pgTable('cohort_reward_cards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id')
+    .notNull()
+    .references(() => cohorts.id, { onDelete: 'cascade' }),
+  titleI18nKey: text('title_i18n_key').notNull(),
+  subtitleI18nKey: text('subtitle_i18n_key'),
+  accentToken: text('accent_token').default('quest').notNull(),
+  faceDown: boolean('face_down').default(false).notNull(),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const dashboardNotifications = pgTable('dashboard_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id').references(() => cohorts.id, { onDelete: 'cascade' }),
+  titleI18nKey: text('title_i18n_key').notNull(),
+  descriptionI18nKey: text('description_i18n_key'),
+  metaI18nKey: text('meta_i18n_key'),
+  icon: text('icon').default('info').notNull(),
+  tone: text('tone').default('neutral').notNull(),
+  actionLabelI18nKey: text('action_label_i18n_key'),
+  actionTarget: text('action_target'),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
 // ==========================================
 // 3. LOGS D'AUDIT
 // ==========================================
@@ -323,6 +366,27 @@ export const pointTransactionsRelations = relations(pointTransactions, ({ one })
 export const globalGaugesRelations = relations(globalGauges, ({ one }) => ({
   cohort: one(cohorts, {
     fields: [globalGauges.cohortId],
+    references: [cohorts.id],
+  }),
+}));
+
+export const globalGaugeMilestonesRelations = relations(globalGaugeMilestones, ({ one }) => ({
+  gauge: one(globalGauges, {
+    fields: [globalGaugeMilestones.gaugeId],
+    references: [globalGauges.id],
+  }),
+}));
+
+export const cohortRewardCardsRelations = relations(cohortRewardCards, ({ one }) => ({
+  cohort: one(cohorts, {
+    fields: [cohortRewardCards.cohortId],
+    references: [cohorts.id],
+  }),
+}));
+
+export const dashboardNotificationsRelations = relations(dashboardNotifications, ({ one }) => ({
+  cohort: one(cohorts, {
+    fields: [dashboardNotifications.cohortId],
     references: [cohorts.id],
   }),
 }));

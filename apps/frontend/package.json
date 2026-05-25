@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "audit:design": "node scripts/audit-design-system.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

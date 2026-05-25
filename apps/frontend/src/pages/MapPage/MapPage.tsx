@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, GameBattle } from '@eduquest/shared';
-import { BACKEND_BASE_URL } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
+import { completeMapActivity, fetchMapActivities } from '../../features/game/api';
 import { useTranslation } from '../../hooks/useTranslation';
 
 // UI Layout and Styling Wrappers (Atomic Design)
@@ -24,68 +24,11 @@ export function MapPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('eduquest_token');
-      const response = await fetch(`${BACKEND_BASE_URL}/api/map`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      if (!response.ok) {
-        throw new Error('Erreur HTTP ' + response.status);
-      }
-      const data = await response.json();
-      if (data.success) {
-        setActivities(data.activities);
-      } else {
-        throw new Error('Le serveur a renvoyé un statut invalide');
-      }
+      if (!token) throw new Error('Missing session token.');
+      setActivities(await fetchMapActivities(token));
     } catch (error: any) {
-      console.warn('Backend injoignable ou en erreur. Utilisation des mocks locaux.');
-      //TODO: Move that in the backend please....
-      setActivities([
-        {
-          id: 'act_1',
-          type: 'campfire',
-          title: "Le Feu de Camp de l'Initiation",
-          isGraded: false,
-          x: 150,
-          y: 300,
-          requiredLevel: 1,
-          unlockRule: { requiredLevel: 1 },
-        },
-        {
-          id: 'act_2',
-          type: 'quest',
-          title: 'La Forêt des Variables et Constantes',
-          isGraded: true,
-          x: 350,
-          y: 180,
-          requiredLevel: 1,
-          unlockRule: { requiredLevel: 1, requiredCompletedActivities: ['act_1'] },
-        },
-        {
-          id: 'act_3',
-          type: 'quest',
-          title: 'Le Ravin du Contrôle de Flux (if/else)',
-          isGraded: true,
-          x: 550,
-          y: 420,
-          requiredLevel: 2,
-          unlockRule: { requiredLevel: 2, requiredCompletedActivities: ['act_2'] },
-        },
-        {
-          id: 'act_4',
-          type: 'boss',
-          title: 'Le Sphinx des Fonctions Récursives',
-          isGraded: true,
-          x: 800,
-          y: 300,
-          requiredLevel: 3,
-          bossMetadata: {
-            projectUrl: 'https://github.com/eduquest/sphinx-recursive',
-          },
-          unlockRule: { requiredLevel: 3, requiredCompletedActivities: ['act_3'] },
-        },
-      ]);
+      console.warn('Could not load map activities.', error);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
@@ -98,16 +41,19 @@ export function MapPage() {
   const completedActivityIds = battles.map((b) => b.activityId);
 
   // Soumission / Résolution d'un nœud
-  const handleCompleteActivity = (act: Activity) => {
+  const handleCompleteActivity = async (act: Activity) => {
     if (completedActivityIds.includes(act.id)) return;
 
-    const newBattle: GameBattle = {
-      id: `battle_${Date.now()}`,
-      studentId: student?.id || 'stud_1',
-      activityId: act.id,
-      grade: act.isGraded ? 0.9 : undefined,
-      createdAt: new Date().toISOString(),
-    };
+    const token = localStorage.getItem('eduquest_token');
+    const newBattle: GameBattle = token
+      ? await completeMapActivity(token, act.id)
+      : {
+          id: `battle_${Date.now()}`,
+          studentId: student?.id || 'stud_1',
+          activityId: act.id,
+          grade: act.isGraded ? 0.9 : undefined,
+          createdAt: new Date().toISOString(),
+        };
 
     addBattle(newBattle);
     const xpReward = act.type === 'boss' ? 200 : act.type === 'quest' ? 100 : 50;

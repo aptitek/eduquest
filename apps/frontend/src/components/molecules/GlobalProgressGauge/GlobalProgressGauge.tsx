@@ -32,6 +32,7 @@ export interface GlobalProgressGaugeProps {
   rightIndicator?: ReactNode;
   leftIndicatorCompactValue?: ReactNode;
   rightIndicatorCompactValue?: ReactNode;
+  boostLabel?: ReactNode;
   className?: string;
   /**
    * Kept for compatibility with older call sites. The gauge now morphs from arch to
@@ -105,6 +106,7 @@ export function GlobalProgressGauge({
   rightIndicator,
   leftIndicatorCompactValue,
   rightIndicatorCompactValue,
+  boostLabel = 'boost',
   className,
 }: GlobalProgressGaugeProps) {
   const gradientId = useId().replace(/:/g, '');
@@ -200,8 +202,8 @@ export function GlobalProgressGauge({
             width: geometry.radius * 2 + PROGRESS_STROKE_WIDTH,
             height: geometry.radius * 2 + PROGRESS_STROKE_WIDTH,
             background: conicGradient,
-            mask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), #000 calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
-            WebkitMask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), #000 calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
+            mask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), black calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
+            WebkitMask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), black calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
           }}
         />
       ) : null}
@@ -217,7 +219,7 @@ export function GlobalProgressGauge({
           >
             <span
               className={cn(
-                'block h-full w-full rounded-full border bg-gaming-card shadow-[inset_0_1px_2px_rgba(255,255,255,0.18),0_0_14px_rgba(0,0,0,0.28)] transition group-hover:scale-125',
+                'block h-full w-full rounded-full border bg-gaming-card shadow-marker transition group-hover:scale-125',
                 milestone.reached ? 'border-status-completed' : 'border-text-muted'
               )}
             />
@@ -254,7 +256,7 @@ export function GlobalProgressGauge({
               {Math.round(progressPercent)}%
             </span>
             <span className="text-[0.55rem] font-bold uppercase tracking-[0.18em] text-text-muted">
-              boost
+              {boostLabel}
             </span>
           </div>
         )}

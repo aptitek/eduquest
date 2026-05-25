@@ -35,7 +35,7 @@ export function GaugeIndicator({
           className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border',
             isGold
-              ? 'border-solarized-yellow/50 bg-solarized-yellow/20 shadow-[0_0_22px_rgba(181,137,0,0.35)]'
+              ? 'border-status-campfire/50 bg-status-campfire/20 shadow-glow-gold'
               : 'border-gaming-border bg-gaming-base/70'
           )}
         >

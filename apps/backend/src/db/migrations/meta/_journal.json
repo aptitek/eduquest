@@ -50,6 +50,20 @@
       "when": 1779625800000,
       "tag": "0006_game_character_classes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779717240000,
+      "tag": "0007_dashboard_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779717600000,
+      "tag": "0008_reconcile_game_schema_and_seed",
+      "breakpoints": true
     }
   ]
 }

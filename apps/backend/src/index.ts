@@ -35,6 +35,7 @@ app.route('/api/auth', authRouter);
 // Enforcer l'authentification sur les endpoints protégés du jeu
 app.use('/api/map', authMiddleware);
 app.use('/api/guilds', authMiddleware);
+app.use('/api/dashboard', authMiddleware);
 
 app.get('/', (c) => {
   return c.text("Bienvenue sur l'API de l'EduQuest Game Master Server ! 🎮");

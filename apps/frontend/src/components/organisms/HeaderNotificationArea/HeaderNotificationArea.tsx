@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Bell } from 'lucide-react';
 import { InfoBar, type InfoBarAction, type InfoBarTone } from '../../molecules/InfoBar';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
 export interface HeaderNotification {
@@ -35,15 +36,20 @@ export interface HeaderNotificationAreaProps {
 
 export function HeaderNotificationButton({
   count,
-  label = 'Notifications',
+  label,
   isOpen = false,
   onClick,
   className,
 }: HeaderNotificationButtonProps) {
+  const { t } = useTranslation();
+  const resolvedLabel = label || t('dashboard.notifications.label');
+
   return (
     <button
       type="button"
-      aria-label={`${label}: ${count} active`}
+      aria-label={t('dashboard.notifications.buttonLabel')
+        .replace('{label}', resolvedLabel)
+        .replace('{count}', String(count))}
       aria-expanded={isOpen}
       onClick={onClick}
       className={cn(
@@ -67,13 +73,15 @@ export function HeaderNotificationArea({
   isOpen = true,
   isExpanded = false,
   visibleLimit = 2,
-  dismissLabel = 'Dismiss notification',
+  dismissLabel,
   emptyLabel,
   onDismiss,
   onAction,
   className,
 }: HeaderNotificationAreaProps) {
+  const { t } = useTranslation();
   const visibleNotifications = isExpanded ? notifications : notifications.slice(0, visibleLimit);
+  const resolvedDismissLabel = dismissLabel || t('dashboard.notifications.dismiss');
 
   if (notifications.length === 0 && !emptyLabel) return null;
 
@@ -99,7 +107,7 @@ export function HeaderNotificationArea({
             icon={notification.icon}
             tone={notification.tone}
             action={notification.action}
-            dismissLabel={dismissLabel}
+            dismissLabel={resolvedDismissLabel}
             onDismiss={() => onDismiss(notification.id)}
             onAction={() => onAction?.(notification.id)}
           />

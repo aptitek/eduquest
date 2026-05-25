@@ -6,15 +6,23 @@ import type { DockGuild } from './types';
 export interface GuildMemberDeckProps {
   guild: DockGuild;
   memberCards: readonly [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
+  fallbackGuildName: string;
+  goldLabel: string;
   compact?: boolean;
 }
 
-export function GuildMemberDeck({ guild, memberCards, compact = false }: GuildMemberDeckProps) {
+export function GuildMemberDeck({
+  guild,
+  memberCards,
+  fallbackGuildName,
+  goldLabel,
+  compact = false,
+}: GuildMemberDeckProps) {
   const guildCard: DashboardMiniCardProps = {
     kind: 'guild',
     guild,
-    title: guild.name || 'Player guild',
-    subtitle: `${guild.totalPoints || 0} gold`,
+    title: guild.name || fallbackGuildName,
+    subtitle: `${guild.totalPoints || 0} ${goldLabel}`,
   };
 
   return (

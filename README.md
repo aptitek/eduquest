@@ -4,73 +4,148 @@
   <img src="./branding/aptitek.svg" alt="Aptitek Logo" width="220" />
 </p>
 
-🌐 _[Version française](./README.fr.md)_
+_French version: [README.fr.md](./README.fr.md)_
 
-# EduQuest 🎮📚
+# EduQuest
 
-EduQuest is a gamified learning management system (LMS) designed as a pedagogical role-playing game.
+EduQuest is a gamified learning management system built as a pedagogical role-playing game. Students progress through an activity map, join cohorts and guilds, complete quests and boss activities, and earn guild progress through a database-backed game state.
 
-This repository is structured as a monorepo using **npm Workspaces**.
+The repository is a TypeScript monorepo using npm workspaces.
 
-## 📂 Monorepo Structure
+## Project Structure
 
-- **`packages/shared`** : 📦 Shared TypeScript types and game constants used across both the frontend and backend (e.g., user structures, XP calculations, quests).
-- **`apps/backend`** : ⚙️ Backend API implemented as a Cloudflare Worker using **Hono** and **Drizzle ORM** (connecting to a PostgreSQL database).
-- **`apps/frontend`** : 🎮 Client-side React application (SPA) built with **Vite**, **TypeScript**, **Tailwind CSS v4** for the interface, **Zustand** for game state, and **Framer Motion** for animations.
+- `apps/frontend`: React SPA built with Vite, TypeScript, Tailwind CSS 3, DaisyUI 5, Zustand, Framer Motion, TanStack Table, and Lucide icons.
+- `apps/backend`: Cloudflare Worker API built with Hono, Drizzle ORM, PostgreSQL, JWT authentication, and management/game routes.
+- `packages/shared`: Shared TypeScript interfaces and game contracts used by the frontend and backend.
+- `Taskfile.yml`: Common development tasks for running, compiling, cleaning, and enforcing design rules.
 
----
+## Current State
 
-## 🛠️ Getting Started & Development
+- Authentication supports GitHub SSO and local debug login.
+- The management UI can load and update school, cohort, student, profile, invite, and logo data through backend routes.
+- The map loads activities through `/api/map`, and activity completion is persisted through `/api/map/activities/:activityId/complete`.
+- The dashboard dock and header notifications load through `/api/dashboard`, with database-backed gauge milestones, reward cards, and notification records.
+- Drizzle migrations include demo seed data for schools, campuses, cohorts, guilds, users, students, memberships, characters, activities, battles, gauges, rewards, and notifications.
+- English and French locales cover the dashboard dock, milestones, rewards, buttons, notifications, management UI, auth UI, profile UI, and map/detail panel strings.
+- Frontend design-token and Atomic Design boundaries are enforced by `apps/frontend/scripts/audit-design-system.mjs`.
 
-Dependencies are installed and automatically linked at the root level.
+## Prerequisites
 
-### Prerequisites
+- Node.js 22.22.3 is declared in `package.json` through Volta. Node 18+ may work, but Node 22 is the expected version.
+- npm 9+.
+- Task, optional but recommended: [taskfile.dev](https://taskfile.dev).
+- Wrangler, installed through the root dev dependencies.
+- PostgreSQL if you want to run against a real database. Without `DATABASE_URL`, the backend uses debug/mock fallback behavior.
 
-- **Node.js** (v18+)
-- **npm** (v9+)
+## Installation
 
-### Installation
-
-Install all project dependencies from the root:
+Install dependencies from the repository root:
 
 ```bash
 npm install
 ```
 
-### Global Commands
+## Development
 
-- **Start in development mode (Frontend & Backend)**:
-  ```bash
-  npm run dev
-  ```
+Run both frontend and backend:
 
-* **Build all applications and packages**:
-  ```bash
-  npm run build
-  ```
+```bash
+task run
+```
 
----
+Equivalent npm command:
 
-## 🏗️ Architecture & Design System (Frontend)
+```bash
+npm run dev
+```
 
-The frontend application follows **Atomic Design** principles inside `apps/frontend/src/components`:
+Run only the backend Worker:
 
-1.  **Atoms** : Basic UI components with no internal logic (e.g., button, XP badge, avatar).
-2.  **Molecules** : Combinations of atoms (e.g., quest progress bar, icon row).
-3.  **Organisms** : Complex, interactive blocks (e.g., interactive game map, inventory sidebar).
-4.  **Templates** : Reusable page skeleton layouts (e.g., game layout with status bar).
+```bash
+task run-backend
+```
 
-Business logic is decoupled and managed inside the `features/` directory:
+Run only the frontend:
 
-- `auth/` : User session and role management (Player vs. Game Master).
-- `game/` : Progression map rendering engine, movement, and game loop.
-- `activities/` : Validation logic for lessons, boss fights, and XP rewards.
-- `gamemaster/` : Teacher tools to modify the map or view statistics.
+```bash
+task run-frontend
+```
 
----
+Open the frontend automatically:
 
-## 🎨 Attribution
+```bash
+task run-frontend-open
+```
 
-This project is proudly developed and maintained by **[Aptitek](https://aptitek.io)** (founded by **Antoine GRÉA**).
+## Build And Checks
 
-For more information or to collaborate on AI, development, and no-code training, visit **[aptitek.io](https://aptitek.io)**! 🐣💻
+Build all workspaces that expose a build script:
+
+```bash
+npm run build
+```
+
+Build and type-check through the Taskfile:
+
+```bash
+task compile
+```
+
+Run the design-system and Atomic Design audit:
+
+```bash
+task lint
+```
+
+Backend type-check:
+
+```bash
+npx tsc --noEmit -p apps/backend/tsconfig.json
+```
+
+Frontend production build uses manual Vite chunks for React, Framer Motion, TanStack, and app code to avoid large bundle warnings.
+
+## Environment
+
+The backend reads Cloudflare Worker bindings/environment values:
+
+```bash
+DATABASE_URL=postgresql://...
+JWT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+GITHUB_REDIRECT_URI=http://localhost:8787/api/auth/github/callback
+FRONTEND_URL=http://localhost:5173
+ENABLE_DEBUG_AUTH=true
+```
+
+`DATABASE_URL` is optional for local debug flows. When it is absent, the backend returns debug data from the local mock backup. When it is present, routes use PostgreSQL through Drizzle.
+
+## Database
+
+The backend schema lives in `apps/backend/src/db/schema.ts`.
+
+Migrations live in `apps/backend/src/db/migrations`. They currently reconcile the project schema and seed deterministic demo data for local/dev environments.
+
+Generate new migrations after schema changes:
+
+```bash
+npm run db:generate --workspace backend
+```
+
+Apply migrations using your deployment/local database workflow. Keep `schema.ts`, migrations, and shared types in sync.
+
+## Code Guidelines
+
+- Use shared types from `@eduquest/shared` for cross-app contracts.
+- Keep business logic in `features`, `pages`, backend routes, or backend services. Reusable UI in `components` should stay as presentational as practical.
+- Respect Atomic Design import direction: atoms must not import molecules/organisms/templates, molecules must not import organisms/templates, and organisms must not import templates.
+- Use DaisyUI semantic components first, Tailwind utilities second, and custom components only when the local design requires them.
+- Use semantic design tokens such as `gaming`, `text`, `status`, and `accent` classes. Do not add hardcoded hex or raw RGB values in TSX.
+- Add new colors in `apps/frontend/src/styles/index.css` and expose them through `apps/frontend/tailwind.config.js`.
+- Put all user-facing strings in `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/fr.ts`.
+- Run `task lint` before opening a PR or committing UI changes.
+
+## Attribution
+
+EduQuest is developed and maintained by [Aptitek](https://aptitek.io), founded by Antoine GREA.

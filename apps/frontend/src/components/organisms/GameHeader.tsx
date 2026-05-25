@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
-import { AccountDropdown } from '../molecules/AccountDropdown';
+import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { useAuth } from '../../features/auth/useAuth';
+import { useDashboardData } from '../../features/game/useDashboardData';
 import {
   HeaderNotificationArea,
   HeaderNotificationButton,
@@ -18,6 +19,7 @@ interface GameHeaderProps {
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const { user } = useAuth();
+  const dashboardData = useDashboardData();
   const { t } = useTranslation();
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -39,16 +41,16 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     };
   }, []);
 
-  const dashboardNotifications: HeaderNotification[] = [
+  const fallbackNotifications: HeaderNotification[] = [
     {
       id: 'cohort-quest',
-      title: 'Quest window opened',
-      description: 'New cohort quest available on the map.',
-      meta: '2 min ago',
+      title: t('dashboard.notifications.cohortQuest.title'),
+      description: t('dashboard.notifications.cohortQuest.description'),
+      meta: t('dashboard.notifications.cohortQuest.meta'),
       tone: 'info',
       icon: <Map size={18} />,
       action: {
-        label: 'Open map',
+        label: t('dashboard.notifications.cohortQuest.action'),
         onSelect: () => {
           window.location.hash = '';
         },
@@ -56,32 +58,48 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     },
     {
       id: 'cohort-campfire',
-      title: 'Campfire milestone',
-      description: 'The warm-up milestone is now complete.',
-      meta: '12 min ago',
+      title: t('dashboard.notifications.cohortCampfire.title'),
+      description: t('dashboard.notifications.cohortCampfire.description'),
+      meta: t('dashboard.notifications.cohortCampfire.meta'),
       tone: 'success',
       icon: <Sparkles size={18} />,
-      action: { label: 'Acknowledge' },
+      action: { label: t('dashboard.notifications.cohortCampfire.action') },
     },
     {
       id: 'reward-gold',
-      title: '+120 guild gold',
-      description: 'Crimson Compilers gained gold from a completed quest.',
-      meta: 'Just now',
+      title: t('dashboard.notifications.rewardGold.title'),
+      description: t('dashboard.notifications.rewardGold.description'),
+      meta: t('dashboard.notifications.rewardGold.meta'),
       tone: 'warning',
       icon: <Coins size={18} />,
-      action: { label: 'Collect' },
+      action: { label: t('dashboard.notifications.rewardGold.action') },
     },
     {
       id: 'reward-spend',
-      title: 'Reward unlocked',
-      description: 'Deadline +24h entered the reward pool.',
-      meta: '8 min ago',
+      title: t('dashboard.notifications.rewardSpend.title'),
+      description: t('dashboard.notifications.rewardSpend.description'),
+      meta: t('dashboard.notifications.rewardSpend.meta'),
       tone: 'neutral',
       icon: <Gift size={18} />,
-      action: { label: 'Review' },
+      action: { label: t('dashboard.notifications.rewardSpend.action') },
     },
   ];
+  const dashboardNotifications: HeaderNotification[] = dashboardData?.notifications.length
+    ? dashboardData.notifications.map((notification) => ({
+        id: notification.id,
+        title: t(notification.titleI18nKey),
+        description: notification.descriptionI18nKey ? t(notification.descriptionI18nKey) : undefined,
+        meta: notification.metaI18nKey ? t(notification.metaI18nKey) : undefined,
+        tone: notification.tone,
+        icon: getNotificationIcon(notification.icon),
+        action: notification.actionLabelI18nKey
+          ? {
+              label: t(notification.actionLabelI18nKey),
+              onSelect: () => runNotificationAction(notification.actionTarget),
+            }
+          : undefined,
+      }))
+    : fallbackNotifications;
   const activeNotifications = dashboardNotifications.filter(
     (notification) => !dismissedNotificationIds.has(notification.id)
   );
@@ -165,6 +183,20 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
       />
     </header>
   );
+}
+
+function getNotificationIcon(icon?: string) {
+  if (icon === 'map') return <Map size={18} />;
+  if (icon === 'sparkles') return <Sparkles size={18} />;
+  if (icon === 'coins') return <Coins size={18} />;
+  if (icon === 'gift') return <Gift size={18} />;
+  return undefined;
+}
+
+function runNotificationAction(actionTarget?: string) {
+  if (actionTarget === 'map') {
+    window.location.hash = '';
+  }
 }
 
 export default GameHeader;

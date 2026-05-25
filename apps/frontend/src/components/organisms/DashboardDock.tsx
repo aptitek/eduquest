@@ -5,6 +5,8 @@ import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { useGameStore } from '../../features/game/gameStore';
+import { useDashboardData } from '../../features/game/useDashboardData';
+import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
@@ -12,10 +14,10 @@ import { FlipDeck } from './DashboardDock/FlipDeck';
 import { GuildMemberDeck } from './DashboardDock/GuildMemberDeck';
 import { Coins } from 'lucide-react';
 import {
-  GAUGE_MILESTONES,
   RIVAL_GUILDS,
   buildCohortRewardCards,
   buildFaceDownDeckCards,
+  buildGaugeMilestones,
   buildGuildMemberCards,
   buildPodiumCards,
   getLatestCohortMembership,
@@ -28,16 +30,41 @@ export interface DashboardDockProps {
 export function DashboardDock({ className }: DashboardDockProps) {
   const [showBonusCards, setShowBonusCards] = useState(false);
   const { user, student, character } = useGameStore();
+  const dashboardData = useDashboardData();
+  const { t } = useTranslation();
   const latestMembership = getLatestCohortMembership(student?.cohortMemberships);
   const playerGuild = latestMembership?.guild || RIVAL_GUILDS[0];
-  const playerName = user ? formatUserDisplayName(user) : 'Player';
+  const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
   const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
 
   if (!student || !character) return null;
 
-  const podiumCards = buildPodiumCards(playerGuild);
-  const cohortDeckCards = buildFaceDownDeckCards(latestMembership?.cohort?.name || 'Cohort deck');
-  const bonusCards = buildCohortRewardCards();
+  const podiumCards = buildPodiumCards(t, playerGuild);
+  const cohortDeckCards = buildFaceDownDeckCards(
+    t,
+    latestMembership?.cohort?.name || t('dashboard.dock.cohortDeck')
+  );
+  const bonusCards = dashboardData?.rewards.length
+    ? (dashboardData.rewards.map((reward) => ({
+        kind: 'guild' as const,
+        title: t(reward.titleI18nKey),
+        subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
+        accentToken: reward.accentToken as DashboardMiniCardProps['accentToken'],
+        faceDown: reward.faceDown,
+      })) as [DashboardMiniCardProps, ...DashboardMiniCardProps[]])
+    : buildCohortRewardCards(t);
+  const gaugeMilestones = dashboardData?.gauge.milestones.length
+    ? dashboardData.gauge.milestones.map((milestone) => ({
+        id: milestone.id,
+        label: t(milestone.labelI18nKey),
+        description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
+        positionPercent: milestone.positionPercent,
+        value: milestone.value,
+      }))
+    : buildGaugeMilestones(t);
+  const gaugeCurrentPoints = dashboardData?.gauge.currentPoints ?? 460;
+  const gaugeTargetPoints = dashboardData?.gauge.targetPoints ?? 1000;
+  const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
   const podiumDeckCards = [podiumCards[0], podiumCards[1], podiumCards[2], ...cohortDeckCards] as [
     DashboardMiniCardProps,
     ...DashboardMiniCardProps[],
@@ -45,7 +72,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const characterCard: DashboardMiniCardProps = {
     kind: 'character',
     title: playerName,
-    subtitle: `Level ${character.currentLevel}`,
+    subtitle: t('dashboard.dock.characterLevel').replace('{level}', String(character.currentLevel)),
     characterClass: character.characterClass,
     illustrationUrl: playerAvatar,
     illustrationAlt: playerName,
@@ -56,14 +83,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
       holdDuration={1200}
       shape="round"
       variant="btn-primary"
-      className="h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-base font-black shadow-[0_0_36px_rgba(42,161,152,0.38)]"
+      className="h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-base font-black shadow-glow-primary"
     >
-      Boost
+      {t('dashboard.dock.boost')}
     </HoldToConfirmButton>
   );
   const goldIndicator = (
     <GaugeIndicator
-      label="Gold"
+      label={t('dashboard.dock.gold')}
       value={(playerGuild.totalPoints || 0).toLocaleString()}
       icon={<Coins size={18} aria-hidden />}
       tone="gold"
@@ -72,9 +99,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
   return (
     <aside
-      aria-label="Dashboard dock"
+      aria-label={t('dashboard.dock.ariaLabel')}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-[0_-24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:h-40',
+        'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-dock backdrop-blur-xl lg:h-40',
         className
       )}
     >
@@ -105,8 +132,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
             backCards={bonusCards}
             flipped={showBonusCards}
             onFlip={() => setShowBonusCards((current) => !current)}
-            frontLabel="Show podium cards"
-            backLabel="Show bonus cards"
+            frontLabel={t('dashboard.dock.showPodiumCards')}
+            backLabel={t('dashboard.dock.showBonusCards')}
             stackSide="left"
             revealedCardCount={3}
             expandOnHover
@@ -121,8 +148,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
             backCards={bonusCards}
             flipped={showBonusCards}
             onFlip={() => setShowBonusCards((current) => !current)}
-            frontLabel="Show podium cards"
-            backLabel="Show bonus cards"
+            frontLabel={t('dashboard.dock.showPodiumCards')}
+            backLabel={t('dashboard.dock.showBonusCards')}
             variant="vertical"
             stackSide="left"
             revealedCardCount={3}
@@ -134,26 +161,34 @@ export function DashboardDock({ className }: DashboardDockProps) {
           />
 
           <GlobalProgressGauge
-            currentPoints={460}
-            targetPoints={1000}
-            milestones={GAUGE_MILESTONES}
-            label="Milestone"
+            currentPoints={gaugeCurrentPoints}
+            targetPoints={gaugeTargetPoints}
+            milestones={gaugeMilestones}
+            label={gaugeLabel}
             centerContent={boostButton}
             goldIndicator={goldIndicator}
             rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
+            boostLabel={t('dashboard.dock.boost')}
             className="mb-2 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
           />
 
           <div className="shrink-0 xl:hidden">
             <GuildMemberDeck
               guild={playerGuild}
-              memberCards={buildGuildMemberCards(characterCard)}
+              memberCards={buildGuildMemberCards(t, characterCard)}
+              fallbackGuildName={t('dashboard.dock.playerGuild')}
+              goldLabel={t('dashboard.dock.gold')}
               compact
             />
           </div>
 
           <div className="hidden shrink-0 xl:block">
-            <GuildMemberDeck guild={playerGuild} memberCards={buildGuildMemberCards(characterCard)} />
+            <GuildMemberDeck
+              guild={playerGuild}
+              memberCards={buildGuildMemberCards(t, characterCard)}
+              fallbackGuildName={t('dashboard.dock.playerGuild')}
+              goldLabel={t('dashboard.dock.gold')}
+            />
           </div>
         </div>
       </div>
@@ -164,8 +199,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
           backCards={bonusCards}
           flipped={showBonusCards}
           onFlip={() => setShowBonusCards((current) => !current)}
-          frontLabel="Show podium cards"
-          backLabel="Show bonus cards"
+          frontLabel={t('dashboard.dock.showPodiumCards')}
+          backLabel={t('dashboard.dock.showBonusCards')}
           variant="vertical"
           stackSide="left"
           revealedCardCount={3}
@@ -176,19 +211,22 @@ export function DashboardDock({ className }: DashboardDockProps) {
         />
 
         <GlobalProgressGauge
-          currentPoints={460}
-          targetPoints={1000}
-          milestones={GAUGE_MILESTONES}
-          label="Milestone"
+          currentPoints={gaugeCurrentPoints}
+          targetPoints={gaugeTargetPoints}
+          milestones={gaugeMilestones}
+          label={gaugeLabel}
           centerContent={boostButton}
           goldIndicator={goldIndicator}
           rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
+          boostLabel={t('dashboard.dock.boost')}
           className="mb-0 h-40 w-40 shrink-0"
         />
 
         <GuildMemberDeck
           guild={playerGuild}
-          memberCards={buildGuildMemberCards(characterCard)}
+          memberCards={buildGuildMemberCards(t, characterCard)}
+          fallbackGuildName={t('dashboard.dock.playerGuild')}
+          goldLabel={t('dashboard.dock.gold')}
           compact
         />
       </div>

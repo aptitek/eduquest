@@ -36,9 +36,9 @@ const toneStyles: Record<
     action: 'border-gaming-border bg-gaming-base/80 text-text-primary hover:bg-gaming-base',
   },
   info: {
-    bar: 'border-solarized-blue/35 bg-solarized-blue/10',
-    icon: 'border-solarized-blue/45 bg-solarized-blue/15 text-solarized-blue',
-    action: 'border-solarized-blue/40 bg-solarized-blue/15 text-solarized-blue hover:bg-solarized-blue/25',
+    bar: 'border-status-quest/35 bg-status-quest/10',
+    icon: 'border-status-quest/45 bg-status-quest/15 text-status-quest',
+    action: 'border-status-quest/40 bg-status-quest/15 text-status-quest hover:bg-status-quest/25',
   },
   success: {
     bar: 'border-status-completed/35 bg-status-completed/10',
@@ -46,14 +46,16 @@ const toneStyles: Record<
     action: 'border-status-completed/40 bg-status-completed/15 text-status-completed hover:bg-status-completed/25',
   },
   warning: {
-    bar: 'border-solarized-yellow/40 bg-solarized-yellow/10',
-    icon: 'border-solarized-yellow/50 bg-solarized-yellow/15 text-solarized-yellow',
-    action: 'border-solarized-yellow/45 bg-solarized-yellow/15 text-solarized-yellow hover:bg-solarized-yellow/25',
+    bar: 'border-status-campfire/40 bg-status-campfire/10',
+    icon: 'border-status-campfire/50 bg-status-campfire/15 text-status-campfire',
+    action:
+      'border-status-campfire/45 bg-status-campfire/15 text-status-campfire hover:bg-status-campfire/25',
   },
   danger: {
-    bar: 'border-solarized-red/40 bg-solarized-red/10',
-    icon: 'border-solarized-red/50 bg-solarized-red/15 text-solarized-red',
-    action: 'border-solarized-red/45 bg-solarized-red/15 text-solarized-red hover:bg-solarized-red/25',
+    bar: 'border-status-danger/40 bg-status-danger/10',
+    icon: 'border-status-danger/50 bg-status-danger/15 text-status-danger',
+    action:
+      'border-status-danger/45 bg-status-danger/15 text-status-danger hover:bg-status-danger/25',
   },
 };
 
@@ -87,7 +89,7 @@ export function InfoBar({
     >
       <span
         className={cn(
-          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-[inset_0_1px_2px_rgba(255,255,255,0.12)] sm:mt-0',
+          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-inset-highlight sm:mt-0',
           styles.icon
         )}
         aria-hidden="true"

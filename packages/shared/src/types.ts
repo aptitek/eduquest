@@ -99,7 +99,7 @@ export interface Guild {
   name: string;
   description?: string;
   iconUrl?: string;
-  color?: string; // Code Hexa (ex: #ef4444)
+  color?: string; // Design accent token, e.g. quest, danger, specialist
   totalPoints?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -209,9 +209,50 @@ export interface Activity {
   x: number;
   y: number;
   requiredLevel: number;
+  basePoints?: number;
   bossMetadata?: BossMetadata; // JSONB
   unlockRule?: UnlockRule; // Optionnel : règles de progression
   createdAt?: string;
+}
+
+export interface DashboardMilestone {
+  id: string;
+  labelI18nKey: string;
+  descriptionI18nKey?: string;
+  positionPercent?: number;
+  value?: number;
+}
+
+export interface DashboardRewardCard {
+  id: string;
+  titleI18nKey: string;
+  subtitleI18nKey?: string;
+  accentToken?: string;
+  faceDown?: boolean;
+}
+
+export type DashboardNotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+
+export interface DashboardNotification {
+  id: string;
+  titleI18nKey: string;
+  descriptionI18nKey?: string;
+  metaI18nKey?: string;
+  icon?: 'map' | 'sparkles' | 'coins' | 'gift' | 'info';
+  tone?: DashboardNotificationTone;
+  actionLabelI18nKey?: string;
+  actionTarget?: 'map' | 'acknowledge' | 'collect' | 'review';
+}
+
+export interface DashboardData {
+  gauge: {
+    currentPoints: number;
+    targetPoints: number;
+    labelI18nKey: string;
+    milestones: DashboardMilestone[];
+  };
+  rewards: DashboardRewardCard[];
+  notifications: DashboardNotification[];
 }
 
 // Table `game_battles` : Rendus de devoirs et combats

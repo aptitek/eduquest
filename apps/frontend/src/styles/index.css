@@ -40,6 +40,19 @@
     --color-status-campfire: var(--color-solarized-yellow);
     --color-status-quest: var(--color-solarized-blue);
     --color-status-boss: var(--color-solarized-magenta);
+    --color-status-danger: var(--color-solarized-red);
+
+    --color-accent-scholar: var(--color-status-quest);
+    --color-accent-champion: var(--color-status-danger);
+    --color-accent-guide: var(--color-status-completed);
+    --color-accent-specialist: var(--color-solarized-violet);
+    --color-accent-neutral: var(--color-text-muted);
+
+    --shadow-glow-primary: 0 0 36px color-mix(in srgb, var(--color-status-quest) 38%, transparent);
+    --shadow-glow-gold: 0 0 22px color-mix(in srgb, var(--color-status-campfire) 35%, transparent);
+    --shadow-dock: 0 -24px 60px color-mix(in srgb, var(--color-solarized-base03) 65%, transparent);
+    --shadow-inset-highlight: inset 0 1px 2px color-mix(in srgb, var(--color-solarized-base3) 14%, transparent);
+    --shadow-marker: var(--shadow-inset-highlight), 0 0 14px color-mix(in srgb, var(--color-solarized-base03) 45%, transparent);
   }
 
   [data-theme='light'] {

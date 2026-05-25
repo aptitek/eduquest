@@ -6,7 +6,7 @@ import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
 import { useToastStore } from '../../features/toast/toastStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
-import { InstitutionalProfileCard } from '../organisms/InstitutionalProfileCard/InstitutionalProfileCard';
+import { InstitutionalProfileCard } from './InstitutionalProfileCard/InstitutionalProfileCard';
 import { StudentCohort, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';

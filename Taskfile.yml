@@ -61,8 +61,8 @@ tasks:
       - echo "Publish completed successfully."
 
   lint:
-    desc: 'Reformat the codebase to meet modern styling and clean coding guidelines'
+    desc: 'Enforce frontend design-token and atomic-design rules'
     cmds:
-      - echo "Formatting files with Prettier..."
-      - npx prettier --write .
-      - echo "Formatting completed."
+      - echo "Running design-system audit..."
+      - npm run audit:design --workspace frontend
+      - echo "Design-system audit completed."

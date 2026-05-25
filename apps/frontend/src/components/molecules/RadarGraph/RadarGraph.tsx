@@ -23,7 +23,13 @@ export interface RadarGraphProps {
   className?: string;
 }
 
-const DEFAULT_COLORS = ['#38bdf8', '#f97316', '#a78bfa', '#22c55e', '#f43f5e'];
+const DEFAULT_COLORS = [
+  'var(--color-status-quest)',
+  'var(--color-status-campfire)',
+  'var(--color-accent-specialist)',
+  'var(--color-status-completed)',
+  'var(--color-status-danger)',
+];
 const VIEWBOX_SIZE = 100;
 const CENTER = VIEWBOX_SIZE / 2;
 const RADIUS = 38;

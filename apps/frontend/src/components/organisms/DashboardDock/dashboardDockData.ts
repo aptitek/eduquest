@@ -2,36 +2,47 @@ import type { StudentCohort } from '@eduquest/shared';
 import type { DashboardMiniCardProps } from '../../molecules/DashboardMiniCard';
 import type { DockGuild } from './types';
 
+type Translate = (path: string) => string;
+
 export const RIVAL_GUILDS = [
   {
     id: 'rival-1',
     cohortId: 'demo',
     name: 'Crimson Compilers',
-    color: '#dc322f',
+    color: 'danger',
     totalPoints: 168,
   },
-  { id: 'rival-2', cohortId: 'demo', name: 'Violet Oracles', color: '#6c71c4', totalPoints: 132 },
+  { id: 'rival-2', cohortId: 'demo', name: 'Violet Oracles', color: 'specialist', totalPoints: 132 },
   {
     id: 'rival-3',
     cohortId: 'demo',
     name: 'Solarized Sentinels',
-    color: '#268bd2',
+    color: 'quest',
     totalPoints: 116,
   },
 ];
 
-export const GAUGE_MILESTONES = [
-  { id: 'spark', label: 'Spark', positionPercent: 12, description: 'First boost' },
-  { id: 'campfire', label: 'Campfire', positionPercent: 24, description: 'Warm-up' },
-  { id: 'quest', label: 'Quest', positionPercent: 38, description: 'Current' },
-  { id: 'rally', label: 'Rally', positionPercent: 52, description: 'Guild vote' },
-  { id: 'treasure', label: 'Treasure', positionPercent: 66, description: 'Reward pool' },
-  { id: 'boss', label: 'Boss', positionPercent: 78, description: 'Unlock' },
-  { id: 'legend', label: 'Legend', positionPercent: 90, description: 'Final push' },
-  { id: 'ascend', label: 'Ascend', positionPercent: 100, description: 'Complete' },
+const MILESTONE_SLOTS = [
+  { id: 'spark', positionPercent: 12 },
+  { id: 'campfire', positionPercent: 24 },
+  { id: 'quest', positionPercent: 38 },
+  { id: 'rally', positionPercent: 52 },
+  { id: 'treasure', positionPercent: 66 },
+  { id: 'boss', positionPercent: 78 },
+  { id: 'legend', positionPercent: 90 },
+  { id: 'ascend', positionPercent: 100 },
 ];
 
+export function buildGaugeMilestones(t: Translate) {
+  return MILESTONE_SLOTS.map((milestone) => ({
+    ...milestone,
+    label: t(`dashboard.milestones.${milestone.id}.label`),
+    description: t(`dashboard.milestones.${milestone.id}.description`),
+  }));
+}
+
 export function buildPodiumCards(
+  t: Translate,
   playerGuild: DockGuild
 ): [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps] {
   const podiumGuilds = [
@@ -44,66 +55,66 @@ export function buildPodiumCards(
     kind: 'guild',
     guild,
     title: guild.name,
-    subtitle: `${guild.totalPoints || 0} gold spent`,
+    subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(guild.totalPoints || 0)),
   });
 
   return [toCard(podiumGuilds[0]), toCard(podiumGuilds[1]), toCard(podiumGuilds[2])];
 }
 
-export function buildFaceDownDeckCards(title: string) {
+export function buildFaceDownDeckCards(t: Translate, title: string) {
   return Array.from({ length: 4 }, () => ({
     kind: 'guild' as const,
     title,
-    subtitle: 'Face down',
-    accentColor: '#586e75',
+    subtitle: t('dashboard.dock.faceDown'),
+    accentToken: 'neutral',
     faceDown: true,
   })) as [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
 }
 
-export function buildCohortRewardCards() {
+export function buildCohortRewardCards(t: Translate) {
   return [
     {
       kind: 'guild' as const,
-      title: 'Deadline +24h',
-      subtitle: 'Extension',
-      accentColor: '#b58900',
+      title: t('dashboard.rewards.deadline.title'),
+      subtitle: t('dashboard.rewards.deadline.subtitle'),
+      accentToken: 'campfire',
     },
     {
       kind: 'guild' as const,
-      title: 'Mini game',
-      subtitle: 'Quiz unlock',
-      accentColor: '#2aa198',
+      title: t('dashboard.rewards.miniGame.title'),
+      subtitle: t('dashboard.rewards.miniGame.subtitle'),
+      accentToken: 'completed',
     },
     {
       kind: 'guild' as const,
-      title: 'Tech help',
-      subtitle: 'Bonus support',
-      accentColor: '#268bd2',
+      title: t('dashboard.rewards.techHelp.title'),
+      subtitle: t('dashboard.rewards.techHelp.subtitle'),
+      accentToken: 'quest',
     },
     {
       kind: 'guild' as const,
-      title: 'Reroll',
-      subtitle: 'Late grading',
-      accentColor: '#6c71c4',
+      title: t('dashboard.rewards.reroll.title'),
+      subtitle: t('dashboard.rewards.reroll.subtitle'),
+      accentToken: 'specialist',
     },
   ] as [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
 }
 
-export function buildGuildMemberCards(characterCard: DashboardMiniCardProps) {
+export function buildGuildMemberCards(t: Translate, characterCard: DashboardMiniCardProps) {
   return [
     characterCard,
     {
       kind: 'character' as const,
-      title: 'Guildmate',
-      subtitle: 'Hidden member',
-      accentColor: '#859900',
+      title: t('dashboard.dock.guildmate'),
+      subtitle: t('dashboard.dock.hiddenMember'),
+      accentToken: 'guide',
       faceDown: true,
     },
     {
       kind: 'character' as const,
-      title: 'Guildmate',
-      subtitle: 'Hidden member',
-      accentColor: '#6c71c4',
+      title: t('dashboard.dock.guildmate'),
+      subtitle: t('dashboard.dock.hiddenMember'),
+      accentToken: 'specialist',
       faceDown: true,
     },
   ] as [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
