@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge';
 import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
+import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
+import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { useGameStore } from '../../features/game/gameStore';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
@@ -9,6 +11,7 @@ import mascotUrl from '../../assets/mascot.svg';
 import { DashboardToastAreas } from './DashboardDock/DashboardToastAreas';
 import { FlipDeck } from './DashboardDock/FlipDeck';
 import { GuildMemberDeck } from './DashboardDock/GuildMemberDeck';
+import { Coins } from 'lucide-react';
 import {
   GAUGE_MILESTONES,
   RIVAL_GUILDS,
@@ -48,6 +51,25 @@ export function DashboardDock({ className }: DashboardDockProps) {
     illustrationUrl: playerAvatar,
     illustrationAlt: playerName,
   };
+  const boostButton = (
+    <HoldToConfirmButton
+      onConfirm={() => undefined}
+      holdDuration={1200}
+      shape="round"
+      variant="btn-primary"
+      className="h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-base font-black shadow-[0_0_36px_rgba(42,161,152,0.38)]"
+    >
+      Boost
+    </HoldToConfirmButton>
+  );
+  const goldIndicator = (
+    <GaugeIndicator
+      label="Gold"
+      value={(playerGuild.totalPoints || 0).toLocaleString()}
+      icon={<Coins size={18} aria-hidden />}
+      tone="gold"
+    />
+  );
 
   return (
     <aside
@@ -116,8 +138,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
             currentPoints={460}
             targetPoints={1000}
             milestones={GAUGE_MILESTONES}
-            label="Current milestone"
-            className="mb-8 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
+            label="Milestone"
+            centerContent={boostButton}
+            goldIndicator={goldIndicator}
+            className="mb-2 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
           />
 
           <div className="shrink-0 xl:hidden">
@@ -154,8 +178,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
         <GlobalProgressGauge
           currentPoints={460}
           targetPoints={1000}
-          label="Current milestone"
+          milestones={GAUGE_MILESTONES}
+          label="Milestone"
           variant="circle"
+          centerContent={boostButton}
+          goldIndicator={goldIndicator}
           className="mb-0"
         />
 

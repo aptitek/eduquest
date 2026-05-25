@@ -21,9 +21,14 @@ export const RIVAL_GUILDS = [
 ];
 
 export const GAUGE_MILESTONES = [
-  { id: 'campfire', label: 'Campfire', positionPercent: 18, description: 'Warm-up' },
-  { id: 'quest', label: 'Quest', positionPercent: 46, description: 'Current' },
+  { id: 'spark', label: 'Spark', positionPercent: 12, description: 'First boost' },
+  { id: 'campfire', label: 'Campfire', positionPercent: 24, description: 'Warm-up' },
+  { id: 'quest', label: 'Quest', positionPercent: 38, description: 'Current' },
+  { id: 'rally', label: 'Rally', positionPercent: 52, description: 'Guild vote' },
+  { id: 'treasure', label: 'Treasure', positionPercent: 66, description: 'Reward pool' },
   { id: 'boss', label: 'Boss', positionPercent: 78, description: 'Unlock' },
+  { id: 'legend', label: 'Legend', positionPercent: 90, description: 'Final push' },
+  { id: 'ascend', label: 'Ascend', positionPercent: 100, description: 'Complete' },
 ];
 
 export function buildPodiumCards(
