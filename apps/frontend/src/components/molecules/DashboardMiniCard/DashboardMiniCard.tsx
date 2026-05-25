@@ -10,6 +10,13 @@ const CHARACTER_CLASS_COLORS: Record<GameCharacterClass, string> = {
   specialist: '#6c71c4',
 };
 
+const CARD_SURFACE_CLASS =
+  'group relative aspect-[5/7] w-32 translate-y-[52%] overflow-hidden rounded-[1.4rem] border border-[color:var(--dashboard-mini-card-accent)]/60 bg-gaming-card shadow-2xl outline-none transition duration-300 ease-out hover:-translate-y-1 hover:scale-105 focus-visible:-translate-y-1 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-[color:var(--dashboard-mini-card-accent)] sm:w-36';
+const CARD_ART_CLASS =
+  'absolute inset-x-3 top-3 bottom-12 overflow-hidden rounded-[1rem] border border-gaming-border bg-gaming-base';
+const CARD_FOOTER_CLASS =
+  'absolute inset-x-0 bottom-0 border-t border-[color:var(--dashboard-mini-card-accent)]/40 bg-gaming-card/95 px-3 py-2 transition duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0';
+
 type DashboardMiniCardStyle = CSSProperties & {
   '--dashboard-mini-card-accent': string;
 };
@@ -62,15 +69,12 @@ export function DashboardMiniCard({
       aria-hidden={interactive ? undefined : true}
       aria-label={interactive ? resolvedTitle : undefined}
       style={style}
-      className={cn(
-        'group relative aspect-[5/7] w-32 translate-y-[52%] overflow-hidden rounded-t-[1.4rem] border-x border-t border-[color:var(--dashboard-mini-card-accent)]/60 bg-gaming-card shadow-2xl outline-none transition duration-300 ease-out hover:-translate-y-1 hover:scale-105 focus-visible:-translate-y-1 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-[color:var(--dashboard-mini-card-accent)] sm:w-36',
-        className
-      )}
+      className={cn(CARD_SURFACE_CLASS, className)}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,color-mix(in_srgb,var(--dashboard-mini-card-accent)_34%,transparent),transparent_55%)]" />
       {faceDown ? (
-        <div className="absolute inset-3 rounded-t-[1rem] border border-[color:var(--dashboard-mini-card-accent)]/50 bg-gaming-base p-2">
-          <div className="flex h-full w-full items-center justify-center rounded-t-[0.75rem] border border-dashed border-[color:var(--dashboard-mini-card-accent)]/50 bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--dashboard-mini-card-accent)_20%,transparent)_0_8px,transparent_8px_16px)]">
+        <div className={cn(CARD_ART_CLASS, 'p-2')}>
+          <div className="flex h-full w-full items-center justify-center rounded-[0.75rem] border border-dashed border-[color:var(--dashboard-mini-card-accent)]/50 bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--dashboard-mini-card-accent)_20%,transparent)_0_8px,transparent_8px_16px)]">
             <Shield
               size={38}
               className="text-[color:var(--dashboard-mini-card-accent)]"
@@ -80,7 +84,7 @@ export function DashboardMiniCard({
         </div>
       ) : (
         <>
-          <div className="absolute inset-x-3 top-3 bottom-12 overflow-hidden rounded-t-[1rem] border border-gaming-border bg-gaming-base">
+          <div className={CARD_ART_CLASS}>
             {resolvedIllustrationUrl ? (
               <img
                 src={resolvedIllustrationUrl}
@@ -95,7 +99,7 @@ export function DashboardMiniCard({
             <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-gaming-card to-transparent" />
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 translate-y-4 border-t border-[color:var(--dashboard-mini-card-accent)]/40 bg-gaming-card/95 px-3 py-2 transition duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0">
+          <div className={CARD_FOOTER_CLASS}>
             <div className="mx-auto mb-1 h-1 w-8 rounded-full bg-[color:var(--dashboard-mini-card-accent)]/70" />
             <h3 className="truncate text-center font-display text-sm font-bold text-text-primary">
               {resolvedTitle}

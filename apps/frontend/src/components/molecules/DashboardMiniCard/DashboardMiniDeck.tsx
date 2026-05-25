@@ -32,6 +32,7 @@ export function DashboardMiniDeck({
 
   return (
     <div
+      tabIndex={expandOnHover ? 0 : undefined}
       className={cn(
         'relative h-56 w-56 overflow-visible',
         expandOnHover && 'group transition-[width] duration-300',
@@ -59,6 +60,30 @@ export function DashboardMiniDeck({
               stacksVertically &&
                 stackDepth >= 3 &&
                 'z-[8] -translate-y-32 rotate-[-8deg] scale-[0.85]',
+              stacksVertically &&
+                expandOnHover &&
+                stackDepth === 1 &&
+                'group-hover:-translate-y-32 group-hover:rotate-[-3deg] group-hover:scale-100 group-focus:-translate-y-32 group-focus:rotate-[-3deg] group-focus:scale-100 group-focus-within:-translate-y-32 group-focus-within:rotate-[-3deg] group-focus-within:scale-100',
+              stacksVertically &&
+                expandOnHover &&
+                stackDepth === 2 &&
+                'group-hover:-translate-y-56 group-hover:rotate-[3deg] group-hover:scale-95 group-focus:-translate-y-56 group-focus:rotate-[3deg] group-focus:scale-95 group-focus-within:-translate-y-56 group-focus-within:rotate-[3deg] group-focus-within:scale-95',
+              stacksVertically &&
+                expandOnHover &&
+                stackDepth >= 3 &&
+                'group-hover:-translate-y-80 group-hover:rotate-[-5deg] group-hover:scale-90 group-focus:-translate-y-80 group-focus:rotate-[-5deg] group-focus:scale-90 group-focus-within:-translate-y-80 group-focus-within:rotate-[-5deg] group-focus-within:scale-90',
+              stacksVertically &&
+                expandOnHover &&
+                stackDepth === 1 &&
+                'hover:!z-40 hover:!-translate-y-40 hover:!rotate-[-2deg] hover:!scale-105',
+              stacksVertically &&
+                expandOnHover &&
+                stackDepth === 2 &&
+                'hover:!z-40 hover:!-translate-y-64 hover:!rotate-[2deg] hover:!scale-105',
+              stacksVertically &&
+                expandOnHover &&
+                stackDepth >= 3 &&
+                'hover:!z-40 hover:!-translate-y-96 hover:!rotate-[-3deg] hover:!scale-105',
               !stacksVertically &&
                 stackDepth === 1 &&
                 (stacksOnLeft
