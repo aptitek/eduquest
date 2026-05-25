@@ -1,4 +1,4 @@
-import { type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Coins, Milestone } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { GaugeIndicator } from '../../atoms/GaugeIndicator';
@@ -214,7 +214,7 @@ export function GlobalProgressGauge({
         return (
           <div
             key={milestone.id}
-            className="group absolute z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2"
+            className="group absolute z-40 h-4 w-4 -translate-x-1/2 -translate-y-1/2 hover:z-50"
             style={{ left: marker.dot.x, top: marker.dot.y }}
           >
             <span
@@ -223,25 +223,23 @@ export function GlobalProgressGauge({
                 milestone.reached ? 'border-status-completed' : 'border-text-muted'
               )}
             />
-            {geometry.showMilestoneLabels ? (
-              <span
-                className="pointer-events-none absolute left-1/2 z-20 w-max max-w-24 -translate-x-1/2 truncate rounded-full border border-gaming-border/60 bg-gaming-card/85 px-2 py-1 text-[0.65rem] font-bold text-text-secondary opacity-90 shadow-sm backdrop-blur-sm transition group-hover:opacity-100"
-                style={{
-                  top: marker.label.y - marker.dot.y,
-                  left: marker.label.x - marker.dot.x + 8,
-                }}
-              >
-                {milestone.label}
-              </span>
-            ) : null}
-            <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-36 -translate-x-1/2 rounded-xl border border-gaming-border bg-gaming-card/95 px-3 py-2 text-center text-xs font-bold text-text-primary opacity-0 shadow-xl backdrop-blur-md transition group-hover:opacity-100">
-              {milestone.label}
-              {milestone.description ? (
-                <span className="mt-0.5 block text-[0.65rem] font-medium text-text-muted">
-                  {milestone.description}
-                </span>
-              ) : null}
-            </span>
+            <MilestoneBadge
+              milestone={milestone}
+              expandable={geometry.showMilestoneLabels}
+              className={
+                geometry.showMilestoneLabels
+                  ? 'z-40 max-w-24 rounded-full px-2 py-1 text-[0.65rem] text-text-secondary opacity-90 shadow-sm group-hover:z-50 group-hover:max-w-36 group-hover:rounded-xl group-hover:px-3 group-hover:py-2 group-hover:text-xs group-hover:text-text-primary group-hover:opacity-100'
+                  : 'bottom-full left-1/2 z-50 mb-2 max-w-36 -translate-x-1/2 opacity-0 shadow-xl group-hover:opacity-100'
+              }
+              style={
+                geometry.showMilestoneLabels
+                  ? {
+                      top: marker.label.y - marker.dot.y,
+                      left: marker.label.x - marker.dot.x + 8,
+                    }
+                  : undefined
+              }
+            />
           </div>
         );
       })}
@@ -311,6 +309,39 @@ export function GlobalProgressGauge({
         </>
       )}
     </section>
+  );
+}
+
+interface MilestoneBadgeProps {
+  milestone: NormalizedMilestone;
+  expandable: boolean;
+  className?: string;
+  style?: CSSProperties;
+}
+
+function MilestoneBadge({ milestone, expandable, className, style }: MilestoneBadgeProps) {
+  return (
+    <span
+      className={cn(
+        'pointer-events-none absolute w-max -translate-x-1/2 overflow-hidden rounded-xl border border-gaming-border/70 bg-gaming-card/95 px-3 py-2 text-center text-xs font-bold text-text-primary backdrop-blur-md transition-all',
+        className
+      )}
+      style={style}
+    >
+      <span className="block truncate">{milestone.label}</span>
+      {milestone.description ? (
+        <span
+          className={cn(
+            'block overflow-hidden text-[0.65rem] font-medium text-text-muted transition-all',
+            expandable
+              ? 'max-h-0 opacity-0 group-hover:mt-0.5 group-hover:max-h-10 group-hover:opacity-100'
+              : 'mt-0.5 max-h-10 opacity-100'
+          )}
+        >
+          {milestone.description}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
