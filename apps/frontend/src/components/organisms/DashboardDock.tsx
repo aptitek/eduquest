@@ -71,11 +71,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
     <aside
       aria-label="Dashboard dock"
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-[0_-24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl 2xl:h-40',
+        'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-[0_-24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:h-40',
         className
       )}
     >
-      <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 2xl:block">
+      <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 lg:block">
         <div className="flex h-full w-full items-end gap-3 overflow-visible">
           <ToggleablePodiumDeck
             cards={podiumDeckCards}
@@ -101,7 +101,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-2 overflow-visible px-2 2xl:hidden sm:gap-3">
+      <div className="absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-2 overflow-visible px-2 lg:hidden sm:gap-3">
         <ToggleablePodiumDeck
           cards={podiumDeckCards}
           showBonusCards={showBonusCards}
