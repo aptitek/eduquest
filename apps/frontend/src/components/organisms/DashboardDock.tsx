@@ -6,7 +6,6 @@ import { useGameStore } from '../../features/game/gameStore';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
-import { DashboardTickerCard } from './DashboardDock/DashboardTickerCard';
 import { DashboardToastAreas } from './DashboardDock/DashboardToastAreas';
 import { FlipDeck } from './DashboardDock/FlipDeck';
 import { GuildMemberDeck } from './DashboardDock/GuildMemberDeck';
@@ -59,20 +58,13 @@ export function DashboardDock({ className }: DashboardDockProps) {
       )}
     >
       <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 lg:block">
-        <div className="flex h-full w-full items-end gap-3 overflow-visible">
-          <DashboardTickerCard
-            title="Cohort events"
-            subtitle="Global unlocks and announcements"
-            side="left"
-            className="w-28"
-          />
-
+        <div className="flex h-full w-full items-end justify-center gap-2 overflow-visible xl:gap-3">
           <DashboardMiniDeck
             cards={bonusCards}
             stackSide="left"
             revealedCardCount={3}
             expandOnHover
-            className="ml-32 mr-20 h-72 w-36 shrink-0 hover:w-[18rem] focus-within:w-[18rem]"
+            className="mr-8 hidden h-72 w-36 shrink-0 hover:w-[18rem] focus-within:w-[18rem] 2xl:block"
             cardClassName="w-32 translate-y-0"
             stackCardClassName="w-28 translate-y-0"
           />
@@ -82,9 +74,42 @@ export function DashboardDock({ className }: DashboardDockProps) {
             stackSide="left"
             revealedCardCount={3}
             expandOnHover
-            className="h-72 w-52 shrink-0 hover:w-[24rem] focus-within:w-[24rem]"
+            className="hidden h-72 w-52 shrink-0 hover:w-[24rem] focus-within:w-[24rem] 2xl:block"
             cardClassName="w-40 translate-y-0"
             stackCardClassName="w-36 translate-y-0"
+          />
+
+          <FlipDeck
+            frontCards={podiumDeckCards}
+            backCards={bonusCards}
+            flipped={showBonusCards}
+            onFlip={() => setShowBonusCards((current) => !current)}
+            frontLabel="Show podium cards"
+            backLabel="Show bonus cards"
+            stackSide="left"
+            revealedCardCount={3}
+            expandOnHover
+            wrapperClassName="hidden xl:block 2xl:hidden"
+            className="h-72 w-40 hover:w-[18rem] focus-within:w-[18rem]"
+            cardClassName="w-36 translate-y-0"
+            stackCardClassName="w-32 translate-y-0"
+          />
+
+          <FlipDeck
+            frontCards={podiumDeckCards}
+            backCards={bonusCards}
+            flipped={showBonusCards}
+            onFlip={() => setShowBonusCards((current) => !current)}
+            frontLabel="Show podium cards"
+            backLabel="Show bonus cards"
+            variant="vertical"
+            stackSide="left"
+            revealedCardCount={3}
+            expandOnHover
+            wrapperClassName="xl:hidden"
+            className="h-64 w-32"
+            cardClassName="w-32 translate-y-0"
+            stackCardClassName="w-28 translate-y-0"
           />
 
           <GlobalProgressGauge
@@ -92,17 +117,20 @@ export function DashboardDock({ className }: DashboardDockProps) {
             targetPoints={1000}
             milestones={GAUGE_MILESTONES}
             label="Current milestone"
-            className="mb-8 min-w-[10rem] flex-1 transition-[width] duration-300"
+            className="mb-8 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
           />
 
-          <GuildMemberDeck guild={playerGuild} memberCards={buildGuildMemberCards(characterCard)} />
+          <div className="shrink-0 xl:hidden">
+            <GuildMemberDeck
+              guild={playerGuild}
+              memberCards={buildGuildMemberCards(characterCard)}
+              compact
+            />
+          </div>
 
-          <DashboardTickerCard
-            title="Reward ticker"
-            subtitle="Live gold gains and spends"
-            side="right"
-            className="ml-24 w-28"
-          />
+          <div className="hidden shrink-0 xl:block">
+            <GuildMemberDeck guild={playerGuild} memberCards={buildGuildMemberCards(characterCard)} />
+          </div>
         </div>
       </div>
 
@@ -118,7 +146,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           stackSide="left"
           revealedCardCount={3}
           expandOnHover
-          className="h-64 w-32 shrink-0 sm:w-36"
+          className="h-64 w-32 sm:w-36"
           cardClassName="w-32 translate-y-0 sm:w-36"
           stackCardClassName="w-28 translate-y-0 sm:w-32"
         />
