@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, RotateCcw } from 'lucide-react';
-import { useToastStore } from '../../../features/toast/toastStore';
+import toast from 'react-hot-toast';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
@@ -36,9 +36,9 @@ export function EditableSchoolLogo({
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
-  const showToast = useToastStore((s) => s.showToast);
   const [isUploading, setIsUploading] = useState(false);
   const [optimisticSrc, setOptimisticSrc] = useState<string | null>(null);
+  const showErrorToast = (messageKey: string) => toast.error(t(messageKey), { id: messageKey });
 
   useEffect(() => {
     if (!optimisticSrc) return;
@@ -64,12 +64,12 @@ export function EditableSchoolLogo({
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      showToast({ messageKey: 'profile.errors.avatarInvalidFormat', type: 'error' });
+      showErrorToast('profile.errors.avatarInvalidFormat');
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      showToast({ messageKey: 'profile.errors.avatarTooLargeAfterCompression', type: 'error' });
+      showErrorToast('profile.errors.avatarTooLargeAfterCompression');
       return;
     }
 
@@ -89,7 +89,7 @@ export function EditableSchoolLogo({
       }
       setOptimisticSrc(null);
       console.error('Error uploading school logo:', error);
-      showToast({ messageKey: 'profile.errors.avatarProcessingFailed', type: 'error' });
+      showErrorToast('profile.errors.avatarProcessingFailed');
     } finally {
       setIsUploading(false);
     }

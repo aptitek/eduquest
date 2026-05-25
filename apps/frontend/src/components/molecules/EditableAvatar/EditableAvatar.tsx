@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, RotateCcw } from 'lucide-react';
-import { useToastStore } from '../../../features/toast/toastStore';
+import toast from 'react-hot-toast';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
@@ -114,12 +114,12 @@ export function EditableAvatar({
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
-  const showToast = useToastStore((s) => s.showToast);
   const [isUploading, setIsUploading] = useState(false);
   const [optimisticSrc, setOptimisticSrc] = useState<string | null>(null);
   const avatarSizeClass = size <= 88 ? 'h-[5.5rem] w-[5.5rem]' : 'h-24 w-24';
   const cameraSize = size <= 88 ? 28 : 32;
   const canReset = Boolean(optimisticSrc || (src && src !== githubFallbackSrc));
+  const showErrorToast = (messageKey: string) => toast.error(t(messageKey), { id: messageKey });
 
   useEffect(() => {
     if (!optimisticSrc) return;
@@ -151,7 +151,7 @@ export function EditableAvatar({
 
     // Validate type
     if (!ALLOWED_TYPES.includes(file.type)) {
-      showToast({ messageKey: 'profile.errors.avatarInvalidFormat', type: 'error' });
+      showErrorToast('profile.errors.avatarInvalidFormat');
       return;
     }
 
@@ -161,7 +161,7 @@ export function EditableAvatar({
       const normalizedFile = await normalizeAvatarFile(file);
 
       if (normalizedFile.size > MAX_FILE_SIZE) {
-        showToast({ messageKey: 'profile.errors.avatarTooLargeAfterCompression', type: 'error' });
+        showErrorToast('profile.errors.avatarTooLargeAfterCompression');
         return;
       }
 
@@ -181,7 +181,7 @@ export function EditableAvatar({
       setOptimisticSrc(null);
       console.error('Error uploading avatar:', error);
       if (!(error instanceof Error && error.message.startsWith('profile.errors.'))) {
-        showToast({ messageKey: 'profile.errors.avatarProcessingFailed', type: 'error' });
+        showErrorToast('profile.errors.avatarProcessingFailed');
       }
     } finally {
       setIsUploading(false);

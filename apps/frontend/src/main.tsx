@@ -6,7 +6,7 @@ import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
 import { useTranslation } from './hooks/useTranslation';
-import { ToastViewport } from './components/atoms/ToastViewport';
+import { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Gamepad2 } from 'lucide-react';
 
@@ -94,6 +94,11 @@ function App() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-    <ToastViewport />
+    <Toaster
+      position="top-center"
+      toastOptions={{
+        duration: 5000,
+      }}
+    />
   </React.StrictMode>
 );

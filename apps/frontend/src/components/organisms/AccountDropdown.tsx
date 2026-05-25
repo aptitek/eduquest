@@ -3,7 +3,7 @@ import { LogOut, ChevronDown, Languages, Check, Moon, Sun } from 'lucide-react';
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
 import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
-import { useToastStore } from '../../features/toast/toastStore';
+import toast from 'react-hot-toast';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from './InstitutionalProfileCard/InstitutionalProfileCard';
@@ -50,7 +50,6 @@ function getLatestCohortMembership(memberships?: StudentCohort[]) {
 export function AccountDropdown() {
   const { user, student, logout } = useAuth();
   const patchUser = useGameStore((s) => s.patchUser);
-  const showToast = useToastStore((s) => s.showToast);
   const { t, locale, setLocale } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
@@ -110,6 +109,10 @@ export function AccountDropdown() {
         ? 'btn-primary text-primary-content shadow-sm'
         : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
     );
+  const showErrorToast = (messageKey: string, fallback?: string) => {
+    const translated = t(messageKey);
+    toast.error(translated === messageKey ? fallback || translated : translated, { id: messageKey });
+  };
 
   const updateProfile = async (data: ProfileUpdate, shouldThrow = false) => {
     if (!user) {
@@ -123,7 +126,7 @@ export function AccountDropdown() {
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
       patchUser(snapshot);
-      showToast({ messageKey: 'profile.errors.unauthorized', type: 'error' });
+      showErrorToast('profile.errors.unauthorized');
       if (shouldThrow) throw new Error('profile.errors.unauthorized');
       return;
     }
@@ -143,11 +146,7 @@ export function AccountDropdown() {
       if (!response.ok || !json.success) {
         const messageKey = json.errorKey || 'profile.errors.updateFailed';
         patchUser(snapshot);
-        showToast({
-          messageKey,
-          fallback: json.error || t('profile.errors.updateFailed'),
-          type: 'error',
-        });
+        showErrorToast(messageKey, json.error || t('profile.errors.updateFailed'));
         if (shouldThrow) throw new Error(messageKey);
         return;
       }
@@ -167,7 +166,7 @@ export function AccountDropdown() {
 
       const messageKey = 'profile.errors.network';
       patchUser(snapshot);
-      showToast({ messageKey, type: 'error' });
+      showErrorToast(messageKey);
       if (shouldThrow) throw new Error(messageKey);
     }
   };

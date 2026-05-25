@@ -23,7 +23,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const { t } = useTranslation();
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(true);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -103,6 +103,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const activeNotifications = dashboardNotifications.filter(
     (notification) => !dismissedNotificationIds.has(notification.id)
   );
+
   const dismissNotification = (id: string) => {
     setDismissedNotificationIds((current) => new Set(current).add(id));
   };
