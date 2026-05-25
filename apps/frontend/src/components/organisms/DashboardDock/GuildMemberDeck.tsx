@@ -25,11 +25,11 @@ export function GuildMemberDeck({ guild, memberCards, compact = false }: GuildMe
       revealedCardCount={memberCards.length}
       expandOnHover
       className={cn(
-        'h-72 w-64 shrink-0 hover:w-[34rem] focus-within:w-[34rem]',
+        'h-72 w-52 shrink-0 hover:w-[28rem] focus-within:w-[28rem]',
         compact && 'h-64 w-32 hover:w-32 focus:w-32 focus-within:w-32 sm:w-36'
       )}
-      cardClassName={cn('translate-y-0', compact && 'w-32')}
-      stackCardClassName={cn('translate-y-0', compact && 'w-28')}
+      cardClassName={cn('w-40 translate-y-0', compact && 'w-32')}
+      stackCardClassName={cn('w-36 translate-y-0', compact && 'w-28')}
     />
   );
 }

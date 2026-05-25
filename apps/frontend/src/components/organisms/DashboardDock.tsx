@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge';
+import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { useGameStore } from '../../features/game/gameStore';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
+import { DashboardTickerCard } from './DashboardDock/DashboardTickerCard';
 import { DashboardToastAreas } from './DashboardDock/DashboardToastAreas';
+import { FlipDeck } from './DashboardDock/FlipDeck';
 import { GuildMemberDeck } from './DashboardDock/GuildMemberDeck';
-import { ToggleablePodiumDeck } from './DashboardDock/ToggleablePodiumDeck';
 import {
   GAUGE_MILESTONES,
   RIVAL_GUILDS,
@@ -35,12 +37,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const podiumCards = buildPodiumCards(playerGuild);
   const cohortDeckCards = buildFaceDownDeckCards(latestMembership?.cohort?.name || 'Cohort deck');
   const bonusCards = buildCohortRewardCards();
-  const podiumDeckCards = showBonusCards
-    ? bonusCards
-    : ([podiumCards[0], podiumCards[1], podiumCards[2], ...cohortDeckCards] as [
-        DashboardMiniCardProps,
-        ...DashboardMiniCardProps[],
-      ]);
+  const podiumDeckCards = [podiumCards[0], podiumCards[1], podiumCards[2], ...cohortDeckCards] as [
+    DashboardMiniCardProps,
+    ...DashboardMiniCardProps[],
+  ];
   const characterCard: DashboardMiniCardProps = {
     kind: 'character',
     title: playerName,
@@ -60,16 +60,31 @@ export function DashboardDock({ className }: DashboardDockProps) {
     >
       <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 lg:block">
         <div className="flex h-full w-full items-end gap-3 overflow-visible">
-          <ToggleablePodiumDeck
-            cards={podiumDeckCards}
-            showBonusCards={showBonusCards}
-            onToggle={() => setShowBonusCards((current) => !current)}
+          <DashboardTickerCard
+            title="Cohort events"
+            subtitle="Global unlocks and announcements"
+            side="left"
+            className="w-28"
+          />
+
+          <DashboardMiniDeck
+            cards={bonusCards}
             stackSide="left"
             revealedCardCount={3}
             expandOnHover
-            className="h-72 w-64 shrink-0 hover:w-[28rem] focus-within:w-[28rem]"
-            cardClassName="w-44 translate-y-0"
-            stackCardClassName="w-40 translate-y-0"
+            className="ml-32 mr-20 h-72 w-36 shrink-0 hover:w-[18rem] focus-within:w-[18rem]"
+            cardClassName="w-32 translate-y-0"
+            stackCardClassName="w-28 translate-y-0"
+          />
+
+          <DashboardMiniDeck
+            cards={podiumDeckCards}
+            stackSide="left"
+            revealedCardCount={3}
+            expandOnHover
+            className="h-72 w-52 shrink-0 hover:w-[24rem] focus-within:w-[24rem]"
+            cardClassName="w-40 translate-y-0"
+            stackCardClassName="w-36 translate-y-0"
           />
 
           <GlobalProgressGauge
@@ -77,18 +92,28 @@ export function DashboardDock({ className }: DashboardDockProps) {
             targetPoints={1000}
             milestones={GAUGE_MILESTONES}
             label="Current milestone"
-            className="mb-8 min-w-[20rem] flex-1 transition-[width] duration-300"
+            className="mb-8 min-w-[10rem] flex-1 transition-[width] duration-300"
           />
 
           <GuildMemberDeck guild={playerGuild} memberCards={buildGuildMemberCards(characterCard)} />
+
+          <DashboardTickerCard
+            title="Reward ticker"
+            subtitle="Live gold gains and spends"
+            side="right"
+            className="ml-24 w-28"
+          />
         </div>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-2 overflow-visible px-2 lg:hidden sm:gap-3">
-        <ToggleablePodiumDeck
-          cards={podiumDeckCards}
-          showBonusCards={showBonusCards}
-          onToggle={() => setShowBonusCards((current) => !current)}
+        <FlipDeck
+          frontCards={podiumDeckCards}
+          backCards={bonusCards}
+          flipped={showBonusCards}
+          onFlip={() => setShowBonusCards((current) => !current)}
+          frontLabel="Show podium cards"
+          backLabel="Show bonus cards"
           variant="vertical"
           stackSide="left"
           revealedCardCount={3}
