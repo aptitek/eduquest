@@ -62,18 +62,33 @@ export function DashboardMiniDeck({
               expandOnHover &&
                 stackDepth === 1 &&
                 (stacksOnLeft
-                  ? 'group-hover:-translate-x-36 group-hover:rotate-0 group-hover:scale-100 group-focus-within:-translate-x-36 group-focus-within:rotate-0 group-focus-within:scale-100'
-                  : 'group-hover:translate-x-36 group-hover:rotate-0 group-hover:scale-100 group-focus-within:translate-x-36 group-focus-within:rotate-0 group-focus-within:scale-100'),
+                  ? 'group-hover:-translate-x-16 group-hover:rotate-[-4deg] group-hover:scale-100 group-focus-within:-translate-x-16 group-focus-within:rotate-[-4deg] group-focus-within:scale-100'
+                  : 'group-hover:translate-x-20 group-hover:rotate-[4deg] group-hover:scale-100 group-focus-within:translate-x-20 group-focus-within:rotate-[4deg] group-focus-within:scale-100'),
               expandOnHover &&
                 stackDepth === 2 &&
                 (stacksOnLeft
-                  ? 'group-hover:-translate-x-64 group-hover:rotate-0 group-hover:scale-100 group-focus-within:-translate-x-64 group-focus-within:rotate-0 group-focus-within:scale-100'
-                  : 'group-hover:translate-x-64 group-hover:rotate-0 group-hover:scale-100 group-focus-within:translate-x-64 group-focus-within:rotate-0 group-focus-within:scale-100'),
+                  ? 'group-hover:-translate-x-28 group-hover:rotate-[-8deg] group-hover:scale-95 group-focus-within:-translate-x-28 group-focus-within:rotate-[-8deg] group-focus-within:scale-95'
+                  : 'group-hover:translate-x-36 group-hover:rotate-[8deg] group-hover:scale-95 group-focus-within:translate-x-36 group-focus-within:rotate-[8deg] group-focus-within:scale-95'),
               expandOnHover &&
                 stackDepth >= 3 &&
                 (stacksOnLeft
-                  ? 'group-hover:-translate-x-[24rem] group-hover:rotate-0 group-hover:scale-100 group-focus-within:-translate-x-[24rem] group-focus-within:rotate-0 group-focus-within:scale-100'
-                  : 'group-hover:translate-x-[24rem] group-hover:rotate-0 group-hover:scale-100 group-focus-within:translate-x-[24rem] group-focus-within:rotate-0 group-focus-within:scale-100'),
+                  ? 'group-hover:-translate-x-40 group-hover:rotate-[-12deg] group-hover:scale-90 group-focus-within:-translate-x-40 group-focus-within:rotate-[-12deg] group-focus-within:scale-90'
+                  : 'group-hover:translate-x-52 group-hover:rotate-[12deg] group-hover:scale-90 group-focus-within:translate-x-52 group-focus-within:rotate-[12deg] group-focus-within:scale-90'),
+              expandOnHover &&
+                stackDepth === 1 &&
+                (stacksOnLeft
+                  ? 'hover:!z-40 hover:!-translate-x-24 hover:!rotate-[-2deg] hover:!scale-105'
+                  : 'hover:!z-40 hover:!translate-x-28 hover:!rotate-[2deg] hover:!scale-105'),
+              expandOnHover &&
+                stackDepth === 2 &&
+                (stacksOnLeft
+                  ? 'hover:!z-40 hover:!-translate-x-36 hover:!rotate-[-4deg] hover:!scale-105'
+                  : 'hover:!z-40 hover:!translate-x-44 hover:!rotate-[4deg] hover:!scale-105'),
+              expandOnHover &&
+                stackDepth >= 3 &&
+                (stacksOnLeft
+                  ? 'hover:!z-40 hover:!-translate-x-48 hover:!rotate-[-6deg] hover:!scale-105'
+                  : 'hover:!z-40 hover:!translate-x-60 hover:!rotate-[6deg] hover:!scale-105'),
               stackCardClassName
             )}
           />
@@ -83,8 +98,10 @@ export function DashboardMiniDeck({
       <DashboardMiniCard
         {...frontCard}
         className={cn(
-          'absolute bottom-0 z-20 origin-bottom translate-y-0',
+          'absolute bottom-0 z-30 origin-bottom translate-y-0',
           stacksOnLeft ? 'right-0' : 'left-0',
+          expandOnHover &&
+            'group-hover:scale-110 group-focus-within:scale-110 group-hover:-translate-y-2 group-focus-within:-translate-y-2',
           cardClassName
         )}
       />
