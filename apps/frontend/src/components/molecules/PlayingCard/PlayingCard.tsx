@@ -16,10 +16,10 @@ export function PlayingCard({ recto, verso, flipLabel, className, innerClassName
   const [isFlipped, setIsFlipped] = useState(false);
 
   return (
-    <div className={cn('relative min-h-[22rem] [perspective:1000px]', className)}>
+    <div className={cn('relative min-h-[22rem] rounded-[1.4rem] [perspective:1000px]', className)}>
       <div
         className={cn(
-          'relative h-full min-h-[22rem] w-full transition-transform duration-500 [transform-style:preserve-3d]',
+          'relative h-full min-h-[22rem] w-full rounded-[1.4rem] transition-transform duration-500 [transform-style:preserve-3d]',
           isFlipped && '[transform:rotateY(180deg)]',
           innerClassName
         )}
@@ -47,12 +47,9 @@ export function PlayingCard({ recto, verso, flipLabel, className, innerClassName
         onClick={() => setIsFlipped((current) => !current)}
         aria-label={flipLabel}
         title={flipLabel}
-        className="absolute bottom-0 right-0 z-10 flex h-14 w-14 items-end justify-end rounded-br-2xl text-text-secondary transition hover:text-text-primary"
+        className="absolute bottom-3 right-3 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-gaming-border bg-gaming-base/95 text-text-secondary shadow-xl transition hover:scale-110 hover:border-status-quest hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-status-quest"
       >
-        <span className="absolute inset-0 rounded-br-2xl bg-gaming-base shadow-lg [clip-path:polygon(100%_0,100%_100%,0_100%)]" />
-        <span className="relative p-2">
-          <RotateCw size={16} />
-        </span>
+        <RotateCw size={24} aria-hidden />
       </button>
     </div>
   );

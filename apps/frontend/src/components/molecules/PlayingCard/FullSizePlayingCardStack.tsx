@@ -40,12 +40,14 @@ export function FullSizePlayingCardStack({
   mainCardClassName,
 }: FullSizePlayingCardStackProps) {
   const visibleCards = cards.slice(0, Math.max(1, visibleCardCount));
-  const spreadShape = resolveSpreadShape(variant);
+  const spreadShape = expanded ? 'horizontal' : resolveSpreadShape(variant);
 
   return (
     <CardSpread
       items={visibleCards as [FullSizePlayingCardStackItem, ...FullSizePlayingCardStackItem[]]}
       shape={spreadShape}
+      side="right"
+      spacing={expanded ? 'wide' : 'default'}
       emphasisIndex={mainCardIndex}
       activeIndex={activeCardIndex}
       visibleSpreadCount={visibleCards.length}
@@ -69,7 +71,8 @@ export function FullSizePlayingCardStack({
       renderItem={({ item: card, isEmphasis }) => (
         <FullSizePlayingCard
           {...card}
-          className={cn('min-h-0 w-full max-w-none', card.className, cardClassName, isEmphasis && 'shadow-glow-primary')}
+          className={cn('min-h-0 w-full max-w-none', card.className)}
+          auraClassName={cn(cardClassName, isEmphasis && 'shadow-glow-primary')}
         />
       )}
     />

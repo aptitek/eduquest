@@ -1,8 +1,10 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
 
 export type CardSpreadShape = 'horizontal' | 'vertical' | 'arc';
 export type CardSpreadSide = 'left' | 'right';
+export type CardSpreadSpacing = 'default' | 'wide';
 
 export interface CardSpreadRenderOptions<TItem> {
   item: TItem;
@@ -17,6 +19,7 @@ export interface CardSpreadProps<TItem> {
   renderItem: (options: CardSpreadRenderOptions<TItem>) => ReactNode;
   shape?: CardSpreadShape;
   side?: CardSpreadSide;
+  spacing?: CardSpreadSpacing;
   emphasisIndex?: number;
   activeIndex?: number;
   visibleSpreadCount?: number;
@@ -50,6 +53,7 @@ export function CardSpread<TItem>({
   renderItem,
   shape = 'horizontal',
   side = 'right',
+  spacing = 'default',
   emphasisIndex = 0,
   activeIndex,
   visibleSpreadCount = DEFAULT_VISIBLE_SPREAD_COUNT,
@@ -61,6 +65,9 @@ export function CardSpread<TItem>({
   spreadCardClassName,
   activeCardClassName,
 }: CardSpreadProps<TItem>) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const emphasisCardRef = useRef<HTMLDivElement>(null);
+  const [dynamicHorizontalStep, setDynamicHorizontalStep] = useState<number | undefined>();
   const resolvedEmphasisIndex = resolveIndex(emphasisIndex, items.length);
   const resolvedActiveIndex = activeIndex === undefined ? undefined : resolveIndex(activeIndex, items.length);
   const emphasisItem = items[resolvedEmphasisIndex];
@@ -69,8 +76,40 @@ export function CardSpread<TItem>({
     .filter(({ index }) => index !== resolvedEmphasisIndex)
     .slice(0, Math.max(0, visibleSpreadCount));
 
+  useLayoutEffect(() => {
+    if (spacing !== 'wide' || shape !== 'horizontal') {
+      setDynamicHorizontalStep(undefined);
+      return undefined;
+    }
+
+    const container = containerRef.current;
+    const emphasisCard = emphasisCardRef.current;
+    if (!container || !emphasisCard || spreadItems.length === 0) return undefined;
+
+    const updateStep = () => {
+      const containerWidth = container.getBoundingClientRect().width;
+      const cardWidth = emphasisCard.getBoundingClientRect().width;
+      const baseOffset = 56;
+      const safetyGap = 24;
+      const availableWidth = Math.max(containerWidth - cardWidth - baseOffset - safetyGap, 0);
+      const fitStep = availableWidth / spreadItems.length;
+      const desiredStep = cardWidth * 0.72;
+
+      setDynamicHorizontalStep(Math.max(0, Math.min(desiredStep, fitStep)));
+    };
+
+    updateStep();
+
+    const resizeObserver = new ResizeObserver(updateStep);
+    resizeObserver.observe(container);
+    resizeObserver.observe(emphasisCard);
+
+    return () => resizeObserver.disconnect();
+  }, [shape, spacing, spreadItems.length]);
+
   return (
     <div
+      ref={containerRef}
       aria-label={ariaLabel}
       tabIndex={expandOnHover ? 0 : undefined}
       className={cn(
@@ -80,6 +119,7 @@ export function CardSpread<TItem>({
       )}
     >
       <div
+        ref={emphasisCardRef}
         className={cn(
           'absolute bottom-0 z-30 origin-bottom translate-y-0 transition-[transform,filter] duration-300',
           getEmphasisPositionClassName(shape, side),
@@ -106,6 +146,8 @@ export function CardSpread<TItem>({
           spreadCount: spreadItems.length,
           shape,
           side,
+          spacing,
+          dynamicHorizontalStep,
           isActive: resolvedActiveIndex === index,
         });
 
@@ -145,6 +187,8 @@ interface SpreadCardStyleOptions {
   spreadCount: number;
   shape: CardSpreadShape;
   side: CardSpreadSide;
+  spacing: CardSpreadSpacing;
+  dynamicHorizontalStep?: number;
   isActive: boolean;
 }
 
@@ -154,6 +198,8 @@ function getSpreadCardStyle({
   spreadCount,
   shape,
   side,
+  spacing,
+  dynamicHorizontalStep,
   isActive,
 }: SpreadCardStyleOptions): CardSpreadStyle {
   if (shape === 'vertical') {
@@ -165,7 +211,7 @@ function getSpreadCardStyle({
     const hoverY = [-10, -16, -24][Math.min(depth, 3) - 1] ?? -24;
 
     return {
-      zIndex: isActive ? 50 : 20 - depth,
+      zIndex: 20 - depth,
       '--card-rest-x': `${sign * 0.15 * depth}rem`,
       '--card-rest-y': `${restY}rem`,
       '--card-rest-rotation': `${rotation}deg`,
@@ -187,7 +233,7 @@ function getSpreadCardStyle({
     const activeLift = isActive ? 1.2 : 0;
 
     return {
-      zIndex: isActive ? 50 : 20 + spreadIndex,
+      zIndex: 20 + spreadIndex,
       '--card-rest-x': `calc(-50% + ${centerOffset * 2.8}rem)`,
       '--card-rest-y': `${arcDrop * 0.35}rem`,
       '--card-rest-rotation': `${centerOffset * 7}deg`,
@@ -204,27 +250,30 @@ function getSpreadCardStyle({
 
   const direction = side === 'left' ? -1 : 1;
   const restX = [0.5, 1.25, 2][Math.min(depth, 3) - 1] ?? 2;
-  const openX = side === 'left'
-    ? [-4, -7, -10][Math.min(depth, 3) - 1] ?? -10
-    : [5, 9, 13][Math.min(depth, 3) - 1] ?? 13;
+  const openSteps = spacing === 'wide' ? [15, 30, 45] : [5, 9, 13];
+  const openX = dynamicHorizontalStep !== undefined
+    ? `${direction * dynamicHorizontalStep * depth}px`
+    : `${direction * (openSteps[Math.min(depth, 3) - 1] ?? openSteps[openSteps.length - 1])}rem`;
   const rotation = direction * ([7, 11, 15][Math.min(depth, 3) - 1] ?? 15);
   const openRotation = direction * ([4, 8, 12][Math.min(depth, 3) - 1] ?? 12);
-  const hoverX = side === 'left'
-    ? [-6, -9, -12][Math.min(depth, 3) - 1] ?? -12
-    : [7, 11, 15][Math.min(depth, 3) - 1] ?? 15;
+  const arcDrop = [0.15, 0.55, 1.15][Math.min(depth, 3) - 1] ?? 1.15;
+  const hoverSteps = spacing === 'wide' ? [17, 32, 47] : [7, 11, 15];
+  const hoverX = dynamicHorizontalStep !== undefined
+    ? openX
+    : `${direction * (hoverSteps[Math.min(depth, 3) - 1] ?? hoverSteps[hoverSteps.length - 1])}rem`;
 
   return {
-    zIndex: isActive ? 50 : 20 - depth,
+    zIndex: 20 - depth,
     '--card-rest-x': `${direction * restX}rem`,
-    '--card-rest-y': '0rem',
+    '--card-rest-y': `${arcDrop * 0.35}rem`,
     '--card-rest-rotation': `${rotation}deg`,
     '--card-rest-scale': 1 - depth * 0.05,
-    '--card-open-x': `${openX}rem`,
-    '--card-open-y': '0rem',
+    '--card-open-x': openX,
+    '--card-open-y': `${arcDrop}rem`,
     '--card-open-rotation': `${openRotation}deg`,
     '--card-open-scale': Math.max(1 - (depth - 1) * 0.05, 0.9),
-    '--card-hover-x': `${hoverX}rem`,
-    '--card-hover-y': '0rem',
+    '--card-hover-x': hoverX,
+    '--card-hover-y': '-1.2rem',
     '--card-hover-rotation': `${direction * ([2, 4, 6][Math.min(depth, 3) - 1] ?? 6)}deg`,
   };
 }

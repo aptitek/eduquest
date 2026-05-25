@@ -39,6 +39,7 @@ export interface FullSizePlayingCardProps {
   backSvgAlt?: string;
   flipLabel?: string;
   className?: string;
+  auraClassName?: string;
   sideClassName?: string;
 }
 
@@ -55,6 +56,7 @@ export function FullSizePlayingCard({
   backSvgAlt,
   flipLabel = 'Flip card',
   className,
+  auraClassName,
   sideClassName,
 }: FullSizePlayingCardProps) {
   return (
@@ -63,8 +65,8 @@ export function FullSizePlayingCard({
       recto={<FullSizePlayingCardSide {...front} className={cn(sideClassName, front.className)} />}
       verso={resolveBackContent({ back, backSvgUrl, backSvgAlt, sideClassName })}
       className={cn('aspect-[5/7] min-h-0 w-full max-w-sm', className)}
-      innerClassName="min-h-0"
-      faceClassName="rounded-[1.4rem] overflow-hidden"
+      innerClassName={cn('min-h-0', auraClassName)}
+      faceClassName="overflow-hidden rounded-[1.4rem] border-0 bg-transparent shadow-none"
     />
   );
 }
@@ -119,28 +121,30 @@ export function FullSizePlayingCardSide({
               <Shield size={72} aria-hidden />
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-gaming-card via-gaming-card/70 to-transparent" />
-        </div>
-
-        <section className="relative flex max-h-[48%] shrink-0 flex-col gap-3 border-t border-gaming-border bg-gaming-card/95 p-4">
-          <div>
-            <h3 className="pr-8 font-display text-xl font-bold leading-tight text-text-primary">{title}</h3>
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-gaming-card via-gaming-card/75 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-4">
+            <h3 className="pr-10 font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg">
+              {title}
+            </h3>
             <div className="mt-2 h-1 w-14 rounded-full bg-[color:var(--playing-card-accent)]" />
           </div>
+        </div>
 
-          <p className="line-clamp-4 text-sm leading-relaxed text-text-secondary">{description}</p>
+        <section className="relative flex max-h-[43%] shrink-0 gap-3 border-t border-gaming-border bg-gaming-card/95 p-4">
+          <div className="min-w-0 flex-1 text-left">
+            <p className="line-clamp-6 text-sm leading-relaxed text-text-secondary">{description}</p>
+            {footer ? <div className="mt-3 text-sm text-text-secondary">{footer}</div> : null}
+          </div>
 
           {radarGraph ? (
-            <div className="rounded-[1rem] border border-gaming-border bg-gaming-base/60 p-3">
+            <div className="w-40 shrink-0 self-start rounded-[1rem] border border-gaming-border bg-gaming-base/60 p-1">
               <RadarGraph
                 axes={radarGraph.axes}
                 datasets={radarGraph.datasets}
-                className="mx-auto max-w-40"
+                className="mx-auto"
               />
             </div>
           ) : null}
-
-          {footer ? <div className="text-sm text-text-secondary">{footer}</div> : null}
         </section>
       </div>
     </article>
@@ -207,11 +211,11 @@ function DefaultPlayingCardBack({ svgUrl, svgAlt = 'Card back', className }: Def
       )}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-status-quest)_0,transparent_62%)] opacity-20" />
-      <div className="relative flex h-full w-full items-center justify-center rounded-[1rem] border border-gaming-border bg-gaming-base/90 p-6">
+      <div className="relative flex h-full w-full items-center justify-center rounded-[1rem] border border-gaming-border bg-gaming-base/90 p-4">
         {svgUrl ? (
-          <img src={svgUrl} alt={svgAlt} className="max-h-full max-w-full object-contain" />
+          <img src={svgUrl} alt={svgAlt} className="h-full max-h-full w-auto max-w-full object-contain" />
         ) : (
-          <svg viewBox="0 0 160 224" role="img" aria-label={svgAlt} className="h-full max-h-72 w-auto">
+          <svg viewBox="0 0 160 224" role="img" aria-label={svgAlt} className="h-full max-h-full w-auto max-w-full">
             <rect x="10" y="10" width="140" height="204" rx="18" className="fill-gaming-base stroke-gaming-border" />
             <path
               d="M80 44 115 64v40c0 32-15 55-35 72-20-17-35-40-35-72V64l35-20Z"
