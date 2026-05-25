@@ -1,4 +1,5 @@
 import type { Guild, StudentCohort } from '@eduquest/shared';
+import type { ReactNode } from 'react';
 import { Bell } from 'lucide-react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
 import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
@@ -62,11 +63,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
     <aside
       aria-label="Dashboard dock"
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 h-40 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-[0_-24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl',
+        'fixed inset-x-0 bottom-0 z-40 h-36 overflow-visible border-t border-gaming-border bg-gaming-base/90 shadow-[0_-24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl xl:h-40',
         className
       )}
     >
-      <div className="absolute inset-x-0 bottom-0 h-72 w-screen overflow-visible px-3">
+      <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 xl:block">
         <div className="flex h-full w-full items-end gap-3 overflow-visible">
           <AnnouncementTickerPlaceholder />
 
@@ -98,6 +99,42 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
           <RewardTickerPlaceholder />
         </div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-start gap-1 overflow-visible px-1 xl:hidden sm:gap-2 sm:px-2">
+        <CohortRewardsDeck compact />
+
+        <DashboardMiniDeck
+          cards={[podiumCards[0], podiumCards[1], podiumCards[2], ...cohortDeckCards]}
+          stackSide="left"
+          revealedCardCount={2}
+          className="h-64 w-40 shrink-0 sm:w-52"
+          cardClassName="w-32 translate-y-0 sm:w-36"
+          stackCardClassName="w-28 translate-y-0 sm:w-32"
+        />
+
+        <GlobalProgressGauge
+          currentPoints={460}
+          targetPoints={1000}
+          label="Current milestone"
+          variant="circle"
+          className="mb-3"
+        />
+
+        <GuildMemberDeck
+          guild={playerGuild}
+          memberCards={buildGuildMemberCards(characterCard)}
+          compact
+        />
+      </div>
+
+      <div className="xl:hidden">
+        <SideDashboardTab side="left" offsetClassName="bottom-40" label="Feed">
+          <AnnouncementTickerPlaceholder />
+        </SideDashboardTab>
+        <SideDashboardTab side="right" offsetClassName="bottom-40" label="Rewards">
+          <RewardTickerPlaceholder />
+        </SideDashboardTab>
       </div>
     </aside>
   );
@@ -161,16 +198,20 @@ function buildCohortRewardCards() {
   ] as [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
 }
 
-function CohortRewardsDeck() {
+function CohortRewardsDeck({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="relative h-72 w-52 shrink-0 overflow-visible" aria-label="Cohort reward cards">
+    <div
+      className={cn('relative h-72 w-52 shrink-0 overflow-visible', compact && 'h-56 w-40')}
+      aria-label="Cohort reward cards"
+    >
       <DashboardMiniDeck
         cards={buildCohortRewardCards()}
+        variant={compact ? 'vertical' : 'horizontal'}
         stackSide="right"
-        revealedCardCount={3}
-        className="absolute bottom-0 left-0 h-72 w-36"
-        cardClassName="w-32 translate-y-0"
-        stackCardClassName="w-28 translate-y-0"
+        revealedCardCount={compact ? 2 : 3}
+        className={cn('absolute bottom-0 left-0 h-72 w-36', compact && 'h-64 w-28')}
+        cardClassName={cn('w-32 translate-y-0', compact && 'w-28')}
+        stackCardClassName={cn('w-28 translate-y-0', compact && 'w-24')}
       />
     </div>
   );
@@ -229,9 +270,11 @@ function getLatestCohortMembership(memberships?: StudentCohort[]) {
 function GuildMemberDeck({
   guild,
   memberCards,
+  compact = false,
 }: {
   guild: DockGuild;
   memberCards: readonly [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
+  compact?: boolean;
 }) {
   const guildCard: DashboardMiniCardProps = {
     kind: 'guild',
@@ -245,10 +288,13 @@ function GuildMemberDeck({
       cards={[guildCard, ...memberCards]}
       stackSide="right"
       revealedCardCount={memberCards.length}
-      expandOnHover
-      className="h-72 w-64 shrink-0 hover:w-[34rem] focus-within:w-[34rem]"
-      cardClassName="translate-y-0"
-      stackCardClassName="translate-y-0"
+      expandOnHover={!compact}
+      className={cn(
+        'h-72 w-64 shrink-0 hover:w-[34rem] focus-within:w-[34rem]',
+        compact && 'h-64 w-40 hover:w-40 focus-within:w-40'
+      )}
+      cardClassName={cn('translate-y-0', compact && 'w-32')}
+      stackCardClassName={cn('translate-y-0', compact && 'w-28')}
     />
   );
 }
@@ -267,6 +313,50 @@ function RewardTickerPlaceholder() {
       </div>
       <div className="h-1.5 rounded-full bg-gaming-base">
         <div className="h-full w-1/2 rounded-full bg-primary/40" />
+      </div>
+    </div>
+  );
+}
+
+function SideDashboardTab({
+  side,
+  offsetClassName,
+  label,
+  children,
+}: {
+  side: 'left' | 'right';
+  offsetClassName: string;
+  label: string;
+  children: ReactNode;
+}) {
+  const isLeft = side === 'left';
+
+  return (
+    <div
+      className={cn(
+        'group fixed z-50 flex items-start',
+        offsetClassName,
+        isLeft ? 'left-0' : 'right-0 flex-row-reverse'
+      )}
+    >
+      <button
+        type="button"
+        className={cn(
+          'min-h-24 rounded-t-xl border border-gaming-border bg-gaming-card px-2 py-3 font-display text-[0.62rem] font-bold uppercase tracking-[0.18em] text-text-secondary shadow-xl outline-none transition-colors hover:text-text-primary focus:text-text-primary',
+          isLeft
+            ? 'rounded-r-xl [writing-mode:vertical-rl]'
+            : 'rounded-l-xl [writing-mode:vertical-rl]'
+        )}
+      >
+        {label}
+      </button>
+      <div
+        className={cn(
+          'pointer-events-none opacity-0 transition duration-300 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-x-0 group-focus-within:opacity-100',
+          isLeft ? '-translate-x-4 pl-2' : 'translate-x-4 pr-2'
+        )}
+      >
+        {children}
       </div>
     </div>
   );

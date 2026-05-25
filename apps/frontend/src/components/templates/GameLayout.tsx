@@ -7,7 +7,7 @@ interface GameLayoutProps {
 
 export function GameLayout({ children }: GameLayoutProps) {
   return (
-    <div className="min-h-screen bg-gaming-base pb-80 text-text-primary flex flex-col">
+    <div className="min-h-screen bg-gaming-base pb-64 text-text-primary flex flex-col xl:pb-80">
       {/* Main page view */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 flex flex-col gap-8">
         {children}

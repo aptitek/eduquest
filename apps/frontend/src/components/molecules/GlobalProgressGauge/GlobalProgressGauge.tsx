@@ -12,6 +12,7 @@ export interface GlobalProgressGaugeProps {
   targetPoints: number;
   milestones?: GlobalProgressMilestone[];
   label?: string;
+  variant?: 'bar' | 'circle';
   className?: string;
 }
 
@@ -20,9 +21,59 @@ export function GlobalProgressGauge({
   targetPoints,
   milestones = [],
   label = 'Global progression',
+  variant = 'bar',
   className,
 }: GlobalProgressGaugeProps) {
   const progressPercent = clampPercent(targetPoints > 0 ? (currentPoints / targetPoints) * 100 : 0);
+
+  if (variant === 'circle') {
+    const radius = 42;
+    const circumference = 2 * Math.PI * radius;
+    const progressOffset = circumference - (progressPercent / 100) * circumference;
+
+    return (
+      <section
+        aria-label={label}
+        className={cn(
+          'flex h-36 w-36 shrink-0 flex-col items-center justify-center rounded-full border border-gaming-border bg-gaming-card shadow-xl',
+          className
+        )}
+      >
+        <div className="relative h-24 w-24">
+          <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke="var(--color-bg-base)"
+              strokeWidth="9"
+            />
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke="var(--color-solarized-cyan)"
+              strokeLinecap="round"
+              strokeWidth="9"
+              strokeDasharray={circumference}
+              strokeDashoffset={progressOffset}
+              className="transition-[stroke-dashoffset] duration-500"
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-display text-xl font-black text-text-primary">
+              {Math.round(progressPercent)}%
+            </span>
+            <span className="text-[0.55rem] font-bold uppercase tracking-[0.18em] text-text-muted">
+              gauge
+            </span>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
