@@ -1,0 +1,608 @@
+import {
+  DEFAULT_REWARD_SYSTEM_CONFIG,
+  type RewardActivityType,
+  type RewardSystemConfig,
+  type RewardSystemConfigOverrides,
+  type StudentAttribute,
+} from '@eduquest/shared';
+import { and, eq, gte, sql } from 'drizzle-orm';
+import { gameCharacters, guilds, pointTransactions, studentCohorts, students } from '../db/schema';
+
+export type {
+  RewardActivityType,
+  RewardSystemConfig,
+  RewardSystemConfigOverrides,
+  StudentAttribute,
+} from '@eduquest/shared';
+
+export class RewardSystemConfigService {
+  static resolve(overrides?: RewardSystemConfigOverrides): RewardSystemConfig {
+    if (!overrides) {
+      return {
+        guild: { ...DEFAULT_REWARD_SYSTEM_CONFIG.guild },
+        attributes: { ...DEFAULT_REWARD_SYSTEM_CONFIG.attributes },
+        modifiers: { ...DEFAULT_REWARD_SYSTEM_CONFIG.modifiers },
+        strategies: { ...DEFAULT_REWARD_SYSTEM_CONFIG.strategies },
+        voting: { ...DEFAULT_REWARD_SYSTEM_CONFIG.voting },
+      };
+    }
+
+    return {
+      guild: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.guild,
+        ...overrides.guild,
+      },
+      attributes: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.attributes,
+        ...overrides.attributes,
+      },
+      modifiers: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.modifiers,
+        ...overrides.modifiers,
+      },
+      strategies: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.strategies,
+        ...overrides.strategies,
+      },
+      voting: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.voting,
+        ...overrides.voting,
+      },
+    };
+  }
+
+  static merge(
+    ...overrides: (RewardSystemConfigOverrides | undefined)[]
+  ): RewardSystemConfigOverrides | undefined {
+    const definedOverrides = overrides.filter((override): override is RewardSystemConfigOverrides =>
+      Boolean(override)
+    );
+
+    if (definedOverrides.length === 0) return undefined;
+
+    return definedOverrides.reduce<RewardSystemConfigOverrides>((merged, override) => {
+      return {
+        guild: {
+          ...merged.guild,
+          ...override.guild,
+        },
+        attributes: {
+          ...merged.attributes,
+          ...override.attributes,
+        },
+        modifiers: {
+          ...merged.modifiers,
+          ...override.modifiers,
+        },
+        strategies: {
+          ...merged.strategies,
+          ...override.strategies,
+        },
+        voting: {
+          ...merged.voting,
+          ...override.voting,
+        },
+      };
+    }, {});
+  }
+}
+
+export interface Student {
+  id: string;
+  force: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+}
+
+export type GuildStudents =
+  | readonly [Student]
+  | readonly [Student, Student]
+  | readonly [Student, Student, Student];
+
+export interface Guild {
+  id: string;
+  totalPoints?: number;
+  students: GuildStudents;
+}
+
+export interface CalculationContext {
+  guild: Guild;
+  guildId?: string;
+  studentId?: string;
+  activeDaysRepository?: ActiveDaysRepository;
+  basePoints?: number;
+  hoursEarly?: number;
+  activeDays?: number;
+  config?: RewardSystemConfigOverrides;
+}
+
+export interface ActiveDaysLookup {
+  guildId: string;
+  studentId?: string;
+  windowDays: number;
+  now?: Date;
+}
+
+export interface ActiveDaysRepository {
+  countActiveDays(input: ActiveDaysLookup): Promise<number>;
+}
+
+type RewardDb = any;
+type PointTransactionType = (typeof pointTransactions.transactionType.enumValues)[number];
+
+export interface RewardActivityInput {
+  id: string;
+  basePoints: number;
+  targetAttribute: RewardActivityType | null;
+}
+
+export interface RewardCalculationInput {
+  guildId: string;
+  activity: RewardActivityInput;
+  studentId?: string;
+  hoursEarly?: number;
+  activeDays?: number;
+  now?: Date;
+  config?: RewardSystemConfigOverrides;
+  transactionType?: Extract<PointTransactionType, 'EARNED' | 'MANUAL_BONUS'>;
+}
+
+export interface RewardCalculationResult {
+  guildId: string;
+  activityId: string;
+  activityType: RewardActivityType;
+  amount: number;
+  calculatedPoints: number;
+  finalPoints: number;
+  activeDays?: number;
+  balance: number;
+}
+
+export interface VoteSpendInput {
+  guildId: string;
+  votes: number;
+  studentId?: string;
+}
+
+export interface VoteSpendResult {
+  guildId: string;
+  votes: number;
+  cost: number;
+  balance: number;
+}
+
+export class GuildModifiers {
+  static sizeModifier(
+    guild: Guild,
+    config: RewardSystemConfig = DEFAULT_REWARD_SYSTEM_CONFIG
+  ): number {
+    const studentCount = this.studentCount(guild, config);
+    return (
+      1 +
+      config.guild.sizeModifierPerMissingStudent *
+        (config.guild.targetSizeForModifier - studentCount)
+    );
+  }
+
+  static attributeSum(
+    guild: Guild,
+    attribute: StudentAttribute,
+    config: RewardSystemConfig = DEFAULT_REWARD_SYSTEM_CONFIG
+  ): number {
+    this.assertValidGuildSize(guild, config);
+
+    return guild.students.reduce(
+      (sum, student) => sum + this.requireFinite(student[attribute], attribute),
+      0
+    );
+  }
+
+  static charismaBuff(
+    calculatedPoints: number,
+    guild: Guild,
+    config: RewardSystemConfig = DEFAULT_REWARD_SYSTEM_CONFIG
+  ): number {
+    const charismaSum = this.attributeSum(guild, 'charisma', config);
+    return calculatedPoints * (1 + config.modifiers.charismaPassiveMultiplier * charismaSum);
+  }
+
+  private static studentCount(guild: Guild, config: RewardSystemConfig): number {
+    this.assertValidGuildSize(guild, config);
+    return guild.students.length;
+  }
+
+  private static assertValidGuildSize(guild: Guild, config: RewardSystemConfig): void {
+    if (
+      guild.students.length < config.guild.minStudents ||
+      guild.students.length > config.guild.maxStudents
+    ) {
+      throw new Error(
+        `A guild must have between ${config.guild.minStudents} and ${config.guild.maxStudents} students.`
+      );
+    }
+  }
+
+  private static requireFinite(value: number, label: string): number {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Expected ${label} to be a finite number.`);
+    }
+
+    return value;
+  }
+}
+
+export interface PointStrategy {
+  calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number>;
+}
+
+abstract class BaseRewardStrategy implements PointStrategy {
+  abstract calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number>;
+
+  protected getBasePoints(context: CalculationContext): number {
+    if (context.basePoints === undefined) {
+      throw new Error('basePoints is required for this reward strategy.');
+    }
+
+    return this.requireFinite(context.basePoints, 'basePoints');
+  }
+
+  protected getSizeModifier(context: CalculationContext, config: RewardSystemConfig): number {
+    return GuildModifiers.sizeModifier(context.guild, config);
+  }
+
+  protected getAttributeSum(
+    context: CalculationContext,
+    attribute: StudentAttribute,
+    config: RewardSystemConfig
+  ): number {
+    return GuildModifiers.attributeSum(context.guild, attribute, config);
+  }
+
+  protected requireFinite(value: number, label: string): number {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Expected ${label} to be a finite number.`);
+    }
+
+    return value;
+  }
+}
+
+export class ForceStrategy extends BaseRewardStrategy {
+  async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
+    const basePoints = this.getBasePoints(context);
+    const forceSum = this.getAttributeSum(context, 'force', config);
+
+    return (
+      basePoints *
+      this.getSizeModifier(context, config) *
+      (1 + config.attributes.earningMultiplier * forceSum)
+    );
+  }
+}
+
+export class IntelligenceStrategy extends BaseRewardStrategy {
+  async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
+    const basePoints = this.getBasePoints(context);
+    const intelligenceSum = this.getAttributeSum(context, 'intelligence', config);
+
+    return (
+      basePoints *
+      this.getSizeModifier(context, config) *
+      (1 + config.attributes.earningMultiplier * intelligenceSum)
+    );
+  }
+}
+
+export class WisdomStrategy extends BaseRewardStrategy {
+  async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
+    const basePoints = this.getBasePoints(context);
+    const wisdomSum = this.getAttributeSum(context, 'wisdom', config);
+
+    return (
+      basePoints *
+      this.getSizeModifier(context, config) *
+      (1 + config.attributes.earningMultiplier * wisdomSum)
+    );
+  }
+}
+
+export class DexterityStrategy extends BaseRewardStrategy {
+  async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
+    if (context.hoursEarly === undefined) {
+      throw new Error('hoursEarly is required for the dexterity reward strategy.');
+    }
+
+    const hoursEarly = this.requireFinite(context.hoursEarly, 'hoursEarly');
+    const dexteritySum = this.getAttributeSum(context, 'dexterity', config);
+
+    return (
+      config.strategies.dexterityHoursEarlyMultiplier *
+      dexteritySum *
+      hoursEarly *
+      this.getSizeModifier(context, config)
+    );
+  }
+}
+
+export class ConstitutionStrategy extends BaseRewardStrategy {
+  async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
+    const basePoints = this.getBasePoints(context);
+    const activeDays = await this.getActiveDays(context, config);
+    const constitutionSum = this.getAttributeSum(context, 'constitution', config);
+
+    return (
+      basePoints *
+      this.getSizeModifier(context, config) *
+      (1 + config.attributes.earningMultiplier * constitutionSum) *
+      (1 + config.strategies.constitutionActiveDaysMultiplier * activeDays)
+    );
+  }
+
+  private async getActiveDays(
+    context: CalculationContext,
+    config: RewardSystemConfig
+  ): Promise<number> {
+    if (context.activeDays !== undefined) {
+      return this.requireFinite(context.activeDays, 'activeDays');
+    }
+
+    if (!context.activeDaysRepository) {
+      throw new Error('activeDaysRepository is required for the constitution reward strategy.');
+    }
+
+    const activeDays = await context.activeDaysRepository.countActiveDays({
+      guildId: context.guildId || context.guild.id,
+      studentId: context.studentId,
+      windowDays: config.strategies.constitutionActiveWindowDays,
+    });
+
+    return this.requireFinite(activeDays, 'activeDays');
+  }
+}
+
+export class PointTransactionActiveDaysRepository implements ActiveDaysRepository {
+  constructor(private readonly db: RewardDb) {}
+
+  async countActiveDays({ guildId, studentId, windowDays, now = new Date() }: ActiveDaysLookup) {
+    const since = new Date(now);
+    since.setUTCDate(since.getUTCDate() - windowDays);
+
+    const conditions = [
+      eq(pointTransactions.guildId, guildId),
+      gte(pointTransactions.createdAt, since),
+    ];
+
+    if (studentId) {
+      conditions.push(eq(pointTransactions.studentId, studentId));
+    }
+
+    const [row] = await this.db
+      .select({
+        activeDays: sql<number>`count(distinct date(${pointTransactions.createdAt}))`,
+      })
+      .from(pointTransactions)
+      .where(and(...conditions));
+
+    return Number(row?.activeDays || 0);
+  }
+}
+
+export class GuildSnapshotRepository {
+  constructor(private readonly db: RewardDb) {}
+
+  async getGuild(guildId: string): Promise<Guild> {
+    const memberRows = await this.db
+      .select({
+        id: students.id,
+        force: gameCharacters.force,
+        dexterity: gameCharacters.dexterity,
+        constitution: gameCharacters.constitution,
+        intelligence: gameCharacters.intelligence,
+        wisdom: gameCharacters.wisdom,
+        charisma: gameCharacters.charisma,
+      })
+      .from(studentCohorts)
+      .innerJoin(students, eq(students.id, studentCohorts.studentId))
+      .innerJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+      .where(eq(studentCohorts.guildId, guildId));
+
+    if (memberRows.length < 1 || memberRows.length > 3) {
+      throw new Error('A guild must have between 1 and 3 students with RPG characters.');
+    }
+
+    const [guildRecord] = await this.db
+      .select({
+        totalPoints: guilds.totalPoints,
+      })
+      .from(guilds)
+      .where(eq(guilds.id, guildId))
+      .limit(1);
+
+    if (!guildRecord) {
+      throw new Error('Guild not found.');
+    }
+
+    return {
+      id: guildId,
+      totalPoints: guildRecord.totalPoints,
+      students: memberRows as GuildStudents,
+    };
+  }
+}
+
+export class RewardService {
+  constructor(
+    private readonly db: RewardDb,
+    private readonly configOverrides?: RewardSystemConfigOverrides
+  ) {}
+
+  private static readonly strategies: Record<RewardActivityType, PointStrategy> = {
+    force: new ForceStrategy(),
+    intelligence: new IntelligenceStrategy(),
+    wisdom: new WisdomStrategy(),
+    dexterity: new DexterityStrategy(),
+    constitution: new ConstitutionStrategy(),
+  };
+
+  static async calculatePreview(
+    activityType: RewardActivityType,
+    context: CalculationContext,
+    configOverrides?: RewardSystemConfigOverrides
+  ): Promise<number> {
+    const config = RewardSystemConfigService.resolve(
+      RewardSystemConfigService.merge(configOverrides, context.config)
+    );
+    const strategy = this.strategies[activityType];
+    const calculatedPoints = await strategy.calculate(context, config);
+    const finalPoints = GuildModifiers.charismaBuff(calculatedPoints, context.guild, config);
+
+    return Math.round(finalPoints);
+  }
+
+  async calculateReward(input: RewardCalculationInput): Promise<RewardCalculationResult> {
+    if (!input.activity.targetAttribute) {
+      throw new Error('Activity targetAttribute is required to calculate a reward.');
+    }
+
+    const activityType = input.activity.targetAttribute;
+    const configOverrides = RewardSystemConfigService.merge(this.configOverrides, input.config);
+    const config = RewardSystemConfigService.resolve(configOverrides);
+
+    return this.db.transaction(async (tx: RewardDb) => {
+      const guild = await new GuildSnapshotRepository(tx).getGuild(input.guildId);
+      let resolvedActiveDays = input.activeDays;
+      const strategy = RewardService.strategies[activityType];
+      const calculatedPoints = await strategy.calculate(
+        {
+          guild,
+          guildId: input.guildId,
+          studentId: input.studentId,
+          basePoints: input.activity.basePoints,
+          hoursEarly: input.hoursEarly,
+          activeDays: input.activeDays,
+          activeDaysRepository: {
+            countActiveDays: async (lookup) => {
+              const activeDays = await new PointTransactionActiveDaysRepository(tx).countActiveDays(
+                {
+                  ...lookup,
+                  now: input.now,
+                }
+              );
+              resolvedActiveDays = activeDays;
+              return activeDays;
+            },
+          },
+          config: configOverrides,
+        },
+        config
+      );
+      const finalPoints = GuildModifiers.charismaBuff(calculatedPoints, guild, config);
+      const amount = Math.round(finalPoints);
+
+      const [updatedGuild] = await tx
+        .update(guilds)
+        .set({
+          totalPoints: sql`${guilds.totalPoints} + ${amount}`,
+          updatedAt: input.now || new Date(),
+        })
+        .where(eq(guilds.id, input.guildId))
+        .returning({ totalPoints: guilds.totalPoints });
+
+      await tx.insert(pointTransactions).values({
+        guildId: input.guildId,
+        studentId: input.studentId,
+        activityId: input.activity.id,
+        amount,
+        transactionType: input.transactionType || 'EARNED',
+        createdAt: input.now || new Date(),
+      });
+
+      return {
+        guildId: input.guildId,
+        activityId: input.activity.id,
+        activityType,
+        amount,
+        calculatedPoints,
+        finalPoints,
+        activeDays: resolvedActiveDays,
+        balance: updatedGuild.totalPoints,
+      };
+    });
+  }
+}
+
+export class VotingCostService {
+  constructor(
+    private readonly db?: RewardDb,
+    private readonly configOverrides?: RewardSystemConfigOverrides
+  ) {}
+
+  static calculateCost(
+    votes: number,
+    guild: Guild,
+    configOverrides?: RewardSystemConfigOverrides
+  ): number {
+    if (!Number.isFinite(votes)) {
+      throw new Error('Expected votes to be a finite number.');
+    }
+
+    if (!Number.isInteger(votes) || votes < 0) {
+      throw new Error('votes must be a positive integer or zero.');
+    }
+
+    const config = RewardSystemConfigService.resolve(configOverrides);
+    const quadraticVotes = Math.pow(votes, config.voting.quadraticExponent);
+    const charismaSum = GuildModifiers.attributeSum(guild, 'charisma', config);
+    const charismaDiscount = Math.max(
+      config.voting.minimumDiscountFactor,
+      1 - config.voting.charismaDiscountMultiplier * charismaSum
+    );
+
+    return Math.ceil(quadraticVotes * charismaDiscount);
+  }
+
+  calculateCost(votes: number, guild: Guild): number {
+    return VotingCostService.calculateCost(votes, guild, this.configOverrides);
+  }
+
+  async spendGuildVotes(input: VoteSpendInput): Promise<VoteSpendResult> {
+    if (!this.db) {
+      throw new Error('A database client is required to spend guild votes.');
+    }
+
+    return this.db.transaction(async (tx: RewardDb) => {
+      const guild = await new GuildSnapshotRepository(tx).getGuild(input.guildId);
+      const cost = this.calculateCost(input.votes, guild);
+
+      if ((guild.totalPoints || 0) < cost) {
+        throw new Error('Guild does not have enough points to buy these votes.');
+      }
+
+      const [updatedGuild] = await tx
+        .update(guilds)
+        .set({
+          totalPoints: sql`${guilds.totalPoints} - ${cost}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(guilds.id, input.guildId))
+        .returning({ totalPoints: guilds.totalPoints });
+
+      await tx.insert(pointTransactions).values({
+        guildId: input.guildId,
+        studentId: input.studentId,
+        amount: -cost,
+        transactionType: 'SPENT_VOTE',
+      });
+
+      return {
+        guildId: input.guildId,
+        votes: input.votes,
+        cost,
+        balance: updatedGuild.totalPoints,
+      };
+    });
+  }
+}

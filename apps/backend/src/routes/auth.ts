@@ -8,11 +8,13 @@ import type {
   CohortGrade,
   GameBattle,
   GameCharacter,
+  GameCharacterClass,
   School,
   Student,
   User,
   UserSchoolMembership,
 } from '@eduquest/shared';
+import { GAME_CHARACTER_CLASSES } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
   addresses,
@@ -53,6 +55,8 @@ export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>
 // Secret JWT par défaut en développement
 const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
+const DEFAULT_CHARACTER_CLASS: GameCharacterClass = 'scholar';
+const GAME_CHARACTER_CLASS_SET = new Set<string>(GAME_CHARACTER_CLASSES);
 const debugCohortInvites: Array<{
   id: string;
   cohortId: string;
@@ -112,6 +116,12 @@ type ManagementCohortInvite = {
   expiresAt: string;
   createdAt?: string;
 };
+
+function normalizeGameCharacterClass(value?: string | null): GameCharacterClass {
+  return GAME_CHARACTER_CLASS_SET.has(value || '')
+    ? (value as GameCharacterClass)
+    : DEFAULT_CHARACTER_CLASS;
+}
 type CohortInviteRecord = typeof cohortInvites.$inferSelect;
 
 function toIsoString(value?: Date | null) {
@@ -216,10 +226,36 @@ function toUserSchoolMembership(
 function toGameCharacter(record: GameCharacterRecord): GameCharacter {
   return {
     studentId: record.studentId,
-    characterClass: record.characterClass || 'Adventurer',
-    stats: (record.stats || {}) as GameCharacter['stats'],
+    characterClass: normalizeGameCharacterClass(record.characterClass),
+    stats: toGameCharacterStats(record),
     currentLevel: record.currentLevel,
     updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toGameCharacterStats(record: GameCharacterRecord): GameCharacter['stats'] {
+  return {
+    str: record.force,
+    dex: record.dexterity,
+    con: record.constitution,
+    int: record.intelligence,
+    wis: record.wisdom,
+    cha: record.charisma,
+    force: record.force,
+    dexterity: record.dexterity,
+    constitution: record.constitution,
+    intelligence: record.intelligence,
+    wisdom: record.wisdom,
+    charisma: record.charisma,
+    xp: 0,
+  };
+}
+
+function getDefaultCharacterValues(studentId: string, characterClass: GameCharacterClass) {
+  return {
+    studentId,
+    characterClass,
+    currentLevel: 1,
   };
 }
 
@@ -301,7 +337,9 @@ function setDebugUserSchoolInstitutionalEmail(
   institutionalEmail: string
 ) {
   if (!school) return;
-  const memberships = profile.user.schoolMemberships || getDebugProfileSchoolMemberships(profile.user, profile.student);
+  const memberships =
+    profile.user.schoolMemberships ||
+    getDebugProfileSchoolMemberships(profile.user, profile.student);
   const existing = memberships.find((membership) => membership.schoolId === school.id);
   if (existing) {
     existing.institutionalEmail = institutionalEmail || undefined;
@@ -515,7 +553,11 @@ async function assignStudentToInvitedCohort(
     })
     .where(eq(students.id, studentId));
 
-  const [studentRecord] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
+  const [studentRecord] = await db
+    .select()
+    .from(students)
+    .where(eq(students.id, studentId))
+    .limit(1);
   if (studentRecord) {
     await ensureUserSchoolMembership(databaseUrl, studentRecord.userId, cohortRecord.schoolId);
   }
@@ -842,18 +884,9 @@ authRouter.get('/github/callback', async (c) => {
 
             authenticatedStudentId = newStudent.id;
 
-            await db.insert(gameCharacters).values({
-              studentId: newStudent.id,
-              characterClass: 'Mage Frontend',
-              stats: {
-                str: 10,
-                dex: 10,
-                int: 10,
-                cha: 10,
-                xp: 0,
-              },
-              currentLevel: 1,
-            });
+            await db
+              .insert(gameCharacters)
+              .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
           }
         } else {
           // Création d'un nouvel utilisateur (Auto-registration)
@@ -885,18 +918,9 @@ authRouter.get('/github/callback', async (c) => {
           authenticatedStudentId = newStudent.id;
 
           // Création du personnage JDR avec stats de départ
-          await db.insert(gameCharacters).values({
-            studentId: newStudent.id,
-            characterClass: 'Mage Frontend',
-            stats: {
-              str: 10,
-              dex: 10,
-              int: 10,
-              cha: 10,
-              xp: 0,
-            },
-            currentLevel: 1,
-          });
+          await db
+            .insert(gameCharacters)
+            .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
         }
 
         if (authenticatedStudentId) {
@@ -1561,18 +1585,9 @@ authRouter.get('/mock', async (c) => {
 
         authenticatedStudentId = newStudent.id;
 
-        await db.insert(gameCharacters).values({
-          studentId: newStudent.id,
-          characterClass: 'Mage Frontend',
-          stats: {
-            str: 10,
-            dex: 10,
-            int: 18,
-            cha: 12,
-            xp: 0,
-          },
-          currentLevel: 1,
-        });
+        await db
+          .insert(gameCharacters)
+          .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
       }
 
       if (authenticatedStudentId) {
@@ -1661,7 +1676,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
 
   let characterObj: GameCharacter = debugProfile?.character || {
     studentId: 'stud_mock_1',
-    characterClass: 'Mage Frontend',
+    characterClass: DEFAULT_CHARACTER_CLASS,
     stats: {
       str: 8,
       dex: 10,
@@ -1814,8 +1829,8 @@ authRouter.get('/me', authMiddleware, async (c) => {
           const charRecord = loadedCharacters[0];
           characterObj = {
             studentId: charRecord.studentId,
-            characterClass: charRecord.characterClass || 'Mage Frontend',
-            stats: (charRecord.stats as any) || characterObj.stats,
+            characterClass: normalizeGameCharacterClass(charRecord.characterClass),
+            stats: toGameCharacterStats(charRecord),
             currentLevel: charRecord.currentLevel,
           };
         }
@@ -1965,9 +1980,9 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     },
   ];
 
-  let characterObj = {
+  let characterObj: GameCharacter = {
     studentId: 'stud_mock_1',
-    characterClass: body.characterClass || 'Mage Frontend',
+    characterClass: normalizeGameCharacterClass(body.characterClass),
     stats: {
       str: 8,
       dex: 10,
@@ -2019,7 +2034,11 @@ authRouter.put('/profile', authMiddleware, async (c) => {
 
       if (body.institutionalEmail !== undefined && userObj.isAdmin) {
         const [targetSchool] = body.institutionalSchoolId
-          ? await db.select().from(schools).where(eq(schools.id, body.institutionalSchoolId)).limit(1)
+          ? await db
+              .select()
+              .from(schools)
+              .where(eq(schools.id, body.institutionalSchoolId))
+              .limit(1)
           : await db.select().from(schools).where(eq(schools.name, 'Aptitek')).limit(1);
 
         if (targetSchool?.emailDomain && body.institutionalEmail) {
@@ -2199,7 +2218,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         const [updatedChar] = await db
           .update(gameCharacters)
           .set({
-            characterClass: body.characterClass,
+            characterClass: normalizeGameCharacterClass(body.characterClass),
             updatedAt: new Date(),
           })
           .where(eq(gameCharacters.studentId, studentId))
@@ -2208,8 +2227,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         if (updatedChar) {
           characterObj = {
             studentId: updatedChar.studentId,
-            characterClass: updatedChar.characterClass || 'Mage Frontend',
-            stats: (updatedChar.stats as any) || characterObj.stats,
+            characterClass: normalizeGameCharacterClass(updatedChar.characterClass),
+            stats: toGameCharacterStats(updatedChar),
             currentLevel: updatedChar.currentLevel,
           };
         }

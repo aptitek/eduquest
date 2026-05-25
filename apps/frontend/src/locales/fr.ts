@@ -137,6 +137,7 @@ export const fr = {
     },
   },
   map: {
+    nav: 'Carte',
     tooltipLocked: '🔒',
   },
   detailPanel: {

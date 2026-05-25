@@ -269,7 +269,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     },
     character: {
       studentId: 'debug_student_lina',
-      characterClass: 'UI Bard',
+      characterClass: 'guide',
       stats: { str: 7, dex: 16, int: 13, cha: 15, xp: 140 },
       currentLevel: 2,
       updatedAt: '2026-02-12',
@@ -330,7 +330,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     },
     character: {
       studentId: 'debug_student_samir',
-      characterClass: 'Backend Ranger',
+      characterClass: 'champion',
       stats: { str: 12, dex: 11, int: 17, cha: 10, xp: 320 },
       currentLevel: 3,
       updatedAt: '2026-02-18',
@@ -398,7 +398,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     },
     character: {
       studentId: 'debug_student_noa',
-      characterClass: 'Data Oracle',
+      characterClass: 'specialist',
       stats: { str: 8, dex: 10, int: 19, cha: 13, xp: 580 },
       currentLevel: 5,
       updatedAt: '2026-03-01',

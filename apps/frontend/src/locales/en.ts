@@ -139,6 +139,7 @@ export const en: TranslationKeys = {
     },
   },
   map: {
+    nav: 'Map',
     tooltipLocked: '🔒',
   },
   detailPanel: {

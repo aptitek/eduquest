@@ -100,6 +100,7 @@ export interface Guild {
   description?: string;
   iconUrl?: string;
   color?: string; // Code Hexa (ex: #ef4444)
+  totalPoints?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -139,10 +140,28 @@ export interface StudentSkillsHistory {
 // 2. PARTIE LUDIQUE (Préfixe game_)
 // ==========================================
 
+export const GAME_CHARACTER_CLASSES = ['scholar', 'champion', 'guide', 'specialist'] as const;
+
+export type GameCharacterClass = (typeof GAME_CHARACTER_CLASSES)[number];
+
+export const GAME_CHARACTER_CLASS_I18N_KEYS: Record<GameCharacterClass, string> = {
+  scholar: 'game.characterClasses.scholar',
+  champion: 'game.characterClasses.champion',
+  guide: 'game.characterClasses.guide',
+  specialist: 'game.characterClasses.specialist',
+};
+
+export interface GameCharacterClassDefinition {
+  slug: GameCharacterClass;
+  nameI18nKey: string;
+  sortOrder: number;
+  createdAt?: string;
+}
+
 // Table `game_characters` : Verso de la carte étudiant (Stats JDR)
 export interface GameCharacter {
   studentId: string;
-  characterClass: string; // ex: 'Archer', 'Mage', 'Guerrier'
+  characterClass: GameCharacterClass;
   stats: {
     str: number;
     dex: number;

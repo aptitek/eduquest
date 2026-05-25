@@ -11,6 +11,7 @@ import {
   pgEnum,
   primaryKey,
 } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 // ==========================================
 // 1. SCHÉMAS ADMINISTRATIFS & UTILISATEURS
@@ -90,6 +91,7 @@ export const guilds = pgTable('guilds', {
   description: text('description'),
   iconUrl: text('icon_url'),
   color: text('color'), // Code Hexa
+  totalPoints: integer('total_points').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -182,13 +184,43 @@ export const studentSkillsHistory = pgTable('student_skills_history', {
 // 2. SCHÉMAS LUDIQUES (game_)
 // ==========================================
 
+export const gameTargetAttributeEnum = pgEnum('game_target_attribute', [
+  'force',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+]);
+
+export const pointTransactionTypeEnum = pgEnum('point_transaction_type', [
+  'EARNED',
+  'SPENT_VOTE',
+  'MANUAL_BONUS',
+]);
+
+// Table des classes de personnage. Les libellés affichés doivent être traduits côté UI depuis `name_i18n_key`.
+export const gameCharacterClasses = pgTable('game_character_classes', {
+  slug: text('slug').primaryKey(),
+  nameI18nKey: text('name_i18n_key').notNull(),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Table des fiches personnages (le "verso" de l'étudiant)
 export const gameCharacters = pgTable('game_characters', {
   studentId: uuid('student_id')
     .primaryKey()
     .references(() => students.id),
-  characterClass: text('character_class'),
-  stats: jsonb('stats').default('{"str": 0, "dex": 0, "int": 0, "cha": 0}'),
+  characterClass: text('character_class')
+    .notNull()
+    .default('scholar')
+    .references(() => gameCharacterClasses.slug, { onDelete: 'restrict', onUpdate: 'cascade' }),
+  force: integer('force').default(0).notNull(),
+  dexterity: integer('dexterity').default(0).notNull(),
+  constitution: integer('constitution').default(0).notNull(),
+  intelligence: integer('intelligence').default(0).notNull(),
+  wisdom: integer('wisdom').default(0).notNull(),
+  charisma: integer('charisma').default(0).notNull(),
   currentLevel: integer('current_level').default(1).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -212,6 +244,8 @@ export const gameActivities = pgTable('game_activities', {
   x: integer('x').default(0).notNull(),
   y: integer('y').default(0).notNull(),
   requiredLevel: integer('required_level').default(1).notNull(),
+  basePoints: integer('base_points').default(0).notNull(),
+  targetAttribute: gameTargetAttributeEnum('target_attribute'),
   bossMetadata: jsonb('boss_metadata').default('{}'), // projectUrl, gradingUrl
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
@@ -224,6 +258,32 @@ export const gameBattles = pgTable('game_battles', {
   grade: doublePrecision('grade'), // note normalisée entre 0 et 1 (1 = 20/20)
   workUrl: text('work_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// Table d'audit déterministe des gains et dépenses de points.
+export const pointTransactions = pgTable('point_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  guildId: uuid('guild_id')
+    .notNull()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  studentId: uuid('student_id').references(() => students.id, { onDelete: 'set null' }),
+  activityId: uuid('activity_id').references(() => gameActivities.id, { onDelete: 'set null' }),
+  amount: integer('amount').notNull(),
+  transactionType: pointTransactionTypeEnum('transaction_type').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// Table des jauges de progression globales par cohort.
+export const globalGauges = pgTable('global_gauges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id')
+    .notNull()
+    .references(() => cohorts.id, { onDelete: 'cascade' }),
+  milestoneName: text('milestone_name').notNull(),
+  currentPoints: integer('current_points').default(0).notNull(),
+  targetPoints: integer('target_points').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // ==========================================
@@ -240,3 +300,29 @@ export const auditLogs = pgTable('audit_logs', {
   userId: uuid('user_id').references(() => users.id),
   changedAt: timestamp('changed_at', { withTimezone: true }).defaultNow(),
 });
+
+// ==========================================
+// 4. RELATIONS
+// ==========================================
+
+export const pointTransactionsRelations = relations(pointTransactions, ({ one }) => ({
+  guild: one(guilds, {
+    fields: [pointTransactions.guildId],
+    references: [guilds.id],
+  }),
+  student: one(students, {
+    fields: [pointTransactions.studentId],
+    references: [students.id],
+  }),
+  activity: one(gameActivities, {
+    fields: [pointTransactions.activityId],
+    references: [gameActivities.id],
+  }),
+}));
+
+export const globalGaugesRelations = relations(globalGauges, ({ one }) => ({
+  cohort: one(cohorts, {
+    fields: [globalGauges.cohortId],
+    references: [cohorts.id],
+  }),
+}));
