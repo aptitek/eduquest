@@ -28,7 +28,11 @@ import type {
   SelectedManagementEntity,
   StudentRow,
 } from '../../features/management/types';
-import { calculateAge, getLatestCohortMembership } from '../../features/management/utils';
+import {
+  calculateAge,
+  formatSchoolYear,
+  getLatestCohortMembership,
+} from '../../features/management/utils';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
@@ -152,6 +156,9 @@ export function ManagementPage() {
               selectedSchool?.id,
               latestMembership?.institutionalEmail
             ),
+            cohort: latestMembership?.cohortId
+              ? cohortRows.find((cohort) => cohort.id === latestMembership.cohortId)
+              : undefined,
             level: rowCharacter.currentLevel,
             age: calculateAge(rowUser.birthDate),
           };
@@ -170,11 +177,14 @@ export function ManagementPage() {
         user,
         displayName: formatUserDisplayName(user),
         email: getSchoolInstitutionalEmail(user, selectedSchool?.id, latestMembership?.institutionalEmail),
+        cohort: latestMembership?.cohortId
+          ? cohortRows.find((cohort) => cohort.id === latestMembership.cohortId)
+          : undefined,
         level: character.currentLevel,
         age: calculateAge(user.birthDate),
       },
     ];
-  }, [character, debugBackup, schoolRows, student, user]);
+  }, [character, cohortRows, debugBackup, schoolRows, student, user]);
   const schoolFilterOptions = useMemo(
     () => Array.from(new Set(studentRows.map((row) => row.school?.name || 'Aptitek'))),
     [studentRows]
@@ -301,6 +311,9 @@ export function ManagementPage() {
           })
         }
         cohort={selectedStudentCohort}
+        cohortRibbonLabel={
+          selectedStudentCohort ? formatSchoolYear(selectedStudentCohort.schoolYear) : undefined
+        }
         cohortOptions={cohortRows.map((cohort) => cohort.id)}
         selectedCohorts={selectedStudentCohortIds}
         onCohortsChange={(cohortIds) =>
@@ -316,7 +329,7 @@ export function ManagementPage() {
         }}
         renderSelectedCohortBadge={(cohortId) => {
           const cohort = cohortRows.find((item) => item.id === cohortId);
-          return cohort ? <CohortListBadge cohort={cohort} /> : cohortId;
+          return cohort ? <CohortListBadge cohort={cohort} showSchoolYear={false} /> : cohortId;
         }}
         renderCohortSchoolBadge={(schoolName) => {
           const school = schoolRows.find((item) => item.name === schoolName);

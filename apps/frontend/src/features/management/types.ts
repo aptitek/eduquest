@@ -19,6 +19,7 @@ export type StudentRow = Student & {
   user: User;
   displayName: string;
   email: string;
+  cohort?: CohortRow;
   level: number;
   age?: number;
 };

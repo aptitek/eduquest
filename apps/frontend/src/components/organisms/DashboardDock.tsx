@@ -51,6 +51,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
         subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
         accentToken: reward.accentToken as DashboardMiniCardProps['accentToken'],
         faceDown: reward.faceDown,
+        ribbonLabel: t('dashboard.dock.newRibbon'),
+        ribbonClassName: 'bg-status-quest',
       })) as [DashboardMiniCardProps, ...DashboardMiniCardProps[]])
     : buildCohortRewardCards(t);
   const gaugeMilestones = dashboardData?.gauge.milestones.length

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { EditableText, EditableFieldContext } from '../../atoms/EditableText';
 import { CompoundBadge } from '../../atoms/CompoundBadge';
+import { CornerRibbon } from '../../atoms/CornerRibbon';
 import { EditableAvatar } from '../../molecules/EditableAvatar';
 import { SplitEditableText } from '../../molecules/SplitEditableText';
 import { EditablePronouns } from '../../molecules/EditablePronouns';
@@ -29,6 +30,9 @@ export interface InstitutionalProfileCardProps {
   onInstitutionalEmailChange?: (email: string, cohortId?: string) => Promise<void> | void;
   cohort?: Pick<Cohort, 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality'>;
   hideRoleBadge?: boolean;
+  useRoleRibbon?: boolean;
+  cohortRibbonLabel?: string;
+  cohortRibbonColorSeed?: string;
   stackPronouns?: boolean;
   cohortOptions?: string[];
   selectedCohorts?: string[];
@@ -60,6 +64,9 @@ export function InstitutionalProfileCard({
   onInstitutionalEmailChange,
   cohort,
   hideRoleBadge,
+  useRoleRibbon,
+  cohortRibbonLabel,
+  cohortRibbonColorSeed,
   stackPronouns,
   cohortOptions,
   selectedCohorts,
@@ -228,7 +235,8 @@ export function InstitutionalProfileCard({
     setCohortSchoolDraft(null);
   };
   const showRoleBadge = !hideRoleBadge;
-  const showBadgeHeader = showRoleBadge || Boolean(primaryCohortId);
+  const showRoleHeaderBadge = showRoleBadge && !useRoleRibbon;
+  const showBadgeHeader = showRoleHeaderBadge || Boolean(primaryCohortId);
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: !readOnly }}>
@@ -238,10 +246,30 @@ export function InstitutionalProfileCard({
           className
         )}
       >
+        {showRoleBadge && useRoleRibbon ? (
+          <CornerRibbon
+            position="top-left"
+            size="lg"
+            ribbonClassName={user.isAdmin ? 'bg-primary' : 'bg-status-quest'}
+          >
+            {roleLabel}
+          </CornerRibbon>
+        ) : null}
+        {!useRoleRibbon && cohortRibbonLabel ? (
+          <CornerRibbon position="top-left" size="md" colorSeed={cohortRibbonColorSeed || cohortRibbonLabel}>
+            {cohortRibbonLabel}
+          </CornerRibbon>
+        ) : null}
+
         {showBadgeHeader && (
-          <div className="flex items-center border-b border-gaming-border bg-gaming-base/40 px-4 py-2 sm:px-5">
+          <div
+            className={cn(
+              'flex items-center border-b border-gaming-border bg-gaming-base/40 px-4 py-2 sm:px-5',
+              cohortRibbonLabel && !showRoleHeaderBadge && 'justify-end'
+            )}
+          >
             <div className="badge badge-outline min-h-0 max-w-full gap-0 overflow-visible rounded-xl border-gaming-border bg-gaming-card p-0 text-xs font-semibold text-text-secondary shadow-sm">
-              {showRoleBadge && (
+              {showRoleHeaderBadge && (
                 <span className="inline-flex min-w-0 items-center px-3 py-1.5">
                   {onRoleChange && !readOnly ? (
                     <BadgeDropdown
@@ -271,7 +299,7 @@ export function InstitutionalProfileCard({
                 </span>
               )}
 
-              {showRoleBadge && primaryCohortId && (
+              {showRoleHeaderBadge && primaryCohortId && (
                 <span className="h-5 w-px shrink-0 bg-gaming-border" aria-hidden />
               )}
 

@@ -240,6 +240,7 @@ export function AccountDropdown() {
                 schoolName={latestSchool?.name}
                 schoolLogoUrl={latestSchool?.logoUrl}
                 cohort={latestCohort}
+                useRoleRibbon
                 className="shadow-none border-none rounded-none border-b border-gaming-border"
               />
             </div>

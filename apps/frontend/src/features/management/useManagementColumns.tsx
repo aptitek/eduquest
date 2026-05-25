@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { CohortGrade } from '@eduquest/shared';
 import { TruncatedText } from '../../components/atoms/TruncatedText';
+import { CohortListBadge } from '../../components/molecules/CohortBadge';
 import { SchoolLogoBadge } from '../../components/molecules/SchoolLogoBadge';
 import type { CohortRow, SchoolRow, StudentRow } from './types';
 import { formatAddress, formatGrade, formatSchoolYear } from './utils';
@@ -87,6 +88,29 @@ export function useManagementColumns(t: (key: string) => string) {
             />
           </span>
         ),
+      },
+      {
+        id: 'cohort',
+        accessorFn: (row) =>
+          row.cohort
+            ? [
+                formatSchoolYear(row.cohort.schoolYear),
+                row.cohort.grade,
+                row.cohort.level,
+                row.cohort.name,
+                row.cohort.majorSpeciality,
+                row.cohort.minorSpeciality,
+              ]
+                .filter(Boolean)
+                .join(' ')
+            : '',
+        header: t('management.students.cohort'),
+        cell: ({ row }) =>
+          row.original.cohort ? (
+            <CohortListBadge cohort={row.original.cohort} />
+          ) : (
+            <span className="text-text-muted">-</span>
+          ),
       },
       {
         accessorKey: 'age',

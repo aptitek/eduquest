@@ -14,6 +14,10 @@ import { SchoolLogoBadge } from '../../molecules/SchoolLogoBadge';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
+const CONTENT_FIT_COLUMN_WEIGHTS: Record<string, number> = {
+  avatar: 0.55,
+};
+
 export function ManagementTable<TData extends { id: string }>({
   data,
   columns,
@@ -60,7 +64,9 @@ export function ManagementTable<TData extends { id: string }>({
   const [zoomedColumnId, setZoomedColumnId] = useState<string | null>(null);
   const zoomWeight = visibleColumns.length > 4 ? 2.4 : 1.8;
   const totalColumnWeight = visibleColumns.reduce(
-    (total, column) => total + (column.id === zoomedColumnId ? zoomWeight : 1),
+    (total, column) =>
+      total +
+      (column.id === zoomedColumnId ? zoomWeight : CONTENT_FIT_COLUMN_WEIGHTS[column.id] || 1),
     0
   );
   const schoolColumn = visibleColumnIds.includes('school') ? table.getColumn('school') : undefined;
@@ -84,7 +90,8 @@ export function ManagementTable<TData extends { id: string }>({
     setZoomedColumnId((current) => (current === columnId ? null : current));
   };
   const getColumnWidth = (columnId: string) => {
-    const weight = columnId === zoomedColumnId ? zoomWeight : 1;
+    const weight =
+      columnId === zoomedColumnId ? zoomWeight : CONTENT_FIT_COLUMN_WEIGHTS[columnId] || 1;
     return `${(weight / totalColumnWeight) * 100}%`;
   };
 

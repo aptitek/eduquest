@@ -1,5 +1,7 @@
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { Shield } from 'lucide-react';
+import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
+import { CornerRibbon } from '../../atoms/CornerRibbon';
 import { cn } from '../../../utils/cn';
 
 export type DashboardMiniCardAccent =
@@ -132,6 +134,9 @@ export interface DashboardMiniCardProps {
   accentToken?: DashboardMiniCardAccent;
   interactive?: boolean;
   faceDown?: boolean;
+  ribbonLabel?: string;
+  ribbonPosition?: CornerRibbonPosition;
+  ribbonClassName?: string;
   className?: string;
 }
 
@@ -146,6 +151,9 @@ export function DashboardMiniCard({
   accentToken,
   interactive = true,
   faceDown = false,
+  ribbonLabel,
+  ribbonPosition = 'top-right',
+  ribbonClassName,
   className,
 }: DashboardMiniCardProps) {
   const resolvedIllustrationUrl = illustrationUrl || guild?.iconUrl;
@@ -162,6 +170,11 @@ export function DashboardMiniCard({
       className={cn(CARD_SURFACE_CLASS, accentStyles.border, accentStyles.ring, className)}
     >
       <div className={cn('absolute inset-0', accentStyles.bgSubtle)} />
+      {ribbonLabel ? (
+        <CornerRibbon position={ribbonPosition} size="sm" ribbonClassName={ribbonClassName}>
+          {ribbonLabel}
+        </CornerRibbon>
+      ) : null}
       {faceDown ? (
         <div className={cn(CARD_ART_CLASS, 'p-2')}>
           <div

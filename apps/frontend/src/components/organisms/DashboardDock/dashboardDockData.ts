@@ -58,7 +58,21 @@ export function buildPodiumCards(
     subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(guild.totalPoints || 0)),
   });
 
-  return [toCard(podiumGuilds[0]), toCard(podiumGuilds[1]), toCard(podiumGuilds[2])];
+  const podiumRibbonClassNames = [
+    'bg-status-campfire',
+    'bg-accent-neutral',
+    'bg-solarized-orange',
+  ];
+
+  return [
+    toCard(podiumGuilds[0]),
+    toCard(podiumGuilds[1]),
+    toCard(podiumGuilds[2]),
+  ].map((card, index) => ({
+    ...card,
+    ribbonLabel: `#${index + 1}`,
+    ribbonClassName: podiumRibbonClassNames[index],
+  })) as [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
 }
 
 export function buildFaceDownDeckCards(t: Translate, title: string) {
@@ -78,24 +92,32 @@ export function buildCohortRewardCards(t: Translate) {
       title: t('dashboard.rewards.deadline.title'),
       subtitle: t('dashboard.rewards.deadline.subtitle'),
       accentToken: 'campfire',
+      ribbonLabel: t('dashboard.dock.newRibbon'),
+      ribbonClassName: 'bg-status-quest',
     },
     {
       kind: 'guild' as const,
       title: t('dashboard.rewards.miniGame.title'),
       subtitle: t('dashboard.rewards.miniGame.subtitle'),
       accentToken: 'completed',
+      ribbonLabel: t('dashboard.dock.newRibbon'),
+      ribbonClassName: 'bg-status-quest',
     },
     {
       kind: 'guild' as const,
       title: t('dashboard.rewards.techHelp.title'),
       subtitle: t('dashboard.rewards.techHelp.subtitle'),
       accentToken: 'quest',
+      ribbonLabel: t('dashboard.dock.newRibbon'),
+      ribbonClassName: 'bg-status-quest',
     },
     {
       kind: 'guild' as const,
       title: t('dashboard.rewards.reroll.title'),
       subtitle: t('dashboard.rewards.reroll.subtitle'),
       accentToken: 'specialist',
+      ribbonLabel: t('dashboard.dock.newRibbon'),
+      ribbonClassName: 'bg-status-quest',
     },
   ] as [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
 }
