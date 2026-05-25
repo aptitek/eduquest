@@ -1,11 +1,7 @@
 import type { Guild, StudentCohort } from '@eduquest/shared';
 import { Bell } from 'lucide-react';
 import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
-import {
-  DashboardMiniCard,
-  DashboardMiniDeck,
-  DashboardMiniPodium,
-} from '../molecules/DashboardMiniCard';
+import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge';
 import { GoldPile } from '../molecules/GoldPile';
 import { useGameStore } from '../../features/game/gameStore';
@@ -72,17 +68,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
       )}
     >
       <div className="absolute inset-x-0 bottom-0 h-72 w-screen overflow-visible px-4">
-        <div className="grid h-full w-full grid-cols-[18rem_12rem_minmax(34rem,1fr)_5rem_18rem_9rem] items-end gap-4">
-          <DashboardMiniPodium
-            cards={podiumCards}
-            className="max-w-none"
-            cardClassName="translate-y-0"
-          />
-
+        <div className="grid h-full w-full grid-cols-[34rem_minmax(34rem,1fr)_5rem_18rem_9rem] items-end gap-4">
           <DashboardMiniDeck
-            cards={cohortDeckCards}
-            cardClassName="translate-y-0"
-            stackCardClassName="translate-y-0"
+            cards={[podiumCards[0], podiumCards[1], podiumCards[2], ...cohortDeckCards]}
+            stackSide="left"
+            revealedCardCount={3}
+            className="h-72 w-[34rem]"
+            cardClassName="w-44 translate-y-0"
+            stackCardClassName="w-40 translate-y-0"
           />
 
           <GlobalProgressGauge
@@ -178,27 +171,15 @@ function GuildMemberDeck({
   };
 
   return (
-    <div className="group relative h-72 w-64 overflow-visible transition-[width] duration-300 hover:w-[34rem] focus-within:w-[34rem]">
-      {memberCards.map((card, index) => (
-        <DashboardMiniCard
-          key={`${card.title || 'member'}-${index}`}
-          {...card}
-          className={cn(
-            'absolute bottom-0 left-8 z-10 origin-bottom translate-y-0 transition-[left,transform] duration-300',
-            index === 0 &&
-              'translate-x-4 scale-95 rotate-[5deg] group-hover:left-36 group-hover:translate-x-0 group-hover:rotate-0',
-            index === 1 &&
-              'translate-x-8 scale-90 rotate-[9deg] group-hover:left-64 group-hover:translate-x-0 group-hover:rotate-0',
-            index === 2 &&
-              'translate-x-12 scale-[0.85] rotate-[13deg] group-hover:left-[24rem] group-hover:translate-x-0 group-hover:rotate-0'
-          )}
-        />
-      ))}
-      <DashboardMiniCard
-        {...guildCard}
-        className="absolute bottom-0 left-0 z-30 origin-bottom translate-y-0"
-      />
-    </div>
+    <DashboardMiniDeck
+      cards={[guildCard, ...memberCards]}
+      stackSide="right"
+      revealedCardCount={memberCards.length}
+      expandOnHover
+      className="h-72 w-64 hover:w-[34rem] focus-within:w-[34rem]"
+      cardClassName="translate-y-0"
+      stackCardClassName="translate-y-0"
+    />
   );
 }
 
