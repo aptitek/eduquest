@@ -86,6 +86,7 @@ export function FullSizePlayingCardModal({
                   visibleCardCount={hand.cards.length}
                   expanded
                   expandOnHover={false}
+                  dealOnMount
                   className="mx-auto h-[calc(100vh-5rem)] max-w-7xl md:h-[54vh]"
                   cardClassName="shadow-glow-primary"
                 />

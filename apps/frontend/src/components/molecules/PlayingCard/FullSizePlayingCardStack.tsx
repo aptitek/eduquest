@@ -22,6 +22,7 @@ export interface FullSizePlayingCardStackProps {
   className?: string;
   cardClassName?: string;
   mainCardClassName?: string;
+  dealOnMount?: boolean;
 }
 
 const MAX_DEFAULT_VISIBLE_CARDS = 5;
@@ -38,6 +39,7 @@ export function FullSizePlayingCardStack({
   className,
   cardClassName,
   mainCardClassName,
+  dealOnMount = false,
 }: FullSizePlayingCardStackProps) {
   const visibleCards = cards.slice(0, Math.max(1, visibleCardCount));
   const spreadShape = expanded ? 'horizontal' : resolveSpreadShape(variant);
@@ -54,6 +56,7 @@ export function FullSizePlayingCardStack({
       expanded={expanded}
       expandOnHover={expandOnHover}
       ariaLabel={ariaLabel}
+      dealOnMount={dealOnMount}
       className={cn(
         'h-[31rem] min-h-[28rem] w-full max-w-7xl [perspective:1600px]',
         className

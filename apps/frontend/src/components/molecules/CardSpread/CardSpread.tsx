@@ -30,6 +30,7 @@ export interface CardSpreadProps<TItem> {
   emphasisClassName?: string;
   spreadCardClassName?: string;
   activeCardClassName?: string;
+  dealOnMount?: boolean;
 }
 
 type CardSpreadStyle = CSSProperties & {
@@ -44,6 +45,11 @@ type CardSpreadStyle = CSSProperties & {
   '--card-hover-x': string;
   '--card-hover-y': string;
   '--card-hover-rotation': string;
+  '--card-deal-delay'?: string;
+};
+
+type CardSpreadDealStyle = CSSProperties & {
+  '--card-deal-delay': string;
 };
 
 const DEFAULT_VISIBLE_SPREAD_COUNT = 3;
@@ -64,6 +70,7 @@ export function CardSpread<TItem>({
   emphasisClassName,
   spreadCardClassName,
   activeCardClassName,
+  dealOnMount = false,
 }: CardSpreadProps<TItem>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const emphasisCardRef = useRef<HTMLDivElement>(null);
@@ -120,11 +127,13 @@ export function CardSpread<TItem>({
     >
       <div
         ref={emphasisCardRef}
+        style={dealOnMount ? getDealStyle(0) : undefined}
         className={cn(
           'absolute bottom-0 z-30 origin-bottom translate-y-0 transition-[transform,filter] duration-300',
           getEmphasisPositionClassName(shape, side),
           expandOnHover &&
             'group-hover:-translate-y-2 group-hover:scale-110 group-focus-within:-translate-y-2 group-focus-within:scale-110',
+          dealOnMount && 'card-deal-emphasis',
           resolvedActiveIndex === resolvedEmphasisIndex && activeCardClassName,
           emphasisClassName
         )}
@@ -149,6 +158,7 @@ export function CardSpread<TItem>({
           spacing,
           dynamicHorizontalStep,
           isActive: resolvedActiveIndex === index,
+          dealOnMount,
         });
 
         return (
@@ -163,6 +173,7 @@ export function CardSpread<TItem>({
               expanded && '[--card-x:var(--card-open-x)] [--card-y:var(--card-open-y)] [--card-rotation:var(--card-open-rotation)] [--card-scale:var(--card-open-scale)]',
               expandOnHover &&
                 'group-hover:[--card-x:var(--card-open-x)] group-hover:[--card-y:var(--card-open-y)] group-hover:[--card-rotation:var(--card-open-rotation)] group-hover:[--card-scale:var(--card-open-scale)] group-focus:[--card-x:var(--card-open-x)] group-focus:[--card-y:var(--card-open-y)] group-focus:[--card-rotation:var(--card-open-rotation)] group-focus:[--card-scale:var(--card-open-scale)] group-focus-within:[--card-x:var(--card-open-x)] group-focus-within:[--card-y:var(--card-open-y)] group-focus-within:[--card-rotation:var(--card-open-rotation)] group-focus-within:[--card-scale:var(--card-open-scale)]',
+              dealOnMount && 'card-deal-spread',
               resolvedActiveIndex === index && activeCardClassName,
               spreadCardClassName
             )}
@@ -190,6 +201,7 @@ interface SpreadCardStyleOptions {
   spacing: CardSpreadSpacing;
   dynamicHorizontalStep?: number;
   isActive: boolean;
+  dealOnMount: boolean;
 }
 
 function getSpreadCardStyle({
@@ -201,7 +213,10 @@ function getSpreadCardStyle({
   spacing,
   dynamicHorizontalStep,
   isActive,
+  dealOnMount,
 }: SpreadCardStyleOptions): CardSpreadStyle {
+  const dealStyle = dealOnMount ? getDealStyle(spreadIndex + 1) : {};
+
   if (shape === 'vertical') {
     const sign = side === 'left' ? -1 : 1;
     const restY = [-3.5, -6, -8][Math.min(depth, 3) - 1] ?? -8;
@@ -223,6 +238,7 @@ function getSpreadCardStyle({
       '--card-hover-x': `${sign * 0.25 * depth}rem`,
       '--card-hover-y': `${hoverY}rem`,
       '--card-hover-rotation': `${openRotation}deg`,
+      ...dealStyle,
     };
   }
 
@@ -231,6 +247,7 @@ function getSpreadCardStyle({
     const distanceFromCenter = Math.abs(centerOffset);
     const arcDrop = distanceFromCenter * distanceFromCenter * 0.95;
     const activeLift = isActive ? 1.2 : 0;
+    const hoverRotation = centerOffset === 0 ? 0 : Math.sign(centerOffset) * Math.min(distanceFromCenter * 2, 6);
 
     return {
       zIndex: 20 + spreadIndex,
@@ -243,8 +260,9 @@ function getSpreadCardStyle({
       '--card-open-rotation': `${centerOffset * 7.5}deg`,
       '--card-open-scale': isActive ? 1.06 : 1 - distanceFromCenter * 0.018,
       '--card-hover-x': `calc(-50% + ${centerOffset * 6.5}rem)`,
-      '--card-hover-y': '-2.25rem',
-      '--card-hover-rotation': '0deg',
+      '--card-hover-y': '-1.2rem',
+      '--card-hover-rotation': `${hoverRotation}deg`,
+      ...dealStyle,
     };
   }
 
@@ -275,6 +293,13 @@ function getSpreadCardStyle({
     '--card-hover-x': hoverX,
     '--card-hover-y': '-1.2rem',
     '--card-hover-rotation': `${direction * ([2, 4, 6][Math.min(depth, 3) - 1] ?? 6)}deg`,
+    ...dealStyle,
+  };
+}
+
+function getDealStyle(index: number): CardSpreadDealStyle {
+  return {
+    '--card-deal-delay': `${index * 90}ms`,
   };
 }
 

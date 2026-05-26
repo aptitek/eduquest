@@ -208,6 +208,12 @@ export const fr = {
     nav: 'Carte',
     tooltipLocked: '🔒',
   },
+  guild: {
+    nav: 'Guilde',
+    title: 'Main de guilde',
+    subtitle: 'Consultez la main tactique de {guildName} et ses cartes de membre.',
+    emptyState: 'Aucune main de guilde à afficher.',
+  },
   detailPanel: {
     noSelectedTitle: 'Aucune cible sélectionnée',
     noSelectedDesc:

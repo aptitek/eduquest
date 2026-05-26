@@ -10,11 +10,11 @@ import {
   type HeaderNotification,
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
-import { Coins, Gift, Map, Settings, Sparkles } from 'lucide-react';
+import { Coins, Gift, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
-  currentView?: 'map' | 'management';
+  currentView?: 'map' | 'management' | 'guild';
 }
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
@@ -137,6 +137,21 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             >
               <Map size={16} aria-hidden />
               {t('map.nav')}
+            </button>
+
+            <button
+              type="button"
+              aria-current={currentView === 'guild' ? 'page' : undefined}
+              onClick={() => {
+                window.location.hash = 'guild';
+              }}
+              className={cn(
+                'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                currentView === 'guild' && 'bg-gaming-base text-status-quest'
+              )}
+            >
+              <Users size={16} aria-hidden />
+              {t('guild.nav')}
             </button>
 
             {user?.isAdmin && (

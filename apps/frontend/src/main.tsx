@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 import { MapPage } from './pages/MapPage/MapPage';
+import { GuildPage } from './pages/GuildPage/GuildPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
@@ -86,6 +87,10 @@ function App() {
 
   if (route === 'management' && user.isAdmin) {
     return <ManagementPage />;
+  }
+
+  if (route === 'guild') {
+    return <GuildPage />;
   }
 
   return <MapPage />;

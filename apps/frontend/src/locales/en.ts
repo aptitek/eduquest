@@ -209,6 +209,12 @@ export const en: TranslationKeys = {
     nav: 'Map',
     tooltipLocked: '🔒',
   },
+  guild: {
+    nav: 'Guild',
+    title: 'Guild hand',
+    subtitle: 'Review the tactical hand for {guildName} and its member cards.',
+    emptyState: 'No guild hand to display.',
+  },
   detailPanel: {
     noSelectedTitle: 'No target selected',
     noSelectedDesc:
