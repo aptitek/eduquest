@@ -13,7 +13,7 @@ import type {
   School,
   Student,
   User,
-  UserSchoolMembership,
+  CohortMembership,
 } from '@eduquest/shared';
 import { GAME_CHARACTER_CLASSES } from '@eduquest/shared';
 import { getDb } from '../db';
@@ -21,14 +21,13 @@ import {
   addresses,
   campuses,
   cohortInvites,
+  cohortMemberships,
   gameBattles,
   cohorts,
   gameCharacters,
   guilds,
   schools,
-  studentCohorts,
   students,
-  userSchoolMemberships,
   users,
 } from '../db/schema';
 import { authMiddleware, UserPayload } from '../middleware/auth';
@@ -81,9 +80,8 @@ type GameBattleRecord = typeof gameBattles.$inferSelect;
 type GameCharacterRecord = typeof gameCharacters.$inferSelect;
 type GuildRecord = typeof guilds.$inferSelect;
 type SchoolRecord = typeof schools.$inferSelect;
-type StudentCohortRecord = typeof studentCohorts.$inferSelect;
+type CohortMembershipRecord = typeof cohortMemberships.$inferSelect;
 type StudentRecord = typeof students.$inferSelect;
-type UserSchoolMembershipRecord = typeof userSchoolMemberships.$inferSelect;
 type UserRecord = typeof users.$inferSelect;
 type ManagementBackup = {
   addresses: Address[];
@@ -183,7 +181,7 @@ function toCohort(record: CohortRecord, school?: School, campus?: Campus): Cohor
     school,
     campusId: record.campusId || undefined,
     campus,
-    schoolYear: record.schoolYear,
+    startYear: record.startYear,
     grade: record.grade as CohortGrade,
     level: record.level,
     name: record.name,
@@ -204,13 +202,13 @@ function toGuild(record: GuildRecord, cohort?: Cohort): Guild {
     description: record.description || undefined,
     iconUrl: record.iconUrl || undefined,
     color: record.color || undefined,
-    totalPoints: record.totalPoints,
+    gold: record.gold,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
   };
 }
 
-function toUser(record: UserRecord, schoolMemberships?: UserSchoolMembership[]): User {
+function toUser(record: UserRecord): User {
   return {
     id: record.id,
     email: record.email,
@@ -225,26 +223,10 @@ function toUser(record: UserRecord, schoolMemberships?: UserSchoolMembership[]):
     avatarUrl: record.avatarUrl || undefined,
     githubAvatarUrl: record.githubAvatarUrl || undefined,
     userStatus: record.userStatus || undefined,
-    statusOverride: record.statusOverride || undefined,
     isAdmin: record.isAdmin,
-    schoolMemberships,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
     lastLogin: toIsoString(record.lastLogin),
-  };
-}
-
-function toUserSchoolMembership(
-  record: UserSchoolMembershipRecord,
-  school?: School
-): UserSchoolMembership {
-  return {
-    userId: record.userId,
-    schoolId: record.schoolId,
-    school,
-    institutionalEmail: record.institutionalEmail || undefined,
-    createdAt: toIsoString(record.createdAt),
-    updatedAt: toIsoString(record.updatedAt),
   };
 }
 
@@ -253,7 +235,6 @@ function toGameCharacter(record: GameCharacterRecord): GameCharacter {
     studentId: record.studentId,
     characterClass: normalizeGameCharacterClass(record.characterClass),
     stats: toGameCharacterStats(record),
-    currentLevel: record.currentLevel,
     updatedAt: toIsoString(record.updatedAt),
   };
 }
@@ -271,19 +252,12 @@ function toGameBattle(record: GameBattleRecord): GameBattle {
 
 function toGameCharacterStats(record: GameCharacterRecord): GameCharacter['stats'] {
   return {
-    str: record.force,
-    dex: record.dexterity,
-    con: record.constitution,
-    int: record.intelligence,
-    wis: record.wisdom,
-    cha: record.charisma,
-    force: record.force,
+    strength: record.strength,
     dexterity: record.dexterity,
     constitution: record.constitution,
     intelligence: record.intelligence,
     wisdom: record.wisdom,
     charisma: record.charisma,
-    xp: 0,
   };
 }
 
@@ -291,20 +265,16 @@ function getDefaultCharacterValues(studentId: string, characterClass: GameCharac
   return {
     studentId,
     characterClass,
-    currentLevel: 1,
   };
 }
 
 function toStudent(
   record: StudentRecord,
-  school: School | undefined,
   memberships: Student['cohortMemberships']
 ): Student {
   return {
     id: record.id,
     userId: record.userId,
-    schoolId: record.schoolId || undefined,
-    school,
     cohortMemberships: memberships,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
@@ -313,140 +283,6 @@ function toStudent(
 
 function isDebugAuthEnabled(c: { env: Bindings }) {
   return runtimeDebugAuthEnabled(c.env);
-}
-
-function buildMembershipEmailFallback(userEmail: string, school?: School) {
-  const domain = school?.emailDomain || 'school.edu';
-  return `${userEmail.split('@')[0]}@${domain}`;
-}
-
-function getDebugProfileSchoolMemberships(user: User, student?: Student): UserSchoolMembership[] {
-  const membershipsBySchool = new Map<string, UserSchoolMembership>();
-
-  if (user.isAdmin) {
-    const aptitekSchool = getDebugBackup().schools.find((school) => school.name === 'Aptitek');
-    if (aptitekSchool) {
-      return [
-        {
-          userId: user.id,
-          schoolId: aptitekSchool.id,
-          school: aptitekSchool,
-          institutionalEmail: user.email,
-        },
-      ];
-    }
-  }
-
-  for (const membership of student?.cohortMemberships || []) {
-    const school = membership.cohort?.school || student?.school;
-    const schoolId = membership.cohort?.schoolId || school?.id || student?.schoolId;
-    if (!schoolId) continue;
-
-    membershipsBySchool.set(schoolId, {
-      userId: user.id,
-      schoolId,
-      school,
-      institutionalEmail: membership.institutionalEmail,
-      createdAt: membership.createdAt,
-    });
-  }
-
-  if (student?.schoolId && !membershipsBySchool.has(student.schoolId)) {
-    membershipsBySchool.set(student.schoolId, {
-      userId: user.id,
-      schoolId: student.schoolId,
-      school: student.school,
-      institutionalEmail: buildMembershipEmailFallback(user.email, student.school),
-    });
-  }
-
-  return Array.from(membershipsBySchool.values());
-}
-
-function attachDebugSchoolMemberships(profile: { user: User; student?: Student }) {
-  profile.user.schoolMemberships = getDebugProfileSchoolMemberships(profile.user, profile.student);
-}
-
-function setDebugUserSchoolInstitutionalEmail(
-  profile: { user: User; student?: Student },
-  school: School | undefined,
-  institutionalEmail: string
-) {
-  if (!school) return;
-  const memberships =
-    profile.user.schoolMemberships ||
-    getDebugProfileSchoolMemberships(profile.user, profile.student);
-  const existing = memberships.find((membership) => membership.schoolId === school.id);
-  if (existing) {
-    existing.institutionalEmail = institutionalEmail || undefined;
-  } else {
-    memberships.push({
-      userId: profile.user.id,
-      schoolId: school.id,
-      school,
-      institutionalEmail: institutionalEmail || undefined,
-    });
-  }
-  profile.user.schoolMemberships = memberships;
-}
-
-async function upsertUserSchoolMembership(
-  databaseUrl: string,
-  userId: string,
-  schoolId: string,
-  institutionalEmail?: string
-) {
-  const db = getDb(databaseUrl);
-  await db
-    .insert(userSchoolMemberships)
-    .values({
-      userId,
-      schoolId,
-      institutionalEmail: institutionalEmail || null,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: [userSchoolMemberships.userId, userSchoolMemberships.schoolId],
-      set: {
-        institutionalEmail: institutionalEmail || null,
-        updatedAt: new Date(),
-      },
-    });
-}
-
-async function ensureUserSchoolMembership(databaseUrl: string, userId: string, schoolId: string) {
-  const db = getDb(databaseUrl);
-  await db
-    .insert(userSchoolMemberships)
-    .values({
-      userId,
-      schoolId,
-      updatedAt: new Date(),
-    })
-    .onConflictDoNothing();
-}
-
-async function loadUserSchoolMemberships(
-  databaseUrl: string,
-  userId: string
-): Promise<UserSchoolMembership[]> {
-  const db = getDb(databaseUrl);
-  const membershipRecords = await db
-    .select()
-    .from(userSchoolMemberships)
-    .where(eq(userSchoolMemberships.userId, userId));
-  const membershipSchoolIds = membershipRecords.map((membership) => membership.schoolId);
-  const membershipSchools =
-    membershipSchoolIds.length > 0
-      ? await db.select().from(schools).where(inArray(schools.id, membershipSchoolIds))
-      : [];
-  const membershipSchoolMap = new Map(
-    membershipSchools.map((school) => [school.id, toSchool(school)])
-  );
-
-  return membershipRecords.map((membership) =>
-    toUserSchoolMembership(membership, membershipSchoolMap.get(membership.schoolId))
-  );
 }
 
 function buildCohortInviteUrl(frontendUrl: string, token: string) {
@@ -538,7 +374,7 @@ async function resolveCohortInvite(
 async function assignStudentToInvitedCohort(
   databaseUrl: string | undefined,
   invite: CohortInvitePayload | null,
-  studentId: string
+  userId: string
 ) {
   if (!databaseUrl || !invite) return;
 
@@ -568,34 +404,17 @@ async function assignStudentToInvitedCohort(
 
   const existingMembership = await db
     .select()
-    .from(studentCohorts)
+    .from(cohortMemberships)
     .where(
-      and(eq(studentCohorts.studentId, studentId), eq(studentCohorts.cohortId, invite.cohortId))
+      and(eq(cohortMemberships.userId, userId), eq(cohortMemberships.cohortId, invite.cohortId))
     )
     .limit(1);
 
   if (existingMembership.length === 0) {
-    await db.insert(studentCohorts).values({
-      studentId,
+    await db.insert(cohortMemberships).values({
+      userId,
       cohortId: invite.cohortId,
     });
-  }
-
-  await db
-    .update(students)
-    .set({
-      schoolId: cohortRecord.schoolId,
-      updatedAt: new Date(),
-    })
-    .where(eq(students.id, studentId));
-
-  const [studentRecord] = await db
-    .select()
-    .from(students)
-    .where(eq(students.id, studentId))
-    .limit(1);
-  if (studentRecord) {
-    await ensureUserSchoolMembership(databaseUrl, studentRecord.userId, cohortRecord.schoolId);
   }
 }
 
@@ -623,7 +442,7 @@ function assignDebugProfileToInvitedCohort(
   const memberships = profile.student.cohortMemberships || [];
   if (!memberships.some((membership) => membership.cohortId === invite.cohortId)) {
     memberships.push({
-      studentId: profile.student.id,
+      userId: profile.user.id,
       cohortId: cohort.id,
       cohort,
       createdAt: new Date().toISOString(),
@@ -631,9 +450,6 @@ function assignDebugProfileToInvitedCohort(
   }
 
   profile.student.cohortMemberships = memberships;
-  profile.student.schoolId = cohort.schoolId;
-  profile.student.school = cohort.school;
-  attachDebugSchoolMemberships(profile);
 }
 
 async function getManagementBackup(
@@ -653,9 +469,8 @@ async function getManagementBackup(
     cohortRecords,
     guildRecords,
     userRecords,
-    userSchoolMembershipRecords,
     studentRecords,
-    studentCohortRecords,
+    cohortMembershipRecords,
     characterRecords,
   ] = await Promise.all([
     db.select().from(addresses),
@@ -664,9 +479,8 @@ async function getManagementBackup(
     db.select().from(cohorts),
     db.select().from(guilds),
     db.select().from(users),
-    db.select().from(userSchoolMemberships),
     db.select().from(students),
-    db.select().from(studentCohorts),
+    db.select().from(cohortMemberships),
     db.select().from(gameCharacters),
   ]);
 
@@ -695,26 +509,18 @@ async function getManagementBackup(
   const guildMap = new Map(
     guildRecords.map((record) => [record.id, toGuild(record, cohortMap.get(record.cohortId))])
   );
-  const schoolMembershipsByUser = userSchoolMembershipRecords.reduce<
-    Map<string, UserSchoolMembership[]>
-  >((groups, membership: UserSchoolMembershipRecord) => {
-    const current = groups.get(membership.userId) || [];
-    current.push(toUserSchoolMembership(membership, schoolMap.get(membership.schoolId)));
-    groups.set(membership.userId, current);
-    return groups;
-  }, new Map());
   const userMap = new Map(
-    userRecords.map((record) => [record.id, toUser(record, schoolMembershipsByUser.get(record.id))])
+    userRecords.map((record) => [record.id, toUser(record)])
   );
   const characterMap = new Map(
     characterRecords.map((record) => [record.studentId, toGameCharacter(record)])
   );
-  const membershipsByStudent = studentCohortRecords.reduce<
+  const membershipsByUser = cohortMembershipRecords.reduce<
     Map<string, NonNullable<Student['cohortMemberships']>>
-  >((groups, membership: StudentCohortRecord) => {
-    const current = groups.get(membership.studentId) || [];
+  >((groups, membership: CohortMembershipRecord) => {
+    const current = groups.get(membership.userId) || [];
     current.push({
-      studentId: membership.studentId,
+      userId: membership.userId,
       cohortId: membership.cohortId,
       cohort: cohortMap.get(membership.cohortId),
       guildId: membership.guildId || undefined,
@@ -722,7 +528,7 @@ async function getManagementBackup(
       institutionalEmail: membership.institutionalEmail || undefined,
       createdAt: toIsoString(membership.createdAt),
     });
-    groups.set(membership.studentId, current);
+    groups.set(membership.userId, current);
     return groups;
   }, new Map());
 
@@ -734,11 +540,7 @@ async function getManagementBackup(
     return [
       {
         user,
-        student: toStudent(
-          studentRecord,
-          studentRecord.schoolId ? schoolMap.get(studentRecord.schoolId) : undefined,
-          membershipsByStudent.get(studentRecord.id) || []
-        ),
+        student: toStudent(studentRecord, membershipsByUser.get(studentRecord.userId) || []),
         character,
       },
     ];
@@ -760,20 +562,20 @@ type DevStudentOption = {
   email: string;
   schoolName?: string;
   cohortNames: string[];
-  level: number;
 };
 
 function toDevStudentOption(profile: ManagementBackup['students'][number]): DevStudentOption {
-  const { user, student, character } = profile;
+  const { user, student } = profile;
   return {
     id: user.id,
     username: user.githubUsername || user.id,
     displayName: user.displayName || user.email,
     email: user.email,
-    schoolName: student.school?.name,
+    schoolName: student.cohortMemberships?.[0]?.cohort?.school?.name,
     cohortNames:
-      student.cohortMemberships?.map((membership) => membership.cohort?.name).filter(Boolean) || [],
-    level: character.currentLevel,
+      student.cohortMemberships
+        ?.map((membership) => membership.cohort?.name)
+        .filter((name): name is string => Boolean(name)) || [],
   };
 }
 
@@ -938,19 +740,12 @@ authRouter.get('/github/callback', async (c) => {
         const db = getDb(databaseUrl);
 
         // Self-healing: Ensure a default school exists in the database
-        let defaultSchoolId: string | undefined = undefined;
         const existingSchools = await db.select().from(schools).limit(1);
         if (existingSchools.length === 0) {
-          const [newSchool] = await db
-            .insert(schools)
-            .values({
-              name: 'Aptitek',
-              emailDomain: 'school.edu',
-            })
-            .returning();
-          defaultSchoolId = newSchool.id;
-        } else {
-          defaultSchoolId = existingSchools[0].id;
+          await db.insert(schools).values({
+            name: 'Aptitek',
+            emailDomain: 'school.edu',
+          });
         }
 
         // Recherche de l'utilisateur existant
@@ -993,7 +788,6 @@ authRouter.get('/github/callback', async (c) => {
               .insert(students)
               .values({
                 userId,
-                schoolId: defaultSchoolId,
               })
               .returning();
 
@@ -1026,7 +820,6 @@ authRouter.get('/github/callback', async (c) => {
             .insert(students)
             .values({
               userId: newUser.id,
-              schoolId: defaultSchoolId,
             })
             .returning();
 
@@ -1039,7 +832,7 @@ authRouter.get('/github/callback', async (c) => {
         }
 
         if (authenticatedStudentId) {
-          await assignStudentToInvitedCohort(databaseUrl, cohortInvite, authenticatedStudentId);
+          await assignStudentToInvitedCohort(databaseUrl, cohortInvite, userId);
         }
       } catch (dbError: any) {
         console.error('Database registration error:', dbError.message);
@@ -1296,7 +1089,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
           (membership) => membership.cohortId === cohortId
         );
         return {
-          studentId,
+          userId: profile.user.id,
           cohortId,
           cohort: backup.cohorts.find((cohort) => cohort.id === cohortId),
           institutionalEmail: existing?.institutionalEmail,
@@ -1312,12 +1105,8 @@ authRouter.put('/management/students/:studentId', async (c) => {
         ) || profile.student.cohortMemberships?.[0];
       if (targetMembership) {
         targetMembership.institutionalEmail = body.institutionalEmail || undefined;
-        const targetSchool = targetMembership.cohort?.school || profile.student.school;
-        setDebugUserSchoolInstitutionalEmail(profile, targetSchool, body.institutionalEmail);
       }
     }
-
-    attachDebugSchoolMemberships(profile);
 
     return c.json({
       success: true,
@@ -1360,8 +1149,8 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
   let currentMemberships = await db
     .select()
-    .from(studentCohorts)
-    .where(eq(studentCohorts.studentId, studentId));
+    .from(cohortMemberships)
+    .where(eq(cohortMemberships.userId, studentRecord.userId));
 
   if (body.cohortIds) {
     const nextCohortIds = Array.from(new Set(body.cohortIds.filter(Boolean)));
@@ -1391,19 +1180,19 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
     if (removedCohortIds.length > 0) {
       await db
-        .delete(studentCohorts)
+        .delete(cohortMemberships)
         .where(
           and(
-            eq(studentCohorts.studentId, studentId),
-            inArray(studentCohorts.cohortId, removedCohortIds)
+            eq(cohortMemberships.userId, studentRecord.userId),
+            inArray(cohortMemberships.cohortId, removedCohortIds)
           )
         );
     }
 
     if (addedCohortIds.length > 0) {
-      await db.insert(studentCohorts).values(
+      await db.insert(cohortMemberships).values(
         addedCohortIds.map((cohortId) => ({
-          studentId,
+          userId: studentRecord.userId,
           cohortId,
         }))
       );
@@ -1411,39 +1200,8 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
     currentMemberships = await db
       .select()
-      .from(studentCohorts)
-      .where(eq(studentCohorts.studentId, studentId));
-
-    const primaryCohortId = nextCohortIds[0];
-    if (primaryCohortId) {
-      const [primaryCohort] = await db
-        .select()
-        .from(cohorts)
-        .where(eq(cohorts.id, primaryCohortId))
-        .limit(1);
-      await db
-        .update(students)
-        .set({
-          schoolId: primaryCohort?.schoolId,
-          updatedAt: new Date(),
-        })
-        .where(eq(students.id, studentId));
-      if (primaryCohort?.schoolId) {
-        await ensureUserSchoolMembership(
-          c.env.DATABASE_URL,
-          studentRecord.userId,
-          primaryCohort.schoolId
-        );
-      }
-    } else {
-      await db
-        .update(students)
-        .set({
-          schoolId: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(students.id, studentId));
-    }
+      .from(cohortMemberships)
+      .where(eq(cohortMemberships.userId, studentRecord.userId));
   }
 
   if (body.institutionalEmail !== undefined) {
@@ -1475,22 +1233,16 @@ authRouter.put('/management/students/:studentId', async (c) => {
       }
 
       await db
-        .update(studentCohorts)
+        .update(cohortMemberships)
         .set({
           institutionalEmail: body.institutionalEmail || null,
         })
         .where(
-          and(eq(studentCohorts.studentId, studentId), eq(studentCohorts.cohortId, targetCohortId))
+          and(
+            eq(cohortMemberships.userId, studentRecord.userId),
+            eq(cohortMemberships.cohortId, targetCohortId)
+          )
         );
-
-      if (targetSchool) {
-        await upsertUserSchoolMembership(
-          c.env.DATABASE_URL,
-          studentRecord.userId,
-          targetSchool.id,
-          body.institutionalEmail
-        );
-      }
     }
   }
 
@@ -1630,19 +1382,12 @@ authRouter.get('/mock', async (c) => {
       const db = getDb(databaseUrl);
 
       // Self-healing: Ensure a default school exists in the database
-      let defaultSchoolId: string | undefined = undefined;
       const existingSchools = await db.select().from(schools).limit(1);
       if (existingSchools.length === 0) {
-        const [newSchool] = await db
-          .insert(schools)
-          .values({
-            name: 'Aptitek',
-            emailDomain: 'school.edu',
-          })
-          .returning();
-        defaultSchoolId = newSchool.id;
-      } else {
-        defaultSchoolId = existingSchools[0].id;
+        await db.insert(schools).values({
+          name: 'Aptitek',
+          emailDomain: 'school.edu',
+        });
       }
 
       const existingUsers = await db
@@ -1696,7 +1441,6 @@ authRouter.get('/mock', async (c) => {
           .insert(students)
           .values({
             userId: newUser.id,
-            schoolId: defaultSchoolId,
           })
           .returning();
 
@@ -1708,7 +1452,7 @@ authRouter.get('/mock', async (c) => {
       }
 
       if (authenticatedStudentId) {
-        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, authenticatedStudentId);
+        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, userId);
       }
     } catch (dbError: any) {
       console.error('DB mock registration failed, playing offline mode:', dbError.message);
@@ -1771,15 +1515,9 @@ authRouter.get('/me', authMiddleware, async (c) => {
   let studentObj: Student = debugProfile?.student || {
     id: 'stud_mock_1',
     userId: userPayload.id,
-    schoolId: 'school_mock_1',
-    school: {
-      id: 'school_mock_1',
-      name: 'Aptitek',
-      emailDomain: 'school.edu',
-    },
     cohortMemberships: [
       {
-        studentId: 'stud_mock_1',
+        userId: userPayload.id,
         cohortId: 'cohort_mock_1',
         institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
         cohort: {
@@ -1790,7 +1528,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
             name: 'Aptitek',
             emailDomain: 'school.edu',
           },
-          schoolYear: '2025-2026',
+          startYear: 2025,
           grade: 'bachelor',
           level: 3,
           name: 'Frontend Mages',
@@ -1803,21 +1541,18 @@ authRouter.get('/me', authMiddleware, async (c) => {
     studentId: 'stud_mock_1',
     characterClass: DEFAULT_CHARACTER_CLASS,
     stats: {
-      str: 8,
-      dex: 10,
-      int: 18,
-      cha: 12,
-      xp: 25,
+      strength: 8,
+      dexterity: 10,
+      constitution: 10,
+      intelligence: 18,
+      wisdom: 12,
+      charisma: 12,
     },
-    currentLevel: 1,
   };
   let battleObj: GameBattle[] = debugProfile?.battles || [];
 
   if (debugProfile) {
-    attachDebugSchoolMemberships(debugProfile);
     userObj = debugProfile.user;
-  } else if (!databaseUrl) {
-    userObj.schoolMemberships = getDebugProfileSchoolMemberships(userObj, studentObj);
   }
 
   // Si DB est configurée, charger les données réelles
@@ -1847,8 +1582,6 @@ authRouter.get('/me', authMiddleware, async (c) => {
           githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
           isAdmin: userRecord.isAdmin,
         };
-
-        userObj.schoolMemberships = await loadUserSchoolMemberships(databaseUrl, userRecord.id);
       }
 
       const loadedStudents = await db
@@ -1860,31 +1593,13 @@ authRouter.get('/me', authMiddleware, async (c) => {
       if (loadedStudents.length > 0) {
         const studentRecord = loadedStudents[0];
 
-        let schoolObj: any = undefined;
-        if (studentRecord.schoolId) {
-          const loadedSchools = await db
-            .select()
-            .from(schools)
-            .where(eq(schools.id, studentRecord.schoolId))
-            .limit(1);
-          if (loadedSchools.length > 0) {
-            schoolObj = {
-              id: loadedSchools[0].id,
-              name: loadedSchools[0].name,
-              logoUrl: loadedSchools[0].logoUrl || undefined,
-              emailDomain: loadedSchools[0].emailDomain || undefined,
-            };
-          }
-        }
-
         const latestMemberships = await db
           .select()
-          .from(studentCohorts)
-          .where(eq(studentCohorts.studentId, studentRecord.id))
-          .orderBy(desc(studentCohorts.createdAt))
-          .limit(1);
+          .from(cohortMemberships)
+          .where(eq(cohortMemberships.userId, studentRecord.userId))
+          .orderBy(desc(cohortMemberships.createdAt));
 
-        const cohortMemberships = [];
+        const membershipItems: CohortMembership[] = [];
         for (const membership of latestMemberships) {
           const loadedCohorts = await db
             .select()
@@ -1914,8 +1629,8 @@ authRouter.get('/me', authMiddleware, async (c) => {
               }
             }
 
-            cohortMemberships.push({
-              studentId: membership.studentId,
+            membershipItems.push({
+              userId: membership.userId,
               cohortId: membership.cohortId,
               guildId: membership.guildId || undefined,
               guild: loadedGuild
@@ -1924,7 +1639,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
                     schoolId: cohortRecord.schoolId,
                     school: cohortSchoolObj,
                     campusId: cohortRecord.campusId || undefined,
-                    schoolYear: cohortRecord.schoolYear,
+                    startYear: cohortRecord.startYear,
                     grade: cohortRecord.grade as CohortGrade,
                     level: cohortRecord.level,
                     name: cohortRecord.name,
@@ -1940,7 +1655,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
                 schoolId: cohortRecord.schoolId,
                 school: cohortSchoolObj,
                 campusId: cohortRecord.campusId || undefined,
-                schoolYear: cohortRecord.schoolYear,
+                startYear: cohortRecord.startYear,
                 grade: cohortRecord.grade as CohortGrade,
                 level: cohortRecord.level,
                 name: cohortRecord.name,
@@ -1952,14 +1667,10 @@ authRouter.get('/me', authMiddleware, async (c) => {
           }
         }
 
-        const latestCohortSchool = cohortMemberships[0]?.cohort?.school;
-
         studentObj = {
           id: studentRecord.id,
           userId: studentRecord.userId,
-          schoolId: latestCohortSchool?.id || studentRecord.schoolId || undefined,
-          school: latestCohortSchool || schoolObj,
-          cohortMemberships,
+          cohortMemberships: membershipItems,
         };
         loadedDbProfile = true;
 
@@ -1975,7 +1686,6 @@ authRouter.get('/me', authMiddleware, async (c) => {
             studentId: charRecord.studentId,
             characterClass: normalizeGameCharacterClass(charRecord.characterClass),
             stats: toGameCharacterStats(charRecord),
-            currentLevel: charRecord.currentLevel,
           };
         }
 
@@ -2090,15 +1800,9 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   let studentObj = {
     id: 'stud_mock_1',
     userId: userPayload.id,
-    schoolId: 'school_mock_1',
-    school: {
-      id: 'school_mock_1',
-      name: 'Aptitek',
-      emailDomain: 'school.edu',
-    },
     cohortMemberships: [
       {
-        studentId: 'stud_mock_1',
+        userId: userPayload.id,
         cohortId: 'cohort_mock_1',
         institutionalEmail:
           body.institutionalEmail ||
@@ -2112,7 +1816,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             name: 'Aptitek',
             emailDomain: 'school.edu',
           },
-          schoolYear: '2025-2026',
+          startYear: 2025,
           grade: 'bachelor',
           level: 3,
           name: 'Frontend Mages',
@@ -2121,37 +1825,17 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     ],
   };
 
-  userObj.schoolMemberships = [
-    {
-      userId: userObj.id,
-      schoolId: userPayload.isAdmin ? 'debug_school_aptitek' : 'school_mock_1',
-      school: userPayload.isAdmin
-        ? {
-            id: 'debug_school_aptitek',
-            name: 'Aptitek',
-            emailDomain: 'aptitek.io',
-          }
-        : studentObj.school,
-      institutionalEmail:
-        body.institutionalEmail ||
-        (userPayload.isAdmin
-          ? userPayload.email
-          : body.email?.split('@')[0] + '@school.edu' ||
-            userPayload.email.split('@')[0] + '@school.edu'),
-    },
-  ];
-
   let characterObj: GameCharacter = {
     studentId: 'stud_mock_1',
     characterClass: normalizeGameCharacterClass(body.characterClass),
     stats: {
-      str: 8,
-      dex: 10,
-      int: 18,
-      cha: 12,
-      xp: 25,
+      strength: 8,
+      dexterity: 10,
+      constitution: 10,
+      intelligence: 18,
+      wisdom: 12,
+      charisma: 12,
     },
-    currentLevel: 1,
   };
 
   if (databaseUrl) {
@@ -2193,39 +1877,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         };
       }
 
-      if (body.institutionalEmail !== undefined && userObj.isAdmin) {
-        const [targetSchool] = body.institutionalSchoolId
-          ? await db
-              .select()
-              .from(schools)
-              .where(eq(schools.id, body.institutionalSchoolId))
-              .limit(1)
-          : await db.select().from(schools).where(eq(schools.name, 'Aptitek')).limit(1);
-
-        if (targetSchool?.emailDomain && body.institutionalEmail) {
-          const domain = targetSchool.emailDomain.toLowerCase();
-          if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
-            return c.json(
-              {
-                success: false,
-                error: `Institutional email must end with @${domain}`,
-                errorKey: 'profile.errors.institutionalEmailDomain',
-              },
-              400
-            );
-          }
-        }
-
-        if (targetSchool) {
-          await upsertUserSchoolMembership(
-            databaseUrl,
-            userObj.id,
-            targetSchool.id,
-            body.institutionalEmail
-          );
-        }
-      }
-
       // 2. Mise à jour de la table `students`
       const existingStudents = await db
         .select()
@@ -2239,9 +1890,9 @@ authRouter.put('/profile', authMiddleware, async (c) => {
 
         const latestMemberships = await db
           .select()
-          .from(studentCohorts)
-          .where(eq(studentCohorts.studentId, studentId))
-          .orderBy(desc(studentCohorts.createdAt))
+          .from(cohortMemberships)
+          .where(eq(cohortMemberships.userId, userPayload.id))
+          .orderBy(desc(cohortMemberships.createdAt))
           .limit(1);
 
         const latestMembership = latestMemberships[0];
@@ -2292,27 +1943,18 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         let updatedMembership = latestMembership;
         if (body.institutionalEmail !== undefined && latestMembership) {
           const [savedMembership] = await db
-            .update(studentCohorts)
+            .update(cohortMemberships)
             .set({
               institutionalEmail: body.institutionalEmail,
             })
             .where(
               and(
-                eq(studentCohorts.studentId, studentId),
-                eq(studentCohorts.cohortId, latestMembership.cohortId)
+                eq(cohortMemberships.userId, userPayload.id),
+                eq(cohortMemberships.cohortId, latestMembership.cohortId)
               )
             )
             .returning();
           updatedMembership = savedMembership || latestMembership;
-        }
-
-        if (body.institutionalEmail !== undefined && latestCohortSchool) {
-          await upsertUserSchoolMembership(
-            databaseUrl,
-            userPayload.id,
-            latestCohortSchool.id,
-            body.institutionalEmail
-          );
         }
 
         const [updatedStudent] = await db
@@ -2324,23 +1966,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           .returning();
 
         if (updatedStudent) {
-          let schoolObj: any = undefined;
-          if (updatedStudent.schoolId) {
-            const loadedSchools = await db
-              .select()
-              .from(schools)
-              .where(eq(schools.id, updatedStudent.schoolId))
-              .limit(1);
-            if (loadedSchools.length > 0) {
-              schoolObj = {
-                id: loadedSchools[0].id,
-                name: loadedSchools[0].name,
-                logoUrl: loadedSchools[0].logoUrl || undefined,
-                emailDomain: loadedSchools[0].emailDomain || undefined,
-              };
-            }
-          }
-
           const latestSchoolObj = latestCohortSchool
             ? {
                 id: latestCohortSchool.id,
@@ -2354,7 +1979,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             updatedMembership && latestCohort
               ? [
                   {
-                    studentId: updatedMembership.studentId,
+                    userId: updatedMembership.userId,
                     cohortId: updatedMembership.cohortId,
                     guildId: updatedMembership.guildId || undefined,
                     guild: latestGuild
@@ -2363,7 +1988,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                           schoolId: latestCohort.schoolId,
                           school: latestSchoolObj,
                           campusId: latestCohort.campusId || undefined,
-                          schoolYear: latestCohort.schoolYear,
+                          startYear: latestCohort.startYear,
                           grade: latestCohort.grade,
                           level: latestCohort.level,
                           name: latestCohort.name,
@@ -2379,7 +2004,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                       schoolId: latestCohort.schoolId,
                       school: latestSchoolObj,
                       campusId: latestCohort.campusId || undefined,
-                      schoolYear: latestCohort.schoolYear,
+                      startYear: latestCohort.startYear,
                       grade: latestCohort.grade,
                       level: latestCohort.level,
                       name: latestCohort.name,
@@ -2394,8 +2019,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           studentObj = {
             id: updatedStudent.id,
             userId: updatedStudent.userId,
-            schoolId: latestSchoolObj?.id || updatedStudent.schoolId || undefined,
-            school: latestSchoolObj || schoolObj,
             cohortMemberships,
           } as any;
         }
@@ -2415,7 +2038,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             studentId: updatedChar.studentId,
             characterClass: normalizeGameCharacterClass(updatedChar.characterClass),
             stats: toGameCharacterStats(updatedChar),
-            currentLevel: updatedChar.currentLevel,
           };
         }
       }
@@ -2425,10 +2047,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         return c.json({ success: false, error: 'Profile could not be saved.' }, 500);
       }
     }
-  }
-
-  if (databaseUrl) {
-    userObj.schoolMemberships = await loadUserSchoolMemberships(databaseUrl, userObj.id);
   }
 
   // 4. Génération d'un NOUVEAU Token JWT mis à jour

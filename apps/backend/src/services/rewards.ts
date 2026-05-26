@@ -6,7 +6,14 @@ import {
   type StudentAttribute,
 } from '@eduquest/shared';
 import { and, eq, gte, sql } from 'drizzle-orm';
-import { gameCharacters, guilds, pointTransactions, studentCohorts, students } from '../db/schema';
+import {
+  cohortMemberships,
+  gameCharacterClasses,
+  gameCharacters,
+  guilds,
+  pointTransactions,
+  students,
+} from '../db/schema';
 
 export type {
   RewardActivityType,
@@ -89,7 +96,7 @@ export class RewardSystemConfigService {
 
 export interface Student {
   id: string;
-  force: number;
+  strength: number;
   dexterity: number;
   constitution: number;
   intelligence: number;
@@ -104,7 +111,7 @@ export type GuildStudents =
 
 export interface Guild {
   id: string;
-  totalPoints?: number;
+  gold?: number;
   students: GuildStudents;
 }
 
@@ -270,15 +277,15 @@ abstract class BaseRewardStrategy implements PointStrategy {
   }
 }
 
-export class ForceStrategy extends BaseRewardStrategy {
+export class StrengthStrategy extends BaseRewardStrategy {
   async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
     const basePoints = this.getBasePoints(context);
-    const forceSum = this.getAttributeSum(context, 'force', config);
+    const strengthSum = this.getAttributeSum(context, 'strength', config);
 
     return (
       basePoints *
       this.getSizeModifier(context, config) *
-      (1 + config.attributes.earningMultiplier * forceSum)
+      (1 + config.attributes.earningMultiplier * strengthSum)
     );
   }
 }
@@ -363,6 +370,19 @@ export class ConstitutionStrategy extends BaseRewardStrategy {
   }
 }
 
+export class CharismaStrategy extends BaseRewardStrategy {
+  async calculate(context: CalculationContext, config: RewardSystemConfig): Promise<number> {
+    const basePoints = this.getBasePoints(context);
+    const charismaSum = this.getAttributeSum(context, 'charisma', config);
+
+    return (
+      basePoints *
+      this.getSizeModifier(context, config) *
+      (1 + config.attributes.earningMultiplier * charismaSum)
+    );
+  }
+}
+
 export class PointTransactionActiveDaysRepository implements ActiveDaysRepository {
   constructor(private readonly db: RewardDb) {}
 
@@ -397,17 +417,18 @@ export class GuildSnapshotRepository {
     const memberRows = await this.db
       .select({
         id: students.id,
-        force: gameCharacters.force,
-        dexterity: gameCharacters.dexterity,
-        constitution: gameCharacters.constitution,
-        intelligence: gameCharacters.intelligence,
-        wisdom: gameCharacters.wisdom,
-        charisma: gameCharacters.charisma,
+        strength: sql<number>`${gameCharacters.strength} + ${gameCharacterClasses.baseStrength}`,
+        dexterity: sql<number>`${gameCharacters.dexterity} + ${gameCharacterClasses.baseDexterity}`,
+        constitution: sql<number>`${gameCharacters.constitution} + ${gameCharacterClasses.baseConstitution}`,
+        intelligence: sql<number>`${gameCharacters.intelligence} + ${gameCharacterClasses.baseIntelligence}`,
+        wisdom: sql<number>`${gameCharacters.wisdom} + ${gameCharacterClasses.baseWisdom}`,
+        charisma: sql<number>`${gameCharacters.charisma} + ${gameCharacterClasses.baseCharisma}`,
       })
-      .from(studentCohorts)
-      .innerJoin(students, eq(students.id, studentCohorts.studentId))
+      .from(cohortMemberships)
+      .innerJoin(students, eq(students.userId, cohortMemberships.userId))
       .innerJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
-      .where(eq(studentCohorts.guildId, guildId));
+      .innerJoin(gameCharacterClasses, eq(gameCharacterClasses.slug, gameCharacters.characterClass))
+      .where(eq(cohortMemberships.guildId, guildId));
 
     if (memberRows.length < 1 || memberRows.length > 3) {
       throw new Error('A guild must have between 1 and 3 students with RPG characters.');
@@ -415,7 +436,7 @@ export class GuildSnapshotRepository {
 
     const [guildRecord] = await this.db
       .select({
-        totalPoints: guilds.totalPoints,
+        gold: guilds.gold,
       })
       .from(guilds)
       .where(eq(guilds.id, guildId))
@@ -427,7 +448,7 @@ export class GuildSnapshotRepository {
 
     return {
       id: guildId,
-      totalPoints: guildRecord.totalPoints,
+      gold: guildRecord.gold,
       students: memberRows as GuildStudents,
     };
   }
@@ -440,11 +461,12 @@ export class RewardService {
   ) {}
 
   private static readonly strategies: Record<RewardActivityType, PointStrategy> = {
-    force: new ForceStrategy(),
+    strength: new StrengthStrategy(),
     intelligence: new IntelligenceStrategy(),
     wisdom: new WisdomStrategy(),
     dexterity: new DexterityStrategy(),
     constitution: new ConstitutionStrategy(),
+    charisma: new CharismaStrategy(),
   };
 
   static async calculatePreview(
@@ -505,11 +527,11 @@ export class RewardService {
       const [updatedGuild] = await tx
         .update(guilds)
         .set({
-          totalPoints: sql`${guilds.totalPoints} + ${amount}`,
+          gold: sql`${guilds.gold} + ${amount}`,
           updatedAt: input.now || new Date(),
         })
         .where(eq(guilds.id, input.guildId))
-        .returning({ totalPoints: guilds.totalPoints });
+        .returning({ gold: guilds.gold });
 
       await tx.insert(pointTransactions).values({
         guildId: input.guildId,
@@ -528,7 +550,7 @@ export class RewardService {
         calculatedPoints,
         finalPoints,
         activeDays: resolvedActiveDays,
-        balance: updatedGuild.totalPoints,
+        balance: updatedGuild.gold,
       };
     });
   }
@@ -577,18 +599,18 @@ export class VotingCostService {
       const guild = await new GuildSnapshotRepository(tx).getGuild(input.guildId);
       const cost = this.calculateCost(input.votes, guild);
 
-      if ((guild.totalPoints || 0) < cost) {
-        throw new Error('Guild does not have enough points to buy these votes.');
+      if ((guild.gold || 0) < cost) {
+        throw new Error('Guild does not have enough gold to buy these votes.');
       }
 
       const [updatedGuild] = await tx
         .update(guilds)
         .set({
-          totalPoints: sql`${guilds.totalPoints} - ${cost}`,
+          gold: sql`${guilds.gold} - ${cost}`,
           updatedAt: new Date(),
         })
         .where(eq(guilds.id, input.guildId))
-        .returning({ totalPoints: guilds.totalPoints });
+        .returning({ gold: guilds.gold });
 
       await tx.insert(pointTransactions).values({
         guildId: input.guildId,
@@ -601,7 +623,7 @@ export class VotingCostService {
         guildId: input.guildId,
         votes: input.votes,
         cost,
-        balance: updatedGuild.totalPoints,
+        balance: updatedGuild.gold,
       };
     });
   }

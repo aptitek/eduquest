@@ -94,7 +94,7 @@ export function useManagementColumns(t: (key: string) => string) {
         accessorFn: (row) =>
           row.cohort
             ? [
-                formatSchoolYear(row.cohort.schoolYear),
+                formatSchoolYear(row.cohort.startYear),
                 row.cohort.grade,
                 row.cohort.level,
                 row.cohort.name,
@@ -202,14 +202,14 @@ export function useManagementColumns(t: (key: string) => string) {
         cell: ({ getValue }) => <TruncatedText value={getValue<string>()} />,
       },
       {
-        accessorKey: 'schoolYear',
+        accessorKey: 'startYear',
         header: t('management.cohorts.schoolYear'),
         cell: ({ getValue }) => (
           <span
             className="badge badge-sm badge-outline border-gaming-border text-text-secondary"
-            title={getValue<string>()}
+            title={String(getValue<number>())}
           >
-            {formatSchoolYear(getValue<string>())}
+            {formatSchoolYear(getValue<number>())}
           </span>
         ),
       },

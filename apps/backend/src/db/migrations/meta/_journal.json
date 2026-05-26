@@ -71,6 +71,13 @@
       "when": 1779873000000,
       "tag": "0009_seed_all_dev_dashboard_data",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779874200000,
+      "tag": "0010_schema_domain_cleanup",
+      "breakpoints": true
     }
   ]
 }

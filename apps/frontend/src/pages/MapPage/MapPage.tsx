@@ -86,7 +86,7 @@ export function MapPage() {
             <GameMap
               activities={activities}
               completedActivityIds={completedActivityIds}
-              playerLevel={character.currentLevel}
+              playerLevel={Number.MAX_SAFE_INTEGER}
               onSelectNode={setSelectedActivity}
             />
           )}

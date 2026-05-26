@@ -5,8 +5,8 @@ import { formatSchoolYear, getCohortBadgeParts } from '../../../features/managem
 import { getSeededBackgroundClass } from '../../../utils/colorHash';
 import { cn } from '../../../utils/cn';
 
-function CohortYearBadge({ schoolYear }: { schoolYear: string }) {
-  const label = formatSchoolYear(schoolYear);
+function CohortYearBadge({ startYear }: { startYear: number }) {
+  const label = formatSchoolYear(startYear);
 
   return (
     <span
@@ -14,7 +14,7 @@ function CohortYearBadge({ schoolYear }: { schoolYear: string }) {
         'badge badge-sm border-transparent font-semibold text-white shadow-sm',
         getSeededBackgroundClass(label)
       )}
-      title={schoolYear}
+      title={String(startYear)}
     >
       {label}
     </span>
@@ -25,7 +25,7 @@ export function CohortDropdownBadge({ cohort }: { cohort: CohortRow }) {
   return (
     <span className="inline-flex max-w-full items-center gap-1">
       <SchoolLogoBadge name={cohort.schoolName} logoUrl={cohort.school?.logoUrl} />
-      <CohortYearBadge schoolYear={cohort.schoolYear} />
+      <CohortYearBadge startYear={cohort.startYear} />
       <CompoundBadge parts={getCohortBadgeParts(cohort)} />
     </span>
   );
@@ -41,7 +41,7 @@ export function CohortListBadge({
   return (
     <span className="inline-flex max-w-full items-center gap-1">
       {showSchoolYear ? (
-        <CohortYearBadge schoolYear={cohort.schoolYear} />
+        <CohortYearBadge startYear={cohort.startYear} />
       ) : null}
       <CompoundBadge parts={getCohortBadgeParts(cohort)} />
     </span>

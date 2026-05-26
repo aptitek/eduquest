@@ -238,7 +238,7 @@ function mergeGuilds(primaryGuilds: readonly Partial<Guild>[], secondaryGuilds: 
       description: guild.description,
       iconUrl: guild.iconUrl,
       color: guild.color,
-      totalPoints: guild.totalPoints || 0,
+      gold: guild.gold || 0,
       createdAt: guild.createdAt || new Date().toISOString(),
       updatedAt: guild.updatedAt || new Date().toISOString(),
     } as Guild);
@@ -248,7 +248,7 @@ function mergeGuilds(primaryGuilds: readonly Partial<Guild>[], secondaryGuilds: 
 }
 
 function sortByPointsThenName(a: Guild, b: Guild) {
-  return (b.totalPoints || 0) - (a.totalPoints || 0) || sortByName(a, b);
+  return (b.gold || 0) - (a.gold || 0) || sortByName(a, b);
 }
 
 function sortByName(a: Guild, b: Guild) {

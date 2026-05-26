@@ -79,7 +79,7 @@ export interface PlayingCardData {
   title?: string;
   subtitle?: string;
   description?: string;
-  guild?: Pick<Guild, 'id' | 'name' | 'color' | 'iconUrl' | 'totalPoints'>;
+  guild?: Pick<Guild, 'id' | 'name' | 'color' | 'iconUrl' | 'gold'>;
   characterClass?: GameCharacterClass;
   accentToken?: PlayingCardAccent;
   color?: CSSProperties['color'];

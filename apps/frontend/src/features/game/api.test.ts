@@ -6,7 +6,7 @@ vi.mock('../auth/useAuth', () => ({
 
 import {
   completeMapActivity,
-  fetchDashboardData,
+  fetchCohortProgressData,
   fetchGuilds,
   fetchMapActivities,
   spendGuildVotes,
@@ -18,26 +18,25 @@ describe('game API client', () => {
   });
 
   it('loads guilds from the authenticated backend route', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', totalPoints: 180 }] }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 }] }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(fetchGuilds('token-1')).resolves.toEqual([
-      { id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', totalPoints: 180 },
+      { id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 },
     ]);
     expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/guilds', {
       headers: { Authorization: 'Bearer token-1' },
     });
   });
 
-  it('loads dashboard data without falling back to local card data', async () => {
-    const dashboard = {
+  it('loads cohort progress data without falling back to local card data', async () => {
+    const progress = {
       gauge: { currentPoints: 20, targetPoints: 100, labelI18nKey: 'dashboard.dock.milestone', milestones: [] },
-      rewards: [],
       notifications: [],
     };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, dashboard })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, progress })));
 
-    await expect(fetchDashboardData('token-1')).resolves.toEqual(dashboard);
+    await expect(fetchCohortProgressData('token-1')).resolves.toEqual(progress);
   });
 
   it('loads map activities from the backend route', async () => {

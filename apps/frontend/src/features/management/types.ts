@@ -20,7 +20,8 @@ export type StudentRow = Student & {
   displayName: string;
   email: string;
   cohort?: CohortRow;
-  level: number;
+  school?: School;
+  schoolId?: string;
   age?: number;
 };
 

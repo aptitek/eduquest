@@ -1,12 +1,18 @@
 export type StudentAttribute =
-  | 'force'
+  | 'strength'
   | 'dexterity'
   | 'constitution'
   | 'intelligence'
   | 'wisdom'
   | 'charisma';
 
-export type RewardActivityType = 'force' | 'intelligence' | 'wisdom' | 'dexterity' | 'constitution';
+export type RewardActivityType =
+  | 'strength'
+  | 'intelligence'
+  | 'wisdom'
+  | 'dexterity'
+  | 'constitution'
+  | 'charisma';
 
 export interface RewardSystemConfig {
   guild: {

@@ -13,7 +13,7 @@ export interface HeaderUserMenuProps {
 export function HeaderUserMenu({ user, onStatusChange, onOpenProfile }: HeaderUserMenuProps) {
   const { t } = useTranslation();
   const currentStatus = user.userStatus || 'offline';
-  const isAutoBusy = currentStatus === 'busy' && !user.statusOverride;
+  const isAutoBusy = currentStatus === 'busy';
   const statusItemClass = (status: 'online' | 'offline' | 'busy') =>
     cn(
       'flex w-full items-center gap-2 py-2 text-left',

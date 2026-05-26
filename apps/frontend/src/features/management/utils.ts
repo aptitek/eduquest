@@ -1,6 +1,6 @@
-import type { Address, Cohort, CohortGrade, StudentCohort } from '@eduquest/shared';
+import type { Address, Cohort, CohortGrade, CohortMembership } from '@eduquest/shared';
 
-export function getLatestCohortMembership(memberships?: StudentCohort[]) {
+export function getLatestCohortMembership(memberships?: CohortMembership[]) {
   if (!memberships || memberships.length === 0) return undefined;
   return [...memberships].sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -35,10 +35,8 @@ export function formatAddress(address?: Address) {
     .join(', ');
 }
 
-export function formatSchoolYear(value: string) {
-  const years = value.match(/\d{4}/g);
-  if (!years || years.length < 2) return value;
-  return `${years[0].slice(-2)}-${years[1].slice(-2)}`;
+export function formatSchoolYear(value: number) {
+  return `${String(value).slice(-2)}-${String(value + 1).slice(-2)}`;
 }
 
 export function formatGrade(value: CohortGrade) {

@@ -53,7 +53,7 @@ export function CharacterPlayingCard({
             <h3 className="truncate text-lg font-display font-bold text-text-primary">{displayName}</h3>
           </div>
           <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-            LVL {character.currentLevel}
+            {classLabel}
           </span>
         </header>
 
@@ -95,7 +95,7 @@ export function CharacterPlayingCard({
 
         <div className="mt-3 flex shrink-0 items-center justify-between gap-2 text-[0.62rem] font-display font-bold uppercase tracking-[0.2em] text-text-muted">
           <span>{classLabel}</span>
-          <span>#{character.currentLevel.toString().padStart(2, '0')}</span>
+          <span>{character.characterClass}</span>
         </div>
       </div>
     </div>

@@ -59,7 +59,7 @@ export const cohorts = pgTable('cohorts', {
     .notNull()
     .references(() => schools.id, { onDelete: 'cascade' }),
   campusId: uuid('campus_id').references(() => campuses.id, { onDelete: 'set null' }),
-  schoolYear: text('school_year').notNull(),
+  startYear: integer('start_year').notNull(),
   grade: text('grade').notNull(),
   level: integer('level').notNull(),
   name: text('name').notNull(),
@@ -91,7 +91,7 @@ export const guilds = pgTable('guilds', {
   description: text('description'),
   iconUrl: text('icon_url'),
   color: text('color'), // Code Hexa
-  totalPoints: integer('total_points').default(0).notNull(),
+  gold: integer('gold').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -113,30 +113,11 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   githubAvatarUrl: text('github_avatar_url'),
   userStatus: userStatusEnum('user_status').default('offline'),
-  statusOverride: boolean('status_override').default(false),
   isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   lastLogin: timestamp('last_login', { withTimezone: true }),
 });
-
-export const userSchoolMemberships = pgTable(
-  'user_school_memberships',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    schoolId: uuid('school_id')
-      .notNull()
-      .references(() => schools.id, { onDelete: 'cascade' }),
-    institutionalEmail: text('institutional_email').unique(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.schoolId] }),
-  })
-);
 
 // Table des profils étudiants
 export const students = pgTable('students', {
@@ -145,20 +126,18 @@ export const students = pgTable('students', {
     .unique()
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  schoolId: uuid('school_id').references(() => schools.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-// Association plusieurs-à-plusieurs entre étudiants et cohorts.
-// Les admins ne sont pas membres de cohorts car l'association passe par `students`.
-// Un étudiant ne peut avoir qu'une seule guilde par cohort car la PK est (student_id, cohort_id).
-export const studentCohorts = pgTable(
-  'student_cohorts',
+// Association plusieurs-à-plusieurs entre utilisateurs étudiants et cohorts.
+// Les admins restent universels et ne passent pas par cette table.
+export const cohortMemberships = pgTable(
+  'cohort_memberships',
   {
-    studentId: uuid('student_id')
+    userId: uuid('user_id')
       .notNull()
-      .references(() => students.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'cascade' }),
     cohortId: uuid('cohort_id')
       .notNull()
       .references(() => cohorts.id, { onDelete: 'cascade' }),
@@ -167,7 +146,7 @@ export const studentCohorts = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.studentId, table.cohortId] }),
+    pk: primaryKey({ columns: [table.userId, table.cohortId] }),
   })
 );
 
@@ -185,11 +164,12 @@ export const studentSkillsHistory = pgTable('student_skills_history', {
 // ==========================================
 
 export const gameTargetAttributeEnum = pgEnum('game_target_attribute', [
-  'force',
+  'strength',
   'dexterity',
   'constitution',
   'intelligence',
   'wisdom',
+  'charisma',
 ]);
 
 export const pointTransactionTypeEnum = pgEnum('point_transaction_type', [
@@ -202,6 +182,12 @@ export const pointTransactionTypeEnum = pgEnum('point_transaction_type', [
 export const gameCharacterClasses = pgTable('game_character_classes', {
   slug: text('slug').primaryKey(),
   nameI18nKey: text('name_i18n_key').notNull(),
+  baseStrength: integer('base_strength').default(0).notNull(),
+  baseDexterity: integer('base_dexterity').default(0).notNull(),
+  baseConstitution: integer('base_constitution').default(0).notNull(),
+  baseIntelligence: integer('base_intelligence').default(0).notNull(),
+  baseWisdom: integer('base_wisdom').default(0).notNull(),
+  baseCharisma: integer('base_charisma').default(0).notNull(),
   sortOrder: integer('sort_order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
@@ -215,21 +201,13 @@ export const gameCharacters = pgTable('game_characters', {
     .notNull()
     .default('scholar')
     .references(() => gameCharacterClasses.slug, { onDelete: 'restrict', onUpdate: 'cascade' }),
-  force: integer('force').default(0).notNull(),
+  strength: integer('strength').default(0).notNull(),
   dexterity: integer('dexterity').default(0).notNull(),
   constitution: integer('constitution').default(0).notNull(),
   intelligence: integer('intelligence').default(0).notNull(),
   wisdom: integer('wisdom').default(0).notNull(),
   charisma: integer('charisma').default(0).notNull(),
-  currentLevel: integer('current_level').default(1).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
-
-// Table des decks / classes / promotions
-export const gameDecks = pgTable('game_decks', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  schoolId: uuid('school_id').references(() => schools.id),
-  name: text('name').notNull(),
 });
 
 // Table des activités sur la carte de jeu
@@ -274,52 +252,39 @@ export const pointTransactions = pgTable('point_transactions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
-// Table des jauges de progression globales par cohort.
-export const globalGauges = pgTable('global_gauges', {
+// Table de progression globale par cohort.
+export const cohortProgress = pgTable('cohort_progress', {
   id: uuid('id').primaryKey().defaultRandom(),
   cohortId: uuid('cohort_id')
     .notNull()
     .references(() => cohorts.id, { onDelete: 'cascade' }),
-  milestoneName: text('milestone_name').notNull(),
+  labelI18nKey: text('label_i18n_key').notNull(),
   currentPoints: integer('current_points').default(0).notNull(),
-  targetPoints: integer('target_points').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-export const globalGaugeMilestones = pgTable('global_gauge_milestones', {
+export const progressMilestones = pgTable('progress_milestones', {
   id: uuid('id').primaryKey().defaultRandom(),
-  gaugeId: uuid('gauge_id')
+  progressId: uuid('progress_id')
     .notNull()
-    .references(() => globalGauges.id, { onDelete: 'cascade' }),
+    .references(() => cohortProgress.id, { onDelete: 'cascade' }),
   labelI18nKey: text('label_i18n_key').notNull(),
   descriptionI18nKey: text('description_i18n_key'),
-  positionPercent: integer('position_percent'),
-  value: integer('value'),
+  cost: integer('cost').notNull(),
+  rewardTitleI18nKey: text('reward_title_i18n_key').notNull(),
+  rewardSubtitleI18nKey: text('reward_subtitle_i18n_key'),
+  rewardAccentToken: text('reward_accent_token').default('quest').notNull(),
   sortOrder: integer('sort_order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
-export const cohortRewardCards = pgTable('cohort_reward_cards', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  cohortId: uuid('cohort_id')
-    .notNull()
-    .references(() => cohorts.id, { onDelete: 'cascade' }),
-  titleI18nKey: text('title_i18n_key').notNull(),
-  subtitleI18nKey: text('subtitle_i18n_key'),
-  accentToken: text('accent_token').default('quest').notNull(),
-  faceDown: boolean('face_down').default(false).notNull(),
-  sortOrder: integer('sort_order').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
-
-export const dashboardNotifications = pgTable('dashboard_notifications', {
+export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
   cohortId: uuid('cohort_id').references(() => cohorts.id, { onDelete: 'cascade' }),
+  guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'cascade' }),
   titleI18nKey: text('title_i18n_key').notNull(),
   descriptionI18nKey: text('description_i18n_key'),
-  metaI18nKey: text('meta_i18n_key'),
   icon: text('icon').default('info').notNull(),
   tone: text('tone').default('neutral').notNull(),
   actionLabelI18nKey: text('action_label_i18n_key'),
@@ -363,30 +328,27 @@ export const pointTransactionsRelations = relations(pointTransactions, ({ one })
   }),
 }));
 
-export const globalGaugesRelations = relations(globalGauges, ({ one }) => ({
+export const cohortProgressRelations = relations(cohortProgress, ({ one }) => ({
   cohort: one(cohorts, {
-    fields: [globalGauges.cohortId],
+    fields: [cohortProgress.cohortId],
     references: [cohorts.id],
   }),
 }));
 
-export const globalGaugeMilestonesRelations = relations(globalGaugeMilestones, ({ one }) => ({
-  gauge: one(globalGauges, {
-    fields: [globalGaugeMilestones.gaugeId],
-    references: [globalGauges.id],
+export const progressMilestonesRelations = relations(progressMilestones, ({ one }) => ({
+  progress: one(cohortProgress, {
+    fields: [progressMilestones.progressId],
+    references: [cohortProgress.id],
   }),
 }));
 
-export const cohortRewardCardsRelations = relations(cohortRewardCards, ({ one }) => ({
+export const notificationsRelations = relations(notifications, ({ one }) => ({
   cohort: one(cohorts, {
-    fields: [cohortRewardCards.cohortId],
+    fields: [notifications.cohortId],
     references: [cohorts.id],
   }),
-}));
-
-export const dashboardNotificationsRelations = relations(dashboardNotifications, ({ one }) => ({
-  cohort: one(cohorts, {
-    fields: [dashboardNotifications.cohortId],
-    references: [cohorts.id],
+  guild: one(guilds, {
+    fields: [notifications.guildId],
+    references: [guilds.id],
   }),
 }));

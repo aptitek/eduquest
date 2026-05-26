@@ -6,9 +6,9 @@ const t = (key: string) => key;
 describe('dashboard dock data builders', () => {
   it('builds podium cards from provided guild data only', () => {
     const cards = buildPodiumCards(t, [
-      { id: 'guild-low', name: 'Low Guild', totalPoints: 10 },
-      { id: 'guild-high', name: 'High Guild', totalPoints: 50 },
-      { id: 'guild-mid', name: 'Mid Guild', totalPoints: 25 },
+      { id: 'guild-low', name: 'Low Guild', gold: 10 },
+      { id: 'guild-high', name: 'High Guild', gold: 50 },
+      { id: 'guild-mid', name: 'Mid Guild', gold: 25 },
     ]);
 
     expect(cards.map((card) => card.title)).toEqual(['High Guild', 'Mid Guild', 'Low Guild']);
@@ -17,7 +17,7 @@ describe('dashboard dock data builders', () => {
 
   it('builds a partial podium while guild data is still loading', () => {
     const cards = buildPodiumCards(t, [
-      { id: 'guild-player', name: 'Solarized Sentinels', totalPoints: 180 },
+      { id: 'guild-player', name: 'Solarized Sentinels', gold: 180 },
     ]);
 
     expect(cards).toHaveLength(1);
@@ -27,24 +27,29 @@ describe('dashboard dock data builders', () => {
 
   it('uses real character stats in the player guild hand', () => {
     const [hand] = buildGuildCardHands(t, {
-      guild: { id: 'guild-1', name: 'Solarized Sentinels', totalPoints: 180 },
+      guild: { id: 'guild-1', name: 'Solarized Sentinels', gold: 180 },
       guildName: 'Solarized Sentinels',
       playerName: 'Lina Morel',
       playerAvatar: '/avatar.png',
-      characterLevel: 2,
       characterClass: 'guide',
       characterClassLabel: 'Guide',
-      characterStats: { str: 7, dex: 16, int: 13, cha: 15 },
+      characterStats: {
+        strength: 7,
+        dexterity: 16,
+        constitution: 0,
+        intelligence: 13,
+        wisdom: 0,
+        charisma: 15,
+      },
       activeCardIndex: 0,
     });
 
     const playerCard = hand.cards.find((card) => card.id === 'player');
     expect(playerCard?.front && 'stats' in playerCard.front ? playerCard.front.stats : []).toEqual([
-      { id: 'str', label: 'STR', value: 7 },
-      { id: 'dex', label: 'DEX', value: 16 },
-      { id: 'int', label: 'INT', value: 13 },
-      { id: 'cha', label: 'CHA', value: 15 },
-      { id: 'xp', label: 'XP', value: 16 },
+      { id: 'strength', label: 'STR', value: 7 },
+      { id: 'dexterity', label: 'DEX', value: 16 },
+      { id: 'intelligence', label: 'INT', value: 13 },
+      { id: 'charisma', label: 'CHA', value: 15 },
     ]);
   });
 });

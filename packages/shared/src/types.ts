@@ -19,21 +19,10 @@ export interface User {
   avatarUrl?: string;
   githubAvatarUrl?: string;
   userStatus?: UserStatus;
-  statusOverride?: boolean;
   isAdmin: boolean;
-  schoolMemberships?: UserSchoolMembership[];
   createdAt?: string;
   updatedAt?: string;
   lastLogin?: string;
-}
-
-export interface UserSchoolMembership {
-  userId: string;
-  schoolId: string;
-  school?: School;
-  institutionalEmail?: string;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 // Table `schools` : Établissement
@@ -80,7 +69,7 @@ export interface Cohort {
   school?: School;
   campusId?: string;
   campus?: Campus;
-  schoolYear: string;
+  startYear: number;
   grade: CohortGrade;
   level: number;
   name: string;
@@ -100,14 +89,14 @@ export interface Guild {
   description?: string;
   iconUrl?: string;
   color?: string; // Design accent token, e.g. quest, danger, specialist
-  totalPoints?: number;
+  gold?: number;
   createdAt?: string;
   updatedAt?: string;
 }
 
-// Table `student_cohorts` : Association étudiants/classes, avec une guilde max par cohort
-export interface StudentCohort {
-  studentId: string;
+// Table `cohort_memberships` : Association utilisateurs étudiants/classes, avec une guilde max par cohort
+export interface CohortMembership {
+  userId: string;
   cohortId: string;
   cohort?: Cohort;
   guildId?: string;
@@ -120,9 +109,7 @@ export interface StudentCohort {
 export interface Student {
   id: string;
   userId: string;
-  schoolId?: string;
-  school?: School;
-  cohortMemberships?: StudentCohort[];
+  cohortMemberships?: CohortMembership[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -154,30 +141,26 @@ export const GAME_CHARACTER_CLASS_I18N_KEYS: Record<GameCharacterClass, string> 
 export interface GameCharacterClassDefinition {
   slug: GameCharacterClass;
   nameI18nKey: string;
+  baseStats: GameStats;
   sortOrder: number;
   createdAt?: string;
+}
+
+export interface GameStats {
+  strength: number;
+  intelligence: number;
+  wisdom: number;
+  dexterity: number;
+  constitution: number;
+  charisma: number;
 }
 
 // Table `game_characters` : Verso de la carte étudiant (Stats JDR)
 export interface GameCharacter {
   studentId: string;
   characterClass: GameCharacterClass;
-  stats: {
-    str: number;
-    dex: number;
-    int: number;
-    cha: number;
-    [key: string]: number;
-  }; // JSONB
-  currentLevel: number;
+  stats: GameStats;
   updatedAt?: string;
-}
-
-// Table `game_decks` : Decks de classes / promotions
-export interface GameDeck {
-  id: string;
-  schoolId: string;
-  name: string;
 }
 
 // Règle de déverrouillage de quête (logique métier)
@@ -215,44 +198,43 @@ export interface Activity {
   createdAt?: string;
 }
 
-export interface DashboardMilestone {
-  id: string;
-  labelI18nKey: string;
-  descriptionI18nKey?: string;
-  positionPercent?: number;
-  value?: number;
-}
-
-export interface DashboardRewardCard {
+export interface ProgressReward {
   id: string;
   titleI18nKey: string;
   subtitleI18nKey?: string;
   accentToken?: string;
-  faceDown?: boolean;
 }
 
-export type DashboardNotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
-
-export interface DashboardNotification {
+export interface ProgressMilestone {
   id: string;
+  labelI18nKey: string;
+  descriptionI18nKey?: string;
+  cost: number;
+  reward: ProgressReward;
+}
+
+export type NotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+
+export interface Notification {
+  id: string;
+  cohortId?: string;
+  guildId?: string;
   titleI18nKey: string;
   descriptionI18nKey?: string;
-  metaI18nKey?: string;
-  icon?: 'map' | 'sparkles' | 'coins' | 'gift' | 'info';
-  tone?: DashboardNotificationTone;
+  icon?: string;
+  tone?: NotificationTone;
   actionLabelI18nKey?: string;
   actionTarget?: 'map' | 'acknowledge' | 'collect' | 'review';
 }
 
-export interface DashboardData {
+export interface CohortProgressData {
   gauge: {
     currentPoints: number;
     targetPoints: number;
     labelI18nKey: string;
-    milestones: DashboardMilestone[];
+    milestones: ProgressMilestone[];
   };
-  rewards: DashboardRewardCard[];
-  notifications: DashboardNotification[];
+  notifications: Notification[];
 }
 
 // Table `game_battles` : Rendus de devoirs et combats

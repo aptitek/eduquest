@@ -9,7 +9,6 @@ import type {
   School,
   Student,
   User,
-  UserSchoolMembership,
 } from '@eduquest/shared';
 
 type DebugStudentProfile = {
@@ -83,7 +82,7 @@ export const DEBUG_COHORTS: Cohort[] = [
     school: DEBUG_SCHOOLS[0],
     campusId: 'debug_campus_aptitek_paris',
     campus: DEBUG_CAMPUSES[0],
-    schoolYear: '2025-2026',
+    startYear: 2025,
     grade: 'bachelor',
     level: 3,
     name: 'Frontend Mages',
@@ -98,7 +97,7 @@ export const DEBUG_COHORTS: Cohort[] = [
     school: DEBUG_SCHOOLS[0],
     campusId: 'debug_campus_aptitek_paris',
     campus: DEBUG_CAMPUSES[0],
-    schoolYear: '2026-2027',
+    startYear: 2026,
     grade: 'master',
     level: 1,
     name: 'Fullstack Rangers',
@@ -113,7 +112,7 @@ export const DEBUG_COHORTS: Cohort[] = [
     school: DEBUG_SCHOOLS[1],
     campusId: 'debug_campus_polyforge_lyon',
     campus: DEBUG_CAMPUSES[1],
-    schoolYear: '2024-2025',
+    startYear: 2024,
     grade: 'engineer',
     level: 5,
     name: 'Data Alchemists',
@@ -132,6 +131,7 @@ export const DEBUG_GUILDS: Guild[] = [
     name: 'Solarized Sentinels',
     description: 'Guardians of consistent UI systems.',
     color: '#268bd2',
+    gold: 180,
     createdAt: '2026-01-01',
   },
   {
@@ -141,6 +141,7 @@ export const DEBUG_GUILDS: Guild[] = [
     name: 'Crimson Compilers',
     description: 'Backend raiders who never leave failing checks behind.',
     color: '#dc322f',
+    gold: 168,
     createdAt: '2026-01-01',
   },
   {
@@ -150,6 +151,7 @@ export const DEBUG_GUILDS: Guild[] = [
     name: 'Violet Oracles',
     description: 'Data interpreters and probability mages.',
     color: '#6c71c4',
+    gold: 132,
     createdAt: '2026-01-01',
   },
 ];
@@ -243,11 +245,9 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     student: {
       id: 'debug_student_lina',
       userId: 'debug_user_lina',
-      schoolId: 'debug_school_aptitek',
-      school: DEBUG_SCHOOLS[0],
       cohortMemberships: [
         {
-          studentId: 'debug_student_lina',
+          userId: 'debug_user_lina',
           cohortId: 'debug_cohort_frontend_mages',
           cohort: DEBUG_COHORTS[0],
           guildId: 'debug_guild_solarized_sentinels',
@@ -256,7 +256,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
           createdAt: '2026-01-01',
         },
         {
-          studentId: 'debug_student_lina',
+          userId: 'debug_user_lina',
           cohortId: 'debug_cohort_fullstack_rangers',
           cohort: DEBUG_COHORTS[1],
           guildId: 'debug_guild_crimson_compilers',
@@ -270,8 +270,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     character: {
       studentId: 'debug_student_lina',
       characterClass: 'guide',
-      stats: { str: 7, dex: 16, int: 13, cha: 15, xp: 140 },
-      currentLevel: 2,
+      stats: { strength: 7, dexterity: 16, constitution: 0, intelligence: 13, wisdom: 0, charisma: 15 },
       updatedAt: '2026-02-12',
     },
     battles: [
@@ -313,11 +312,9 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     student: {
       id: 'debug_student_samir',
       userId: 'debug_user_samir',
-      schoolId: 'debug_school_aptitek',
-      school: DEBUG_SCHOOLS[0],
       cohortMemberships: [
         {
-          studentId: 'debug_student_samir',
+          userId: 'debug_user_samir',
           cohortId: 'debug_cohort_fullstack_rangers',
           cohort: DEBUG_COHORTS[1],
           guildId: 'debug_guild_crimson_compilers',
@@ -331,8 +328,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     character: {
       studentId: 'debug_student_samir',
       characterClass: 'champion',
-      stats: { str: 12, dex: 11, int: 17, cha: 10, xp: 320 },
-      currentLevel: 3,
+      stats: { strength: 12, dexterity: 11, constitution: 0, intelligence: 17, wisdom: 0, charisma: 10 },
       updatedAt: '2026-02-18',
     },
     battles: [
@@ -381,11 +377,9 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     student: {
       id: 'debug_student_noa',
       userId: 'debug_user_noa',
-      schoolId: 'debug_school_polyforge',
-      school: DEBUG_SCHOOLS[1],
       cohortMemberships: [
         {
-          studentId: 'debug_student_noa',
+          userId: 'debug_user_noa',
           cohortId: 'debug_cohort_data_alchemists',
           cohort: DEBUG_COHORTS[2],
           guildId: 'debug_guild_violet_oracles',
@@ -399,8 +393,7 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
     character: {
       studentId: 'debug_student_noa',
       characterClass: 'specialist',
-      stats: { str: 8, dex: 10, int: 19, cha: 13, xp: 580 },
-      currentLevel: 5,
+      stats: { strength: 8, dexterity: 10, constitution: 0, intelligence: 19, wisdom: 0, charisma: 13 },
       updatedAt: '2026-03-01',
     },
     battles: [
@@ -436,23 +429,20 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
 ];
 
 export function getDebugStudentOptions() {
-  return DEBUG_STUDENT_PROFILES.map(({ user, student, character }) => ({
+  return DEBUG_STUDENT_PROFILES.map(({ user, student }) => ({
     id: user.id,
     username: user.githubUsername || user.id,
     displayName: user.displayName || user.email,
     email: user.email,
-    schoolName: student.school?.name,
+    schoolName: student.cohortMemberships?.[0]?.cohort?.school?.name,
     cohortNames:
-      student.cohortMemberships?.map((membership) => membership.cohort?.name).filter(Boolean) || [],
-    level: character.currentLevel,
+      student.cohortMemberships
+        ?.map((membership) => membership.cohort?.name)
+        .filter((name): name is string => Boolean(name)) || [],
   }));
 }
 
 export function getDebugBackup() {
-  for (const profile of DEBUG_STUDENT_PROFILES) {
-    profile.user.schoolMemberships = getDebugSchoolMemberships(profile);
-  }
-
   return {
     addresses: DEBUG_ADDRESSES,
     schools: DEBUG_SCHOOLS,
@@ -462,34 +452,6 @@ export function getDebugBackup() {
     activities: DEBUG_ACTIVITIES,
     students: DEBUG_STUDENT_PROFILES,
   };
-}
-
-function getDebugSchoolMemberships(profile: DebugStudentProfile): UserSchoolMembership[] {
-  const membershipsBySchool = new Map<string, UserSchoolMembership>();
-
-  for (const membership of profile.student.cohortMemberships || []) {
-    const school = membership.cohort?.school || profile.student.school;
-    const schoolId = membership.cohort?.schoolId || school?.id || profile.student.schoolId;
-    if (!schoolId) continue;
-
-    membershipsBySchool.set(schoolId, {
-      userId: profile.user.id,
-      schoolId,
-      school,
-      institutionalEmail: membership.institutionalEmail,
-      createdAt: membership.createdAt,
-    });
-  }
-
-  if (profile.student.schoolId && !membershipsBySchool.has(profile.student.schoolId)) {
-    membershipsBySchool.set(profile.student.schoolId, {
-      userId: profile.user.id,
-      schoolId: profile.student.schoolId,
-      school: profile.student.school,
-    });
-  }
-
-  return Array.from(membershipsBySchool.values());
 }
 
 export function getDebugProfile(identifier?: string | null) {

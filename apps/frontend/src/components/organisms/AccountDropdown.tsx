@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from './InstitutionalProfileCard/InstitutionalProfileCard';
-import { StudentCohort, User } from '@eduquest/shared';
+import { CohortMembership, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
@@ -38,7 +38,7 @@ function getInitialTheme(): ThemeMode {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
-function getLatestCohortMembership(memberships?: StudentCohort[]) {
+function getLatestCohortMembership(memberships?: CohortMembership[]) {
   if (!memberships || memberships.length === 0) return undefined;
   return [...memberships].sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -57,15 +57,7 @@ export function AccountDropdown() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const latestCohortMembership = getLatestCohortMembership(student?.cohortMemberships);
   const latestCohort = user?.isAdmin ? undefined : latestCohortMembership?.cohort;
-  const adminSchoolMembership = user?.schoolMemberships?.find(
-    (membership) => membership.school?.name === 'Aptitek'
-  );
-  const latestSchool = user?.isAdmin
-    ? adminSchoolMembership?.school
-    : latestCohort?.school || student?.school;
-  const latestSchoolMembership = user?.schoolMemberships?.find(
-    (membership) => membership.schoolId === latestSchool?.id
-  );
+  const latestSchool = latestCohort?.school;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -85,7 +77,7 @@ export function AccountDropdown() {
 
   useEffect(() => {
     setInstitutionalEmailOverride(null);
-  }, [latestSchoolMembership?.institutionalEmail]);
+  }, [latestCohortMembership?.institutionalEmail]);
 
   if (!user) return null;
 
@@ -227,7 +219,6 @@ export function AccountDropdown() {
                 onUploadAvatar={handleUploadAvatar}
                 institutionalEmail={
                   institutionalEmailOverride ??
-                  latestSchoolMembership?.institutionalEmail ??
                   latestCohortMembership?.institutionalEmail
                 }
                 institutionalEmailDomain={latestSchool?.emailDomain || 'school.edu'}

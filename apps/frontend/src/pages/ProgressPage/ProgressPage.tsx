@@ -5,18 +5,18 @@ import { PlayingCard, type PlayingCardData } from '../../components/molecules/Pl
 import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid';
 import { useTranslation } from '../../hooks/useTranslation';
 import { buildProgressBonusCards } from '../../components/organisms/DashboardDock/dashboardDockData';
-import { useDashboardData } from '../../features/game/useDashboardData';
+import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 
 export function ProgressPage() {
   const { t } = useTranslation();
-  const dashboardData = useDashboardData();
-  const fallbackBonusCards = dashboardData?.rewards.length
-    ? (dashboardData.rewards.map((reward) => ({
+  const dashboardData = useCohortProgressData();
+  const milestoneRewards = dashboardData?.gauge.milestones.map((milestone) => milestone.reward) || [];
+  const fallbackBonusCards = milestoneRewards.length
+    ? (milestoneRewards.map((reward) => ({
         kind: 'guild' as const,
         title: t(reward.titleI18nKey),
         subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
         accentToken: reward.accentToken,
-        faceDown: reward.faceDown,
         ribbonLabel: t('dashboard.dock.newRibbon'),
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])

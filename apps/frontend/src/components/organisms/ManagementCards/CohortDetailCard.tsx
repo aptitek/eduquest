@@ -61,7 +61,7 @@ export function CohortDetailCard({
     campusName: cohort.campusName,
     name: cohort.name,
     description: cohort.description || '',
-    schoolYear: cohort.schoolYear,
+    startYear: String(cohort.startYear),
     grade: formatGrade(cohort.grade),
     level: String(cohort.level),
     majorSpeciality: cohort.majorSpeciality || '',
@@ -79,7 +79,7 @@ export function CohortDetailCard({
   const resolvedLogoUrl =
     cohort.school?.logoUrl || (cohort.schoolName === 'Aptitek' ? aptitekLogoUrl : undefined);
   const schoolYearOptions = Array.from(
-    new Set([cohort.schoolYear, ...cohortOptions.map((item) => item.schoolYear)])
+    new Set([String(cohort.startYear), ...cohortOptions.map((item) => String(item.startYear))])
   );
   const gradeOptions = ['Licence', 'Bachelor', 'Engineer', 'Master', 'Doctorate'];
   const levelOptions = ['1', '2', '3', '4', '5'];
@@ -103,7 +103,7 @@ export function CohortDetailCard({
       campusName: cohort.campusName,
       name: cohort.name,
       description: cohort.description || '',
-      schoolYear: cohort.schoolYear,
+      startYear: String(cohort.startYear),
       grade: formatGrade(cohort.grade),
       level: String(cohort.level),
       majorSpeciality: cohort.majorSpeciality || '',
@@ -481,9 +481,9 @@ export function CohortDetailCard({
           <div className="flex flex-wrap gap-2">
             <BadgeDropdown
               options={schoolYearOptions}
-              value={[draft.schoolYear]}
+              value={[draft.startYear]}
               onChange={(next) =>
-                setDraft((current) => ({ ...current, schoolYear: next[0] || current.schoolYear }))
+                setDraft((current) => ({ ...current, startYear: next[0] || current.startYear }))
               }
               multiple={false}
               placeholder={t('management.cohorts.schoolYear')}

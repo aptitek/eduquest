@@ -1,4 +1,4 @@
-import type { GameCharacterClass, StudentCohort } from '@eduquest/shared';
+import type { CohortMembership, GameCharacterClass, GameStats } from '@eduquest/shared';
 import type { PlayingCardData, PlayingHandData } from '../../molecules/PlayingCard';
 import type { DockGuild } from './types';
 
@@ -9,10 +9,9 @@ interface GuildHandOptions {
   guildName: string;
   playerName: string;
   playerAvatar: string;
-  characterLevel: number;
   characterClass: GameCharacterClass;
   characterClassLabel: string;
-  characterStats: Record<string, number>;
+  characterStats: GameStats;
   activeCardIndex: number;
 }
 
@@ -27,7 +26,7 @@ export function buildPodiumCards(
   t: Translate,
   guilds: readonly DockGuild[]
 ): PlayingCardData[] {
-  const podiumGuilds = [...guilds].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  const podiumGuilds = [...guilds].sort((a, b) => (b.gold || 0) - (a.gold || 0));
 
   const toCard = (guild: DockGuild): PlayingCardData => ({
     kind: 'guild',
@@ -35,7 +34,7 @@ export function buildPodiumCards(
     layoutId: `class-guild-${slugify(guild.name)}-guild`,
     guild,
     title: guild.name,
-    subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(guild.totalPoints || 0)),
+    subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(guild.gold || 0)),
   });
 
   const podiumRibbonClassNames = [
@@ -85,7 +84,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
       kind: 'guild',
       guild: options.guild,
       title: options.guildName,
-      subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.totalPoints || 0)),
+      subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.gold || 0)),
       front: {
         title: options.guildName,
         description:
@@ -94,7 +93,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         illustrationUrl: options.guild.iconUrl,
         ribbonText: t('dashboard.dock.playerGuild'),
         stats: [
-          { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.totalPoints || 0, max: 250 },
+          { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
           { id: 'quests', label: 'Quest', value: 74 },
           { id: 'support', label: 'Aid', value: 68 },
           { id: 'focus', label: 'Focus', value: 82 },
@@ -120,21 +119,20 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
       kind: 'character',
       characterClass: options.characterClass,
       title: options.playerName,
-      subtitle: `LVL ${options.characterLevel}`,
+      subtitle: options.characterClassLabel,
       illustrationUrl: options.playerAvatar,
       illustrationAlt: options.playerName,
       front: {
         title: options.playerName,
-        description: `${options.characterClassLabel} level ${options.characterLevel}. A reliable active member ready to turn boosts into progress.`,
+        description: `${options.characterClassLabel}. A reliable active member ready to turn boosts into progress.`,
         color: 'var(--color-status-quest)',
         illustrationUrl: options.playerAvatar,
         ribbonText: options.characterClassLabel,
         stats: [
-          { id: 'str', label: 'STR', value: options.characterStats.str ?? options.characterStats.force ?? 0 },
-          { id: 'dex', label: 'DEX', value: options.characterStats.dex ?? options.characterStats.dexterity ?? 0 },
-          { id: 'int', label: 'INT', value: options.characterStats.int ?? options.characterStats.intelligence ?? 0 },
-          { id: 'cha', label: 'CHA', value: options.characterStats.cha ?? options.characterStats.charisma ?? 0 },
-          { id: 'xp', label: 'XP', value: Math.min(options.characterLevel * 8, 100) },
+          { id: 'strength', label: 'STR', value: options.characterStats.strength ?? 0 },
+          { id: 'dexterity', label: 'DEX', value: options.characterStats.dexterity ?? 0 },
+          { id: 'intelligence', label: 'INT', value: options.characterStats.intelligence ?? 0 },
+          { id: 'charisma', label: 'CHA', value: options.characterStats.charisma ?? 0 },
         ],
       },
     },
@@ -217,7 +215,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
         kind: 'guild',
         guild: options.guild,
         title: guildName,
-        subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.totalPoints || 0)),
+        subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.gold || 0)),
         front: {
           title: guildName,
           description:
@@ -226,7 +224,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
           illustrationUrl: options.guild.iconUrl,
           ribbonText: t('dashboard.dock.playerGuild'),
           stats: [
-            { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.totalPoints || 0, max: 250 },
+            { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
             { id: 'quests', label: 'Quest', value: 72 },
             { id: 'support', label: 'Aid', value: 64 },
             { id: 'focus', label: 'Focus', value: 78 },
@@ -282,7 +280,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
   };
 }
 
-export function getLatestCohortMembership(memberships?: StudentCohort[]) {
+export function getLatestCohortMembership(memberships?: CohortMembership[]) {
   if (!memberships || memberships.length === 0) return undefined;
 
   return [...memberships].sort((a, b) => {

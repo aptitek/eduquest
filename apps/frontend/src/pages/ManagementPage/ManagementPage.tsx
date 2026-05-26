@@ -38,17 +38,8 @@ import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
 
-function getSchoolInstitutionalEmail(
-  rowUser: StudentRow['user'],
-  schoolId?: string,
-  legacyEmail?: string
-) {
-  return (
-    rowUser.schoolMemberships?.find((membership) => membership.schoolId === schoolId)
-      ?.institutionalEmail ||
-    legacyEmail ||
-    rowUser.email
-  );
+function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: string) {
+  return legacyEmail || rowUser.email;
 }
 
 export function ManagementPage() {
@@ -104,8 +95,10 @@ export function ManagementPage() {
       const cohortCount = debugBackup.cohorts.filter(
         (cohort) => cohort.schoolId === school.id
       ).length;
-      const studentCount = debugBackup.students.filter(
-        (profile) => profile.student.schoolId === school.id
+      const studentCount = debugBackup.students.filter((profile) =>
+        profile.student.cohortMemberships?.some(
+          (membership) => membership.cohort?.schoolId === school.id
+        )
       ).length;
 
       return {
@@ -140,10 +133,9 @@ export function ManagementPage() {
     if (debugBackup) {
       return debugBackup.students
         .filter(({ user: rowUser }) => !rowUser.isAdmin)
-        .map(({ user: rowUser, student: rowStudent, character: rowCharacter }) => {
+        .map(({ user: rowUser, student: rowStudent }) => {
           const latestMembership = getLatestCohortMembership(rowStudent.cohortMemberships);
-          const selectedSchool =
-            latestMembership?.cohort?.school || rowStudent.school || schoolRows[0];
+          const selectedSchool = latestMembership?.cohort?.school || schoolRows[0];
 
           return {
             ...rowStudent,
@@ -151,15 +143,10 @@ export function ManagementPage() {
             school: selectedSchool,
             user: rowUser,
             displayName: formatUserDisplayName(rowUser),
-            email: getSchoolInstitutionalEmail(
-              rowUser,
-              selectedSchool?.id,
-              latestMembership?.institutionalEmail
-            ),
+            email: getSchoolInstitutionalEmail(rowUser, latestMembership?.institutionalEmail),
             cohort: latestMembership?.cohortId
               ? cohortRows.find((cohort) => cohort.id === latestMembership.cohortId)
               : undefined,
-            level: rowCharacter.currentLevel,
             age: calculateAge(rowUser.birthDate),
           };
         });
@@ -167,20 +154,19 @@ export function ManagementPage() {
 
     if (!user || !student || !character || user.isAdmin) return [];
     const latestMembership = getLatestCohortMembership(student.cohortMemberships);
-    const selectedSchool = latestMembership?.cohort?.school || student.school || schoolRows[0];
+    const selectedSchool = latestMembership?.cohort?.school || schoolRows[0];
 
     return [
       {
         ...student,
-        schoolId: selectedSchool.id,
+        schoolId: selectedSchool?.id,
         school: selectedSchool,
         user,
         displayName: formatUserDisplayName(user),
-        email: getSchoolInstitutionalEmail(user, selectedSchool?.id, latestMembership?.institutionalEmail),
+        email: getSchoolInstitutionalEmail(user, latestMembership?.institutionalEmail),
         cohort: latestMembership?.cohortId
           ? cohortRows.find((cohort) => cohort.id === latestMembership.cohortId)
           : undefined,
-        level: character.currentLevel,
         age: calculateAge(user.birthDate),
       },
     ];
@@ -225,9 +211,6 @@ export function ManagementPage() {
     (selectedStudentMembership?.cohortId
       ? cohortRows.find((cohort) => cohort.id === selectedStudentMembership.cohortId)
       : undefined);
-  const selectedStudentSchoolMembership = selectedStudentRow?.user.schoolMemberships?.find(
-    (membership) => membership.schoolId === selectedStudentRow.schoolId
-  );
   const updateSelectedSchool = async (update: ManagementSchoolUpdate, shouldThrow = false) => {
     if (!selectedSchoolRow) return;
 
@@ -302,12 +285,11 @@ export function ManagementPage() {
         }
         hideRoleBadge
         stackPronouns
-        schoolLogoUrl={selectedStudentRow.school?.logoUrl}
+        schoolLogoUrl={selectedStudentCohort?.school?.logoUrl}
         institutionalEmail={
-          selectedStudentSchoolMembership?.institutionalEmail ||
           selectedStudentMembership?.institutionalEmail
         }
-        institutionalEmailDomain={selectedStudentRow.school?.emailDomain}
+        institutionalEmailDomain={selectedStudentCohort?.school?.emailDomain}
         onInstitutionalEmailChange={(institutionalEmail, cohortId) =>
           updateSelectedStudent({
             institutionalEmail,
@@ -317,7 +299,7 @@ export function ManagementPage() {
         }
         cohort={selectedStudentCohort}
         cohortRibbonLabel={
-          selectedStudentCohort ? formatSchoolYear(selectedStudentCohort.schoolYear) : undefined
+          selectedStudentCohort ? formatSchoolYear(selectedStudentCohort.startYear) : undefined
         }
         cohortOptions={cohortRows.map((cohort) => cohort.id)}
         selectedCohorts={selectedStudentCohortIds}
@@ -350,10 +332,8 @@ export function ManagementPage() {
           cohortRows.find((item) => item.id === cohortId)?.schoolName
         }
         getCohortInstitutionalEmail={(cohortId) => {
-          const cohort = cohortRows.find((item) => item.id === cohortId);
           return getSchoolInstitutionalEmail(
             selectedStudentRow.user,
-            cohort?.schoolId,
             selectedStudentRow.cohortMemberships?.find(
               (membership) => membership.cohortId === cohortId
             )?.institutionalEmail

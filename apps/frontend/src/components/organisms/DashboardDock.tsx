@@ -7,7 +7,7 @@ import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { useGameStore } from '../../features/game/gameStore';
 import { fetchGuilds, spendGuildVotes } from '../../features/game/api';
-import { useDashboardData } from '../../features/game/useDashboardData';
+import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
@@ -44,7 +44,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const [guilds, setGuilds] = useState<DockGuild[]>([]);
   const { user, student, character } = useGameStore();
-  const dashboardData = useDashboardData();
+  const dashboardData = useCohortProgressData();
   const { t } = useTranslation();
   const latestMembership = getLatestCohortMembership(student?.cohortMemberships);
   const playerGuild = latestMembership?.guild;
@@ -166,13 +166,13 @@ export function DashboardDock({ className }: DashboardDockProps) {
     podiumGuilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name) ||
     playerGuild;
   const podiumCards = buildPodiumCards(t, podiumGuilds);
-  const bonusCards = dashboardData?.rewards.length
-    ? (dashboardData.rewards.map((reward) => ({
+  const milestoneRewards = dashboardData?.gauge.milestones.map((milestone) => milestone.reward) || [];
+  const bonusCards = milestoneRewards.length
+    ? (milestoneRewards.map((reward) => ({
         kind: 'guild' as const,
         title: t(reward.titleI18nKey),
         subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
         accentToken: reward.accentToken as PlayingCardData['accentToken'],
-        faceDown: reward.faceDown,
         ribbonLabel: t('dashboard.dock.newRibbon'),
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
@@ -192,8 +192,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         id: milestone.id,
         label: t(milestone.labelI18nKey),
         description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
-        positionPercent: milestone.positionPercent,
-        value: milestone.value,
+        value: milestone.cost,
       }))
     : [];
   const gaugeCurrentPoints = dashboardData?.gauge.currentPoints ?? 0;
@@ -237,7 +236,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
     guildName: activePlayerGuild.name || t('dashboard.dock.playerGuild'),
     playerName,
     playerAvatar,
-    characterLevel: character.currentLevel,
     characterClass: character.characterClass,
     characterClassLabel: t(`game.classes.${character.characterClass}`),
     characterStats: character.stats,
@@ -293,7 +291,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     try {
       const voteSpend = await spendGuildVotes(token, activePlayerGuild.id, 1);
       setGuilds((current) => {
-        const updatedGuild = { ...activePlayerGuild, totalPoints: voteSpend.balance };
+        const updatedGuild = { ...activePlayerGuild, gold: voteSpend.balance };
         return [updatedGuild, ...current.filter((guild) => guild?.id !== activePlayerGuild.id)];
       });
     } catch (error) {
@@ -317,7 +315,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const goldIndicator = (
     <GaugeIndicator
       label={t('dashboard.dock.gold')}
-      value={(activePlayerGuild.totalPoints || 0).toLocaleString()}
+      value={(activePlayerGuild.gold || 0).toLocaleString()}
       icon={<Coins size={18} aria-hidden />}
       tone="gold"
     />
@@ -468,7 +466,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             label={gaugeLabel}
             centerContent={boostButton}
             goldIndicator={goldIndicator}
-            rightIndicatorCompactValue={(activePlayerGuild.totalPoints || 0).toLocaleString()}
+            rightIndicatorCompactValue={(activePlayerGuild.gold || 0).toLocaleString()}
             boostLabel={t('dashboard.dock.boost')}
             milestoneBadgesExpanded={isProgressPage}
             className={cn(

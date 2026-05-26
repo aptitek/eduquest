@@ -60,7 +60,6 @@ export function CharacterPage() {
       avatarUrl,
       characterClass: character.characterClass,
       classLabel: currentClassLabel,
-      level: character.currentLevel,
       stats: character.stats,
       bio: user.bio,
       fallbackDescription: t('character.activeCardDescription'),
@@ -180,7 +179,6 @@ function buildPlayerCharacterCard({
   avatarUrl,
   characterClass,
   classLabel,
-  level,
   stats,
   bio,
   fallbackDescription,
@@ -189,7 +187,6 @@ function buildPlayerCharacterCard({
   avatarUrl?: string;
   characterClass: GameCharacterClass;
   classLabel: string;
-  level: number;
   stats: GameCharacter['stats'];
   bio?: string;
   fallbackDescription: string;
@@ -205,18 +202,19 @@ function buildPlayerCharacterCard({
     ribbonLabel: classLabel,
     front: {
       title: name,
-      subtitle: `${classLabel} · ${level}`,
+      subtitle: classLabel,
       description: bio || fallbackDescription,
       illustrationUrl: avatarUrl,
       illustrationAlt: name,
       ribbonText: classLabel,
       ribbonEditable: false,
       stats: [
-        { id: 'str', label: 'STR', value: stats.str ?? stats.force ?? 0 },
-        { id: 'dex', label: 'DEX', value: stats.dex ?? stats.dexterity ?? 0 },
-        { id: 'int', label: 'INT', value: stats.int ?? stats.intelligence ?? 0 },
-        { id: 'cha', label: 'CHA', value: stats.cha ?? stats.charisma ?? 0 },
-        { id: 'xp', label: 'XP', value: Math.min(level * 8, 100) },
+        { id: 'strength', label: 'STR', value: stats.strength },
+        { id: 'dexterity', label: 'DEX', value: stats.dexterity },
+        { id: 'constitution', label: 'CON', value: stats.constitution },
+        { id: 'intelligence', label: 'INT', value: stats.intelligence },
+        { id: 'wisdom', label: 'WIS', value: stats.wisdom },
+        { id: 'charisma', label: 'CHA', value: stats.charisma },
       ],
     },
   };

@@ -1,10 +1,10 @@
-import type { Activity, DashboardData, GameBattle, Guild } from '@eduquest/shared';
+import type { Activity, CohortProgressData, GameBattle, Guild } from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 
 type DashboardResponse =
   | {
       success: true;
-      dashboard: DashboardData;
+      progress: CohortProgressData;
     }
   | {
       success: false;
@@ -22,7 +22,7 @@ type GuildsResponse =
       error?: string;
     };
 
-export async function fetchDashboardData(token: string): Promise<DashboardData> {
+export async function fetchCohortProgressData(token: string): Promise<CohortProgressData> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/dashboard`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -35,7 +35,7 @@ export async function fetchDashboardData(token: string): Promise<DashboardData> 
     throw new Error(data.success ? 'Dashboard request failed.' : data.error || 'Dashboard request failed.');
   }
 
-  return data.dashboard;
+  return data.progress;
 }
 
 export async function fetchGuilds(token: string): Promise<Guild[]> {

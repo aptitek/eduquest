@@ -26,7 +26,7 @@ export function GuildMemberDeck({
     kind: 'guild',
     guild,
     title: guild.name || fallbackGuildName,
-    subtitle: `${guild.totalPoints || 0} ${goldLabel}`,
+    subtitle: `${guild.gold || 0} ${goldLabel}`,
   };
 
   return (

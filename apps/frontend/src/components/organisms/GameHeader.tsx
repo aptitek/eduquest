@@ -4,7 +4,7 @@ import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { PlayingCard } from '../molecules/PlayingCard';
 import { useAuth } from '../../features/auth/useAuth';
-import { useDashboardData } from '../../features/game/useDashboardData';
+import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import {
   HeaderNotificationArea,
   HeaderNotificationButton,
@@ -21,7 +21,7 @@ interface GameHeaderProps {
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const { user, character } = useAuth();
-  const dashboardData = useDashboardData();
+  const dashboardData = useCohortProgressData();
   const { t } = useTranslation();
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -48,7 +48,6 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
         id: notification.id,
         title: t(notification.titleI18nKey),
         description: notification.descriptionI18nKey ? t(notification.descriptionI18nKey) : undefined,
-        meta: notification.metaI18nKey ? t(notification.metaI18nKey) : undefined,
         tone: notification.tone,
         icon: getNotificationIcon(notification.icon),
         action: notification.actionLabelI18nKey

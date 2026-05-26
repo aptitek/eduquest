@@ -1,17 +1,16 @@
 import { Hono } from 'hono';
-import { and, desc, eq, sql } from 'drizzle-orm';
-import { type DashboardData } from '@eduquest/shared';
+import { and, desc, eq, or, sql, sum } from 'drizzle-orm';
+import { type CohortProgressData } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
-  cohortRewardCards,
-  dashboardNotifications,
+  cohortMemberships,
+  cohortProgress,
   gameActivities,
   gameBattles,
   pointTransactions,
   guilds,
-  globalGaugeMilestones,
-  globalGauges,
-  studentCohorts,
+  notifications,
+  progressMilestones,
   students,
 } from '../db/schema';
 import { DEBUG_ACTIVITIES, DEBUG_GUILDS } from '../dev/debugBackup';
@@ -28,33 +27,27 @@ type Variables = {
   user?: UserPayload;
 };
 
-const DEBUG_DASHBOARD: DashboardData = {
+const DEBUG_COHORT_PROGRESS: CohortProgressData = {
   gauge: {
     currentPoints: 460,
-    targetPoints: 1000,
+    targetPoints: 460,
     labelI18nKey: 'dashboard.dock.milestone',
     milestones: [
-      { id: 'spark', labelI18nKey: 'dashboard.milestones.spark.label', descriptionI18nKey: 'dashboard.milestones.spark.description', positionPercent: 12 },
-      { id: 'campfire', labelI18nKey: 'dashboard.milestones.campfire.label', descriptionI18nKey: 'dashboard.milestones.campfire.description', positionPercent: 24 },
-      { id: 'quest', labelI18nKey: 'dashboard.milestones.quest.label', descriptionI18nKey: 'dashboard.milestones.quest.description', positionPercent: 38 },
-      { id: 'rally', labelI18nKey: 'dashboard.milestones.rally.label', descriptionI18nKey: 'dashboard.milestones.rally.description', positionPercent: 52 },
-      { id: 'treasure', labelI18nKey: 'dashboard.milestones.treasure.label', descriptionI18nKey: 'dashboard.milestones.treasure.description', positionPercent: 66 },
-      { id: 'boss', labelI18nKey: 'dashboard.milestones.boss.label', descriptionI18nKey: 'dashboard.milestones.boss.description', positionPercent: 78 },
-      { id: 'legend', labelI18nKey: 'dashboard.milestones.legend.label', descriptionI18nKey: 'dashboard.milestones.legend.description', positionPercent: 90 },
-      { id: 'ascend', labelI18nKey: 'dashboard.milestones.ascend.label', descriptionI18nKey: 'dashboard.milestones.ascend.description', positionPercent: 100 },
+      { id: 'spark', labelI18nKey: 'dashboard.milestones.spark.label', descriptionI18nKey: 'dashboard.milestones.spark.description', cost: 12, reward: { id: 'spark-reward', titleI18nKey: 'dashboard.rewards.deadline.title', subtitleI18nKey: 'dashboard.rewards.deadline.subtitle', accentToken: 'campfire' } },
+      { id: 'campfire', labelI18nKey: 'dashboard.milestones.campfire.label', descriptionI18nKey: 'dashboard.milestones.campfire.description', cost: 24, reward: { id: 'campfire-reward', titleI18nKey: 'dashboard.rewards.miniGame.title', subtitleI18nKey: 'dashboard.rewards.miniGame.subtitle', accentToken: 'completed' } },
+      { id: 'quest', labelI18nKey: 'dashboard.milestones.quest.label', descriptionI18nKey: 'dashboard.milestones.quest.description', cost: 38, reward: { id: 'quest-reward', titleI18nKey: 'dashboard.rewards.techHelp.title', subtitleI18nKey: 'dashboard.rewards.techHelp.subtitle', accentToken: 'quest' } },
+      { id: 'rally', labelI18nKey: 'dashboard.milestones.rally.label', descriptionI18nKey: 'dashboard.milestones.rally.description', cost: 52, reward: { id: 'rally-reward', titleI18nKey: 'dashboard.rewards.reroll.title', subtitleI18nKey: 'dashboard.rewards.reroll.subtitle', accentToken: 'specialist' } },
+      { id: 'treasure', labelI18nKey: 'dashboard.milestones.treasure.label', descriptionI18nKey: 'dashboard.milestones.treasure.description', cost: 66, reward: { id: 'treasure-reward', titleI18nKey: 'dashboard.milestones.treasure.label', accentToken: 'quest' } },
+      { id: 'boss', labelI18nKey: 'dashboard.milestones.boss.label', descriptionI18nKey: 'dashboard.milestones.boss.description', cost: 78, reward: { id: 'boss-reward', titleI18nKey: 'dashboard.milestones.boss.label', accentToken: 'danger' } },
+      { id: 'legend', labelI18nKey: 'dashboard.milestones.legend.label', descriptionI18nKey: 'dashboard.milestones.legend.description', cost: 90, reward: { id: 'legend-reward', titleI18nKey: 'dashboard.milestones.legend.label', accentToken: 'specialist' } },
+      { id: 'ascend', labelI18nKey: 'dashboard.milestones.ascend.label', descriptionI18nKey: 'dashboard.milestones.ascend.description', cost: 100, reward: { id: 'ascend-reward', titleI18nKey: 'dashboard.milestones.ascend.label', accentToken: 'completed' } },
     ],
   },
-  rewards: [
-    { id: 'deadline', titleI18nKey: 'dashboard.rewards.deadline.title', subtitleI18nKey: 'dashboard.rewards.deadline.subtitle', accentToken: 'campfire' },
-    { id: 'mini-game', titleI18nKey: 'dashboard.rewards.miniGame.title', subtitleI18nKey: 'dashboard.rewards.miniGame.subtitle', accentToken: 'completed' },
-    { id: 'tech-help', titleI18nKey: 'dashboard.rewards.techHelp.title', subtitleI18nKey: 'dashboard.rewards.techHelp.subtitle', accentToken: 'quest' },
-    { id: 'reroll', titleI18nKey: 'dashboard.rewards.reroll.title', subtitleI18nKey: 'dashboard.rewards.reroll.subtitle', accentToken: 'specialist' },
-  ],
   notifications: [
-    { id: 'cohort-quest', titleI18nKey: 'dashboard.notifications.cohortQuest.title', descriptionI18nKey: 'dashboard.notifications.cohortQuest.description', metaI18nKey: 'dashboard.notifications.cohortQuest.meta', icon: 'map', tone: 'info', actionLabelI18nKey: 'dashboard.notifications.cohortQuest.action', actionTarget: 'map' },
-    { id: 'cohort-campfire', titleI18nKey: 'dashboard.notifications.cohortCampfire.title', descriptionI18nKey: 'dashboard.notifications.cohortCampfire.description', metaI18nKey: 'dashboard.notifications.cohortCampfire.meta', icon: 'sparkles', tone: 'success', actionLabelI18nKey: 'dashboard.notifications.cohortCampfire.action', actionTarget: 'acknowledge' },
-    { id: 'reward-gold', titleI18nKey: 'dashboard.notifications.rewardGold.title', descriptionI18nKey: 'dashboard.notifications.rewardGold.description', metaI18nKey: 'dashboard.notifications.rewardGold.meta', icon: 'coins', tone: 'warning', actionLabelI18nKey: 'dashboard.notifications.rewardGold.action', actionTarget: 'collect' },
-    { id: 'reward-spend', titleI18nKey: 'dashboard.notifications.rewardSpend.title', descriptionI18nKey: 'dashboard.notifications.rewardSpend.description', metaI18nKey: 'dashboard.notifications.rewardSpend.meta', icon: 'gift', tone: 'neutral', actionLabelI18nKey: 'dashboard.notifications.rewardSpend.action', actionTarget: 'review' },
+    { id: 'cohort-quest', titleI18nKey: 'dashboard.notifications.cohortQuest.title', descriptionI18nKey: 'dashboard.notifications.cohortQuest.description', icon: 'map', tone: 'info', actionLabelI18nKey: 'dashboard.notifications.cohortQuest.action', actionTarget: 'map' },
+    { id: 'cohort-campfire', titleI18nKey: 'dashboard.notifications.cohortCampfire.title', descriptionI18nKey: 'dashboard.notifications.cohortCampfire.description', icon: 'sparkles', tone: 'success', actionLabelI18nKey: 'dashboard.notifications.cohortCampfire.action', actionTarget: 'acknowledge' },
+    { id: 'reward-gold', titleI18nKey: 'dashboard.notifications.rewardGold.title', descriptionI18nKey: 'dashboard.notifications.rewardGold.description', icon: 'coins', tone: 'warning', actionLabelI18nKey: 'dashboard.notifications.rewardGold.action', actionTarget: 'collect' },
+    { id: 'reward-spend', titleI18nKey: 'dashboard.notifications.rewardSpend.title', descriptionI18nKey: 'dashboard.notifications.rewardSpend.description', icon: 'gift', tone: 'neutral', actionLabelI18nKey: 'dashboard.notifications.rewardSpend.action', actionTarget: 'review' },
   ],
 };
 
@@ -77,7 +70,7 @@ mapRouter.get('/guilds', async (c) => {
 
   try {
     const db = getDb(databaseUrl);
-    const guildRecords = await db.select().from(guilds).orderBy(desc(guilds.totalPoints));
+    const guildRecords = await db.select().from(guilds).orderBy(desc(guilds.gold));
 
     return c.json({
       success: true,
@@ -89,7 +82,7 @@ mapRouter.get('/guilds', async (c) => {
         description: guild.description || undefined,
         iconUrl: guild.iconUrl || undefined,
         color: guild.color || undefined,
-        totalPoints: guild.totalPoints,
+        gold: guild.gold,
         createdAt: guild.createdAt?.toISOString?.(),
         updatedAt: guild.updatedAt?.toISOString?.(),
       })),
@@ -218,9 +211,9 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
 
     const [latestMembership] = await db
       .select()
-      .from(studentCohorts)
-      .where(eq(studentCohorts.studentId, studentRecord.id))
-      .orderBy(desc(studentCohorts.createdAt))
+      .from(cohortMemberships)
+      .where(eq(cohortMemberships.userId, studentRecord.userId))
+      .orderBy(desc(cohortMemberships.createdAt))
       .limit(1);
     const earnedPoints = activity.basePoints || 0;
 
@@ -228,7 +221,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       await db
         .update(guilds)
         .set({
-          totalPoints: sql`${guilds.totalPoints} + ${earnedPoints}`,
+          gold: sql`${guilds.gold} + ${earnedPoints}`,
           updatedAt: new Date(),
         })
         .where(eq(guilds.id, latestMembership.guildId));
@@ -244,12 +237,12 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
 
     if (earnedPoints > 0 && latestMembership?.cohortId) {
       await db
-        .update(globalGauges)
+        .update(cohortProgress)
         .set({
-          currentPoints: sql`${globalGauges.currentPoints} + ${earnedPoints}`,
+          currentPoints: sql`${cohortProgress.currentPoints} + ${earnedPoints}`,
           updatedAt: new Date(),
         })
-        .where(eq(globalGauges.cohortId, latestMembership.cohortId));
+        .where(eq(cohortProgress.cohortId, latestMembership.cohortId));
     }
 
     return c.json({
@@ -328,7 +321,7 @@ mapRouter.get('/dashboard', async (c) => {
       return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
     }
 
-    return c.json({ success: true, source: 'mock', dashboard: DEBUG_DASHBOARD });
+    return c.json({ success: true, source: 'mock', progress: DEBUG_COHORT_PROGRESS });
   }
 
   try {
@@ -340,79 +333,84 @@ mapRouter.get('/dashboard', async (c) => {
     const [latestMembership] = studentRecord
       ? await db
           .select()
-          .from(studentCohorts)
-          .where(eq(studentCohorts.studentId, studentRecord.id))
-          .orderBy(desc(studentCohorts.createdAt))
+          .from(cohortMemberships)
+          .where(eq(cohortMemberships.userId, studentRecord.userId))
+          .orderBy(desc(cohortMemberships.createdAt))
           .limit(1)
       : [];
 
     if (!latestMembership?.cohortId) {
-      return c.json({ success: false, error: 'Dashboard cohort context not found.' }, 404);
+      return c.json({ success: false, error: 'Progress cohort context not found.' }, 404);
     }
 
-    const [gauge] = await db
+    const [progress] = await db
       .select()
-      .from(globalGauges)
-      .where(eq(globalGauges.cohortId, latestMembership.cohortId))
+      .from(cohortProgress)
+      .where(eq(cohortProgress.cohortId, latestMembership.cohortId))
       .limit(1);
 
-    if (!gauge) {
-      return c.json({ success: false, error: 'Dashboard gauge not found.' }, 404);
+    if (!progress) {
+      return c.json({ success: false, error: 'Cohort progress not found.' }, 404);
     }
 
-    const [milestones, rewards, notifications] = await Promise.all([
+    const notificationScope = latestMembership.guildId
+      ? and(
+          eq(notifications.cohortId, latestMembership.cohortId),
+          or(eq(notifications.guildId, latestMembership.guildId), sql`${notifications.guildId} IS NULL`)
+        )
+      : and(eq(notifications.cohortId, latestMembership.cohortId), sql`${notifications.guildId} IS NULL`);
+
+    const [milestones, [targetRow], notificationRows] = await Promise.all([
       db
         .select()
-        .from(globalGaugeMilestones)
-        .where(eq(globalGaugeMilestones.gaugeId, gauge.id))
-        .orderBy(globalGaugeMilestones.sortOrder),
+        .from(progressMilestones)
+        .where(eq(progressMilestones.progressId, progress.id))
+        .orderBy(progressMilestones.sortOrder),
+      db
+        .select({ targetPoints: sum(progressMilestones.cost) })
+        .from(progressMilestones)
+        .where(eq(progressMilestones.progressId, progress.id)),
       db
         .select()
-        .from(cohortRewardCards)
-        .where(eq(cohortRewardCards.cohortId, latestMembership.cohortId))
-        .orderBy(cohortRewardCards.sortOrder),
-      db
-        .select()
-        .from(dashboardNotifications)
-        .where(eq(dashboardNotifications.cohortId, latestMembership.cohortId))
-        .orderBy(dashboardNotifications.sortOrder),
+        .from(notifications)
+        .where(notificationScope)
+        .orderBy(notifications.sortOrder),
     ]);
 
-    const dashboard: DashboardData = {
+    const progressData: CohortProgressData = {
       gauge: {
-        currentPoints: gauge.currentPoints,
-        targetPoints: gauge.targetPoints,
-        labelI18nKey: gauge.milestoneName,
+        currentPoints: progress.currentPoints,
+        targetPoints: Number(targetRow?.targetPoints || 0),
+        labelI18nKey: progress.labelI18nKey,
         milestones: milestones.map((milestone) => ({
           id: milestone.id,
           labelI18nKey: milestone.labelI18nKey,
           descriptionI18nKey: milestone.descriptionI18nKey || undefined,
-          positionPercent: milestone.positionPercent || undefined,
-          value: milestone.value || undefined,
+          cost: milestone.cost,
+          reward: {
+            id: `${milestone.id}-reward`,
+            titleI18nKey: milestone.rewardTitleI18nKey,
+            subtitleI18nKey: milestone.rewardSubtitleI18nKey || undefined,
+            accentToken: milestone.rewardAccentToken,
+          },
         })),
       },
-      rewards: rewards.map((reward) => ({
-        id: reward.id,
-        titleI18nKey: reward.titleI18nKey,
-        subtitleI18nKey: reward.subtitleI18nKey || undefined,
-        accentToken: reward.accentToken,
-        faceDown: reward.faceDown,
-      })),
-      notifications: notifications.map((notification) => ({
+      notifications: notificationRows.map((notification) => ({
         id: notification.id,
+        cohortId: notification.cohortId || undefined,
+        guildId: notification.guildId || undefined,
         titleI18nKey: notification.titleI18nKey,
         descriptionI18nKey: notification.descriptionI18nKey || undefined,
-        metaI18nKey: notification.metaI18nKey || undefined,
-        icon: notification.icon as DashboardData['notifications'][number]['icon'],
-        tone: notification.tone as DashboardData['notifications'][number]['tone'],
+        icon: notification.icon,
+        tone: notification.tone as CohortProgressData['notifications'][number]['tone'],
         actionLabelI18nKey: notification.actionLabelI18nKey || undefined,
-        actionTarget: notification.actionTarget as DashboardData['notifications'][number]['actionTarget'],
+        actionTarget: notification.actionTarget as CohortProgressData['notifications'][number]['actionTarget'],
       })),
     };
 
-    return c.json({ success: true, source: 'database', dashboard });
+    return c.json({ success: true, source: 'database', progress: progressData });
   } catch (error: any) {
-    console.error('Dashboard SQL error:', error.message);
-    return c.json({ success: false, error: 'Dashboard data could not be loaded.' }, 500);
+    console.error('Progress SQL error:', error.message);
+    return c.json({ success: false, error: 'Progress data could not be loaded.' }, 500);
   }
 });
