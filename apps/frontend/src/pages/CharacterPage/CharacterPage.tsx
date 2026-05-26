@@ -1,16 +1,27 @@
+import { useState } from 'react';
 import { GAME_CHARACTER_CLASSES, type GameCharacterClass } from '@eduquest/shared';
-import { Sparkles, UserRound } from 'lucide-react';
+import { UserRound } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
-import { PlayingCard, type PlayingCardData } from '../../components/molecules/PlayingCard';
-import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid';
+import {
+  PlayingCard,
+  PlayingHand,
+  type PlayingCardData,
+  type PlayingCardEditableField,
+  type PlayingHandData,
+} from '../../components/molecules/PlayingCard';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatUserDisplayName } from '../../utils/displayName';
 
+type EditablePlayerCardOverride = Partial<Record<PlayingCardEditableField, string>> & {
+  stats?: Record<string, number>;
+};
+
 export function CharacterPage() {
   const { t } = useTranslation();
   const { user, character, setCharacterClass } = useGameStore();
+  const [playerCardOverride, setPlayerCardOverride] = useState<EditablePlayerCardOverride>({});
 
   if (!user || !character) {
     return (
@@ -23,23 +34,56 @@ export function CharacterPage() {
   const playerName = formatUserDisplayName(user);
   const avatarUrl = user.avatarUrl || user.githubAvatarUrl;
   const currentClassLabel = t(`game.classes.${character.characterClass}`);
-  const playerCard = buildPlayerCharacterCard({
-    name: playerName,
-    avatarUrl,
-    characterClass: character.characterClass,
-    classLabel: currentClassLabel,
-    level: character.currentLevel,
-    bio: user.bio,
-  });
-  const currentClassCard = buildClassCard({
-    characterClass: character.characterClass,
-    label: currentClassLabel,
-    description: t(`game.classDescriptions.${character.characterClass}`),
-    ribbonText: t('character.currentClassRibbon'),
-  });
-  const selectableClasses = GAME_CHARACTER_CLASSES.filter(
-    (characterClass) => characterClass !== character.characterClass
+  const updatePlayerCardField = (field: PlayingCardEditableField, value: string) => {
+    if (field === 'ribbonText') return;
+    setPlayerCardOverride((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+  const updatePlayerCardStat = (statId: string, value: number) => {
+    setPlayerCardOverride((current) => ({
+      ...current,
+      stats: {
+        ...current.stats,
+        [statId]: value,
+      },
+    }));
+  };
+  const playerCard = applyPlayerCardOverrides(
+    buildPlayerCharacterCard({
+      name: playerName,
+      avatarUrl,
+      characterClass: character.characterClass,
+      classLabel: currentClassLabel,
+      level: character.currentLevel,
+      bio: user.bio,
+    }),
+    playerCardOverride,
+    updatePlayerCardField,
+    updatePlayerCardStat
   );
+  const currentClassIndex = Math.max(
+    GAME_CHARACTER_CLASSES.findIndex((characterClass) => characterClass === character.characterClass),
+    0
+  );
+  const classCards = GAME_CHARACTER_CLASSES.map((characterClass) => {
+    const label = t(`game.classes.${characterClass}`);
+    return buildClassCard({
+      characterClass,
+      label,
+      description: t(`game.classDescriptions.${characterClass}`),
+      ribbonText: label,
+    });
+  }) as [PlayingCardData, ...PlayingCardData[]];
+  const classHand: PlayingHandData = {
+    id: 'character-class-hand',
+    title: t('character.chooseClass'),
+    cards: classCards,
+    activeCardIndex: currentClassIndex,
+    mainCardIndex: currentClassIndex,
+    variant: 'fan',
+  };
 
   return (
     <GameLayout>
@@ -59,55 +103,70 @@ export function CharacterPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+          <div className="grid gap-8 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] xl:items-center">
             <div className="mx-auto w-full max-w-sm">
               <PlayingCard {...playerCard} size="full" className="w-full" />
             </div>
-            <div className="mx-auto w-full max-w-sm">
-              <PlayingCard {...currentClassCard} size="full" className="w-full" />
+            <div className="min-w-0 overflow-visible rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-xl font-bold">{t('character.chooseClass')}</h3>
+                <span className="font-display text-xs font-bold uppercase tracking-[0.24em] text-text-muted">
+                  {t('character.currentClassRibbon')}
+                </span>
+              </div>
+              <PlayingHand
+                hand={classHand}
+                mode="full"
+                visibleCardCount={classCards.length}
+                expandOnHover={false}
+                onCardSelect={(card) => {
+                  if (card.characterClass) setCharacterClass(card.characterClass);
+                }}
+                className="mx-auto h-[30rem] min-h-0 max-w-5xl"
+              />
             </div>
           </div>
-        </section>
-
-        <div className="flex items-center gap-4" role="separator" aria-hidden>
-          <div className="h-px flex-1 bg-gaming-border" />
-          <span className="font-display text-xs font-bold uppercase tracking-[0.24em] text-text-muted">
-            {t('character.chooseClass')}
-          </span>
-          <div className="h-px flex-1 bg-gaming-border" />
-        </div>
-
-        <section aria-labelledby="character-class-grid-title" className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Sparkles className="text-status-campfire" size={22} aria-hidden />
-            <h3 id="character-class-grid-title" className="text-xl font-bold">
-              {t('character.otherClasses')}
-            </h3>
-          </div>
-          <ResponsiveCardGrid
-            items={selectableClasses}
-            getKey={(characterClass) => characterClass}
-            renderItem={(characterClass) => {
-              const label = t(`game.classes.${characterClass}`);
-              return (
-                <PlayingCard
-                  {...buildClassCard({
-                    characterClass,
-                    label,
-                    description: t(`game.classDescriptions.${characterClass}`),
-                    ribbonText: label,
-                  })}
-                  size="full"
-                  className="w-full"
-                  onClick={() => setCharacterClass(characterClass)}
-                />
-              );
-            }}
-          />
         </section>
       </main>
     </GameLayout>
   );
+}
+
+function applyPlayerCardOverrides(
+  card: PlayingCardData,
+  override: EditablePlayerCardOverride,
+  onFieldChange: (field: PlayingCardEditableField, value: string) => void,
+  onStatChange: (statId: string, value: number) => void
+): PlayingCardData {
+  const front = card.front;
+
+  return {
+    ...card,
+    title: override.title ?? card.title,
+    subtitle: override.subtitle ?? card.subtitle,
+    illustrationUrl: override.illustrationUrl ?? card.illustrationUrl,
+    editable: true,
+    ribbonEditable: false,
+    onFieldChange,
+    onStatChange,
+    front: front
+      ? {
+          ...front,
+          title: override.title ?? front.title,
+          subtitle: override.subtitle ?? front.subtitle,
+          description: override.description ?? front.description,
+          illustrationUrl: override.illustrationUrl ?? front.illustrationUrl,
+          editable: true,
+          ribbonEditable: false,
+          onFieldChange,
+          onStatChange,
+          stats: front.stats?.map((stat) => ({
+            ...stat,
+            value: override.stats?.[stat.id] ?? stat.value,
+          })),
+        }
+      : front,
+  };
 }
 
 function buildPlayerCharacterCard({
@@ -141,6 +200,7 @@ function buildPlayerCharacterCard({
       illustrationUrl: avatarUrl,
       illustrationAlt: name,
       ribbonText: classLabel,
+      ribbonEditable: false,
       stats: [
         { id: 'str', label: 'STR', value: 62 },
         { id: 'dex', label: 'DEX', value: 68 },
@@ -165,6 +225,7 @@ function buildClassCard({
 }): PlayingCardData {
   return {
     id: `character-class-${characterClass}`,
+    disableLayoutAnimation: true,
     kind: 'character',
     title: label,
     subtitle: characterClass,

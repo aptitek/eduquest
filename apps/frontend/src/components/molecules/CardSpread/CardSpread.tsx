@@ -94,8 +94,9 @@ export function CardSpread<TItem>({
       const availableWidth = Math.max(containerWidth - cardWidth - baseOffset - safetyGap, 0);
       const fitStep = availableWidth / spreadItems.length;
       const desiredStep = cardWidth * 0.72;
+      const nextStep = Math.max(0, Math.min(desiredStep, fitStep));
 
-      setDynamicHorizontalStep(Math.max(0, Math.min(desiredStep, fitStep)));
+      setDynamicHorizontalStep(nextStep);
     };
 
     updateStep();

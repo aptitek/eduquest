@@ -61,6 +61,7 @@ export interface PlayingCardSide {
   statsLabel?: string;
   footer?: ReactNode;
   editable?: boolean;
+  ribbonEditable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
   onStatChange?: (statId: string, value: number) => void;
   onRibbonClick?: () => void;
@@ -72,6 +73,7 @@ export type PlayingCardBack = ReactNode | PlayingCardSide;
 export interface PlayingCardData {
   id?: string;
   layoutId?: string;
+  disableLayoutAnimation?: boolean;
   kind?: 'character' | 'guild';
   title?: string;
   subtitle?: string;
@@ -100,6 +102,7 @@ export interface PlayingCardData {
   flipLabel?: string;
   interactive?: boolean;
   editable?: boolean;
+  ribbonEditable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
   onStatChange?: (statId: string, value: number) => void;
   onRibbonClick?: () => void;
@@ -154,7 +157,7 @@ export function PlayingCard({
   const front = resolveFrontSide(card);
   const color = resolveCardColor(card, front);
   const style: AccentStyle = { '--playing-card-accent': color };
-  const layoutId = card.layoutId || card.id;
+  const layoutId = card.disableLayoutAnimation ? undefined : card.layoutId || card.id;
   const isFull = size === 'full';
   const isNano = size === 'nano';
   const hasBack = Boolean(isFull && (card.back || card.backSvgUrl));
@@ -368,6 +371,7 @@ function FullCardSide({
 }) {
   const radarGraph = buildRadarGraph(side.stats, side.statsLabel || side.title, color);
   const canEdit = Boolean(side.editable);
+  const canEditRibbon = canEdit && side.ribbonEditable !== false;
   const updateField = (field: PlayingCardEditableField, value: string) => {
     side.onFieldChange?.(field, value);
   };
@@ -395,7 +399,7 @@ function FullCardSide({
           onClick={side.onRibbonClick}
           ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
           >
-            {canEdit ? (
+            {canEditRibbon ? (
               <EditableText
                 value={side.ribbonText || ''}
                 onChange={(value) => updateField('ribbonText', value)}
@@ -523,6 +527,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
       ribbonText: card.front.ribbonText || card.ribbonText || card.ribbonLabel,
       ribbonIcon: card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
       editable: card.front.editable ?? card.editable,
+      ribbonEditable: card.front.ribbonEditable ?? card.ribbonEditable,
       onFieldChange: card.front.onFieldChange || card.onFieldChange,
       onStatChange: card.front.onStatChange || card.onStatChange,
       onRibbonClick: card.front.onRibbonClick || card.onRibbonClick,
@@ -546,6 +551,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     statsLabel: card.statsLabel,
     footer: card.footer,
       editable: card.editable,
+      ribbonEditable: card.ribbonEditable,
       onFieldChange: card.onFieldChange,
       onStatChange: card.onStatChange,
       onRibbonClick: card.onRibbonClick,
