@@ -1,10 +1,10 @@
 import { Gift, Trophy } from 'lucide-react';
 import { DashboardMiniDeck } from '../../molecules/DashboardMiniCard';
 import type { DashboardMiniDeckProps } from '../../molecules/DashboardMiniCard';
-import type { DashboardMiniCardProps } from '../../molecules/DashboardMiniCard';
+import type { PlayingCardData } from '../../molecules/PlayingCard';
 import { cn } from '../../../utils/cn';
 
-type DeckCards = readonly [DashboardMiniCardProps, ...DashboardMiniCardProps[]];
+type DeckCards = readonly [PlayingCardData, ...PlayingCardData[]];
 
 export interface FlipDeckProps extends Omit<DashboardMiniDeckProps, 'cards'> {
   frontCards: DeckCards;

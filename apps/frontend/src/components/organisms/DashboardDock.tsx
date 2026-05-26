@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import type { DashboardMiniCardProps } from '../molecules/DashboardMiniCard';
-import { FullSizePlayingCardModal } from '../molecules/PlayingCard';
+import { useEffect, useState } from 'react';
+import type { PlayingCardData } from '../molecules/PlayingCard';
+import { PlayingHand } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
@@ -12,18 +12,17 @@ import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
 import { FlipDeck } from './DashboardDock/FlipDeck';
-import { GuildMemberDeck } from './DashboardDock/GuildMemberDeck';
 import { Coins } from 'lucide-react';
 import {
   RIVAL_GUILDS,
   buildCohortRewardCards,
   buildFaceDownDeckCards,
   buildGaugeMilestones,
-  buildGuildMemberCards,
   buildMockGuildCardHands,
   buildPodiumCards,
   getLatestCohortMembership,
 } from './DashboardDock/dashboardDockData';
+import { motion } from 'framer-motion';
 
 export interface DashboardDockProps {
   className?: string;
@@ -31,7 +30,8 @@ export interface DashboardDockProps {
 
 export function DashboardDock({ className }: DashboardDockProps) {
   const [showBonusCards, setShowBonusCards] = useState(false);
-  const [guildHandModalCardIndex, setGuildHandModalCardIndex] = useState<number | null>(null);
+  const [route, setRoute] = useState(() => getHashRoute());
+  const [usesWideGuildDeck, setUsesWideGuildDeck] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
   const { user, student, character } = useGameStore();
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
@@ -39,6 +39,28 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const playerGuild = latestMembership?.guild || RIVAL_GUILDS[0];
   const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
   const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
+  const isGuildPage = route === 'guild';
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setRoute(getHashRoute());
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1280px)');
+    const handleMediaChange = () => setUsesWideGuildDeck(mediaQuery.matches);
+
+    handleMediaChange();
+    mediaQuery.addEventListener('change', handleMediaChange);
+
+    return () => mediaQuery.removeEventListener('change', handleMediaChange);
+  }, []);
 
   if (!student || !character) return null;
 
@@ -52,11 +74,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
         kind: 'guild' as const,
         title: t(reward.titleI18nKey),
         subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
-        accentToken: reward.accentToken as DashboardMiniCardProps['accentToken'],
+        accentToken: reward.accentToken as PlayingCardData['accentToken'],
         faceDown: reward.faceDown,
         ribbonLabel: t('dashboard.dock.newRibbon'),
         ribbonClassName: 'bg-status-quest',
-      })) as [DashboardMiniCardProps, ...DashboardMiniCardProps[]])
+      })) as [PlayingCardData, ...PlayingCardData[]])
     : buildCohortRewardCards(t);
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
@@ -71,32 +93,23 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const gaugeTargetPoints = dashboardData?.gauge.targetPoints ?? 1000;
   const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
   const podiumDeckCards = [podiumCards[0], podiumCards[1], podiumCards[2], ...cohortDeckCards] as [
-    DashboardMiniCardProps,
-    ...DashboardMiniCardProps[],
+    PlayingCardData,
+    ...PlayingCardData[],
   ];
-  const characterCard: DashboardMiniCardProps = {
-    kind: 'character',
-    title: playerName,
-    subtitle: t('dashboard.dock.characterLevel').replace('{level}', String(character.currentLevel)),
-    characterClass: character.characterClass,
-    illustrationUrl: playerAvatar,
-    illustrationAlt: playerName,
-  };
-  const guildMemberCards = buildGuildMemberCards(t, characterCard);
-  const guildHandModalHands = buildMockGuildCardHands(t, {
+  const guildHand = buildMockGuildCardHands(t, {
     guild: playerGuild,
     guildName: playerGuild.name || t('dashboard.dock.playerGuild'),
     playerName,
     playerAvatar,
     characterLevel: character.currentLevel,
     characterClassLabel: t(`game.classes.${character.characterClass}`),
-    activeCardIndex: guildHandModalCardIndex ?? 0,
-  });
-  const openGuildHandModal = (_card: DashboardMiniCardProps, index: number) => {
-    setGuildHandModalCardIndex(index);
+    activeCardIndex: 0,
+  })[0];
+  const openGuildPage = () => {
+    window.location.hash = 'guild';
   };
-  const closeGuildHandModal = () => {
-    setGuildHandModalCardIndex(null);
+  const openClassPage = () => {
+    window.location.hash = 'class';
   };
   const boostButton = (
     <HoldToConfirmButton
@@ -144,6 +157,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             stackSide="left"
             revealedCardCount={3}
             expandOnHover
+            onCardSelect={openClassPage}
             className="hidden h-72 w-52 shrink-0 hover:w-[24rem] focus-within:w-[24rem] 2xl:block"
             cardClassName="w-40 translate-y-0"
             stackCardClassName="w-36 translate-y-0"
@@ -159,6 +173,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             stackSide="left"
             revealedCardCount={3}
             expandOnHover
+            onCardSelect={openClassPage}
             wrapperClassName="hidden xl:block 2xl:hidden"
             className="h-72 w-40 hover:w-[18rem] focus-within:w-[18rem]"
             cardClassName="w-36 translate-y-0"
@@ -194,26 +209,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             className="mb-2 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
           />
 
-          <div className="shrink-0 xl:hidden">
-            <GuildMemberDeck
-              guild={playerGuild}
-              memberCards={guildMemberCards}
-              fallbackGuildName={t('dashboard.dock.playerGuild')}
-              goldLabel={t('dashboard.dock.gold')}
-              onCardSelect={openGuildHandModal}
-              compact
-            />
-          </div>
-
-          <div className="hidden shrink-0 xl:block">
-            <GuildMemberDeck
-              guild={playerGuild}
-              memberCards={guildMemberCards}
-              fallbackGuildName={t('dashboard.dock.playerGuild')}
-              goldLabel={t('dashboard.dock.gold')}
-              onCardSelect={openGuildHandModal}
-            />
-          </div>
+          {!isGuildPage ? <div className="hidden h-72 w-52 shrink-0 xl:block" aria-hidden /> : null}
         </div>
       </div>
 
@@ -229,6 +225,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           stackSide="left"
           revealedCardCount={3}
           expandOnHover
+          onCardSelect={openClassPage}
           className="h-64 w-32 sm:w-36"
           cardClassName="w-32 translate-y-0 sm:w-36"
           stackCardClassName="w-28 translate-y-0 sm:w-32"
@@ -246,27 +243,41 @@ export function DashboardDock({ className }: DashboardDockProps) {
           className="mb-0 h-40 w-40 shrink-0"
         />
 
-        <GuildMemberDeck
-          guild={playerGuild}
-          memberCards={guildMemberCards}
-          fallbackGuildName={t('dashboard.dock.playerGuild')}
-          goldLabel={t('dashboard.dock.gold')}
-          onCardSelect={openGuildHandModal}
-          compact
-        />
+        {!isGuildPage ? <div className="h-64 w-32 shrink-0 sm:w-36" aria-hidden /> : null}
       </div>
       </aside>
 
-      <FullSizePlayingCardModal
-        isOpen={guildHandModalCardIndex !== null}
-        title={playerGuild.name || t('dashboard.dock.playerGuild')}
-        subtitle={t('dashboard.dock.cardHandModalSubtitle')}
-        closeLabel={t('dashboard.dock.closeCardHandModal')}
-        hands={guildHandModalHands}
-        onClose={closeGuildHandModal}
-      />
+      <motion.div
+        layout
+        transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+        className={cn(
+          'fixed z-50 overflow-visible [perspective:1600px]',
+          isGuildPage
+            ? 'left-1/2 top-28 h-[30rem] w-[calc(100vw-2rem)] max-w-7xl -translate-x-1/2 md:h-[32rem]'
+            : 'bottom-0 right-2 h-64 w-32 sm:w-36 xl:left-[calc(50vw+23rem)] xl:right-auto xl:h-72 xl:w-52 xl:hover:w-[28rem] xl:focus-within:w-[28rem] 2xl:left-[calc(50vw+27rem)]'
+        )}
+      >
+        <PlayingHand
+          hand={guildHand}
+          mode={isGuildPage ? 'full' : 'mini'}
+          variant={!isGuildPage && !usesWideGuildDeck ? 'vertical' : 'horizontal'}
+          visibleCardCount={guildHand.cards.length}
+          expandOnHover={!isGuildPage}
+          onCardSelect={isGuildPage ? undefined : openGuildPage}
+          className={cn(
+            'h-full w-full',
+            isGuildPage ? 'max-w-7xl' : 'xl:hover:w-[28rem] xl:focus-within:w-[28rem]'
+          )}
+          cardClassName={cn(isGuildPage ? 'shadow-glow-primary' : 'w-32 translate-y-0 sm:w-36 xl:w-40')}
+          stackCardClassName={cn(!isGuildPage && 'w-28 translate-y-0 sm:w-32 xl:w-36')}
+        />
+      </motion.div>
     </>
   );
 }
 
 export default DashboardDock;
+
+function getHashRoute() {
+  return window.location.hash.replace(/^#\/?/, '');
+}

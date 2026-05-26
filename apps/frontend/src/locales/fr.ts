@@ -214,6 +214,16 @@ export const fr = {
     subtitle: 'Consultez la main tactique de {guildName} et ses cartes de membre.',
     emptyState: 'Aucune main de guilde à afficher.',
   },
+  class: {
+    nav: 'Classe',
+    eyebrow: 'Liste de cohorte',
+    title: 'Guildes de classe',
+    subtitle: 'Parcourez les guildes de votre cohorte, en commençant par le podium actuel.',
+    podium: 'Podium',
+    remaining: 'Toutes les guildes',
+    guilds: 'Annuaire des guildes',
+    guildCount: 'guildes',
+  },
   detailPanel: {
     noSelectedTitle: 'Aucune cible sélectionnée',
     noSelectedDesc:

@@ -1,10 +1,21 @@
-import type { Activity, DashboardData, GameBattle } from '@eduquest/shared';
+import type { Activity, DashboardData, GameBattle, Guild } from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 
 type DashboardResponse =
   | {
       success: true;
       dashboard: DashboardData;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type GuildsResponse =
+  | {
+      success: true;
+      guilds: Guild[];
+      source?: string;
     }
   | {
       success: false;
@@ -25,6 +36,22 @@ export async function fetchDashboardData(token: string): Promise<DashboardData> 
   }
 
   return data.dashboard;
+}
+
+export async function fetchGuilds(token: string): Promise<Guild[]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as GuildsResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Guilds request failed.' : data.error || 'Guilds request failed.');
+  }
+
+  return data.guilds;
 }
 
 type MapResponse =

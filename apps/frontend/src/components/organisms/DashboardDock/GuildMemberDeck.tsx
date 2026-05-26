@@ -1,15 +1,15 @@
 import { DashboardMiniDeck } from '../../molecules/DashboardMiniCard';
-import type { DashboardMiniCardProps } from '../../molecules/DashboardMiniCard';
+import type { PlayingCardData } from '../../molecules/PlayingCard';
 import { cn } from '../../../utils/cn';
 import type { DockGuild } from './types';
 
 export interface GuildMemberDeckProps {
   guild: DockGuild;
-  memberCards: readonly [DashboardMiniCardProps, DashboardMiniCardProps, DashboardMiniCardProps];
+  memberCards: readonly [PlayingCardData, PlayingCardData, PlayingCardData];
   fallbackGuildName: string;
   goldLabel: string;
   compact?: boolean;
-  onCardSelect?: (card: DashboardMiniCardProps, index: number) => void;
+  onCardSelect?: (card: PlayingCardData, index: number) => void;
 }
 
 export function GuildMemberDeck({
@@ -20,7 +20,9 @@ export function GuildMemberDeck({
   compact = false,
   onCardSelect,
 }: GuildMemberDeckProps) {
-  const guildCard: DashboardMiniCardProps = {
+  const guildCard: PlayingCardData = {
+    id: 'guild-hand-guild',
+    layoutId: 'guild-hand-guild',
     kind: 'guild',
     guild,
     title: guild.name || fallbackGuildName,

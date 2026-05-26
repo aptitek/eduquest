@@ -10,11 +10,11 @@ import {
   type HeaderNotification,
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
-import { Coins, Gift, Map, Settings, Sparkles, Users } from 'lucide-react';
+import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
-  currentView?: 'map' | 'management' | 'guild';
+  currentView?: 'map' | 'management' | 'guild' | 'class';
 }
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
@@ -152,6 +152,21 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             >
               <Users size={16} aria-hidden />
               {t('guild.nav')}
+            </button>
+
+            <button
+              type="button"
+              aria-current={currentView === 'class' ? 'page' : undefined}
+              onClick={() => {
+                window.location.hash = 'class';
+              }}
+              className={cn(
+                'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                currentView === 'class' && 'bg-gaming-base text-status-quest'
+              )}
+            >
+              <GraduationCap size={16} aria-hidden />
+              {t('class.nav')}
             </button>
 
             {user?.isAdmin && (

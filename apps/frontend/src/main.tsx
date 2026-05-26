@@ -3,12 +3,13 @@ import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 import { MapPage } from './pages/MapPage/MapPage';
 import { GuildPage } from './pages/GuildPage/GuildPage';
+import { ClassPage } from './pages/ClassPage/ClassPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
 import { useTranslation } from './hooks/useTranslation';
 import { Toaster } from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { LayoutGroup, motion } from 'framer-motion';
 import { Gamepad2 } from 'lucide-react';
 
 const savedTheme = localStorage.getItem('eduquest_theme');
@@ -93,12 +94,18 @@ function App() {
     return <GuildPage />;
   }
 
+  if (route === 'class') {
+    return <ClassPage />;
+  }
+
   return <MapPage />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <LayoutGroup id="eduquest-cards">
+      <App />
+    </LayoutGroup>
     <Toaster
       position="top-center"
       toastOptions={{

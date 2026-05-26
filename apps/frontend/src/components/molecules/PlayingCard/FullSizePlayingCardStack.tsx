@@ -1,12 +1,11 @@
-import { cn } from '../../../utils/cn';
-import { CardSpread } from '../CardSpread';
-import type { CardSpreadShape } from '../CardSpread';
-import { FullSizePlayingCard } from './FullSizePlayingCard';
+import { PlayingHand } from './PlayingHand';
+import type { PlayingHandVariant } from './PlayingHand';
+import type { PlayingCardData } from './PlayingCard';
 import type { FullSizePlayingCardProps } from './FullSizePlayingCard';
 
-export type FullSizePlayingCardStackVariant = 'arc' | 'fan' | 'horizontal' | 'vertical';
+export type FullSizePlayingCardStackVariant = PlayingHandVariant;
 
-export interface FullSizePlayingCardStackItem extends FullSizePlayingCardProps {
+export interface FullSizePlayingCardStackItem extends PlayingCardData, FullSizePlayingCardProps {
   id?: string;
 }
 
@@ -22,7 +21,6 @@ export interface FullSizePlayingCardStackProps {
   className?: string;
   cardClassName?: string;
   mainCardClassName?: string;
-  dealOnMount?: boolean;
 }
 
 const MAX_DEFAULT_VISIBLE_CARDS = 5;
@@ -39,52 +37,25 @@ export function FullSizePlayingCardStack({
   className,
   cardClassName,
   mainCardClassName,
-  dealOnMount = false,
 }: FullSizePlayingCardStackProps) {
-  const visibleCards = cards.slice(0, Math.max(1, visibleCardCount));
-  const spreadShape = expanded ? 'horizontal' : resolveSpreadShape(variant);
-
   return (
-    <CardSpread
-      items={visibleCards as [FullSizePlayingCardStackItem, ...FullSizePlayingCardStackItem[]]}
-      shape={spreadShape}
-      side="right"
-      spacing={expanded ? 'wide' : 'default'}
-      emphasisIndex={mainCardIndex}
-      activeIndex={activeCardIndex}
-      visibleSpreadCount={visibleCards.length}
-      expanded={expanded}
+    <PlayingHand
+      hand={{
+        id: ariaLabel,
+        cards,
+        activeCardIndex,
+        mainCardIndex,
+        variant,
+      }}
+      mode={expanded ? 'full' : 'mini'}
+      visibleCardCount={Math.max(1, visibleCardCount || MAX_DEFAULT_VISIBLE_CARDS)}
       expandOnHover={expandOnHover}
       ariaLabel={ariaLabel}
-      dealOnMount={dealOnMount}
-      className={cn(
-        'h-[31rem] min-h-[28rem] w-full max-w-7xl [perspective:1600px]',
-        className
-      )}
-      emphasisClassName={cn(
-        'z-40 w-72 rounded-[1.4rem] duration-500 md:w-80',
-        'hover:!z-50 hover:-translate-y-5 hover:scale-[1.03] hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-5 focus-within:scale-[1.03] focus-within:drop-shadow-2xl',
-        mainCardClassName
-      )}
-      spreadCardClassName={cn(
-        'w-72 rounded-[1.4rem] duration-500 md:w-80',
-        mainCardIndex !== undefined && spreadShape === 'arc' && 'left-[62%]',
-      )}
-      activeCardClassName="drop-shadow-2xl ring-2 ring-status-campfire ring-offset-4 ring-offset-gaming-base"
-      renderItem={({ item: card, isEmphasis }) => (
-        <FullSizePlayingCard
-          {...card}
-          className={cn('min-h-0 w-full max-w-none', card.className)}
-          auraClassName={cn(cardClassName, isEmphasis && 'shadow-glow-primary')}
-        />
-      )}
+      className={className}
+      cardClassName={cardClassName}
+      mainCardClassName={mainCardClassName}
     />
   );
-}
-
-function resolveSpreadShape(variant: FullSizePlayingCardStackVariant): CardSpreadShape {
-  if (variant === 'fan') return 'arc';
-  return variant;
 }
 
 export default FullSizePlayingCardStack;

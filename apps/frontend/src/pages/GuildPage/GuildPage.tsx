@@ -1,17 +1,15 @@
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatUserDisplayName } from '../../utils/displayName';
-import mascotUrl from '../../assets/mascot.svg';
 import {
   RIVAL_GUILDS,
-  buildMockGuildCardHands,
   getLatestCohortMembership,
 } from '../../components/organisms/DashboardDock/dashboardDockData';
-import { PlayingHandPage } from '../PlayingHandPage/PlayingHandPage';
+import { GameLayout } from '../../components/templates/GameLayout';
+import { GameHeader } from '../../components/organisms/GameHeader';
 
 export function GuildPage() {
   const { t } = useTranslation();
-  const { user, student, character } = useGameStore();
+  const { student, character } = useGameStore();
 
   if (!student || !character) {
     return (
@@ -24,26 +22,19 @@ export function GuildPage() {
   const latestMembership = getLatestCohortMembership(student.cohortMemberships);
   const playerGuild = latestMembership?.guild || RIVAL_GUILDS[0];
   const guildName = playerGuild.name || t('dashboard.dock.playerGuild');
-  const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
-  const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
-  const hands = buildMockGuildCardHands(t, {
-    guild: playerGuild,
-    guildName,
-    playerName,
-    playerAvatar,
-    characterLevel: character.currentLevel,
-    characterClassLabel: t(`game.classes.${character.characterClass}`),
-    activeCardIndex: 0,
-  });
 
   return (
-    <PlayingHandPage
-      title={t('guild.title')}
-      subtitle={t('guild.subtitle').replace('{guildName}', guildName)}
-      hands={hands}
-      currentView="guild"
-      emptyState={t('guild.emptyState')}
-    />
+    <GameLayout>
+      <GameHeader currentView="guild" />
+
+      <main className="pb-8 pt-4">
+        <h2 className="sr-only">{t('guild.title')}</h2>
+        <section
+          aria-label={t('guild.subtitle').replace('{guildName}', guildName)}
+          className="h-[32rem] overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-2 shadow-2xl md:p-4"
+        />
+      </main>
+    </GameLayout>
   );
 }
 

@@ -215,6 +215,16 @@ export const en: TranslationKeys = {
     subtitle: 'Review the tactical hand for {guildName} and its member cards.',
     emptyState: 'No guild hand to display.',
   },
+  class: {
+    nav: 'Class',
+    eyebrow: 'Cohort roster',
+    title: 'Class guilds',
+    subtitle: 'Browse the guilds in your cohort, starting with the current podium.',
+    podium: 'Podium',
+    remaining: 'All guilds',
+    guilds: 'Guild directory',
+    guildCount: 'guilds',
+  },
   detailPanel: {
     noSelectedTitle: 'No target selected',
     noSelectedDesc:

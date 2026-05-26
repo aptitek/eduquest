@@ -459,9 +459,11 @@ export function ManagementPage() {
         </div>
 
         <PlayingCard
+          size="full"
+          title={t('management.title')}
           flipLabel={t('management.card.flip')}
-          recto={selectedCardContent}
-          verso={
+          frontContent={selectedCardContent}
+          back={
             <div className="flex h-full min-h-[18rem] flex-col items-center justify-center p-5 text-center text-text-muted">
               <span className="text-xs font-display uppercase tracking-widest">
                 {t('management.card.versoEmpty')}
