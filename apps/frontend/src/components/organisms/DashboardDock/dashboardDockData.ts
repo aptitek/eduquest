@@ -147,6 +147,31 @@ export function buildCohortRewardCards(t: Translate) {
   ] as [PlayingCardData, ...PlayingCardData[]];
 }
 
+export function buildProgressBonusCards(
+  cards: readonly [PlayingCardData, ...PlayingCardData[]],
+  layoutPrefix = 'progress-bonus'
+) {
+  return cards.map((card, index) => {
+    const slug = slugify(card.id || card.title || `bonus-${index}`);
+
+    return {
+      ...card,
+      id: `${layoutPrefix}-${slug}`,
+      layoutId: `${layoutPrefix}-${slug}`,
+      front: {
+        title: card.title || `Bonus ${index + 1}`,
+        subtitle: card.subtitle,
+        description: card.description || card.subtitle || 'Bonus card available to the cohort.',
+        color: resolveCardColor(card.accentToken),
+        illustrationUrl: card.illustrationUrl,
+        illustrationAlt: card.illustrationAlt || card.title,
+        ribbonText: card.ribbonLabel,
+        ribbonPosition: card.ribbonPosition,
+      },
+    };
+  }) as [PlayingCardData, ...PlayingCardData[]];
+}
+
 export function buildGuildMemberCards(t: Translate, characterCard: PlayingCardData) {
   return [
     {

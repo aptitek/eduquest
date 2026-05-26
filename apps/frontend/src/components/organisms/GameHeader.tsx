@@ -14,7 +14,7 @@ import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'luci
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
-  currentView?: 'map' | 'management' | 'guild' | 'class';
+  currentView?: 'map' | 'management' | 'guild' | 'class' | 'progress';
 }
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
@@ -167,6 +167,21 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             >
               <GraduationCap size={16} aria-hidden />
               {t('class.nav')}
+            </button>
+
+            <button
+              type="button"
+              aria-current={currentView === 'progress' ? 'page' : undefined}
+              onClick={() => {
+                window.location.hash = 'progress';
+              }}
+              className={cn(
+                'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                currentView === 'progress' && 'bg-gaming-base text-status-quest'
+              )}
+            >
+              <Gift size={16} aria-hidden />
+              {t('progress.nav')}
             </button>
 
             {user?.isAdmin && (

@@ -224,6 +224,12 @@ export const fr = {
     guilds: 'Annuaire des guildes',
     guildCount: 'guildes',
   },
+  progress: {
+    nav: 'Progression',
+    title: 'Cartes bonus de progression',
+    activeBonuses: 'Cartes bonus actives',
+    nextVote: 'Disponibles au prochain vote',
+  },
   detailPanel: {
     noSelectedTitle: 'Aucune cible sélectionnée',
     noSelectedDesc:

@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import type { PlayingCardData } from '../molecules/PlayingCard';
 import { PlayingHand } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
-import { DashboardMiniDeck } from '../molecules/DashboardMiniCard';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { useGameStore } from '../../features/game/gameStore';
@@ -20,6 +19,7 @@ import {
   buildGaugeMilestones,
   buildMockGuildCardHands,
   buildPodiumCards,
+  buildProgressBonusCards,
   getLatestCohortMembership,
 } from './DashboardDock/dashboardDockData';
 import { motion } from 'framer-motion';
@@ -33,6 +33,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [usesWideGuildDeck, setUsesWideGuildDeck] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
   const [classPodiumTarget, setClassPodiumTarget] = useState<HTMLElement | null>(null);
   const [guildHandTarget, setGuildHandTarget] = useState<HTMLElement | null>(null);
+  const [progressBonusTarget, setProgressBonusTarget] = useState<HTMLElement | null>(null);
   const { user, student, character } = useGameStore();
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
@@ -42,6 +43,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
   const isGuildPage = route === 'guild';
   const isClassPage = route === 'class';
+  const isProgressPage = route === 'progress';
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -82,6 +84,19 @@ export function DashboardDock({ className }: DashboardDockProps) {
   }, [route]);
 
   useEffect(() => {
+    if (route !== 'progress') {
+      setProgressBonusTarget(null);
+      return undefined;
+    }
+
+    const updateTarget = () => setProgressBonusTarget(document.getElementById('progress-bonus-hand-target'));
+    updateTarget();
+
+    const animationFrame = window.requestAnimationFrame(updateTarget);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [route]);
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1280px)');
     const handleMediaChange = () => setUsesWideGuildDeck(mediaQuery.matches);
 
@@ -105,6 +120,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
     : buildCohortRewardCards(t);
+  const progressBonusCards = buildProgressBonusCards(bonusCards, 'progress-active-bonus');
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
         id: milestone.id,
@@ -178,7 +194,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         'overflow-visible [perspective:1600px]',
         isClassPage
           ? 'relative z-0 w-full'
-          : 'fixed bottom-0 left-[max(0.5rem,calc(50vw-10.5rem))] z-50 h-64 w-32 sm:left-[max(0.5rem,calc(50vw-12.5rem))] sm:w-36 xl:left-[calc(50vw-23rem)] xl:h-72 xl:w-40 xl:hover:w-[18rem] xl:focus-within:w-[18rem] 2xl:left-[calc(50vw-27rem)] 2xl:w-52 2xl:hover:w-[24rem] 2xl:focus-within:w-[24rem]'
+          : 'relative h-full w-full'
       )}
     >
       {isClassPage ? (
@@ -234,7 +250,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         'overflow-visible [perspective:1600px]',
         isGuildPage
           ? 'relative z-0 w-full'
-          : 'fixed bottom-0 left-[min(calc(100vw-8.5rem),calc(50vw+6.5rem))] z-50 h-64 w-32 sm:left-[min(calc(100vw-9.5rem),calc(50vw+6.5rem))] sm:w-36 xl:left-[calc(50vw+23rem)] xl:right-auto xl:h-72 xl:w-52 xl:hover:w-[28rem] xl:focus-within:w-[28rem] 2xl:left-[calc(50vw+27rem)]'
+          : 'relative h-full w-full'
       )}
     >
       <PlayingHand
@@ -253,6 +269,42 @@ export function DashboardDock({ className }: DashboardDockProps) {
       />
     </motion.div>
   );
+  const bonusContent = (
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+      className={cn(
+        'overflow-visible [perspective:1600px]',
+        isProgressPage
+          ? 'relative z-0 w-full'
+          : 'relative h-full w-full'
+      )}
+    >
+      <PlayingHand
+        hand={{
+          id: 'progress-active-bonus-hand',
+          title: t('progress.activeBonuses'),
+          cards: progressBonusCards,
+          mainCardIndex: 0,
+          variant: 'horizontal',
+        }}
+        mode={isProgressPage ? 'full' : 'mini'}
+        visibleCardCount={progressBonusCards.length}
+        expandOnHover={!isProgressPage}
+        onCardSelect={isProgressPage ? undefined : () => {
+          window.location.hash = 'progress';
+        }}
+        stackSide="left"
+        className={cn(
+          isProgressPage
+            ? 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
+            : 'h-full w-full xl:hover:w-[18rem] xl:focus-within:w-[18rem]'
+        )}
+        cardClassName={cn(!isProgressPage && 'w-32 translate-y-0')}
+        stackCardClassName={cn(!isProgressPage && 'w-28 translate-y-0')}
+      />
+    </motion.div>
+  );
 
   return (
     <>
@@ -264,20 +316,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
         )}
       >
       <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 lg:block">
-        <div className="flex h-full w-full items-end justify-center gap-2 overflow-visible xl:gap-3">
-          <DashboardMiniDeck
-            cards={bonusCards}
-            stackSide="left"
-            revealedCardCount={3}
-            expandOnHover
-            className="mr-8 hidden h-72 w-36 shrink-0 hover:w-[18rem] focus-within:w-[18rem] 2xl:block"
-            cardClassName="w-32 translate-y-0"
-            stackCardClassName="w-28 translate-y-0"
-          />
+        <div className="flex h-full w-full items-end justify-center gap-4 overflow-visible">
+          <div className="hidden h-72 w-36 shrink-0 2xl:block">
+            {isProgressPage && progressBonusTarget ? null : bonusContent}
+          </div>
 
-          <div className="hidden h-72 w-52 shrink-0 2xl:block" aria-hidden />
-          <div className="hidden h-72 w-40 shrink-0 xl:block 2xl:hidden" aria-hidden />
-          <div className="h-64 w-32 shrink-0 xl:hidden" aria-hidden />
+          <div className="hidden h-72 w-40 shrink-0 xl:block 2xl:w-52">
+            {isClassPage && classPodiumTarget ? null : podiumContent}
+          </div>
 
           <GlobalProgressGauge
             currentPoints={gaugeCurrentPoints}
@@ -291,12 +337,16 @@ export function DashboardDock({ className }: DashboardDockProps) {
             className="mb-2 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
           />
 
-          {!isGuildPage ? <div className="hidden h-72 w-52 shrink-0 xl:block" aria-hidden /> : null}
+          <div className="hidden h-72 w-52 shrink-0 xl:block">
+            {isGuildPage && guildHandTarget ? null : guildContent}
+          </div>
         </div>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-2 overflow-visible px-2 lg:hidden sm:gap-3">
-        <div className="h-64 w-32 shrink-0 sm:w-36" aria-hidden />
+        <div className="h-64 w-32 shrink-0 sm:w-36">
+          {isClassPage && classPodiumTarget ? null : podiumContent}
+        </div>
 
         <GlobalProgressGauge
           currentPoints={gaugeCurrentPoints}
@@ -310,13 +360,17 @@ export function DashboardDock({ className }: DashboardDockProps) {
           className="mb-0 h-40 w-40 shrink-0"
         />
 
-        {!isGuildPage ? <div className="h-64 w-32 shrink-0 sm:w-36" aria-hidden /> : null}
+        <div className="h-64 w-32 shrink-0 sm:w-36">
+          {isGuildPage && guildHandTarget ? null : guildContent}
+        </div>
       </div>
       </aside>
 
-      {isClassPage && classPodiumTarget ? createPortal(podiumContent, classPodiumTarget) : podiumContent}
+      {isClassPage && classPodiumTarget ? createPortal(podiumContent, classPodiumTarget) : null}
 
-      {isGuildPage && guildHandTarget ? createPortal(guildContent, guildHandTarget) : guildContent}
+      {isGuildPage && guildHandTarget ? createPortal(guildContent, guildHandTarget) : null}
+
+      {isProgressPage && progressBonusTarget ? createPortal(bonusContent, progressBonusTarget) : null}
     </>
   );
 }

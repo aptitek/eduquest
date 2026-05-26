@@ -225,6 +225,12 @@ export const en: TranslationKeys = {
     guilds: 'Guild directory',
     guildCount: 'guilds',
   },
+  progress: {
+    nav: 'Progress',
+    title: 'Progress bonuses',
+    activeBonuses: 'Active bonus cards',
+    nextVote: 'Available for next vote',
+  },
   detailPanel: {
     noSelectedTitle: 'No target selected',
     noSelectedDesc:

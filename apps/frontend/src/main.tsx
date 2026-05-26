@@ -4,6 +4,7 @@ import './styles/index.css';
 import { MapPage } from './pages/MapPage/MapPage';
 import { GuildPage } from './pages/GuildPage/GuildPage';
 import { ClassPage } from './pages/ClassPage/ClassPage';
+import { ProgressPage } from './pages/ProgressPage/ProgressPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
@@ -96,6 +97,10 @@ function App() {
 
   if (route === 'class') {
     return <ClassPage />;
+  }
+
+  if (route === 'progress') {
+    return <ProgressPage />;
   }
 
   return <MapPage />;
