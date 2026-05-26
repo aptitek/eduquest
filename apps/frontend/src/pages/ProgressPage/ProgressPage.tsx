@@ -1,15 +1,11 @@
 import { Gift } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
-import { PlayingCard } from '../../components/molecules/PlayingCard';
+import { PlayingCard, type PlayingCardData } from '../../components/molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid';
 import { useTranslation } from '../../hooks/useTranslation';
-import {
-  buildCohortRewardCards,
-  buildProgressBonusCards,
-} from '../../components/organisms/DashboardDock/dashboardDockData';
+import { buildProgressBonusCards } from '../../components/organisms/DashboardDock/dashboardDockData';
 import { useDashboardData } from '../../features/game/useDashboardData';
-import { ENABLE_MOCK_DATA } from '../../config/deployment';
 
 export function ProgressPage() {
   const { t } = useTranslation();
@@ -23,19 +19,17 @@ export function ProgressPage() {
         faceDown: reward.faceDown,
         ribbonLabel: t('dashboard.dock.newRibbon'),
         ribbonClassName: 'bg-status-quest',
-      })) as ReturnType<typeof buildCohortRewardCards>)
-    : ENABLE_MOCK_DATA
-      ? buildCohortRewardCards(t)
-      : ([
-          {
-            kind: 'guild' as const,
-            id: 'empty-progress-reward',
-            title: t('dashboard.rewards.empty.title'),
-            subtitle: t('dashboard.rewards.empty.subtitle'),
-            accentToken: 'neutral' as const,
-            faceDown: true,
-          },
-        ] as ReturnType<typeof buildCohortRewardCards>);
+      })) as [PlayingCardData, ...PlayingCardData[]])
+    : ([
+        {
+          kind: 'guild' as const,
+          id: 'empty-progress-reward',
+          title: t('dashboard.rewards.empty.title'),
+          subtitle: t('dashboard.rewards.empty.subtitle'),
+          accentToken: 'neutral' as const,
+          faceDown: true,
+        },
+      ] as [PlayingCardData, ...PlayingCardData[]]);
   const nextVoteCards = buildProgressBonusCards(fallbackBonusCards, 'progress-next-vote');
 
   return (

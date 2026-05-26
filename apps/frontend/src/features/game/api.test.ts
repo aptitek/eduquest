@@ -9,6 +9,7 @@ import {
   fetchDashboardData,
   fetchGuilds,
   fetchMapActivities,
+  spendGuildVotes,
 } from './api';
 
 describe('game API client', () => {
@@ -61,6 +62,22 @@ describe('game API client', () => {
         headers: { Authorization: 'Bearer token-1' },
       }
     );
+  });
+
+  it('posts guild vote spending to the backend route', async () => {
+    const voteSpend = { guildId: 'guild-1', votes: 1, cost: 1, balance: 179 };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, voteSpend }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(spendGuildVotes('token-1', 'guild-1', 1)).resolves.toEqual(voteSpend);
+    expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/guilds/guild-1/votes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token-1',
+      },
+      body: JSON.stringify({ votes: 1 }),
+    });
   });
 
   it('surfaces API errors instead of substituting mock data', async () => {

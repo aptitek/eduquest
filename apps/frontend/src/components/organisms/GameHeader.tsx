@@ -12,7 +12,6 @@ import {
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
-import { ENABLE_MOCK_DATA } from '../../config/deployment';
 import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
@@ -44,49 +43,6 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     };
   }, []);
 
-  const fallbackNotifications: HeaderNotification[] = [
-    {
-      id: 'cohort-quest',
-      title: t('dashboard.notifications.cohortQuest.title'),
-      description: t('dashboard.notifications.cohortQuest.description'),
-      meta: t('dashboard.notifications.cohortQuest.meta'),
-      tone: 'info',
-      icon: <Map size={18} />,
-      action: {
-        label: t('dashboard.notifications.cohortQuest.action'),
-        onSelect: () => {
-          window.location.hash = '';
-        },
-      },
-    },
-    {
-      id: 'cohort-campfire',
-      title: t('dashboard.notifications.cohortCampfire.title'),
-      description: t('dashboard.notifications.cohortCampfire.description'),
-      meta: t('dashboard.notifications.cohortCampfire.meta'),
-      tone: 'success',
-      icon: <Sparkles size={18} />,
-      action: { label: t('dashboard.notifications.cohortCampfire.action') },
-    },
-    {
-      id: 'reward-gold',
-      title: t('dashboard.notifications.rewardGold.title'),
-      description: t('dashboard.notifications.rewardGold.description'),
-      meta: t('dashboard.notifications.rewardGold.meta'),
-      tone: 'warning',
-      icon: <Coins size={18} />,
-      action: { label: t('dashboard.notifications.rewardGold.action') },
-    },
-    {
-      id: 'reward-spend',
-      title: t('dashboard.notifications.rewardSpend.title'),
-      description: t('dashboard.notifications.rewardSpend.description'),
-      meta: t('dashboard.notifications.rewardSpend.meta'),
-      tone: 'neutral',
-      icon: <Gift size={18} />,
-      action: { label: t('dashboard.notifications.rewardSpend.action') },
-    },
-  ];
   const dashboardNotifications: HeaderNotification[] = dashboardData?.notifications.length
     ? dashboardData.notifications.map((notification) => ({
         id: notification.id,
@@ -102,9 +58,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             }
           : undefined,
       }))
-    : ENABLE_MOCK_DATA
-      ? fallbackNotifications
-      : [];
+    : [];
   const activeNotifications = dashboardNotifications.filter(
     (notification) => !dismissedNotificationIds.has(notification.id)
   );

@@ -4,7 +4,7 @@ import type { DockGuild } from './types';
 
 type Translate = (path: string) => string;
 
-interface MockGuildHandOptions {
+interface GuildHandOptions {
   guild: DockGuild;
   guildName: string;
   playerName: string;
@@ -12,6 +12,7 @@ interface MockGuildHandOptions {
   characterLevel: number;
   characterClass: GameCharacterClass;
   characterClassLabel: string;
+  characterStats: Record<string, number>;
   activeCardIndex: number;
 }
 
@@ -22,52 +23,11 @@ interface ClassGuildHandOptions {
   activeCardIndex?: number;
 }
 
-export const RIVAL_GUILDS = [
-  {
-    id: 'rival-1',
-    cohortId: 'demo',
-    name: 'Crimson Compilers',
-    color: 'danger',
-    totalPoints: 168,
-  },
-  { id: 'rival-2', cohortId: 'demo', name: 'Violet Oracles', color: 'specialist', totalPoints: 132 },
-  {
-    id: 'rival-3',
-    cohortId: 'demo',
-    name: 'Solarized Sentinels',
-    color: 'quest',
-    totalPoints: 116,
-  },
-];
-
-const MILESTONE_SLOTS = [
-  { id: 'spark', positionPercent: 12 },
-  { id: 'campfire', positionPercent: 24 },
-  { id: 'quest', positionPercent: 38 },
-  { id: 'rally', positionPercent: 52 },
-  { id: 'treasure', positionPercent: 66 },
-  { id: 'boss', positionPercent: 78 },
-  { id: 'legend', positionPercent: 90 },
-  { id: 'ascend', positionPercent: 100 },
-];
-
-export function buildGaugeMilestones(t: Translate) {
-  return MILESTONE_SLOTS.map((milestone) => ({
-    ...milestone,
-    label: t(`dashboard.milestones.${milestone.id}.label`),
-    description: t(`dashboard.milestones.${milestone.id}.description`),
-  }));
-}
-
 export function buildPodiumCards(
   t: Translate,
-  playerGuild: DockGuild
-): [PlayingCardData, PlayingCardData, PlayingCardData] {
-  const podiumGuilds = [
-    { ...playerGuild, totalPoints: playerGuild?.totalPoints ?? 180 },
-    RIVAL_GUILDS[1],
-    RIVAL_GUILDS[2],
-  ].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  guilds: readonly DockGuild[]
+): PlayingCardData[] {
+  const podiumGuilds = [...guilds].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
 
   const toCard = (guild: DockGuild): PlayingCardData => ({
     kind: 'guild',
@@ -84,68 +44,11 @@ export function buildPodiumCards(
     'bg-solarized-orange',
   ];
 
-  return [
-    toCard(podiumGuilds[0]),
-    toCard(podiumGuilds[1]),
-    toCard(podiumGuilds[2]),
-  ].map((card, index) => ({
-    ...card,
+  return podiumGuilds.slice(0, 3).map((guild, index) => ({
+    ...toCard(guild),
     ribbonLabel: `#${index + 1}`,
     ribbonClassName: podiumRibbonClassNames[index],
-  })) as [PlayingCardData, PlayingCardData, PlayingCardData];
-}
-
-export function buildFaceDownDeckCards(t: Translate, title: string) {
-  return Array.from({ length: 4 }, (_, index) => ({
-    kind: 'guild' as const,
-    id: `cohort-facedown-${index}`,
-    layoutId: `cohort-facedown-${index}`,
-    title,
-    subtitle: t('dashboard.dock.faceDown'),
-    accentToken: 'neutral',
-    faceDown: true,
-  })) as [PlayingCardData, ...PlayingCardData[]];
-}
-
-export function buildCohortRewardCards(t: Translate) {
-  return [
-    {
-      kind: 'guild' as const,
-      id: 'reward-deadline',
-      title: t('dashboard.rewards.deadline.title'),
-      subtitle: t('dashboard.rewards.deadline.subtitle'),
-      accentToken: 'campfire',
-      ribbonLabel: t('dashboard.dock.newRibbon'),
-      ribbonClassName: 'bg-status-quest',
-    },
-    {
-      kind: 'guild' as const,
-      id: 'reward-mini-game',
-      title: t('dashboard.rewards.miniGame.title'),
-      subtitle: t('dashboard.rewards.miniGame.subtitle'),
-      accentToken: 'completed',
-      ribbonLabel: t('dashboard.dock.newRibbon'),
-      ribbonClassName: 'bg-status-quest',
-    },
-    {
-      kind: 'guild' as const,
-      id: 'reward-tech-help',
-      title: t('dashboard.rewards.techHelp.title'),
-      subtitle: t('dashboard.rewards.techHelp.subtitle'),
-      accentToken: 'quest',
-      ribbonLabel: t('dashboard.dock.newRibbon'),
-      ribbonClassName: 'bg-status-quest',
-    },
-    {
-      kind: 'guild' as const,
-      id: 'reward-reroll',
-      title: t('dashboard.rewards.reroll.title'),
-      subtitle: t('dashboard.rewards.reroll.subtitle'),
-      accentToken: 'specialist',
-      ribbonLabel: t('dashboard.dock.newRibbon'),
-      ribbonClassName: 'bg-status-quest',
-    },
-  ] as [PlayingCardData, ...PlayingCardData[]];
+  }));
 }
 
 export function buildProgressBonusCards(
@@ -173,35 +76,7 @@ export function buildProgressBonusCards(
   }) as [PlayingCardData, ...PlayingCardData[]];
 }
 
-export function buildGuildMemberCards(t: Translate, characterCard: PlayingCardData) {
-  return [
-    {
-      ...characterCard,
-      id: 'guild-hand-player',
-      layoutId: 'guild-hand-player',
-    },
-    {
-      kind: 'character' as const,
-      id: 'guild-hand-guide',
-      layoutId: 'guild-hand-guide',
-      title: t('dashboard.dock.guildmate'),
-      subtitle: t('dashboard.dock.hiddenMember'),
-      accentToken: 'guide',
-      faceDown: true,
-    },
-    {
-      kind: 'character' as const,
-      id: 'guild-hand-specialist',
-      layoutId: 'guild-hand-specialist',
-      title: t('dashboard.dock.guildmate'),
-      subtitle: t('dashboard.dock.hiddenMember'),
-      accentToken: 'specialist',
-      faceDown: true,
-    },
-  ] as [PlayingCardData, PlayingCardData, PlayingCardData];
-}
-
-export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOptions): [PlayingHandData] {
+export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [PlayingHandData] {
   const guildColor = resolveCardColor(options.guild.color);
   const cards: [PlayingCardData, ...PlayingCardData[]] = [
     {
@@ -228,7 +103,7 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
       },
       back: {
         title: `${options.guildName} strategy`,
-        description: 'Mock tactical notes for the next guild action. This side will later host real guild effects.',
+        description: 'Guild planning notes for the next shared action.',
         color: guildColor,
         ribbonText: 'Plan',
         stats: [
@@ -255,11 +130,11 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
         illustrationUrl: options.playerAvatar,
         ribbonText: options.characterClassLabel,
         stats: [
-          { id: 'logic', label: 'Logic', value: 78 },
-          { id: 'speed', label: 'Speed', value: 63 },
-          { id: 'team', label: 'Team', value: 71 },
+          { id: 'str', label: 'STR', value: options.characterStats.str ?? options.characterStats.force ?? 0 },
+          { id: 'dex', label: 'DEX', value: options.characterStats.dex ?? options.characterStats.dexterity ?? 0 },
+          { id: 'int', label: 'INT', value: options.characterStats.int ?? options.characterStats.intelligence ?? 0 },
+          { id: 'cha', label: 'CHA', value: options.characterStats.cha ?? options.characterStats.charisma ?? 0 },
           { id: 'xp', label: 'XP', value: Math.min(options.characterLevel * 8, 100) },
-          { id: 'focus', label: 'Focus', value: 84 },
         ],
       },
     },
@@ -273,7 +148,7 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
       accentToken: 'guide',
       front: {
         title: t('dashboard.dock.guildmate'),
-        description: 'Mock support member. This card previews how hidden guildmates will appear once real data is connected.',
+        description: t('dashboard.dock.hiddenMember'),
         color: 'var(--color-accent-guide)',
         ribbonText: t('game.classes.guide'),
         stats: [
@@ -295,7 +170,7 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
       accentToken: 'specialist',
       front: {
         title: t('dashboard.dock.guildmate'),
-        description: 'Mock specialist member with a more technical profile and a strong reward conversion angle.',
+        description: t('dashboard.dock.hiddenMember'),
         color: 'var(--color-accent-specialist)',
         ribbonText: t('game.classes.specialist'),
         stats: [
@@ -313,7 +188,7 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
     {
       id: 'guild-hand',
       title: options.guildName,
-      description: 'Mock full-size guild hand used to refine the modal layout, animation, and active-card highlight.',
+      description: options.guild.description,
       cards,
       activeCardIndex: options.activeCardIndex,
       mainCardIndex: 0,
@@ -331,7 +206,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
   return {
     id: `${layoutPrefix}-hand`,
     title: guildName,
-    description: 'Mock class guild hand used until real guild member data is connected.',
+    description: options.guild.description,
     activeCardIndex: options.activeCardIndex,
     mainCardIndex: 0,
     variant: 'fan',
@@ -369,7 +244,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
         accentToken: 'guide',
         front: {
           title: t('dashboard.dock.guildmate'),
-          description: 'Mock support member. This previews where class member details will appear.',
+          description: t('dashboard.dock.hiddenMember'),
           color: 'var(--color-accent-guide)',
           ribbonText: t('game.classes.guide'),
           stats: [
@@ -391,7 +266,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
         accentToken: 'specialist',
         front: {
           title: t('dashboard.dock.guildmate'),
-          description: 'Mock specialist member with a technical profile and reward conversion angle.',
+          description: t('dashboard.dock.hiddenMember'),
           color: 'var(--color-accent-specialist)',
           ribbonText: t('game.classes.specialist'),
           stats: [

@@ -64,6 +64,13 @@
       "when": 1779717600000,
       "tag": "0008_reconcile_game_schema_and_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779873000000,
+      "tag": "0009_seed_all_dev_dashboard_data",
+      "breakpoints": true
     }
   ]
 }

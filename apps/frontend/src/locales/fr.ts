@@ -62,7 +62,7 @@ export const fr = {
       showBonusCards: 'Afficher les cartes bonus',
       newRibbon: 'Nouveau',
       cardHandModalSubtitle:
-        'Prévisualisez la main de guilde en cartes pleine taille. Des données mock sont branchées pour tester le rendu.',
+        'Prévisualisez la main de guilde en cartes pleine taille avec les données de jeu de la base.',
       closeCardHandModal: 'Fermer la modale de main de cartes',
     },
     milestones: {

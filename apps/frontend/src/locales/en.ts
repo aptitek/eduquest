@@ -63,7 +63,7 @@ export const en: TranslationKeys = {
       showPodiumCards: 'Show podium cards',
       showBonusCards: 'Show bonus cards',
       newRibbon: 'New',
-      cardHandModalSubtitle: 'Preview the full-size guild hand. Mock data is wired for visual testing.',
+      cardHandModalSubtitle: 'Preview the full-size guild hand with database-backed game data.',
       closeCardHandModal: 'Close card hand modal',
     },
     milestones: {

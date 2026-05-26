@@ -9,7 +9,6 @@ export const APP_ENV: AppEnvironment =
 
 export const IS_PRODUCTION = APP_ENV === 'production';
 export const ENABLE_DEV_TOOLS = !IS_PRODUCTION && import.meta.env.VITE_ENABLE_DEV_TOOLS !== 'false';
-export const ENABLE_MOCK_DATA = !IS_PRODUCTION && import.meta.env.VITE_ENABLE_MOCK_DATA === 'true';
 
 export const BACKEND_BASE_URL =
   import.meta.env.VITE_BACKEND_BASE_URL ||

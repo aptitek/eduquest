@@ -74,6 +74,21 @@ type CompleteActivityResponse =
       error?: string;
     };
 
+type SpendGuildVotesResponse =
+  | {
+      success: true;
+      voteSpend: {
+        guildId: string;
+        votes: number;
+        cost: number;
+        balance: number;
+      };
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
 export async function fetchMapActivities(token: string): Promise<Activity[]> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/map`, {
     headers: {
@@ -105,4 +120,22 @@ export async function completeMapActivity(token: string, activityId: string): Pr
   }
 
   return data.battle;
+}
+
+export async function spendGuildVotes(token: string, guildId: string, votes = 1) {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}/votes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ votes }),
+  });
+  const data = (await response.json()) as SpendGuildVotesResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Guild vote spend failed.' : data.error || 'Guild vote spend failed.');
+  }
+
+  return data.voteSpend;
 }

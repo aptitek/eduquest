@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { type DashboardData } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
@@ -7,6 +7,7 @@ import {
   dashboardNotifications,
   gameActivities,
   gameBattles,
+  pointTransactions,
   guilds,
   globalGaugeMilestones,
   globalGauges,
@@ -16,6 +17,7 @@ import {
 import { DEBUG_ACTIVITIES, DEBUG_GUILDS } from '../dev/debugBackup';
 import type { UserPayload } from '../middleware/auth';
 import { isMockDataEnabled } from '../config/runtime';
+import { VotingCostService } from '../services/rewards';
 
 type Bindings = {
   APP_ENV?: string;
@@ -98,6 +100,50 @@ mapRouter.get('/guilds', async (c) => {
   }
 });
 
+mapRouter.post('/guilds/:guildId/votes', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const guildId = c.req.param('guildId');
+  const user = c.get('user');
+
+  if (!databaseUrl) {
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+  }
+
+  let body: { votes?: number };
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  const votes = body.votes ?? 1;
+  if (!Number.isInteger(votes) || votes <= 0) {
+    return c.json({ success: false, error: 'votes must be a positive integer.' }, 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [studentRecord] = user?.id
+      ? await db.select().from(students).where(eq(students.userId, user.id)).limit(1)
+      : [];
+
+    if (!studentRecord) {
+      return c.json({ success: false, error: 'Student profile not found.' }, 404);
+    }
+
+    const result = await new VotingCostService(db).spendGuildVotes({
+      guildId,
+      studentId: studentRecord.id,
+      votes,
+    });
+
+    return c.json({ success: true, source: 'database', voteSpend: result });
+  } catch (error: any) {
+    console.error('Guild vote spend SQL error:', error.message);
+    return c.json({ success: false, error: error.message || 'Guild vote spend failed.' }, 400);
+  }
+});
+
 mapRouter.post('/map/activities/:activityId/complete', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
   const activityId = c.req.param('activityId');
@@ -140,6 +186,27 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       return c.json({ success: false, error: 'Activity not found.' }, 404);
     }
 
+    const [existingBattle] = await db
+      .select()
+      .from(gameBattles)
+      .where(and(eq(gameBattles.studentId, studentRecord.id), eq(gameBattles.activityId, activityId)))
+      .limit(1);
+
+    if (existingBattle) {
+      return c.json({
+        success: true,
+        source: 'database',
+        battle: {
+          id: existingBattle.id,
+          studentId: existingBattle.studentId,
+          activityId: existingBattle.activityId,
+          grade: existingBattle.grade || undefined,
+          workUrl: existingBattle.workUrl || undefined,
+          createdAt: existingBattle.createdAt?.toISOString?.(),
+        },
+      });
+    }
+
     const [battle] = await db
       .insert(gameBattles)
       .values({
@@ -148,6 +215,42 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
         grade: activity.isGraded ? 1 : null,
       })
       .returning();
+
+    const [latestMembership] = await db
+      .select()
+      .from(studentCohorts)
+      .where(eq(studentCohorts.studentId, studentRecord.id))
+      .orderBy(desc(studentCohorts.createdAt))
+      .limit(1);
+    const earnedPoints = activity.basePoints || 0;
+
+    if (earnedPoints > 0 && latestMembership?.guildId) {
+      await db
+        .update(guilds)
+        .set({
+          totalPoints: sql`${guilds.totalPoints} + ${earnedPoints}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(guilds.id, latestMembership.guildId));
+
+      await db.insert(pointTransactions).values({
+        guildId: latestMembership.guildId,
+        studentId: studentRecord.id,
+        activityId,
+        amount: earnedPoints,
+        transactionType: 'EARNED',
+      });
+    }
+
+    if (earnedPoints > 0 && latestMembership?.cohortId) {
+      await db
+        .update(globalGauges)
+        .set({
+          currentPoints: sql`${globalGauges.currentPoints} + ${earnedPoints}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(globalGauges.cohortId, latestMembership.cohortId));
+    }
 
     return c.json({
       success: true,
@@ -189,15 +292,7 @@ mapRouter.get('/map', async (c) => {
     const activitiesFromDb = await db.select().from(gameActivities);
 
     if (activitiesFromDb.length === 0) {
-      if (!isMockDataEnabled(c.env)) {
-        return c.json({ success: true, source: 'database', activities: [] });
-      }
-
-      return c.json({
-        success: true,
-        source: 'mock_fallback',
-        activities: DEBUG_ACTIVITIES,
-      });
+      return c.json({ success: true, source: 'database', activities: [] });
     }
 
     return c.json({
@@ -221,16 +316,7 @@ mapRouter.get('/map', async (c) => {
     });
   } catch (error: any) {
     console.error('Map SQL error:', error.message);
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'Map activities could not be loaded.' }, 500);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock_error_fallback',
-      warning: 'Erreur SQL, renvoi des fausses données de secours.',
-      activities: DEBUG_ACTIVITIES,
-    });
+    return c.json({ success: false, error: 'Map activities could not be loaded.' }, 500);
   }
 });
 
@@ -261,11 +347,7 @@ mapRouter.get('/dashboard', async (c) => {
       : [];
 
     if (!latestMembership?.cohortId) {
-      if (!isMockDataEnabled(c.env)) {
-        return c.json({ success: false, error: 'Dashboard cohort context not found.' }, 404);
-      }
-
-      return c.json({ success: true, source: 'mock_fallback', dashboard: DEBUG_DASHBOARD });
+      return c.json({ success: false, error: 'Dashboard cohort context not found.' }, 404);
     }
 
     const [gauge] = await db
@@ -275,11 +357,7 @@ mapRouter.get('/dashboard', async (c) => {
       .limit(1);
 
     if (!gauge) {
-      if (!isMockDataEnabled(c.env)) {
-        return c.json({ success: false, error: 'Dashboard gauge not found.' }, 404);
-      }
-
-      return c.json({ success: true, source: 'mock_fallback', dashboard: DEBUG_DASHBOARD });
+      return c.json({ success: false, error: 'Dashboard gauge not found.' }, 404);
     }
 
     const [milestones, rewards, notifications] = await Promise.all([
@@ -335,10 +413,6 @@ mapRouter.get('/dashboard', async (c) => {
     return c.json({ success: true, source: 'database', dashboard });
   } catch (error: any) {
     console.error('Dashboard SQL error:', error.message);
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'Dashboard data could not be loaded.' }, 500);
-    }
-
-    return c.json({ success: true, source: 'mock_error_fallback', dashboard: DEBUG_DASHBOARD });
+    return c.json({ success: false, error: 'Dashboard data could not be loaded.' }, 500);
   }
 });

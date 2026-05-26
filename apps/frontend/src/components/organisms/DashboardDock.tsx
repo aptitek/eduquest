@@ -6,23 +6,21 @@ import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProg
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { useGameStore } from '../../features/game/gameStore';
+import { fetchGuilds, spendGuildVotes } from '../../features/game/api';
 import { useDashboardData } from '../../features/game/useDashboardData';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
-import { ENABLE_MOCK_DATA } from '../../config/deployment';
 import mascotUrl from '../../assets/mascot.svg';
 import { Coins } from 'lucide-react';
 import {
-  RIVAL_GUILDS,
   buildClassGuildHand,
-  buildCohortRewardCards,
-  buildGaugeMilestones,
-  buildMockGuildCardHands,
+  buildGuildCardHands,
   buildPodiumCards,
   buildProgressBonusCards,
   getLatestCohortMembership,
 } from './DashboardDock/dashboardDockData';
+import type { DockGuild } from './DashboardDock/types';
 import { motion, useReducedMotion } from 'framer-motion';
 
 export interface DashboardDockProps {
@@ -44,11 +42,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [guildHandTarget, setGuildHandTarget] = useState<HTMLElement | null>(null);
   const [progressBonusTarget, setProgressBonusTarget] = useState<HTMLElement | null>(null);
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
+  const [guilds, setGuilds] = useState<DockGuild[]>([]);
   const { user, student, character } = useGameStore();
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
   const latestMembership = getLatestCohortMembership(student?.cohortMemberships);
-  const playerGuild = latestMembership?.guild || (ENABLE_MOCK_DATA ? RIVAL_GUILDS[0] : undefined);
+  const playerGuild = latestMembership?.guild;
   const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
   const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
   const isGuildPage = route === 'guild';
@@ -142,9 +141,31 @@ export function DashboardDock({ className }: DashboardDockProps) {
     return () => mediaQuery.removeEventListener('change', handleMediaChange);
   }, []);
 
+  useEffect(() => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return undefined;
+
+    let isMounted = true;
+    fetchGuilds(token)
+      .then((nextGuilds) => {
+        if (isMounted) setGuilds(nextGuilds);
+      })
+      .catch((error) => {
+        console.warn('Could not load dashboard guilds.', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   if (!student || !character || !playerGuild) return null;
 
-  const podiumCards = buildPodiumCards(t, playerGuild);
+  const podiumGuilds = mergeGuilds(playerGuild ? [playerGuild] : [], guilds);
+  const activePlayerGuild =
+    podiumGuilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name) ||
+    playerGuild;
+  const podiumCards = buildPodiumCards(t, podiumGuilds);
   const bonusCards = dashboardData?.rewards.length
     ? (dashboardData.rewards.map((reward) => ({
         kind: 'guild' as const,
@@ -155,18 +176,16 @@ export function DashboardDock({ className }: DashboardDockProps) {
         ribbonLabel: t('dashboard.dock.newRibbon'),
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
-    : ENABLE_MOCK_DATA
-      ? buildCohortRewardCards(t)
-      : ([
-          {
-            kind: 'guild' as const,
-            id: 'empty-reward',
-            title: t('dashboard.rewards.empty.title'),
-            subtitle: t('dashboard.rewards.empty.subtitle'),
-            accentToken: 'neutral' as const,
-            faceDown: true,
-          },
-        ] as [PlayingCardData, ...PlayingCardData[]]);
+    : ([
+        {
+          kind: 'guild' as const,
+          id: 'empty-reward',
+          title: t('dashboard.rewards.empty.title'),
+          subtitle: t('dashboard.rewards.empty.subtitle'),
+          accentToken: 'neutral' as const,
+          faceDown: true,
+        },
+      ] as [PlayingCardData, ...PlayingCardData[]]);
   const progressBonusCards = buildProgressBonusCards(bonusCards, 'progress-active-bonus');
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
@@ -176,9 +195,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         positionPercent: milestone.positionPercent,
         value: milestone.value,
       }))
-    : ENABLE_MOCK_DATA
-      ? buildGaugeMilestones(t)
-      : [];
+    : [];
   const gaugeCurrentPoints = dashboardData?.gauge.currentPoints ?? 0;
   const gaugeTargetPoints = dashboardData?.gauge.targetPoints ?? 1;
   const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
@@ -191,20 +208,17 @@ export function DashboardDock({ className }: DashboardDockProps) {
     accentToken: 'neutral',
     ribbonLabel: t('class.guilds'),
   };
-  const podiumDeckCards = [podiumCards[0], podiumCards[1], podiumCards[2], classRemainingCard] as [
-    PlayingCardData,
-    ...PlayingCardData[],
-  ];
+  const podiumDeckCards = toNonEmptyCards([...podiumCards, classRemainingCard]);
   const classPodiumHandsBase = podiumCards.map((card) =>
     buildClassGuildHand(t, {
-      guild: card.guild || playerGuild,
+      guild: card.guild || activePlayerGuild,
       guildName: card.title,
     })
   );
   const classPodiumHands = classPodiumHandsBase.map((hand) => ({
     ...hand,
     cards: hand.cards.map((card) =>
-      card.kind === 'guild' && card.guild?.name === playerGuild.name
+      card.kind === 'guild' && card.guild?.name === activePlayerGuild.name
         ? makeEditableDashboardCard({
             card,
             cardKey: 'guild',
@@ -218,14 +232,15 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const openCharacterPage = () => {
     window.location.hash = 'character';
   };
-  const guildHandBase = buildMockGuildCardHands(t, {
-    guild: playerGuild,
-    guildName: playerGuild.name || t('dashboard.dock.playerGuild'),
+  const guildHandBase = buildGuildCardHands(t, {
+    guild: activePlayerGuild,
+    guildName: activePlayerGuild.name || t('dashboard.dock.playerGuild'),
     playerName,
     playerAvatar,
     characterLevel: character.currentLevel,
     characterClass: character.characterClass,
     characterClassLabel: t(`game.classes.${character.characterClass}`),
+    characterStats: character.stats,
     activeCardIndex: 0,
   })[0];
   const guildHand = {
@@ -271,9 +286,23 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const openClassPage = () => {
     window.location.hash = 'class';
   };
+  const boostGuild = async () => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token || !activePlayerGuild.id) return;
+
+    try {
+      const voteSpend = await spendGuildVotes(token, activePlayerGuild.id, 1);
+      setGuilds((current) => {
+        const updatedGuild = { ...activePlayerGuild, totalPoints: voteSpend.balance };
+        return [updatedGuild, ...current.filter((guild) => guild?.id !== activePlayerGuild.id)];
+      });
+    } catch (error) {
+      console.warn('Could not spend guild vote.', error);
+    }
+  };
   const boostButton = (
     <HoldToConfirmButton
-      onConfirm={() => undefined}
+      onConfirm={boostGuild}
       holdDuration={1200}
       shape="round"
       variant="btn-primary"
@@ -288,7 +317,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const goldIndicator = (
     <GaugeIndicator
       label={t('dashboard.dock.gold')}
-      value={(playerGuild.totalPoints || 0).toLocaleString()}
+      value={(activePlayerGuild.totalPoints || 0).toLocaleString()}
       icon={<Coins size={18} aria-hidden />}
       tone="gold"
     />
@@ -439,7 +468,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             label={gaugeLabel}
             centerContent={boostButton}
             goldIndicator={goldIndicator}
-            rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
+            rightIndicatorCompactValue={(activePlayerGuild.totalPoints || 0).toLocaleString()}
             boostLabel={t('dashboard.dock.boost')}
             milestoneBadgesExpanded={isProgressPage}
             className={cn(
@@ -463,8 +492,31 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
 export default DashboardDock;
 
+function mergeGuilds(primaryGuilds: readonly DockGuild[], secondaryGuilds: readonly DockGuild[]) {
+  const guildMap = new Map<string, DockGuild>();
+
+  [...primaryGuilds, ...secondaryGuilds].forEach((guild) => {
+    if (!guild?.name) return;
+    guildMap.set(slugify(guild.name), guild);
+  });
+
+  return Array.from(guildMap.values());
+}
+
+function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...PlayingCardData[]] {
+  if (cards.length === 0) {
+    throw new Error('Expected at least one card.');
+  }
+
+  return cards as [PlayingCardData, ...PlayingCardData[]];
+}
+
 function getHashRoute() {
   return window.location.hash.replace(/^#\/?/, '');
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
 function makeEditableDashboardCard({

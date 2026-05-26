@@ -11,7 +11,6 @@ import { StudentCohort, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
-import { ENABLE_MOCK_DATA } from '../../config/deployment';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -62,14 +61,7 @@ export function AccountDropdown() {
     (membership) => membership.school?.name === 'Aptitek'
   );
   const latestSchool = user?.isAdmin
-    ? adminSchoolMembership?.school ||
-      (ENABLE_MOCK_DATA
-        ? {
-            id: 'debug_school_aptitek',
-            name: 'Aptitek',
-            emailDomain: 'aptitek.io',
-          }
-        : undefined)
+    ? adminSchoolMembership?.school
     : latestCohort?.school || student?.school;
   const latestSchoolMembership = user?.schoolMemberships?.find(
     (membership) => membership.schoolId === latestSchool?.id
