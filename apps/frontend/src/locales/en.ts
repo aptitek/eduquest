@@ -12,8 +12,16 @@ export const en: TranslationKeys = {
     languageEnglish: 'English',
     switchToLightTheme: 'Switch to light theme',
     switchToDarkTheme: 'Switch to dark theme',
+    onboarding: 'Onboarding',
+    character_creation: 'Character Creation',
+    tavern: 'Tavern',
+    tutorial: 'Tutorial',
+    ice_breaker: 'Ice Breaker',
     campfire: 'Campfire',
     quest: 'Quest',
+    quiz: 'Quiz',
+    practical: 'Practical',
+    mini_boss: 'Mini Boss',
     boss: 'Boss Battle',
     emptyPlayingHands: 'No playing hands to display.',
   },
@@ -275,10 +283,26 @@ export const en: TranslationKeys = {
     completedSuccess: 'Challenge successfully completed!',
     completing: 'Completing...',
     completionError: 'The activity could not be completed. Please try again.',
+    onboardingDesc:
+      'Enter the adventure, learn the game frame, and prepare your first progression step.',
+    character_creationDesc:
+      'Create your character and choose the identity that will represent your learning journey.',
+    tavernDesc:
+      'Form your guild, meet your allies, and organize your first collective strategy.',
+    tutorialDesc:
+      'Follow the UI tour to understand the essential EduQuest tools.',
+    ice_breakerDesc:
+      'Start a short activity to get to know your group before the main challenges.',
     bossDesc:
       'Confront the guardian of this educational module by submitting your final deliverable. Intelligence (INT) statistics are critical.',
     questDesc: 'Explore this hands-on quest to master new programming concepts.',
     campfireDesc: "Rest by the fire and follow the Game Master's talk.",
+    quizDesc:
+      'Validate your knowledge with an interactive quiz, Genially, or SCORM activity.',
+    practicalDesc:
+      'Put concepts into practice with a guided exercise and a concrete deliverable.',
+    mini_bossDesc:
+      'Face an intermediate challenge before the final boss to consolidate the chapter.',
   },
   playingCard: {
     flip: 'Flip card',

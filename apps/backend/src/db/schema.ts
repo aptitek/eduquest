@@ -10,8 +10,10 @@ import {
   doublePrecision,
   pgEnum,
   primaryKey,
+  uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ==========================================
 // 1. SCHÉMAS ADMINISTRATIFS & UTILISATEURS
@@ -172,11 +174,39 @@ export const gameTargetAttributeEnum = pgEnum('game_target_attribute', [
   'charisma',
 ]);
 
+export const gameActivityTypeEnum = pgEnum('game_activity_type', [
+  'onboarding',
+  'character_creation',
+  'tavern',
+  'tutorial',
+  'ice_breaker',
+  'campfire',
+  'quiz',
+  'practical',
+  'mini_boss',
+  'boss',
+]);
+
 export const pointTransactionTypeEnum = pgEnum('point_transaction_type', [
   'EARNED',
   'SPENT_VOTE',
   'MANUAL_BONUS',
 ]);
+
+export const gameMapRunStatusEnum = pgEnum('game_map_run_status', [
+  'active',
+  'completed',
+  'archived',
+]);
+
+export const gameActivityCompletionTypeEnum = pgEnum('game_activity_completion_type', [
+  'read',
+  'submission',
+  'battle',
+  'system',
+]);
+
+export const gameCharacterMoveTypeEnum = pgEnum('game_character_move_type', ['enter', 'move']);
 
 // Table des classes de personnage. Les libellés affichés doivent être traduits côté UI depuis `name_i18n_key`.
 export const gameCharacterClasses = pgTable('game_character_classes', {
@@ -210,26 +240,127 @@ export const gameCharacters = pgTable('game_characters', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-// Table des activités sur la carte de jeu
+export const gameMapRuns = pgTable(
+  'game_map_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => cohorts.id, { onDelete: 'cascade' }),
+    currentSectorDepth: integer('current_sector_depth').default(0).notNull(),
+    fogRevealDepth: integer('fog_reveal_depth').default(1).notNull(),
+    status: gameMapRunStatusEnum('status').default('active').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    activeCohortIdx: uniqueIndex('game_map_runs_active_cohort_idx')
+      .on(table.cohortId)
+      .where(sql`${table.status} = 'active'`),
+  })
+);
+
+// Table des activités sur la carte de jeu. Les lignes sans cohort_id sont des modèles réutilisables.
 export const gameActivities = pgTable('game_activities', {
   id: uuid('id').primaryKey().defaultRandom(),
-  type: text('type').notNull(), // 'campfire', 'quest', 'boss'
+  cohortId: uuid('cohort_id').references(() => cohorts.id, { onDelete: 'cascade' }),
+  templateActivityId: uuid('template_activity_id').references(
+    (): AnyPgColumn => gameActivities.id,
+    { onDelete: 'set null' }
+  ),
+  mapRunId: uuid('map_run_id').references(() => gameMapRuns.id, { onDelete: 'cascade' }),
+  type: gameActivityTypeEnum('type').notNull(),
   title: text('title').notNull(),
   startDate: timestamp('start_date', { withTimezone: true }),
   endDate: timestamp('end_date', { withTimezone: true }),
   url: text('url'),
   isGraded: boolean('is_graded').default(false).notNull(),
-  x: integer('x').default(0).notNull(),
-  y: integer('y').default(0).notNull(),
+  mapX: integer('map_x').default(0).notNull(),
+  mapY: integer('map_y').default(0).notNull(),
+  sectorDepth: integer('sector_depth').default(0).notNull(),
   requiredLevel: integer('required_level').default(1).notNull(),
-  unlockRule: jsonb('unlock_rule').default('{}'),
   basePoints: integer('base_points').default(0).notNull(),
   targetAttribute: gameTargetAttributeEnum('target_attribute'),
-  bossMetadata: jsonb('boss_metadata').default('{}'), // projectUrl, gradingUrl
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
-// Table des rendus / combats
+export const gameActivityEdges = pgTable(
+  'game_activity_edges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    cohortId: uuid('cohort_id').references(() => cohorts.id, { onDelete: 'cascade' }),
+    mapRunId: uuid('map_run_id').references(() => gameMapRuns.id, { onDelete: 'cascade' }),
+    fromActivityId: uuid('from_activity_id')
+      .notNull()
+      .references(() => gameActivities.id, { onDelete: 'cascade' }),
+    toActivityId: uuid('to_activity_id')
+      .notNull()
+      .references(() => gameActivities.id, { onDelete: 'cascade' }),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    edgeScopeIdx: uniqueIndex('game_activity_edges_scope_idx').on(
+      table.fromActivityId,
+      table.toActivityId,
+      table.cohortId,
+      table.mapRunId
+    ),
+  })
+);
+
+// Ledger unifié des interactions avec les activités.
+export const gameActivityCompletions = pgTable(
+  'game_activity_completions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => cohorts.id, { onDelete: 'cascade' }),
+    activityId: uuid('activity_id')
+      .notNull()
+      .references(() => gameActivities.id, { onDelete: 'cascade' }),
+    completionType: gameActivityCompletionTypeEnum('completion_type').default('read').notNull(),
+    grade: doublePrecision('grade'),
+    workUrl: text('work_url'),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    studentCohortActivityIdx: uniqueIndex('game_activity_completions_student_cohort_activity_idx').on(
+      table.studentId,
+      table.cohortId,
+      table.activityId
+    ),
+  })
+);
+
+export const gameCharacterMoves = pgTable('game_character_moves', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  studentId: uuid('student_id')
+    .notNull()
+    .references(() => students.id, { onDelete: 'cascade' }),
+  cohortId: uuid('cohort_id')
+    .notNull()
+    .references(() => cohorts.id, { onDelete: 'cascade' }),
+  mapRunId: uuid('map_run_id')
+    .notNull()
+    .references(() => gameMapRuns.id, { onDelete: 'cascade' }),
+  fromActivityId: uuid('from_activity_id').references(() => gameActivities.id, { onDelete: 'set null' }),
+  toActivityId: uuid('to_activity_id')
+    .notNull()
+    .references(() => gameActivities.id, { onDelete: 'cascade' }),
+  moveType: gameCharacterMoveTypeEnum('move_type').default('move').notNull(),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// Ancienne table conservée uniquement pour les migrations historiques.
 export const gameBattles = pgTable('game_battles', {
   id: uuid('id').primaryKey().defaultRandom(),
   studentId: uuid('student_id').references(() => students.id),

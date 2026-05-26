@@ -1,6 +1,7 @@
-import { Flame, Compass, Swords, Lock } from 'lucide-react';
-import { ActivityType } from '@eduquest/shared';
+import { BookOpen, Compass, Flame, Hammer, HelpCircle, Lock, Shield, Snowflake, Swords, User, Users } from 'lucide-react';
+import type { ActivityType } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
+import { getActivityVisualVariant } from '../../features/game/activityPresentation';
 
 interface NodeIconProps {
   type: ActivityType;
@@ -13,10 +14,24 @@ export function NodeIcon({ type, isCompleted, isLocked, onClick }: NodeIconProps
   const getIcon = () => {
     if (isLocked) return <Lock size={20} />;
     switch (type) {
+      case 'onboarding':
+        return <Compass size={20} />;
+      case 'character_creation':
+        return <User size={20} />;
+      case 'tavern':
+        return <Users size={20} />;
+      case 'tutorial':
+        return <BookOpen size={20} />;
+      case 'ice_breaker':
+        return <Snowflake size={20} />;
       case 'campfire':
         return <Flame size={20} />;
-      case 'quest':
-        return <Compass size={20} />;
+      case 'quiz':
+        return <HelpCircle size={20} />;
+      case 'practical':
+        return <Hammer size={20} />;
+      case 'mini_boss':
+        return <Shield size={20} />;
       case 'boss':
         return <Swords size={20} />;
     }
@@ -30,7 +45,7 @@ export function NodeIcon({ type, isCompleted, isLocked, onClick }: NodeIconProps
     if (isCompleted) {
       return 'bg-status-completed/10 border-status-completed text-status-completed hover:border-status-completed cursor-pointer motion-safe:hover:scale-110 shadow-lg';
     }
-    switch (type) {
+    switch (getActivityVisualVariant(type)) {
       case 'campfire':
         return 'bg-status-campfire/10 border-status-campfire text-status-campfire hover:border-status-campfire cursor-pointer motion-safe:hover:scale-110 motion-safe:animate-pulse';
       case 'quest':

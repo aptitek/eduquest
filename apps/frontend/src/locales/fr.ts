@@ -10,8 +10,16 @@ export const fr = {
     languageEnglish: 'English',
     switchToLightTheme: 'Passer au thème clair',
     switchToDarkTheme: 'Passer au thème sombre',
+    onboarding: 'Accueil',
+    character_creation: 'Création de personnage',
+    tavern: 'Taverne',
+    tutorial: 'Tutoriel',
+    ice_breaker: 'Brise-glace',
     campfire: 'Feu de Camp',
     quest: 'Quête',
+    quiz: 'Quiz',
+    practical: 'Pratique',
+    mini_boss: 'Mini-boss',
     boss: 'Combat de Boss',
     emptyPlayingHands: 'Aucune main de cartes à afficher.',
   },
@@ -275,11 +283,26 @@ export const fr = {
     completedSuccess: 'Défi accompli avec succès !',
     completing: 'Validation en cours...',
     completionError: "L'activité n'a pas pu être validée. Veuillez réessayer.",
+    onboardingDesc:
+      "Entrez dans l'aventure, découvrez le cadre de jeu et préparez votre première progression.",
+    character_creationDesc:
+      "Créez votre personnage et choisissez l'identité qui représentera votre parcours.",
+    tavernDesc:
+      'Formez votre guilde, rencontrez vos allié·es et organisez votre première stratégie collective.',
+    tutorialDesc:
+      "Suivez la visite guidée de l'interface pour comprendre les outils essentiels d'EduQuest.",
+    ice_breakerDesc:
+      'Lancez une activité courte pour apprendre à connaître votre groupe avant les défis principaux.',
     bossDesc:
       "Affrontez le gardien de ce module pédagogique en soumettant votre livrable final. Les statistiques d'intelligence (INT) sont critiques.",
-    questDesc:
-      'Explorez cette quête pratique pour maîtriser de nouveaux concepts de programmation.',
+    questDesc: 'Explorez cette quête pratique pour maîtriser de nouveaux concepts de programmation.',
     campfireDesc: 'Reposez-vous au coin du feu et suivez la conférence du Maître du Jeu.',
+    quizDesc:
+      'Validez vos connaissances avec une activité interactive de type quiz, Genially ou SCORM.',
+    practicalDesc:
+      'Mettez les notions en pratique avec un exercice guidé et un livrable concret.',
+    mini_bossDesc:
+      'Affrontez un défi intermédiaire avant le boss final pour consolider les acquis du chapitre.',
   },
   playingCard: {
     flip: 'Retourner la carte',

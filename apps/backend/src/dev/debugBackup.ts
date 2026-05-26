@@ -3,8 +3,10 @@ import type {
   Address,
   Campus,
   Cohort,
-  GameBattle,
+  GameActivityCompletion,
+  GameActivityEdge,
   GameCharacter,
+  GameMapRun,
   Guild,
   School,
   Student,
@@ -15,7 +17,7 @@ type DebugStudentProfile = {
   user: User;
   student: Student;
   character: GameCharacter;
-  battles: GameBattle[];
+  activityCompletions: GameActivityCompletion[];
 };
 
 export const DEBUG_ADDRESSES: Address[] = [
@@ -159,46 +161,50 @@ export const DEBUG_GUILDS: Guild[] = [
 export const DEBUG_ACTIVITIES: Activity[] = [
   {
     id: 'debug_activity_campfire_git',
-    type: 'campfire',
+    type: 'onboarding',
     title: "Le Feu de Camp de l'Onboarding Git",
     isGraded: false,
-    x: 130,
-    y: 320,
+    mapX: 130,
+    mapY: 320,
+    sectorDepth: 0,
     requiredLevel: 1,
-    unlockRule: { requiredLevel: 1 },
+    metadata: { resources: [{ title: 'Git onboarding', url: 'https://git-scm.com/docs/gittutorial' }] },
     createdAt: '2026-01-08',
   },
   {
     id: 'debug_activity_variables',
-    type: 'quest',
+    type: 'practical',
     title: 'La Forêt des Variables et Constantes',
     isGraded: true,
-    x: 330,
-    y: 180,
+    mapX: 330,
+    mapY: 180,
+    sectorDepth: 1,
     requiredLevel: 1,
-    unlockRule: { requiredLevel: 1, requiredCompletedActivities: ['debug_activity_campfire_git'] },
+    metadata: {},
     createdAt: '2026-01-10',
   },
   {
     id: 'debug_activity_api_bridge',
-    type: 'quest',
+    type: 'practical',
     title: 'Le Pont des API et des Contrats Typés',
     isGraded: true,
-    x: 540,
-    y: 410,
+    mapX: 540,
+    mapY: 410,
+    sectorDepth: 2,
     requiredLevel: 2,
-    unlockRule: { requiredLevel: 2, requiredCompletedActivities: ['debug_activity_variables'] },
+    metadata: {},
     createdAt: '2026-01-17',
   },
   {
     id: 'debug_activity_accessibility',
-    type: 'quest',
+    type: 'practical',
     title: "Les Ruines de l'Accessibilité Perdue",
     isGraded: true,
-    x: 700,
-    y: 190,
+    mapX: 700,
+    mapY: 190,
+    sectorDepth: 2,
     requiredLevel: 2,
-    unlockRule: { requiredLevel: 2, requiredCompletedActivities: ['debug_activity_variables'] },
+    metadata: {},
     createdAt: '2026-01-24',
   },
   {
@@ -206,18 +212,70 @@ export const DEBUG_ACTIVITIES: Activity[] = [
     type: 'boss',
     title: 'Le Dragon de la Release Candidate',
     isGraded: true,
-    x: 880,
-    y: 310,
+    mapX: 880,
+    mapY: 310,
+    sectorDepth: 3,
     requiredLevel: 3,
-    bossMetadata: {
-      projectUrl: 'https://github.com/eduquest/debug-release-candidate',
-      gradingUrl: 'https://api.eduquest.test/grade/debug-release-candidate',
-    },
-    unlockRule: {
-      requiredLevel: 3,
-      requiredCompletedActivities: ['debug_activity_api_bridge', 'debug_activity_accessibility'],
+    metadata: {
+      boss: {
+        projectUrl: 'https://github.com/eduquest/debug-release-candidate',
+        gradingUrl: 'https://api.eduquest.test/grade/debug-release-candidate',
+      },
     },
     createdAt: '2026-02-01',
+  },
+];
+
+export const DEBUG_MAP_RUN: GameMapRun = {
+  id: 'debug_map_run_frontend_mages',
+  cohortId: 'debug_cohort_frontend_mages',
+  currentSectorDepth: 1,
+  fogRevealDepth: 1,
+  status: 'active',
+  createdAt: '2026-01-08',
+  updatedAt: '2026-01-18',
+};
+
+export const DEBUG_ACTIVITY_EDGES: GameActivityEdge[] = [
+  {
+    id: 'debug_edge_git_variables',
+    cohortId: 'debug_cohort_frontend_mages',
+    mapRunId: 'debug_map_run_frontend_mages',
+    fromActivityId: 'debug_activity_campfire_git',
+    toActivityId: 'debug_activity_variables',
+    createdAt: '2026-01-08',
+  },
+  {
+    id: 'debug_edge_variables_api',
+    cohortId: 'debug_cohort_frontend_mages',
+    mapRunId: 'debug_map_run_frontend_mages',
+    fromActivityId: 'debug_activity_variables',
+    toActivityId: 'debug_activity_api_bridge',
+    createdAt: '2026-01-10',
+  },
+  {
+    id: 'debug_edge_variables_accessibility',
+    cohortId: 'debug_cohort_frontend_mages',
+    mapRunId: 'debug_map_run_frontend_mages',
+    fromActivityId: 'debug_activity_variables',
+    toActivityId: 'debug_activity_accessibility',
+    createdAt: '2026-01-10',
+  },
+  {
+    id: 'debug_edge_api_boss',
+    cohortId: 'debug_cohort_frontend_mages',
+    mapRunId: 'debug_map_run_frontend_mages',
+    fromActivityId: 'debug_activity_api_bridge',
+    toActivityId: 'debug_activity_boss_release',
+    createdAt: '2026-01-17',
+  },
+  {
+    id: 'debug_edge_accessibility_boss',
+    cohortId: 'debug_cohort_frontend_mages',
+    mapRunId: 'debug_map_run_frontend_mages',
+    fromActivityId: 'debug_activity_accessibility',
+    toActivityId: 'debug_activity_boss_release',
+    createdAt: '2026-01-24',
   },
 ];
 
@@ -273,17 +331,21 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       stats: { strength: 7, dexterity: 16, constitution: 0, intelligence: 13, wisdom: 0, charisma: 15 },
       updatedAt: '2026-02-12',
     },
-    battles: [
+    activityCompletions: [
       {
         id: 'debug_battle_lina_git',
         studentId: 'debug_student_lina',
+        cohortId: 'debug_cohort_frontend_mages',
         activityId: 'debug_activity_campfire_git',
+        completionType: 'read',
         createdAt: '2026-01-09',
       },
       {
         id: 'debug_battle_lina_variables',
         studentId: 'debug_student_lina',
+        cohortId: 'debug_cohort_frontend_mages',
         activityId: 'debug_activity_variables',
+        completionType: 'battle',
         grade: 0.92,
         createdAt: '2026-01-13',
       },
@@ -331,24 +393,30 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       stats: { strength: 12, dexterity: 11, constitution: 0, intelligence: 17, wisdom: 0, charisma: 10 },
       updatedAt: '2026-02-18',
     },
-    battles: [
+    activityCompletions: [
       {
         id: 'debug_battle_samir_git',
         studentId: 'debug_student_samir',
+        cohortId: 'debug_cohort_fullstack_rangers',
         activityId: 'debug_activity_campfire_git',
+        completionType: 'read',
         createdAt: '2026-01-16',
       },
       {
         id: 'debug_battle_samir_variables',
         studentId: 'debug_student_samir',
+        cohortId: 'debug_cohort_fullstack_rangers',
         activityId: 'debug_activity_variables',
+        completionType: 'battle',
         grade: 0.81,
         createdAt: '2026-01-18',
       },
       {
         id: 'debug_battle_samir_api',
         studentId: 'debug_student_samir',
+        cohortId: 'debug_cohort_fullstack_rangers',
         activityId: 'debug_activity_api_bridge',
+        completionType: 'battle',
         grade: 0.88,
         createdAt: '2026-01-25',
       },
@@ -396,31 +464,39 @@ export const DEBUG_STUDENT_PROFILES: DebugStudentProfile[] = [
       stats: { strength: 8, dexterity: 10, constitution: 0, intelligence: 19, wisdom: 0, charisma: 13 },
       updatedAt: '2026-03-01',
     },
-    battles: [
+    activityCompletions: [
       {
         id: 'debug_battle_noa_git',
         studentId: 'debug_student_noa',
+        cohortId: 'debug_cohort_data_alchemists',
         activityId: 'debug_activity_campfire_git',
+        completionType: 'read',
         createdAt: '2026-02-02',
       },
       {
         id: 'debug_battle_noa_variables',
         studentId: 'debug_student_noa',
+        cohortId: 'debug_cohort_data_alchemists',
         activityId: 'debug_activity_variables',
+        completionType: 'battle',
         grade: 0.97,
         createdAt: '2026-02-04',
       },
       {
         id: 'debug_battle_noa_api',
         studentId: 'debug_student_noa',
+        cohortId: 'debug_cohort_data_alchemists',
         activityId: 'debug_activity_api_bridge',
+        completionType: 'battle',
         grade: 0.9,
         createdAt: '2026-02-08',
       },
       {
         id: 'debug_battle_noa_accessibility',
         studentId: 'debug_student_noa',
+        cohortId: 'debug_cohort_data_alchemists',
         activityId: 'debug_activity_accessibility',
+        completionType: 'battle',
         grade: 0.84,
         createdAt: '2026-02-11',
       },

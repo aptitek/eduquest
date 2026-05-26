@@ -1,4 +1,10 @@
-import type { Activity, CohortProgressData, GameBattle, Guild } from '@eduquest/shared';
+import type {
+  CohortProgressData,
+  GameActivityCompletion,
+  GameCharacterMove,
+  GameMapData,
+  Guild,
+} from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 
 type DashboardResponse =
@@ -57,7 +63,7 @@ export async function fetchGuilds(token: string): Promise<Guild[]> {
 type MapResponse =
   | {
       success: true;
-      activities: Activity[];
+      map: GameMapData;
     }
   | {
       success: false;
@@ -67,7 +73,18 @@ type MapResponse =
 type CompleteActivityResponse =
   | {
       success: true;
-      battle: GameBattle;
+      completion: GameActivityCompletion;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type MoveCharacterResponse =
+  | {
+      success: true;
+      move: GameCharacterMove;
+      currentActivityId: string;
     }
   | {
       success: false;
@@ -89,7 +106,7 @@ type SpendGuildVotesResponse =
       error?: string;
     };
 
-export async function fetchMapActivities(token: string): Promise<Activity[]> {
+export async function fetchMapActivities(token: string): Promise<GameMapData> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/map`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -101,10 +118,13 @@ export async function fetchMapActivities(token: string): Promise<Activity[]> {
     throw new Error(data.success ? 'Map request failed.' : data.error || 'Map request failed.');
   }
 
-  return data.activities;
+  return data.map;
 }
 
-export async function completeMapActivity(token: string, activityId: string): Promise<GameBattle> {
+export async function completeMapActivity(
+  token: string,
+  activityId: string
+): Promise<GameActivityCompletion> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/map/activities/${activityId}/complete`, {
     method: 'POST',
     headers: {
@@ -119,7 +139,26 @@ export async function completeMapActivity(token: string, activityId: string): Pr
     );
   }
 
-  return data.battle;
+  return data.completion;
+}
+
+export async function moveCharacterToActivity(
+  token: string,
+  activityId: string
+): Promise<{ move: GameCharacterMove; currentActivityId: string }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/map/activities/${activityId}/move`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as MoveCharacterResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Character move failed.' : data.error || 'Character move failed.');
+  }
+
+  return { move: data.move, currentActivityId: data.currentActivityId };
 }
 
 export async function spendGuildVotes(token: string, guildId: string, votes = 1) {

@@ -6,7 +6,7 @@ import type {
   Campus,
   Cohort,
   CohortGrade,
-  GameBattle,
+  GameActivityCompletion,
   GameCharacter,
   GameCharacterClass,
   Guild,
@@ -22,7 +22,7 @@ import {
   campuses,
   cohortInvites,
   cohortMemberships,
-  gameBattles,
+  gameActivityCompletions,
   cohorts,
   gameCharacters,
   guilds,
@@ -76,7 +76,7 @@ const debugCohortInvites: Array<{
 type AddressRecord = typeof addresses.$inferSelect;
 type CampusRecord = typeof campuses.$inferSelect;
 type CohortRecord = typeof cohorts.$inferSelect;
-type GameBattleRecord = typeof gameBattles.$inferSelect;
+type GameActivityCompletionRecord = typeof gameActivityCompletions.$inferSelect;
 type GameCharacterRecord = typeof gameCharacters.$inferSelect;
 type GuildRecord = typeof guilds.$inferSelect;
 type SchoolRecord = typeof schools.$inferSelect;
@@ -251,14 +251,18 @@ function toGameCharacter(record: GameCharacterRecord): GameCharacter {
   };
 }
 
-function toGameBattle(record: GameBattleRecord): GameBattle {
+function toGameActivityCompletion(record: GameActivityCompletionRecord): GameActivityCompletion {
   return {
     id: record.id,
-    studentId: record.studentId || '',
-    activityId: record.activityId || '',
+    studentId: record.studentId,
+    cohortId: record.cohortId,
+    activityId: record.activityId,
+    completionType: record.completionType,
     grade: record.grade || undefined,
     workUrl: record.workUrl || undefined,
+    metadata: (record.metadata || {}) as Record<string, unknown>,
     createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
   };
 }
 
@@ -1575,7 +1579,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
       charisma: 12,
     },
   };
-  let battleObj: GameBattle[] = debugProfile?.battles || [];
+  let activityCompletionObj: GameActivityCompletion[] = debugProfile?.activityCompletions || [];
 
   if (debugProfile) {
     userObj = debugProfile.user;
@@ -1715,13 +1719,13 @@ authRouter.get('/me', authMiddleware, async (c) => {
           };
         }
 
-        battleObj = (
+        activityCompletionObj = (
           await db
             .select()
-            .from(gameBattles)
-            .where(eq(gameBattles.studentId, studentRecord.id))
-            .orderBy(desc(gameBattles.createdAt))
-        ).map(toGameBattle);
+            .from(gameActivityCompletions)
+            .where(eq(gameActivityCompletions.studentId, studentRecord.id))
+            .orderBy(desc(gameActivityCompletions.createdAt))
+        ).map(toGameActivityCompletion);
       }
     } catch (dbError: any) {
       console.warn('Database error loading user profile:', dbError.message);
@@ -1740,7 +1744,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
     user: userObj,
     student: studentObj,
     character: characterObj,
-    battles: battleObj,
+    activityCompletions: activityCompletionObj,
   });
 });
 

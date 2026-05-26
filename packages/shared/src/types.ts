@@ -163,39 +163,114 @@ export interface GameCharacter {
   updatedAt?: string;
 }
 
-// Règle de déverrouillage de quête (logique métier)
-export interface UnlockRule {
-  requiredLevel?: number;
-  requiredCompletedActivities?: string[]; // IDs des activités prérequises
-  requiredItems?: string[];
-}
-
-// Métadonnées spécifiques aux Boss (Examens)
-export interface BossMetadata {
-  projectUrl?: string;
-  gradingUrl?: string;
-  [key: string]: any;
-}
+export const GAME_ACTIVITY_TYPES = [
+  'onboarding',
+  'character_creation',
+  'tavern',
+  'tutorial',
+  'ice_breaker',
+  'campfire',
+  'quiz',
+  'practical',
+  'mini_boss',
+  'boss',
+] as const;
 
 // Type d'activité du jeu
-export type ActivityType = 'campfire' | 'quest' | 'boss';
+export type ActivityType = (typeof GAME_ACTIVITY_TYPES)[number];
+
+export type ActivityMetadata = Record<string, unknown> & {
+  projectUrl?: string;
+  gradingUrl?: string;
+  geniallyUrl?: string;
+  resources?: Array<{ title: string; url: string }>;
+  rubricUrl?: string;
+};
 
 // Table `game_activities` : Activités sur la carte
 export interface Activity {
   id: string;
-  type: ActivityType; // campfire (CM), quest (TD), boss (Exam)
+  cohortId?: string;
+  templateActivityId?: string;
+  mapRunId?: string;
+  type: ActivityType;
   title: string;
   startDate?: string;
   endDate?: string;
   url?: string;
   isGraded: boolean;
-  x: number;
-  y: number;
+  mapX: number;
+  mapY: number;
+  sectorDepth: number;
   requiredLevel: number;
   basePoints?: number;
-  bossMetadata?: BossMetadata; // JSONB
-  unlockRule?: UnlockRule; // Optionnel : règles de progression
+  metadata?: ActivityMetadata;
+  isCompleted?: boolean;
+  isRevealed?: boolean;
+  isStormed?: boolean;
+  isLocked?: boolean;
+  isCurrent?: boolean;
   createdAt?: string;
+}
+
+export type GameMapRunStatus = 'active' | 'completed' | 'archived';
+
+export interface GameMapRun {
+  id: string;
+  cohortId: string;
+  currentSectorDepth: number;
+  fogRevealDepth: number;
+  status: GameMapRunStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GameActivityEdge {
+  id: string;
+  cohortId?: string;
+  mapRunId?: string;
+  fromActivityId: string;
+  toActivityId: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export type GameActivityCompletionType = 'read' | 'submission' | 'battle' | 'system';
+
+export interface GameActivityCompletion {
+  id: string;
+  studentId: string;
+  cohortId: string;
+  activityId: string;
+  completionType: GameActivityCompletionType;
+  grade?: number;
+  workUrl?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type GameCharacterMoveType = 'enter' | 'move';
+
+export interface GameCharacterMove {
+  id: string;
+  studentId: string;
+  cohortId: string;
+  mapRunId: string;
+  fromActivityId?: string;
+  toActivityId: string;
+  moveType: GameCharacterMoveType;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface GameMapData {
+  run: GameMapRun;
+  activities: Activity[];
+  edges: GameActivityEdge[];
+  completions: GameActivityCompletion[];
+  currentActivityId?: string;
+  currentMove?: GameCharacterMove;
 }
 
 export interface ProgressReward {
@@ -235,16 +310,6 @@ export interface CohortProgressData {
     milestones: ProgressMilestone[];
   };
   notifications: Notification[];
-}
-
-// Table `game_battles` : Rendus de devoirs et combats
-export interface GameBattle {
-  id: string;
-  studentId: string;
-  activityId: string;
-  grade?: number; // Flottant entre 0 et 1 (Note sur 20 représentée en pourcentage)
-  workUrl?: string;
-  createdAt?: string;
 }
 
 // ==========================================

@@ -9,6 +9,7 @@ import {
   fetchCohortProgressData,
   fetchGuilds,
   fetchMapActivities,
+  moveCharacterToActivity,
   spendGuildVotes,
 } from './api';
 
@@ -40,22 +41,60 @@ describe('game API client', () => {
   });
 
   it('loads map activities from the backend route', async () => {
-    const activities = [
-      { id: 'activity-1', type: 'quest', title: 'Quest', isGraded: true, x: 10, y: 20, requiredLevel: 1, basePoints: 100 },
-    ];
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, activities })));
+    const map = {
+      run: { id: 'run-1', cohortId: 'cohort-1', currentSectorDepth: 0, fogRevealDepth: 1, status: 'active' },
+      activities: [
+        { id: 'activity-1', type: 'practical', title: 'Quest', isGraded: true, mapX: 10, mapY: 20, sectorDepth: 1, requiredLevel: 1, basePoints: 100 },
+      ],
+      edges: [],
+      completions: [],
+      currentActivityId: 'activity-1',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, map })));
 
-    await expect(fetchMapActivities('token-1')).resolves.toEqual(activities);
+    await expect(fetchMapActivities('token-1')).resolves.toEqual(map);
   });
 
   it('posts activity completion to the backend route', async () => {
-    const battle = { id: 'battle-1', studentId: 'student-1', activityId: 'activity-1', grade: 1 };
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, battle }));
+    const completion = {
+      id: 'completion-1',
+      studentId: 'student-1',
+      cohortId: 'cohort-1',
+      activityId: 'activity-1',
+      completionType: 'submission',
+      grade: 1,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, completion }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(completeMapActivity('token-1', 'activity-1')).resolves.toEqual(battle);
+    await expect(completeMapActivity('token-1', 'activity-1')).resolves.toEqual(completion);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://backend.test/api/map/activities/activity-1/complete',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer token-1' },
+      }
+    );
+  });
+
+  it('posts character moves to the backend route', async () => {
+    const move = {
+      id: 'move-1',
+      studentId: 'student-1',
+      cohortId: 'cohort-1',
+      mapRunId: 'run-1',
+      toActivityId: 'activity-1',
+      moveType: 'move',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, move, currentActivityId: 'activity-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(moveCharacterToActivity('token-1', 'activity-1')).resolves.toEqual({
+      move,
+      currentActivityId: 'activity-1',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/map/activities/activity-1/move',
       {
         method: 'POST',
         headers: { Authorization: 'Bearer token-1' },

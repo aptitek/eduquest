@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Activity, GameBattle } from '@eduquest/shared';
+import type { Activity, GameActivityCompletion } from '@eduquest/shared';
 import { useGameStore } from '../../features/game/gameStore';
-import { completeMapActivity, fetchMapActivities } from '../../features/game/api';
+import { completeMapActivity, fetchMapActivities, moveCharacterToActivity } from '../../features/game/api';
+import { getActivityXpReward } from '../../features/game/activityPresentation';
 import { useTranslation } from '../../hooks/useTranslation';
 
 // UI Layout and Styling Wrappers (Atomic Design)
@@ -13,8 +14,18 @@ import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPa
 
 export function MapPage() {
   const { t } = useTranslation();
-  const { student, character, activities, battles, setActivities, addBattle, gainXp } =
-    useGameStore();
+  const {
+    student,
+    character,
+    activities,
+    activityEdges,
+    activityCompletions,
+    setActivities,
+    setMapData,
+    addActivityCompletion,
+    setCurrentMove,
+    gainXp,
+  } = useGameStore();
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +38,7 @@ export function MapPage() {
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      setActivities(await fetchMapActivities(token));
+      setMapData(await fetchMapActivities(token));
     } catch (error: unknown) {
       console.warn('Could not load map activities.', error);
       setActivities([]);
@@ -40,7 +51,21 @@ export function MapPage() {
     fetchMapData();
   }, []);
 
-  const completedActivityIds = battles.map((b) => b.activityId);
+  const completedActivityIds = activityCompletions.map((completion) => completion.activityId);
+
+  const handleSelectActivity = async (activity: Activity) => {
+    setSelectedActivity(activity);
+    if (activity.isCurrent || activity.isLocked || activity.isStormed) return;
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const result = await moveCharacterToActivity(token, activity.id);
+      setCurrentMove(result.move, result.currentActivityId);
+    } catch (error) {
+      console.warn('Could not track character move.', error);
+    }
+  };
 
   // Soumission / Résolution d'un nœud
   const handleCompleteActivity = async (act: Activity) => {
@@ -52,11 +77,10 @@ export function MapPage() {
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      const newBattle: GameBattle = await completeMapActivity(token, act.id);
+      const completion: GameActivityCompletion = await completeMapActivity(token, act.id);
 
-      addBattle(newBattle);
-      const xpReward = act.type === 'boss' ? 200 : act.type === 'quest' ? 100 : 50;
-      gainXp(xpReward);
+      addActivityCompletion(completion);
+      gainXp(getActivityXpReward(act));
       setSelectedActivity(null);
     } catch (error) {
       console.warn('Could not complete map activity.', error);
@@ -85,9 +109,8 @@ export function MapPage() {
           ) : (
             <GameMap
               activities={activities}
-              completedActivityIds={completedActivityIds}
-              playerLevel={Number.MAX_SAFE_INTEGER}
-              onSelectNode={setSelectedActivity}
+              edges={activityEdges}
+              onSelectNode={handleSelectActivity}
             />
           )}
         </MapArea>

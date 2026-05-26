@@ -1,5 +1,6 @@
 import { Activity } from '@eduquest/shared';
 import { Sparkles, Target, CheckCircle, Award } from 'lucide-react';
+import { getActivityVisualVariant, getActivityXpReward, isBossActivity } from '../../features/game/activityPresentation';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 
@@ -18,11 +19,18 @@ const TYPE_BADGE_STYLES = {
   campfire: 'bg-status-campfire/10 text-status-campfire border border-status-campfire/30',
 };
 
-const TYPE_XP_REWARDS = {
-  boss: 200,
-  quest: 100,
-  campfire: 50,
-};
+function getMetadataUrl(metadata: Activity['metadata'], key: 'projectUrl' | 'gradingUrl' | 'geniallyUrl' | 'rubricUrl') {
+  const directValue = metadata?.[key];
+  if (typeof directValue === 'string') return directValue;
+
+  const bossMetadata = metadata?.boss;
+  if (bossMetadata && typeof bossMetadata === 'object' && key in bossMetadata) {
+    const value = (bossMetadata as Record<string, unknown>)[key];
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  return undefined;
+}
 
 export function ActivityDetailPanel({
   selectedActivity,
@@ -48,15 +56,20 @@ export function ActivityDetailPanel({
   const isCompleted = completedActivityIds.includes(selectedActivity.id);
   const isCompleting = completingActivityId === selectedActivity.id;
   const type = selectedActivity.type;
+  const visualVariant = getActivityVisualVariant(type);
 
   // Prepare design states safely before rendering (KISS)
-  const badgeStyle = TYPE_BADGE_STYLES[type] || TYPE_BADGE_STYLES.campfire;
+  const badgeStyle = TYPE_BADGE_STYLES[visualVariant];
   const description = t(`detailPanel.${type}Desc`);
-  const xpReward = TYPE_XP_REWARDS[type] || TYPE_XP_REWARDS.campfire;
+  const xpReward = getActivityXpReward(selectedActivity);
+  const projectUrl =
+    getMetadataUrl(selectedActivity.metadata, 'projectUrl') ||
+    getMetadataUrl(selectedActivity.metadata, 'geniallyUrl') ||
+    getMetadataUrl(selectedActivity.metadata, 'rubricUrl');
 
   const buttonStyle = cn(
     'btn w-full border-none font-bold',
-    type === 'boss'
+    isBossActivity(type)
       ? 'bg-status-boss text-gaming-base hover:bg-status-boss/80'
       : 'bg-gaming-base border border-gaming-border text-text-primary hover:bg-gaming-base/80'
   );
@@ -94,20 +107,20 @@ export function ActivityDetailPanel({
           </h3>
           <p className="text-text-secondary text-sm leading-relaxed mb-6">{description}</p>
 
-          {type === 'boss' && selectedActivity.bossMetadata && (
+          {projectUrl ? (
             <div className="p-4 rounded-lg bg-status-boss/5 border border-status-boss/10 text-xs text-status-boss/80 mb-4">
               <Sparkles size={16} className="mb-1 text-status-boss" />
               <strong>{t('detailPanel.challengeLink')} :</strong>{' '}
               <a
-                href={selectedActivity.bossMetadata.projectUrl}
+                href={projectUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline break-all"
               >
-                {selectedActivity.bossMetadata.projectUrl}
+                {projectUrl}
               </a>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Action button container */}
@@ -126,7 +139,7 @@ export function ActivityDetailPanel({
             >
               {isCompleting
                 ? t('detailPanel.completing')
-                : type === 'boss'
+                : isBossActivity(type)
                   ? t('detailPanel.startBoss')
                   : t('detailPanel.startQuest')}
             </button>

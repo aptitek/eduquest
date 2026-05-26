@@ -78,6 +78,27 @@
       "when": 1779874200000,
       "tag": "0010_schema_domain_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779875520000,
+      "tag": "0011_game_activity_type_enum",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779876120000,
+      "tag": "0012_ftl_activity_map",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1779876600000,
+      "tag": "0013_character_moves",
+      "breakpoints": true
     }
   ]
 }

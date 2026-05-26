@@ -4,16 +4,30 @@ import { cn } from '../../utils/cn';
 export interface GraphNode<TMetadata = unknown> {
   id: string;
   label: string;
+  x?: number;
+  y?: number;
   prerequisites?: string[];
   isCompleted?: boolean;
   isLocked?: boolean;
+  isHidden?: boolean;
+  isStormed?: boolean;
   icon?: React.ReactNode;
   customClass?: string;
   metadata?: TMetadata;
 }
 
+export interface GraphEdge {
+  id: string;
+  from: string;
+  to: string;
+  isCompleted?: boolean;
+  isLocked?: boolean;
+  isHidden?: boolean;
+}
+
 interface GenericGraphProps<TMetadata = unknown> {
   nodes: GraphNode<TMetadata>[];
+  edges?: GraphEdge[];
   width?: number;
   height?: number;
   onSelectNode?: (node: GraphNode<TMetadata>) => void;
@@ -110,8 +124,8 @@ function calculateGraphLayout<TMetadata>(
 
       layoutNodes.push({
         ...node,
-        x,
-        y,
+        x: node.x ?? x,
+        y: node.y ?? y,
       });
     });
   });
@@ -121,6 +135,7 @@ function calculateGraphLayout<TMetadata>(
 
 export function GenericGraph<TMetadata = unknown>({
   nodes,
+  edges,
   width = 800,
   height = 600,
   onSelectNode,
@@ -135,6 +150,16 @@ export function GenericGraph<TMetadata = unknown>({
       containerRef.current.style.minWidth = `${Math.min(width, 640)}px`;
     }
   }, [height, width]);
+
+  const renderedEdges: GraphEdge[] =
+    edges ||
+    layoutedNodes.flatMap((node) =>
+      (node.prerequisites || []).map((preReqId) => ({
+        id: `${preReqId}-${node.id}`,
+        from: preReqId,
+        to: node.id,
+      }))
+    );
 
   const setNodeStyle = (x: number, y: number) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -169,37 +194,33 @@ export function GenericGraph<TMetadata = unknown>({
           </linearGradient>
         </defs>
 
-        {layoutedNodes.map((node) => {
-          if (!node.prerequisites) return null;
-
-          return node.prerequisites.map((preReqId) => {
-            const preReqNode = layoutedNodes.find((n) => n.id === preReqId);
-            if (!preReqNode) return null;
-
-            const isPathCompleted = node.isCompleted && preReqNode.isCompleted;
-            const isPathLocked = node.isLocked || preReqNode.isLocked;
+        {renderedEdges.map((edge) => {
+          const fromNode = layoutedNodes.find((node) => node.id === edge.from);
+          const toNode = layoutedNodes.find((node) => node.id === edge.to);
+          if (!fromNode || !toNode || edge.isHidden || fromNode.isHidden || toNode.isHidden) return null;
 
             return (
               <line
-                key={`${preReqId}-${node.id}`}
-                x1={preReqNode.x}
-                y1={preReqNode.y}
-                x2={node.x}
-                y2={node.y}
+                key={edge.id}
+                x1={fromNode.x}
+                y1={fromNode.y}
+                x2={toNode.x}
+                y2={toNode.y}
                 stroke={
-                  isPathCompleted ? 'url(#line-gradient-completed)' : 'url(#line-gradient-locked)'
+                  edge.isCompleted || (fromNode.isCompleted && toNode.isCompleted)
+                    ? 'url(#line-gradient-completed)'
+                    : 'url(#line-gradient-locked)'
                 }
                 strokeWidth={3}
-                strokeDasharray={isPathLocked ? '6 6' : undefined}
+                strokeDasharray={edge.isLocked || fromNode.isLocked || toNode.isLocked ? '6 6' : undefined}
                 className="transition-all duration-500"
               />
             );
-          });
         })}
       </svg>
 
       {/* Node Renderers */}
-      {layoutedNodes.map((node) => (
+      {layoutedNodes.filter((node) => !node.isHidden).map((node) => (
         <div
           key={node.id}
           ref={setNodeStyle(node.x, node.y)}
@@ -208,7 +229,7 @@ export function GenericGraph<TMetadata = unknown>({
           <button
             type="button"
             onClick={() => onSelectNode?.(node)}
-            disabled={node.isLocked}
+            disabled={node.isLocked || node.isStormed}
             aria-label={node.label}
             title={node.label}
             className={cn(
@@ -226,7 +247,7 @@ export function GenericGraph<TMetadata = unknown>({
           </button>
 
           <div className="absolute top-14 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none bg-gaming-base border border-gaming-border px-2 py-1 rounded-sm text-xs text-text-muted font-semibold whitespace-nowrap shadow-md">
-            {node.label} {node.isLocked && '🔒'}
+            {node.label}
           </div>
         </div>
       ))}
