@@ -3,9 +3,12 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
 import { RotateCw, Shield } from 'lucide-react';
+import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
+import { EditableSchoolLogo } from '../EditableSchoolLogo';
 import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
 import type { RadarGraphAxis, RadarGraphDataset } from '../RadarGraph';
 import { cn } from '../../../utils/cn';
+import { readFileAsDataUrl } from '../../../utils/readFileAsDataUrl';
 import {
   PLAYING_CARD_TRANSITION,
   PlayingCardArtFrame,
@@ -36,6 +39,13 @@ export interface PlayingCardStat {
   max?: number;
 }
 
+export type PlayingCardEditableField =
+  | 'title'
+  | 'subtitle'
+  | 'description'
+  | 'illustrationUrl'
+  | 'ribbonText';
+
 export interface PlayingCardSide {
   title: string;
   description?: string;
@@ -49,6 +59,9 @@ export interface PlayingCardSide {
   stats?: PlayingCardStat[];
   statsLabel?: string;
   footer?: ReactNode;
+  editable?: boolean;
+  onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
+  onStatChange?: (statId: string, value: number) => void;
   className?: string;
 }
 
@@ -61,7 +74,7 @@ export interface PlayingCardData {
   title?: string;
   subtitle?: string;
   description?: string;
-  guild?: Pick<Guild, 'name' | 'color' | 'iconUrl' | 'totalPoints'>;
+  guild?: Pick<Guild, 'id' | 'name' | 'color' | 'iconUrl' | 'totalPoints'>;
   characterClass?: GameCharacterClass;
   accentToken?: PlayingCardAccent;
   color?: CSSProperties['color'];
@@ -83,6 +96,9 @@ export interface PlayingCardData {
   backSvgAlt?: string;
   flipLabel?: string;
   interactive?: boolean;
+  editable?: boolean;
+  onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
+  onStatChange?: (statId: string, value: number) => void;
   onClick?: () => void;
   className?: string;
   innerClassName?: string;
@@ -161,7 +177,7 @@ export function PlayingCard({
         className
       )}
     >
-      <div className="absolute inset-0 bg-[color:var(--playing-card-accent)] opacity-10" />
+      <div className="pointer-events-none absolute inset-0 bg-[color:var(--playing-card-accent)] opacity-10" />
 
       <motion.div
         animate={{ rotateY: isFull && isFlipped ? 180 : 0 }}
@@ -287,61 +303,134 @@ function FullCardSide({
   className?: string;
 }) {
   const radarGraph = buildRadarGraph(side.stats, side.statsLabel || side.title, color);
+  const canEdit = Boolean(side.editable);
+  const updateField = (field: PlayingCardEditableField, value: string) => {
+    side.onFieldChange?.(field, value);
+  };
+  const updateIllustrationFromFile = async (file: File) => {
+    updateField('illustrationUrl', await readFileAsDataUrl(file));
+  };
 
   return (
-    <div
-      aria-label={side.title}
-      className={cn(
-        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-[1.1rem] border border-gaming-border bg-gaming-card/95',
-        className,
-        side.className
-      )}
-    >
-      {side.ribbonText ? (
-        <PlayingCardRibbon
-          layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
-          position={side.ribbonPosition || 'top-right'}
-          size="md"
-          color={color}
-        >
-          {side.ribbonText}
-        </PlayingCardRibbon>
-      ) : null}
-
-      <PlayingCardArtFrame size="full" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
-        <PlayingCardIllustration
-          title={side.title}
-          illustrationUrl={side.illustrationUrl}
-          illustrationAlt={side.illustrationAlt}
-          illustration={side.illustration}
-          iconSize={72}
-          layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-        />
-        <PlayingCardTitleBlock
-          title={side.title}
-          subtitle={side.subtitle}
-          size="full"
-          layoutId={layoutId ? `${layoutId}-title` : undefined}
-        />
-      </PlayingCardArtFrame>
-
-      <section className="relative flex max-h-[43%] shrink-0 gap-3 border-t border-gaming-border bg-gaming-card/95 p-4">
-        <div className="min-w-0 flex-1 text-left">
-          {side.description ? (
-            <p className="line-clamp-6 text-sm leading-relaxed text-text-secondary">{side.description}</p>
-          ) : null}
-          {side.footer ? <div className="mt-3 text-sm text-text-secondary">{side.footer}</div> : null}
-        </div>
-
-        {radarGraph ? (
-          <PlayingCardStatPanel
-            axes={radarGraph.axes}
-            datasets={radarGraph.datasets}
-            layoutId={layoutId ? `${layoutId}-stats` : undefined}
-          />
+    <EditableFieldContext.Provider value={{ showPencil: canEdit }}>
+      <div
+        aria-label={side.title}
+        className={cn(
+          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-[1.1rem] border border-gaming-border bg-gaming-card/95',
+          className,
+          side.className
+        )}
+      >
+        {side.ribbonText || canEdit ? (
+          <PlayingCardRibbon
+            layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
+            position={side.ribbonPosition || 'top-right'}
+            size="md"
+            color={color}
+          >
+            {canEdit ? (
+              <EditableText
+                value={side.ribbonText || ''}
+                onChange={(value) => updateField('ribbonText', value)}
+                placeholder="Ribbon"
+                className="text-inherit"
+                truncate={false}
+              />
+            ) : (
+              side.ribbonText
+            )}
+          </PlayingCardRibbon>
         ) : null}
-      </section>
-    </div>
+
+        <PlayingCardArtFrame size="full" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
+          {canEdit ? (
+            <motion.div
+              layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+              transition={PLAYING_CARD_TRANSITION}
+              className="absolute inset-0"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <EditableSchoolLogo
+                src={side.illustrationUrl}
+                name={side.illustrationAlt || side.title}
+                isEditing
+                canReset={Boolean(side.illustrationUrl)}
+                onUpload={updateIllustrationFromFile}
+                onReset={() => {
+                  updateField('illustrationUrl', '');
+                  return Promise.resolve();
+                }}
+                className="h-full rounded-none border-0 bg-transparent p-0"
+              />
+            </motion.div>
+          ) : (
+            <PlayingCardIllustration
+              title={side.title}
+              illustrationUrl={side.illustrationUrl}
+              illustrationAlt={side.illustrationAlt}
+              illustration={side.illustration}
+              iconSize={72}
+              layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+            />
+          )}
+          <PlayingCardTitleBlock
+            title={side.title}
+            subtitle={side.subtitle}
+            size="full"
+            layoutId={layoutId ? `${layoutId}-title` : undefined}
+            editable={canEdit}
+            onTitleChange={(value) => updateField('title', value)}
+          />
+        </PlayingCardArtFrame>
+
+        <section className="relative flex max-h-[43%] shrink-0 gap-3 border-t border-gaming-border bg-gaming-card/95 p-4">
+          <div className="min-w-0 flex-1 text-left">
+            {side.subtitle || canEdit ? (
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                {canEdit ? (
+                  <EditableText
+                    value={side.subtitle || ''}
+                    onChange={(value) => updateField('subtitle', value)}
+                    placeholder="Subtitle"
+                    className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted"
+                    truncate={false}
+                  />
+                ) : (
+                  side.subtitle
+                )}
+              </div>
+            ) : null}
+            {side.description || canEdit ? (
+              canEdit ? (
+                <EditableText
+                  multiline
+                  value={side.description || ''}
+                  onChange={(value) => updateField('description', value)}
+                  placeholder="Card description"
+                  truncate={false}
+                  className="text-sm leading-relaxed text-text-secondary"
+                />
+              ) : (
+                <p className="line-clamp-6 text-sm leading-relaxed text-text-secondary">
+                  {side.description}
+                </p>
+              )
+            ) : null}
+            {side.footer ? <div className="mt-3 text-sm text-text-secondary">{side.footer}</div> : null}
+          </div>
+
+          {radarGraph ? (
+            <PlayingCardStatPanel
+              axes={radarGraph.axes}
+              datasets={radarGraph.datasets}
+              layoutId={layoutId ? `${layoutId}-stats` : undefined}
+              editable={canEdit && Boolean(side.onStatChange)}
+              onValueChange={side.onStatChange}
+            />
+          ) : null}
+        </section>
+      </div>
+    </EditableFieldContext.Provider>
   );
 }
 
@@ -365,6 +454,9 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     return {
       ...card.front,
       ribbonText: card.front.ribbonText || card.ribbonText || card.ribbonLabel,
+      editable: card.front.editable ?? card.editable,
+      onFieldChange: card.front.onFieldChange || card.onFieldChange,
+      onStatChange: card.front.onStatChange || card.onStatChange,
     };
   }
 
@@ -383,6 +475,9 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     stats: card.stats,
     statsLabel: card.statsLabel,
     footer: card.footer,
+      editable: card.editable,
+      onFieldChange: card.onFieldChange,
+      onStatChange: card.onStatChange,
   };
 }
 

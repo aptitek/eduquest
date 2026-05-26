@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent, PointerEvent } from 'react';
 import { AdaptiveTooltipBadge } from '../../atoms/AdaptiveTooltipBadge';
 import { cn } from '../../../utils/cn';
 
@@ -21,6 +22,8 @@ export interface RadarGraphProps {
   maxValue?: number;
   levels?: number;
   showLabels?: boolean;
+  editable?: boolean;
+  onValueChange?: (axisId: string, value: number) => void;
   className?: string;
 }
 
@@ -57,19 +60,29 @@ function clampRatio(value: number, max: number) {
   return Math.min(Math.max(value / max, 0), 1);
 }
 
+function clampValue(value: number, max: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Math.max(Math.round(value), 0), max);
+}
+
 export function RadarGraph({
   axes,
   datasets,
   maxValue,
   levels = 4,
   showLabels = true,
+  editable = false,
+  onValueChange,
   className,
 }: RadarGraphProps) {
   const titleId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [activeAxisId, setActiveAxisId] = useState<string | null>(null);
   const size = useElementSize(containerRef);
   const safeLevels = Math.max(Math.floor(levels), 1);
   const showInlineAxisLabels = size.width >= 180;
+  const canEdit = editable && Boolean(onValueChange) && Boolean(datasets[0]);
 
   const chart = useMemo(() => {
     const usableAxes = axes.filter((axis) => axis.id);
@@ -87,6 +100,7 @@ export function RadarGraph({
 
     const axisLines = angles.map((angle, index) => ({
       axis: usableAxes[index],
+      angle,
       end: polarToCartesian(angle, RADIUS),
       label: polarToCartesian(angle, LABEL_RADIUS),
     }));
@@ -113,6 +127,9 @@ export function RadarGraph({
 
       return {
         axis,
+        angle: angles[axisIndex],
+        value: primaryDataset?.values[axis.id] ?? 0,
+        max: axisMax,
         point: polarToCartesian(angles[axisIndex], RADIUS * ratio),
       };
     });
@@ -124,6 +141,55 @@ export function RadarGraph({
       axisMarkers,
     };
   }, [axes, datasets, maxValue, safeLevels]);
+
+  const updateAxisFromPointer = (
+    event: PointerEvent<SVGSVGElement | SVGCircleElement>,
+    axis: RadarGraphAxis,
+    angle: number
+  ) => {
+    if (!canEdit || !svgRef.current || !onValueChange) return;
+
+    const svgPoint = svgRef.current.createSVGPoint();
+    svgPoint.x = event.clientX;
+    svgPoint.y = event.clientY;
+    const screenMatrix = svgRef.current.getScreenCTM();
+    if (!screenMatrix) return;
+
+    const cursor = svgPoint.matrixTransform(screenMatrix.inverse());
+    const projection =
+      ((cursor.x - CENTER) * Math.cos(angle) + (cursor.y - CENTER) * Math.sin(angle)) / RADIUS;
+    const axisMax = axis.max ?? maxValue ?? 100;
+
+    onValueChange(axis.id, clampValue(projection * axisMax, axisMax));
+  };
+
+  const updateAxisByStep = (axis: RadarGraphAxis, currentValue: number, step: number) => {
+    if (!canEdit || !onValueChange) return;
+    const axisMax = axis.max ?? maxValue ?? 100;
+    onValueChange(axis.id, clampValue(currentValue + step, axisMax));
+  };
+
+  const handleMarkerKeyDown = (
+    event: KeyboardEvent<SVGCircleElement>,
+    axis: RadarGraphAxis,
+    currentValue: number
+  ) => {
+    if (!canEdit) return;
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      updateAxisByStep(axis, currentValue, event.shiftKey ? 10 : 1);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+      event.preventDefault();
+      updateAxisByStep(axis, currentValue, event.shiftKey ? -10 : -1);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      updateAxisByStep(axis, currentValue, -Number.MAX_SAFE_INTEGER);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      updateAxisByStep(axis, currentValue, Number.MAX_SAFE_INTEGER);
+    }
+  };
 
   if (!chart) {
     return (
@@ -141,10 +207,18 @@ export function RadarGraph({
   return (
     <div ref={containerRef} className={cn('relative min-w-0 overflow-visible', className)}>
       <svg
+        ref={svgRef}
         viewBox={`${VIEWBOX_MIN} ${VIEWBOX_MIN} ${VIEWBOX_RENDER_SIZE} ${VIEWBOX_RENDER_SIZE}`}
         role="img"
         aria-labelledby={titleId}
-        className="aspect-square w-full"
+        className={cn('aspect-square w-full', canEdit && 'touch-none')}
+        onPointerMove={(event) => {
+          if (!activeAxisId || !canEdit) return;
+          const marker = chart.axisMarkers.find(({ axis }) => axis.id === activeAxisId);
+          if (marker) updateAxisFromPointer(event, marker.axis, marker.angle);
+        }}
+        onPointerUp={() => setActiveAxisId(null)}
+        onPointerCancel={() => setActiveAxisId(null)}
       >
         <title id={titleId}>
           {datasets.map((dataset) => dataset.label).join(', ') || 'Radar graph'}
@@ -174,14 +248,49 @@ export function RadarGraph({
         ))}
 
         {showLabels
-          ? chart.axisMarkers.map(({ axis, point }) => (
+          ? chart.axisMarkers.map(({ axis, angle, max, point, value }) => (
               <circle
                 key={axis.id}
                 cx={point.x}
                 cy={point.y}
-                r="1.7"
-                className="fill-transparent stroke-gaming-border"
-                strokeWidth="0.55"
+                r={canEdit ? '3.2' : '1.7'}
+                className={cn(
+                  canEdit
+                    ? 'cursor-grab fill-gaming-card stroke-[color:var(--color-status-quest)] outline-none focus-visible:stroke-primary active:cursor-grabbing'
+                    : 'fill-transparent stroke-gaming-border'
+                )}
+                strokeWidth={canEdit ? '1.15' : '0.55'}
+                role={canEdit ? 'slider' : undefined}
+                tabIndex={canEdit ? 0 : undefined}
+                aria-label={canEdit ? `${axis.label} value` : undefined}
+                aria-valuemin={canEdit ? 0 : undefined}
+                aria-valuemax={canEdit ? max : undefined}
+                aria-valuenow={canEdit ? clampValue(value, max) : undefined}
+                onPointerDown={
+                  canEdit
+                    ? (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        setActiveAxisId(axis.id);
+                        updateAxisFromPointer(event, axis, angle);
+                      }
+                    : undefined
+                }
+                onPointerUp={
+                  canEdit
+                    ? (event) => {
+                        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                          event.currentTarget.releasePointerCapture(event.pointerId);
+                        }
+                        setActiveAxisId(null);
+                      }
+                    : undefined
+                }
+                onClick={canEdit ? (event) => event.stopPropagation() : undefined}
+                onKeyDown={
+                  canEdit ? (event) => handleMarkerKeyDown(event, axis, value) : undefined
+                }
               />
             ))
           : null}
@@ -195,7 +304,10 @@ export function RadarGraph({
             return (
               <span
                 key={axis.id}
-                className="absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2"
+                className={cn(
+                  'absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2',
+                  canEdit && 'pointer-events-none'
+                )}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <AdaptiveTooltipBadge

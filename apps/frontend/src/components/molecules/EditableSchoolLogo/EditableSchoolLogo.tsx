@@ -155,7 +155,7 @@ export function EditableSchoolLogo({
             }
           }}
           disabled={isUploading}
-          className="btn btn-circle btn-xs absolute bottom-2 right-2 z-10 h-7 w-7 min-h-0 border border-gaming-border bg-gaming-card text-text-muted shadow-md hover:text-status-boss"
+          className="btn btn-circle btn-xs absolute bottom-2 right-2 z-30 h-7 w-7 min-h-0 border border-gaming-border bg-gaming-card text-text-muted shadow-md hover:text-status-boss"
         >
           <RotateCcw size={13} />
         </button>

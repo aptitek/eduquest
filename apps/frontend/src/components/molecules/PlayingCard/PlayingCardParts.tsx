@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Shield } from 'lucide-react';
+import { EditableText } from '../../atoms/EditableText';
 import { CornerRibbon } from '../../atoms/CornerRibbon';
 import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
 import { RadarGraph } from '../RadarGraph';
@@ -82,7 +83,7 @@ export function PlayingCardArtFrame({ children, size, layoutId, className }: Pla
       {children}
       <div
         className={cn(
-          'absolute inset-x-0 bottom-0 bg-gradient-to-t from-gaming-card to-transparent',
+          'pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-gaming-card to-transparent',
           size === 'full' ? 'h-32 via-gaming-card/75' : 'h-16'
         )}
       />
@@ -95,18 +96,42 @@ export interface PlayingCardTitleBlockProps {
   subtitle?: string;
   size: 'mini' | 'full';
   layoutId?: string;
+  editable?: boolean;
+  onTitleChange?: (title: string) => void;
 }
 
-export function PlayingCardTitleBlock({ title, subtitle, size, layoutId }: PlayingCardTitleBlockProps) {
+export function PlayingCardTitleBlock({
+  title,
+  subtitle,
+  size,
+  layoutId,
+  editable,
+  onTitleChange,
+}: PlayingCardTitleBlockProps) {
   if (size === 'full') {
     return (
       <motion.div
         layoutId={layoutId}
         transition={PLAYING_CARD_TRANSITION}
-        className="absolute inset-x-0 bottom-0 p-4"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4"
       >
-        <h3 className="pr-10 font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg">
-          {title}
+        <h3
+          className={cn(
+            'pr-10 font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg',
+            editable && 'pointer-events-auto'
+          )}
+        >
+          {editable && onTitleChange ? (
+            <EditableText
+              value={title}
+              onChange={onTitleChange}
+              placeholder="Card title"
+              className="font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg"
+              truncate={false}
+            />
+          ) : (
+            title
+          )}
         </h3>
         <div className="mt-2 h-1 w-14 rounded-full bg-[color:var(--playing-card-accent)]" />
       </motion.div>
@@ -117,7 +142,7 @@ export function PlayingCardTitleBlock({ title, subtitle, size, layoutId }: Playi
     <motion.div
       layoutId={layoutId}
       transition={PLAYING_CARD_TRANSITION}
-      className="absolute inset-x-0 bottom-0 border-t border-[color:var(--playing-card-accent)] bg-gaming-card/95 px-3 py-2 transition duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-[color:var(--playing-card-accent)] bg-gaming-card/95 px-3 py-2 transition duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0"
     >
       <div className="mx-auto mb-1 h-1 w-8 rounded-full bg-[color:var(--playing-card-accent)]" />
       <h3 className="truncate text-center font-display text-sm font-bold text-text-primary">{title}</h3>
@@ -160,16 +185,30 @@ export interface PlayingCardStatPanelProps {
   axes: RadarGraphAxis[];
   datasets: RadarGraphDataset[];
   layoutId?: string;
+  editable?: boolean;
+  onValueChange?: (axisId: string, value: number) => void;
 }
 
-export function PlayingCardStatPanel({ axes, datasets, layoutId }: PlayingCardStatPanelProps) {
+export function PlayingCardStatPanel({
+  axes,
+  datasets,
+  layoutId,
+  editable,
+  onValueChange,
+}: PlayingCardStatPanelProps) {
   return (
     <motion.div
       layoutId={layoutId}
       transition={PLAYING_CARD_TRANSITION}
       className="w-40 shrink-0 self-start rounded-[1rem] border border-gaming-border bg-gaming-base/60 p-1"
     >
-      <RadarGraph axes={axes} datasets={datasets} className="mx-auto" />
+      <RadarGraph
+        axes={axes}
+        datasets={datasets}
+        editable={editable}
+        onValueChange={onValueChange}
+        className="mx-auto"
+      />
     </motion.div>
   );
 }

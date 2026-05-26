@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
+import { CharacterNanoCard } from '../molecules/CharacterNanoCard';
 import { useAuth } from '../../features/auth/useAuth';
 import { useDashboardData } from '../../features/game/useDashboardData';
 import {
@@ -18,7 +19,7 @@ interface GameHeaderProps {
 }
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
-  const { user } = useAuth();
+  const { user, character } = useAuth();
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
 
@@ -203,19 +204,20 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
           </nav>
         </div>
 
-        {/* Partie Droite : Account Dropdown */}
+        {/* Partie Droite : Character, Account & Notifications */}
         <div className="flex items-center gap-3 px-4">
-          <HeaderNotificationButton
-            count={activeNotifications.length}
-            isOpen={isNotificationDrawerOpen}
-            onClick={() => setIsNotificationDrawerOpen((current) => !current)}
-          />
           {!isOnline && (
             <div className="tooltip tooltip-left" data-tip={t('header.connectionLost')}>
               <StatusIndicator status="error" isPulsing={true} />
             </div>
           )}
+          {user && character ? <CharacterNanoCard user={user} character={character} /> : null}
           <AccountDropdown />
+          <HeaderNotificationButton
+            count={activeNotifications.length}
+            isOpen={isNotificationDrawerOpen}
+            onClick={() => setIsNotificationDrawerOpen((current) => !current)}
+          />
         </div>
       </div>
 

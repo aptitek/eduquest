@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { PlayingCardData } from '../molecules/PlayingCard';
+import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
 import { PlayingHand } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
@@ -28,12 +28,17 @@ export interface DashboardDockProps {
   className?: string;
 }
 
+type EditableCardSideOverride = Partial<Record<PlayingCardEditableField, string>> & {
+  stats?: Record<string, number>;
+};
+
 export function DashboardDock({ className }: DashboardDockProps) {
   const [route, setRoute] = useState(() => getHashRoute());
   const [usesWideGuildDeck, setUsesWideGuildDeck] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
   const [classPodiumTarget, setClassPodiumTarget] = useState<HTMLElement | null>(null);
   const [guildHandTarget, setGuildHandTarget] = useState<HTMLElement | null>(null);
   const [progressBonusTarget, setProgressBonusTarget] = useState<HTMLElement | null>(null);
+  const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const { user, student, character } = useGameStore();
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
@@ -55,6 +60,32 @@ export function DashboardDock({ className }: DashboardDockProps) {
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
+  }, []);
+
+  const updateEditableCardField = useCallback(
+    (sideKey: string, field: PlayingCardEditableField, value: string) => {
+      setEditableCardSides((current) => ({
+        ...current,
+        [sideKey]: {
+          ...current[sideKey],
+          [field]: value,
+        },
+      }));
+    },
+    []
+  );
+
+  const updateEditableCardStat = useCallback((sideKey: string, statId: string, value: number) => {
+    setEditableCardSides((current) => ({
+      ...current,
+      [sideKey]: {
+        ...current[sideKey],
+        stats: {
+          ...current[sideKey]?.stats,
+          [statId]: value,
+        },
+      },
+    }));
   }, []);
 
   useEffect(() => {
@@ -146,13 +177,27 @@ export function DashboardDock({ className }: DashboardDockProps) {
     PlayingCardData,
     ...PlayingCardData[],
   ];
-  const classPodiumHands = podiumCards.map((card) =>
+  const classPodiumHandsBase = podiumCards.map((card) =>
     buildClassGuildHand(t, {
       guild: card.guild || playerGuild,
       guildName: card.title,
     })
   );
-  const guildHand = buildMockGuildCardHands(t, {
+  const classPodiumHands = classPodiumHandsBase.map((hand) => ({
+    ...hand,
+    cards: hand.cards.map((card) =>
+      card.kind === 'guild' && card.guild?.name === playerGuild.name
+        ? makeEditableDashboardCard({
+            card,
+            cardKey: 'guild',
+            sideOverrides: editableCardSides,
+            onFieldChange: updateEditableCardField,
+            onStatChange: updateEditableCardStat,
+          })
+        : card
+    ) as [PlayingCardData, ...PlayingCardData[]],
+  }));
+  const guildHandBase = buildMockGuildCardHands(t, {
     guild: playerGuild,
     guildName: playerGuild.name || t('dashboard.dock.playerGuild'),
     playerName,
@@ -161,6 +206,32 @@ export function DashboardDock({ className }: DashboardDockProps) {
     characterClassLabel: t(`game.classes.${character.characterClass}`),
     activeCardIndex: 0,
   })[0];
+  const guildHand = {
+    ...guildHandBase,
+    cards: guildHandBase.cards.map((card) => {
+      if (card.id === 'guild') {
+        return makeEditableDashboardCard({
+          card,
+          cardKey: 'guild',
+          sideOverrides: editableCardSides,
+          onFieldChange: updateEditableCardField,
+          onStatChange: updateEditableCardStat,
+        });
+      }
+
+      if (card.id === 'player') {
+        return makeEditableDashboardCard({
+          card,
+          cardKey: 'player',
+          sideOverrides: editableCardSides,
+          onFieldChange: updateEditableCardField,
+          onStatChange: updateEditableCardStat,
+        });
+      }
+
+      return card;
+    }) as [PlayingCardData, ...PlayingCardData[]],
+  };
   const openGuildPage = () => {
     window.location.hash = 'guild';
   };
@@ -361,4 +432,93 @@ export default DashboardDock;
 
 function getHashRoute() {
   return window.location.hash.replace(/^#\/?/, '');
+}
+
+function makeEditableDashboardCard({
+  card,
+  cardKey,
+  sideOverrides,
+  onFieldChange,
+  onStatChange,
+}: {
+  card: PlayingCardData;
+  cardKey: string;
+  sideOverrides: Record<string, EditableCardSideOverride>;
+  onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
+  onStatChange: (sideKey: string, statId: string, value: number) => void;
+}): PlayingCardData {
+  const frontSideKey = `${cardKey}:front`;
+  const backSideKey = `${cardKey}:back`;
+  const front = applyEditableSide({
+    side: card.front || {
+      title: card.title || 'Card',
+      subtitle: card.subtitle,
+      description: card.description,
+      illustrationUrl: card.illustrationUrl,
+      illustrationAlt: card.illustrationAlt,
+      ribbonText: card.ribbonLabel || card.ribbonText,
+      ribbonPosition: card.ribbonPosition,
+      stats: card.stats,
+      statsLabel: card.statsLabel,
+      footer: card.footer,
+    },
+    sideKey: frontSideKey,
+    override: sideOverrides[frontSideKey],
+    onFieldChange,
+    onStatChange,
+  });
+  const back = isEditablePlayingCardSide(card.back)
+    ? applyEditableSide({
+        side: card.back,
+        sideKey: backSideKey,
+        override: sideOverrides[backSideKey],
+        onFieldChange,
+        onStatChange,
+      })
+    : card.back;
+
+  return {
+    ...card,
+    title: front.title,
+    subtitle: front.subtitle,
+    illustrationUrl: front.illustrationUrl,
+    ribbonLabel: front.ribbonText,
+    front,
+    back,
+    editable: true,
+  };
+}
+
+function applyEditableSide({
+  side,
+  sideKey,
+  override,
+  onFieldChange,
+  onStatChange,
+}: {
+  side: PlayingCardSide;
+  sideKey: string;
+  override?: EditableCardSideOverride;
+  onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
+  onStatChange: (sideKey: string, statId: string, value: number) => void;
+}): PlayingCardSide {
+  return {
+    ...side,
+    title: override?.title ?? side.title,
+    subtitle: override?.subtitle ?? side.subtitle,
+    description: override?.description ?? side.description,
+    illustrationUrl: override?.illustrationUrl ?? side.illustrationUrl,
+    ribbonText: override?.ribbonText ?? side.ribbonText,
+    stats: side.stats?.map((stat) => ({
+      ...stat,
+      value: override?.stats?.[stat.id] ?? stat.value,
+    })),
+    editable: true,
+    onFieldChange: (field, value) => onFieldChange(sideKey, field, value),
+    onStatChange: (statId, value) => onStatChange(sideKey, statId, value),
+  };
+}
+
+function isEditablePlayingCardSide(value: PlayingCardData['back']): value is PlayingCardSide {
+  return Boolean(value && typeof value === 'object' && !('type' in value) && 'title' in value);
 }
