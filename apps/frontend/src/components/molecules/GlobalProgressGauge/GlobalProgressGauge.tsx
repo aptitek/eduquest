@@ -33,6 +33,7 @@ export interface GlobalProgressGaugeProps {
   leftIndicatorCompactValue?: ReactNode;
   rightIndicatorCompactValue?: ReactNode;
   boostLabel?: ReactNode;
+  milestoneBadgesExpanded?: boolean;
   className?: string;
   /**
    * Kept for compatibility with older call sites. The gauge now morphs from arch to
@@ -107,6 +108,7 @@ export function GlobalProgressGauge({
   leftIndicatorCompactValue,
   rightIndicatorCompactValue,
   boostLabel = 'boost',
+  milestoneBadgesExpanded = false,
   className,
 }: GlobalProgressGaugeProps) {
   const gradientId = useId().replace(/:/g, '');
@@ -210,6 +212,7 @@ export function GlobalProgressGauge({
 
       {normalizedMilestones.map((milestone) => {
         const marker = getMarkerGeometry(geometry, milestone.displayPercent);
+        const showFullMilestoneBadge = milestoneBadgesExpanded && geometry.showMilestoneLabels;
 
         return (
           <div
@@ -226,11 +229,14 @@ export function GlobalProgressGauge({
             <MilestoneBadge
               milestone={milestone}
               expandable={geometry.showMilestoneLabels}
-              className={
+              expanded={showFullMilestoneBadge}
+              className={cn(
                 geometry.showMilestoneLabels
                   ? 'z-40 max-w-24 rounded-full px-2 py-1 text-[0.65rem] text-text-secondary opacity-90 shadow-sm group-hover:z-50 group-hover:max-w-36 group-hover:rounded-xl group-hover:px-3 group-hover:py-2 group-hover:text-xs group-hover:text-text-primary group-hover:opacity-100'
-                  : 'bottom-full left-1/2 z-50 mb-2 max-w-36 -translate-x-1/2 opacity-0 shadow-xl group-hover:opacity-100'
-              }
+                  : 'bottom-full left-1/2 z-50 mb-2 max-w-36 -translate-x-1/2 opacity-0 shadow-xl group-hover:opacity-100',
+                showFullMilestoneBadge &&
+                  'z-50 max-w-48 rounded-2xl px-3 py-2 text-xs text-text-primary opacity-100 shadow-xl'
+              )}
               style={
                 geometry.showMilestoneLabels
                   ? {
@@ -315,11 +321,12 @@ export function GlobalProgressGauge({
 interface MilestoneBadgeProps {
   milestone: NormalizedMilestone;
   expandable: boolean;
+  expanded?: boolean;
   className?: string;
   style?: CSSProperties;
 }
 
-function MilestoneBadge({ milestone, expandable, className, style }: MilestoneBadgeProps) {
+function MilestoneBadge({ milestone, expandable, expanded = false, className, style }: MilestoneBadgeProps) {
   return (
     <span
       className={cn(
@@ -333,7 +340,7 @@ function MilestoneBadge({ milestone, expandable, className, style }: MilestoneBa
         <span
           className={cn(
             'block overflow-hidden text-[0.65rem] font-medium text-text-muted transition-all',
-            expandable
+            expandable && !expanded
               ? 'max-h-0 opacity-0 group-hover:mt-0.5 group-hover:max-h-10 group-hover:opacity-100'
               : 'mt-0.5 max-h-10 opacity-100'
           )}

@@ -173,7 +173,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
       holdDuration={1200}
       shape="round"
       variant="btn-primary"
-      className="h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-base font-black shadow-glow-primary"
+      className={cn(
+        'h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-base font-black shadow-glow-primary',
+        isProgressPage && 'h-32 w-32 text-lg sm:h-36 sm:w-36 sm:text-xl'
+      )}
     >
       {t('dashboard.dock.boost')}
     </HoldToConfirmButton>
@@ -194,7 +197,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         'overflow-visible [perspective:1600px]',
         isClassPage
           ? 'relative z-0 w-full'
-          : 'relative h-full w-full'
+          : 'relative z-50 h-64 w-32 shrink-0 sm:w-36 lg:h-72 xl:w-40 2xl:w-52'
       )}
     >
       {isClassPage ? (
@@ -235,7 +238,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           visibleCardCount={3}
           expandOnHover
           onCardSelect={openClassPage}
-          className="h-full w-full xl:hover:w-[18rem] xl:focus-within:w-[18rem] 2xl:hover:w-[24rem] 2xl:focus-within:w-[24rem]"
+          className="h-full w-full"
           cardClassName="w-32 translate-y-0 sm:w-36 xl:w-36 2xl:w-40"
           stackCardClassName="w-28 translate-y-0 sm:w-32 xl:w-32 2xl:w-36"
         />
@@ -250,7 +253,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         'overflow-visible [perspective:1600px]',
         isGuildPage
           ? 'relative z-0 w-full'
-          : 'relative h-full w-full'
+          : 'relative z-50 h-64 w-32 shrink-0 sm:w-36 lg:h-72 xl:w-40'
       )}
     >
       <PlayingHand
@@ -262,7 +265,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         onCardSelect={isGuildPage ? undefined : openGuildPage}
         className={cn(
           'h-full w-full',
-          isGuildPage ? 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]' : 'xl:hover:w-[28rem] xl:focus-within:w-[28rem]'
+          isGuildPage && 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
         )}
         cardClassName={cn(!isGuildPage && 'w-32 translate-y-0 sm:w-36 xl:w-40')}
         stackCardClassName={cn(!isGuildPage && 'w-28 translate-y-0 sm:w-32 xl:w-36')}
@@ -277,7 +280,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         'overflow-visible [perspective:1600px]',
         isProgressPage
           ? 'relative z-0 w-full'
-          : 'relative h-full w-full'
+          : 'relative z-40 hidden h-72 w-36 shrink-0 xl:block'
       )}
     >
       <PlayingHand
@@ -298,7 +301,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         className={cn(
           isProgressPage
             ? 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
-            : 'h-full w-full xl:hover:w-[18rem] xl:focus-within:w-[18rem]'
+            : 'h-full w-full'
         )}
         cardClassName={cn(!isProgressPage && 'w-32 translate-y-0')}
         stackCardClassName={cn(!isProgressPage && 'w-28 translate-y-0')}
@@ -315,15 +318,15 @@ export function DashboardDock({ className }: DashboardDockProps) {
           className
         )}
       >
-      <div className="absolute inset-x-0 bottom-0 hidden h-72 w-screen overflow-visible px-3 lg:block">
-        <div className="flex h-full w-full items-end justify-center gap-4 overflow-visible">
-          <div className="hidden h-72 w-36 shrink-0 2xl:block">
-            {isProgressPage && progressBonusTarget ? null : bonusContent}
-          </div>
+        <div
+          className={cn(
+            'absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-4 overflow-visible px-3 sm:gap-6 lg:h-72 lg:gap-8 lg:px-4 xl:gap-10 2xl:gap-12',
+            isProgressPage && 'h-72 lg:h-80'
+          )}
+        >
+          {!isProgressPage ? bonusContent : null}
 
-          <div className="hidden h-72 w-40 shrink-0 xl:block 2xl:w-52">
-            {isClassPage && classPodiumTarget ? null : podiumContent}
-          </div>
+          {!isClassPage ? podiumContent : null}
 
           <GlobalProgressGauge
             currentPoints={gaugeCurrentPoints}
@@ -334,43 +337,22 @@ export function DashboardDock({ className }: DashboardDockProps) {
             goldIndicator={goldIndicator}
             rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
             boostLabel={t('dashboard.dock.boost')}
-            className="mb-2 min-w-[26rem] max-w-[50rem] flex-1 shrink xl:min-w-[30rem] 2xl:min-w-[34rem]"
+            milestoneBadgesExpanded={isProgressPage}
+            className={cn(
+              'h-40 w-40 shrink-0 rounded-none border-0 bg-transparent shadow-none lg:h-52 lg:w-auto lg:min-w-[26rem] lg:max-w-[50rem] lg:flex-1 lg:shrink xl:min-w-[30rem] 2xl:min-w-[34rem]',
+              isProgressPage && 'h-56 w-56 sm:h-64 sm:w-64 lg:h-72 lg:min-w-[34rem] 2xl:min-w-[40rem]'
+            )}
           />
 
-          <div className="hidden h-72 w-52 shrink-0 xl:block">
-            {isGuildPage && guildHandTarget ? null : guildContent}
-          </div>
+          {!isGuildPage ? guildContent : null}
         </div>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-2 overflow-visible px-2 lg:hidden sm:gap-3">
-        <div className="h-64 w-32 shrink-0 sm:w-36">
-          {isClassPage && classPodiumTarget ? null : podiumContent}
-        </div>
-
-        <GlobalProgressGauge
-          currentPoints={gaugeCurrentPoints}
-          targetPoints={gaugeTargetPoints}
-          milestones={gaugeMilestones}
-          label={gaugeLabel}
-          centerContent={boostButton}
-          goldIndicator={goldIndicator}
-          rightIndicatorCompactValue={(playerGuild.totalPoints || 0).toLocaleString()}
-          boostLabel={t('dashboard.dock.boost')}
-          className="mb-0 h-40 w-40 shrink-0"
-        />
-
-        <div className="h-64 w-32 shrink-0 sm:w-36">
-          {isGuildPage && guildHandTarget ? null : guildContent}
-        </div>
-      </div>
       </aside>
 
-      {isClassPage && classPodiumTarget ? createPortal(podiumContent, classPodiumTarget) : null}
+      {isClassPage ? (classPodiumTarget ? createPortal(podiumContent, classPodiumTarget) : podiumContent) : null}
 
-      {isGuildPage && guildHandTarget ? createPortal(guildContent, guildHandTarget) : null}
+      {isGuildPage ? (guildHandTarget ? createPortal(guildContent, guildHandTarget) : guildContent) : null}
 
-      {isProgressPage && progressBonusTarget ? createPortal(bonusContent, progressBonusTarget) : null}
+      {isProgressPage ? (progressBonusTarget ? createPortal(bonusContent, progressBonusTarget) : bonusContent) : null}
     </>
   );
 }
