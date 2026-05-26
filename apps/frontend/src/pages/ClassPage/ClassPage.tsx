@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Guild } from '@eduquest/shared';
+import { motion } from 'framer-motion';
 import { Trophy, Users } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
@@ -64,10 +65,6 @@ export function ClassPage() {
     [classGuilds, podiumKeys]
   );
   const groupedGuilds = useMemo(() => groupGuildsByInitial(remainingGuilds), [remainingGuilds]);
-  const podiumHands = useMemo(
-    () => podiumGuilds.map((guild) => buildClassGuildHand(t, { guild })),
-    [podiumGuilds, t]
-  );
   const groupedHands = useMemo(
     () =>
       groupedGuilds.map((group) => ({
@@ -86,15 +83,7 @@ export function ClassPage() {
       <GameHeader currentView="class" />
 
       <main className="space-y-8 pb-8 pt-4">
-        <header className="rounded-3xl border border-gaming-border bg-gaming-card/70 p-6 shadow-lg">
-          <p className="font-display text-xs font-bold uppercase tracking-[0.24em] text-status-campfire">
-            {t('class.eyebrow')}
-          </p>
-          <h2 className="mt-2 text-3xl font-bold text-text-primary">{t('class.title')}</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-secondary">
-            {t('class.subtitle')}
-          </p>
-        </header>
+        <h2 className="sr-only">{t('class.title')}</h2>
 
         <section aria-labelledby="class-podium-title" className="space-y-4">
           <div className="flex items-center gap-3">
@@ -104,16 +93,7 @@ export function ClassPage() {
             </h3>
           </div>
 
-          <div className="space-y-5">
-            {podiumHands.map((hand, index) => (
-              <ClassHandSection
-                key={hand.id}
-                hand={hand}
-                rank={index + 1}
-                isPlayerGuild={hand.title === playerGuild?.name}
-              />
-            ))}
-          </div>
+          <div id="class-podium-hands-target" className="relative z-0 min-h-[94rem] overflow-visible" />
         </section>
 
         <div className="flex items-center gap-4" role="separator" aria-hidden>
@@ -124,7 +104,12 @@ export function ClassPage() {
           <div className="h-px flex-1 bg-gaming-border" />
         </div>
 
-        <section aria-labelledby="class-guilds-title" className="relative">
+        <motion.section
+          layoutId="class-remaining-guilds-list"
+          transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+          aria-labelledby="class-guilds-title"
+          className="relative rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg"
+        >
           <div className="mb-4 flex items-center gap-3">
             <Users className="text-status-quest" size={22} aria-hidden />
             <h3 id="class-guilds-title" className="text-xl font-bold">
@@ -155,7 +140,7 @@ export function ClassPage() {
           </div>
 
           {showAlphabetScrollbar ? <AlphabetScrollbar letters={visibleLetters} /> : null}
-        </section>
+        </motion.section>
       </main>
     </GameLayout>
   );

@@ -67,6 +67,11 @@
     --color-gaming-grid: color-mix(in srgb, var(--color-solarized-base1) 24%, transparent);
   }
 
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   body {
     background-color: var(--color-bg-base);
     color: var(--color-text-primary);

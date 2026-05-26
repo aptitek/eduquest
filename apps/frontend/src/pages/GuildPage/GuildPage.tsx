@@ -31,8 +31,10 @@ export function GuildPage() {
         <h2 className="sr-only">{t('guild.title')}</h2>
         <section
           aria-label={t('guild.subtitle').replace('{guildName}', guildName)}
-          className="h-[32rem] overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-2 shadow-2xl md:p-4"
-        />
+          className="overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-2 shadow-2xl md:p-4"
+        >
+          <div id="guild-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
+        </section>
       </main>
     </GameLayout>
   );
