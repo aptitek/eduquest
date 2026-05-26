@@ -10,7 +10,7 @@ import { InstitutionalProfileCard } from './InstitutionalProfileCard/Institution
 import { CohortMembership, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
-import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
+import { uploadAsset } from '../../features/assets/api';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -162,8 +162,11 @@ export function AccountDropdown() {
   const handleUpdateProfile = (data: Partial<User>) => updateProfile(data);
 
   const handleUploadAvatar = async (file: File) => {
-    const avatarUrl = await readFileAsDataUrl(file);
-    await updateProfile({ avatarUrl }, true);
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) throw new Error('profile.errors.network');
+
+    const asset = await uploadAsset(token, 'avatar', file);
+    await updateProfile({ avatarUrl: asset.url }, true);
   };
 
   const handleInstitutionalEmailChange = async (institutionalEmail: string) => {

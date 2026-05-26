@@ -141,6 +141,12 @@ ENABLE_MOCK_DATA=true
 ENABLE_DEBUG_AUTH=true
 ```
 
+Asset uploads use the Worker `ASSETS` R2 binding declared in `apps/backend/wrangler.toml`.
+Wrangler dev uses a local R2 simulation by default, so profile pictures and school
+logos can be uploaded locally without creating a real Cloudflare bucket. Uploaded
+objects are served by the Worker at `/assets/<object-key>` unless
+`ASSET_PUBLIC_BASE_URL` is set to a custom public bucket/CDN URL.
+
 `DATABASE_URL` is optional only for development/mock deployments. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; mock data, mock auth, and debug backup endpoints are disabled even if their flags are set.
 
 Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local starting points. Do not commit real `.env` or `.dev.vars` files.

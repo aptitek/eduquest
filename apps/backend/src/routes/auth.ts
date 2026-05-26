@@ -136,6 +136,18 @@ function toIsoString(value?: Date | null) {
   return value?.toISOString?.();
 }
 
+function isPersistableImageUrl(value?: string | null) {
+  if (!value) return true;
+  if (value.startsWith('/assets/')) return true;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function toAddress(record: AddressRecord): Address {
   return {
     id: record.id,
@@ -1063,6 +1075,13 @@ authRouter.put('/management/students/:studentId', async (c) => {
     );
   }
 
+  if (body.user?.avatarUrl !== undefined && !isPersistableImageUrl(body.user.avatarUrl)) {
+    return c.json(
+      { success: false, error: 'Avatar URL must reference an uploaded asset or external image.' },
+      400
+    );
+  }
+
   const studentId = c.req.param('studentId');
 
   if (!c.env.DATABASE_URL) {
@@ -1279,6 +1298,13 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
 
   const schoolId = c.req.param('schoolId');
 
+  if (body.logoUrl !== undefined && !isPersistableImageUrl(body.logoUrl)) {
+    return c.json(
+      { success: false, error: 'Logo URL must reference an uploaded asset or external image.' },
+      400
+    );
+  }
+
   if (!c.env.DATABASE_URL) {
     const backup = getDebugBackup();
     const school = backup.schools.find((item) => item.id === schoolId);
@@ -1348,7 +1374,7 @@ authRouter.get('/mock', async (c) => {
     try {
       const profile = await findDevDatabaseProfile(databaseUrl, requestedMockStudent);
       if (profile) {
-        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, profile.student.id);
+        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, profile.user.id);
         await getDb(databaseUrl)
           .update(users)
           .set({ lastLogin: new Date(), updatedAt: new Date() })
@@ -1761,6 +1787,17 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   const allowMockData = isMockDataEnabled(c.env);
   if (!databaseUrl && !allowMockData) {
     return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+  }
+
+  if (body.avatarUrl !== undefined && !isPersistableImageUrl(body.avatarUrl)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Avatar URL must reference an uploaded asset or external image.',
+        errorKey: 'profile.errors.avatarProcessingFailed',
+      },
+      400
+    );
   }
 
   // Validation offline/resilience

@@ -36,7 +36,7 @@ import {
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
-import { readFileAsDataUrl } from '../../utils/readFileAsDataUrl';
+import { uploadAsset } from '../../features/assets/api';
 
 function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: string) {
   return legacyEmail || rowUser.email;
@@ -256,8 +256,11 @@ export function ManagementPage() {
       school={selectedSchoolRow}
       t={t}
       onUploadLogo={async (file) => {
-        const logoUrl = await readFileAsDataUrl(file);
-        await updateSelectedSchool({ logoUrl }, true);
+        const token = localStorage.getItem('eduquest_token');
+        if (!token) throw new Error('management.errors.missingSession');
+
+        const asset = await uploadAsset(token, 'school-logo', file, selectedSchoolRow.id);
+        await updateSelectedSchool({ logoUrl: asset.url }, true);
       }}
       onResetLogo={() => updateSelectedSchool({ logoUrl: '' }, true)}
     />
@@ -274,8 +277,11 @@ export function ManagementPage() {
         user={selectedStudentRow.user}
         onUpdateProfile={(data) => updateSelectedStudent({ user: data })}
         onUploadAvatar={async (file) => {
-          const avatarUrl = await readFileAsDataUrl(file);
-          await updateSelectedStudent({ user: { avatarUrl } }, true);
+          const token = localStorage.getItem('eduquest_token');
+          if (!token) throw new Error('management.errors.missingSession');
+
+          const asset = await uploadAsset(token, 'avatar', file);
+          await updateSelectedStudent({ user: { avatarUrl: asset.url } }, true);
         }}
         onResetAvatar={() =>
           updateSelectedStudent(

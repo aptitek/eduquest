@@ -25,7 +25,6 @@ const ALLOWED_TYPES = [
   'image/jpg',
   'image/webp',
   'image/gif',
-  'image/svg+xml',
 ];
 const MAX_DIMENSION = 512;
 
@@ -70,8 +69,9 @@ async function normalizeAvatarFile(file: File): Promise<File> {
   const img = await loadImage(file);
   const needsResize = img.width > MAX_DIMENSION || img.height > MAX_DIMENSION;
   const needsCompression = file.size > MAX_FILE_SIZE;
+  const needsFormatNormalization = file.type !== OUTPUT_MIME_TYPE;
 
-  if (!needsResize && !needsCompression) {
+  if (!needsResize && !needsCompression && !needsFormatNormalization) {
     return file;
   }
 

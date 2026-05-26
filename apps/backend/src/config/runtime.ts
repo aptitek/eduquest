@@ -7,6 +7,7 @@ export type RuntimeBindings = {
   DATABASE_URL?: string;
   FRONTEND_URL?: string;
   JWT_SECRET?: string;
+  ASSET_PUBLIC_BASE_URL?: string;
 };
 
 const DEFAULT_DEV_FRONTEND_URL = 'http://localhost:5173';

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { mapRouter } from './routes/map';
 import { authRouter } from './routes/auth';
+import { assetRouter, publicAssetRouter } from './routes/assets';
 import { authMiddleware } from './middleware/auth';
 import { getFrontendUrl } from './config/runtime';
 
@@ -15,6 +16,8 @@ type Bindings = {
   GITHUB_CLIENT_SECRET?: string;
   GITHUB_REDIRECT_URI?: string;
   FRONTEND_URL?: string;
+  ASSET_PUBLIC_BASE_URL?: string;
+  ASSETS?: R2Bucket;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -35,11 +38,13 @@ app.use(
 
 // Montage des routes publiques d'authentification sous /api/auth
 app.route('/api/auth', authRouter);
+app.route('/assets', publicAssetRouter);
 
 // Enforcer l'authentification sur les endpoints protégés du jeu
 app.use('/api/map', authMiddleware);
 app.use('/api/guilds', authMiddleware);
 app.use('/api/dashboard', authMiddleware);
+app.use('/api/assets/*', authMiddleware);
 
 app.get('/', (c) => {
   return c.text("Bienvenue sur l'API de l'EduQuest Game Master Server ! 🎮");
@@ -47,5 +52,6 @@ app.get('/', (c) => {
 
 // Montage du sous-routeur d'activités/carte sous le préfixe /api
 app.route('/api', mapRouter);
+app.route('/api', assetRouter);
 
 export default app;
