@@ -44,7 +44,7 @@ export function PlayingCardIllustration({
         transition={PLAYING_CARD_TRANSITION}
         src={illustrationUrl}
         alt={illustrationAlt || title}
-        className="h-full w-full object-cover transition duration-300 group-hover:scale-110 group-focus-visible:scale-110"
+        className="h-full w-full object-cover object-center transition duration-300 group-hover:scale-110 group-focus-visible:scale-110"
       />
     );
   }
@@ -65,9 +65,16 @@ export interface PlayingCardArtFrameProps {
   size: 'mini' | 'full';
   layoutId?: string;
   className?: string;
+  gradientClassName?: string;
 }
 
-export function PlayingCardArtFrame({ children, size, layoutId, className }: PlayingCardArtFrameProps) {
+export function PlayingCardArtFrame({
+  children,
+  size,
+  layoutId,
+  className,
+  gradientClassName,
+}: PlayingCardArtFrameProps) {
   return (
     <motion.div
       layoutId={layoutId}
@@ -84,7 +91,8 @@ export function PlayingCardArtFrame({ children, size, layoutId, className }: Pla
       <div
         className={cn(
           'pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-gaming-card to-transparent',
-          size === 'full' ? 'h-32 via-gaming-card/75' : 'h-16'
+          size === 'full' ? 'h-32 via-gaming-card/75' : 'h-16',
+          gradientClassName
         )}
       />
     </motion.div>
@@ -98,6 +106,7 @@ export interface PlayingCardTitleBlockProps {
   layoutId?: string;
   editable?: boolean;
   onTitleChange?: (title: string) => void;
+  className?: string;
 }
 
 export function PlayingCardTitleBlock({
@@ -107,13 +116,14 @@ export function PlayingCardTitleBlock({
   layoutId,
   editable,
   onTitleChange,
+  className,
 }: PlayingCardTitleBlockProps) {
   if (size === 'full') {
     return (
       <motion.div
         layoutId={layoutId}
         transition={PLAYING_CARD_TRANSITION}
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4"
+        className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4', className)}
       >
         <h3
           className={cn(
@@ -142,7 +152,10 @@ export function PlayingCardTitleBlock({
     <motion.div
       layoutId={layoutId}
       transition={PLAYING_CARD_TRANSITION}
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-[color:var(--playing-card-accent)] bg-gaming-card/95 px-3 py-2 transition duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0"
+      className={cn(
+        'pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-[color:var(--playing-card-accent)] bg-gaming-card/95 px-3 py-2 transition duration-300 group-hover:translate-y-0 group-focus-visible:translate-y-0',
+        className
+      )}
     >
       <div className="mx-auto mb-1 h-1 w-8 rounded-full bg-[color:var(--playing-card-accent)]" />
       <h3 className="truncate text-center font-display text-sm font-bold text-text-primary">{title}</h3>

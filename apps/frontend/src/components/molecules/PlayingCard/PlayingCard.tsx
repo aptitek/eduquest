@@ -18,7 +18,7 @@ import {
   PlayingCardTitleBlock,
 } from './PlayingCardParts';
 
-export type PlayingCardSize = 'mini' | 'full';
+export type PlayingCardSize = 'nano' | 'mini' | 'full';
 
 export type PlayingCardAccent =
   | 'scholar'
@@ -152,6 +152,7 @@ export function PlayingCard({
   const style: AccentStyle = { '--playing-card-accent': color };
   const layoutId = card.layoutId || card.id;
   const isFull = size === 'full';
+  const isNano = size === 'nano';
   const hasBack = Boolean(isFull && (card.back || card.backSvgUrl));
 
   return (
@@ -171,8 +172,11 @@ export function PlayingCard({
       transition={PLAYING_CARD_TRANSITION}
       className={cn(
         'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl outline-none',
-        'transition-[filter,box-shadow] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-[color:var(--playing-card-accent)]',
-        isFull ? 'w-full max-w-sm p-2' : 'w-32 sm:w-36',
+        'transition-[filter,box-shadow,width,transform,border-radius] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-[color:var(--playing-card-accent)]',
+        isFull && 'w-full max-w-sm p-2',
+        !isFull && !isNano && 'w-32 sm:w-36',
+        isNano &&
+          'w-[2.15rem] rounded-lg p-0.5 shadow-lg hover:z-50 hover:w-32 hover:translate-y-1 hover:rounded-[1.4rem] hover:shadow-2xl focus-within:z-50 focus-within:w-32 focus-within:translate-y-1 focus-within:rounded-[1.4rem] focus-within:shadow-2xl sm:hover:w-36 sm:focus-within:w-36',
         card.faceDown && !isFull && 'bg-gaming-base',
         className
       )}
@@ -184,6 +188,7 @@ export function PlayingCard({
         transition={{ duration: 0.5 }}
         className={cn(
           'relative h-full min-h-0 w-full rounded-[1.1rem] [transform-style:preserve-3d]',
+          isNano && 'rounded-lg group-hover:rounded-[1.1rem] group-focus-within:rounded-[1.1rem]',
           auraClassName,
           innerClassName
         )}
@@ -254,6 +259,55 @@ function PlayingCardFront({
 
   if (size === 'full') {
     return <FullCardSide side={side} color={color} layoutId={layoutId} className={className} />;
+  }
+
+  if (size === 'nano') {
+    return (
+      <div
+        className={cn(
+          'relative h-full min-h-0 overflow-hidden rounded-[0.45rem] transition-[border-radius] duration-300 group-hover:rounded-[1.25rem] group-focus-within:rounded-[1.25rem]',
+          className
+        )}
+      >
+        {side.ribbonText ? (
+          <div className="origin-top-right scale-50 opacity-0 transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100">
+            <PlayingCardRibbon
+              layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
+              position={side.ribbonPosition || 'top-right'}
+              size="sm"
+              color={color}
+              ribbonClassName={ribbonClassName}
+            >
+              {side.ribbonText}
+            </PlayingCardRibbon>
+          </div>
+        ) : null}
+
+        <PlayingCardArtFrame
+          size="mini"
+          layoutId={layoutId ? `${layoutId}-art-frame` : undefined}
+          className="absolute inset-0 rounded-[0.35rem] border-0 bg-transparent transition-all duration-300 group-hover:inset-x-3 group-hover:bottom-12 group-hover:top-3 group-hover:rounded-[1rem] group-hover:border group-hover:border-gaming-border group-hover:bg-gaming-base group-focus-within:inset-x-3 group-focus-within:bottom-12 group-focus-within:top-3 group-focus-within:rounded-[1rem] group-focus-within:border group-focus-within:border-gaming-border group-focus-within:bg-gaming-base"
+          gradientClassName="opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <PlayingCardIllustration
+            title={side.title}
+            illustrationUrl={side.illustrationUrl}
+            illustrationAlt={side.illustrationAlt}
+            illustration={side.illustration}
+            iconSize={24}
+            layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+          />
+        </PlayingCardArtFrame>
+
+        <PlayingCardTitleBlock
+          title={side.title}
+          subtitle={side.subtitle}
+          size="mini"
+          layoutId={layoutId ? `${layoutId}-title` : undefined}
+          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+        />
+      </div>
+    );
   }
 
   return (

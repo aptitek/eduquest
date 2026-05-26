@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
-import { CharacterNanoCard } from '../molecules/CharacterNanoCard';
+import { PlayingCard } from '../molecules/PlayingCard';
 import { useAuth } from '../../features/auth/useAuth';
 import { useDashboardData } from '../../features/game/useDashboardData';
 import {
@@ -11,6 +11,7 @@ import {
   type HeaderNotification,
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
+import { formatUserDisplayName } from '../../utils/displayName';
 import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
@@ -211,7 +212,21 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
               <StatusIndicator status="error" isPulsing={true} />
             </div>
           )}
-          {user && character ? <CharacterNanoCard user={user} character={character} /> : null}
+          {user && character ? (
+            <div className="relative h-12 w-[2.15rem] overflow-visible">
+              <PlayingCard
+                size="nano"
+                kind="character"
+                title={formatUserDisplayName(user)}
+                ribbonLabel={`LVL ${character.currentLevel}`}
+                characterClass={character.characterClass}
+                illustrationUrl={user.avatarUrl || user.githubAvatarUrl}
+                illustrationAlt={formatUserDisplayName(user)}
+                interactive={false}
+                className="absolute left-1/2 top-0 -translate-x-1/2"
+              />
+            </div>
+          ) : null}
           <AccountDropdown />
           <HeaderNotificationButton
             count={activeNotifications.length}
