@@ -8,17 +8,41 @@ import {
   buildCohortRewardCards,
   buildProgressBonusCards,
 } from '../../components/organisms/DashboardDock/dashboardDockData';
+import { useDashboardData } from '../../features/game/useDashboardData';
+import { ENABLE_MOCK_DATA } from '../../config/deployment';
 
 export function ProgressPage() {
   const { t } = useTranslation();
-  const fallbackBonusCards = buildCohortRewardCards(t);
+  const dashboardData = useDashboardData();
+  const fallbackBonusCards = dashboardData?.rewards.length
+    ? (dashboardData.rewards.map((reward) => ({
+        kind: 'guild' as const,
+        title: t(reward.titleI18nKey),
+        subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
+        accentToken: reward.accentToken,
+        faceDown: reward.faceDown,
+        ribbonLabel: t('dashboard.dock.newRibbon'),
+        ribbonClassName: 'bg-status-quest',
+      })) as ReturnType<typeof buildCohortRewardCards>)
+    : ENABLE_MOCK_DATA
+      ? buildCohortRewardCards(t)
+      : ([
+          {
+            kind: 'guild' as const,
+            id: 'empty-progress-reward',
+            title: t('dashboard.rewards.empty.title'),
+            subtitle: t('dashboard.rewards.empty.subtitle'),
+            accentToken: 'neutral' as const,
+            faceDown: true,
+          },
+        ] as ReturnType<typeof buildCohortRewardCards>);
   const nextVoteCards = buildProgressBonusCards(fallbackBonusCards, 'progress-next-vote');
 
   return (
     <GameLayout>
       <GameHeader currentView="progress" />
 
-      <main className="space-y-8 pb-8 pt-4">
+      <div className="space-y-8 pb-8 pt-4">
         <h2 className="sr-only">{t('progress.title')}</h2>
 
         <section aria-labelledby="progress-active-title" className="space-y-4">
@@ -49,7 +73,7 @@ export function ProgressPage() {
             renderItem={(card) => <PlayingCard {...card} size="full" className="w-full" />}
           />
         </section>
-      </main>
+      </div>
     </GameLayout>
   );
 }

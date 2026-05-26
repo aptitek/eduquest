@@ -9,6 +9,7 @@ import type {
   GameBattle,
   GameCharacter,
   GameCharacterClass,
+  Guild,
   School,
   Student,
   User,
@@ -20,8 +21,10 @@ import {
   addresses,
   campuses,
   cohortInvites,
+  gameBattles,
   cohorts,
   gameCharacters,
+  guilds,
   schools,
   studentCohorts,
   students,
@@ -35,8 +38,16 @@ import {
   getDebugProfile,
   getDebugStudentOptions,
 } from '../dev/debugBackup';
+import {
+  isMockDataEnabled,
+  isDebugAuthEnabled as runtimeDebugAuthEnabled,
+  requireFrontendUrl,
+  requireJwtSecret,
+} from '../config/runtime';
 
 type Bindings = {
+  APP_ENV?: string;
+  ENABLE_MOCK_DATA?: string;
   DATABASE_URL?: string;
   JWT_SECRET?: string;
   GITHUB_CLIENT_ID?: string;
@@ -52,9 +63,6 @@ type Variables = {
 
 export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// Secret JWT par défaut en développement
-const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';
-const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
 const DEFAULT_CHARACTER_CLASS: GameCharacterClass = 'scholar';
 const GAME_CHARACTER_CLASS_SET = new Set<string>(GAME_CHARACTER_CLASSES);
 const debugCohortInvites: Array<{
@@ -69,7 +77,9 @@ const debugCohortInvites: Array<{
 type AddressRecord = typeof addresses.$inferSelect;
 type CampusRecord = typeof campuses.$inferSelect;
 type CohortRecord = typeof cohorts.$inferSelect;
+type GameBattleRecord = typeof gameBattles.$inferSelect;
 type GameCharacterRecord = typeof gameCharacters.$inferSelect;
+type GuildRecord = typeof guilds.$inferSelect;
 type SchoolRecord = typeof schools.$inferSelect;
 type StudentCohortRecord = typeof studentCohorts.$inferSelect;
 type StudentRecord = typeof students.$inferSelect;
@@ -185,6 +195,21 @@ function toCohort(record: CohortRecord, school?: School, campus?: Campus): Cohor
   };
 }
 
+function toGuild(record: GuildRecord, cohort?: Cohort): Guild {
+  return {
+    id: record.id,
+    cohortId: record.cohortId,
+    cohort,
+    name: record.name,
+    description: record.description || undefined,
+    iconUrl: record.iconUrl || undefined,
+    color: record.color || undefined,
+    totalPoints: record.totalPoints,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
 function toUser(record: UserRecord, schoolMemberships?: UserSchoolMembership[]): User {
   return {
     id: record.id,
@@ -233,6 +258,17 @@ function toGameCharacter(record: GameCharacterRecord): GameCharacter {
   };
 }
 
+function toGameBattle(record: GameBattleRecord): GameBattle {
+  return {
+    id: record.id,
+    studentId: record.studentId || '',
+    activityId: record.activityId || '',
+    grade: record.grade || undefined,
+    workUrl: record.workUrl || undefined,
+    createdAt: toIsoString(record.createdAt),
+  };
+}
+
 function toGameCharacterStats(record: GameCharacterRecord): GameCharacter['stats'] {
   return {
     str: record.force,
@@ -276,7 +312,7 @@ function toStudent(
 }
 
 function isDebugAuthEnabled(c: { env: Bindings }) {
-  return !c.env.DATABASE_URL || c.env.ENABLE_DEBUG_AUTH === 'true';
+  return runtimeDebugAuthEnabled(c.env);
 }
 
 function buildMembershipEmailFallback(userEmail: string, school?: School) {
@@ -600,8 +636,14 @@ function assignDebugProfileToInvitedCohort(
   attachDebugSchoolMemberships(profile);
 }
 
-async function getManagementBackup(databaseUrl?: string): Promise<ManagementBackup> {
-  if (!databaseUrl) return getDebugBackup();
+async function getManagementBackup(
+  databaseUrl: string | undefined,
+  allowMockData: boolean
+): Promise<ManagementBackup> {
+  if (!databaseUrl) {
+    if (allowMockData) return getDebugBackup();
+    throw new Error('DATABASE_URL is required for management data.');
+  }
 
   const db = getDb(databaseUrl);
   const [
@@ -609,6 +651,7 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
     schoolRecords,
     campusRecords,
     cohortRecords,
+    guildRecords,
     userRecords,
     userSchoolMembershipRecords,
     studentRecords,
@@ -619,6 +662,7 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
     db.select().from(schools),
     db.select().from(campuses),
     db.select().from(cohorts),
+    db.select().from(guilds),
     db.select().from(users),
     db.select().from(userSchoolMemberships),
     db.select().from(students),
@@ -648,6 +692,9 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
       ),
     ])
   );
+  const guildMap = new Map(
+    guildRecords.map((record) => [record.id, toGuild(record, cohortMap.get(record.cohortId))])
+  );
   const schoolMembershipsByUser = userSchoolMembershipRecords.reduce<
     Map<string, UserSchoolMembership[]>
   >((groups, membership: UserSchoolMembershipRecord) => {
@@ -671,6 +718,7 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
       cohortId: membership.cohortId,
       cohort: cohortMap.get(membership.cohortId),
       guildId: membership.guildId || undefined,
+      guild: membership.guildId ? guildMap.get(membership.guildId) : undefined,
       institutionalEmail: membership.institutionalEmail || undefined,
       createdAt: toIsoString(membership.createdAt),
     });
@@ -705,6 +753,69 @@ async function getManagementBackup(databaseUrl?: string): Promise<ManagementBack
   };
 }
 
+type DevStudentOption = {
+  id: string;
+  username?: string;
+  displayName: string;
+  email: string;
+  schoolName?: string;
+  cohortNames: string[];
+  level: number;
+};
+
+function toDevStudentOption(profile: ManagementBackup['students'][number]): DevStudentOption {
+  const { user, student, character } = profile;
+  return {
+    id: user.id,
+    username: user.githubUsername || user.id,
+    displayName: user.displayName || user.email,
+    email: user.email,
+    schoolName: student.school?.name,
+    cohortNames:
+      student.cohortMemberships?.map((membership) => membership.cohort?.name).filter(Boolean) || [],
+    level: character.currentLevel,
+  };
+}
+
+async function getDevStudentOptions(databaseUrl: string | undefined): Promise<DevStudentOption[]> {
+  if (!databaseUrl) return getDebugStudentOptions();
+
+  const backup = await getManagementBackup(databaseUrl, false);
+  return backup.students.filter((profile) => !profile.user.isAdmin).map(toDevStudentOption);
+}
+
+async function findDevDatabaseProfile(databaseUrl: string, identifier?: string | null) {
+  const backup = await getManagementBackup(databaseUrl, false);
+  const studentProfiles = backup.students.filter((profile) => !profile.user.isAdmin);
+
+  if (!identifier) return studentProfiles[0];
+
+  return studentProfiles.find(
+    ({ user, student }) =>
+      user.id === identifier ||
+      student.id === identifier ||
+      user.githubUsername === identifier ||
+      user.email === identifier
+  );
+}
+
+function toAuthPayload(user: User): UserPayload {
+  return {
+    id: user.id,
+    email: user.email,
+    githubUsername: user.githubUsername,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    displayName: user.displayName,
+    birthDate: user.birthDate,
+    bio: user.bio,
+    pronouns: user.pronouns,
+    avatarUrl: user.avatarUrl,
+    githubAvatarUrl: user.githubAvatarUrl,
+    isAdmin: user.isAdmin,
+  };
+}
+
 // 1. GET /api/auth/github : Redirige vers GitHub OAuth
 authRouter.get('/github', (c) => {
   const clientId = c.env.GITHUB_CLIENT_ID;
@@ -733,8 +844,8 @@ authRouter.get('/github', (c) => {
 authRouter.get('/github/callback', async (c) => {
   const code = c.req.query('code');
   const inviteToken = c.req.query('state');
-  const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
-  const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+  const jwtSecret = requireJwtSecret(c.env);
+  const frontendUrl = requireFrontendUrl(c.env);
 
   if (!code) {
     return c.redirect(`${frontendUrl}/?error=missing_code`);
@@ -817,6 +928,10 @@ authRouter.get('/github/callback', async (c) => {
     const isAptitek = githubUser.login.toLowerCase() === 'aptitek';
     let isAdmin: boolean = isAptitek;
     const cohortInvite = await resolveCohortInvite(inviteToken, jwtSecret);
+
+    if (!databaseUrl && !isMockDataEnabled(c.env)) {
+      throw new Error('DATABASE_URL must be configured for production OAuth sessions.');
+    }
 
     if (databaseUrl) {
       try {
@@ -927,10 +1042,10 @@ authRouter.get('/github/callback', async (c) => {
           await assignStudentToInvitedCohort(databaseUrl, cohortInvite, authenticatedStudentId);
         }
       } catch (dbError: any) {
-        console.error(
-          'Database registration error, falling back to mock UUID session:',
-          dbError.message
-        );
+        console.error('Database registration error:', dbError.message);
+        if (!isMockDataEnabled(c.env)) {
+          throw dbError;
+        }
       }
     }
 
@@ -954,12 +1069,12 @@ authRouter.get('/github/callback', async (c) => {
   }
 });
 
-authRouter.get('/mock-students', (c) => {
+authRouter.get('/mock-students', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
 
   return c.json({
     success: true,
-    students: getDebugStudentOptions(),
+    students: await getDevStudentOptions(c.env.DATABASE_URL),
   });
 });
 
@@ -987,7 +1102,7 @@ authRouter.get('/management', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
   });
 });
 
@@ -1004,7 +1119,7 @@ authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
   }
 
   const cohortId = c.req.param('cohortId');
-  const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+  const frontendUrl = requireFrontendUrl(c.env);
 
   return c.json({
     success: true,
@@ -1046,8 +1161,8 @@ authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
     );
   }
 
-  const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
-  const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+  const jwtSecret = requireJwtSecret(c.env);
+  const frontendUrl = requireFrontendUrl(c.env);
   const inviteId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const token = await sign(
@@ -1125,7 +1240,7 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
     invites: await listActiveCohortInvites(
       c.env.DATABASE_URL,
       cohortId,
-      c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL
+      requireFrontendUrl(c.env)
     ),
   });
 });
@@ -1381,7 +1496,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
   });
 });
 
@@ -1457,7 +1572,7 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
   });
 });
 
@@ -1465,8 +1580,8 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
 authRouter.get('/mock', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
 
-  const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
-  const frontendUrl = c.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+  const jwtSecret = requireJwtSecret(c.env);
+  const frontendUrl = requireFrontendUrl(c.env);
   const cohortInvite = await resolveCohortInvite(c.req.query('invite'), jwtSecret);
 
   const requestedMockStudent = c.req.query('studentId') || c.req.query('username');
@@ -1475,27 +1590,30 @@ authRouter.get('/mock', async (c) => {
     getDebugProfile(requestedMockStudent).user.githubUsername ||
     'wizard1337';
   const isAptitek = mockUsername.toLowerCase() === 'aptitek';
+  const databaseUrl = c.env.DATABASE_URL;
+
+  if (databaseUrl && !isAptitek) {
+    try {
+      const profile = await findDevDatabaseProfile(databaseUrl, requestedMockStudent);
+      if (profile) {
+        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, profile.student.id);
+        await getDb(databaseUrl)
+          .update(users)
+          .set({ lastLogin: new Date(), updatedAt: new Date() })
+          .where(eq(users.id, profile.user.id));
+
+        const token = await sign(toAuthPayload(profile.user), jwtSecret);
+        return c.redirect(`${frontendUrl}/?token=${token}`);
+      }
+    } catch (dbError: any) {
+      console.error('DB dev login failed, trying offline debug data:', dbError.message);
+    }
+  }
 
   if (!isAptitek) {
     assignDebugProfileToInvitedCohort(cohortInvite, requestedMockStudent);
     const { user } = getDebugProfile(requestedMockStudent);
-    const token = await sign(
-      {
-        id: user.id,
-        email: user.email,
-        githubUsername: user.githubUsername,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        displayName: user.displayName,
-        birthDate: user.birthDate,
-        bio: user.bio,
-        pronouns: user.pronouns,
-        avatarUrl: user.avatarUrl,
-        githubAvatarUrl: user.githubAvatarUrl,
-        isAdmin: false,
-      },
-      jwtSecret
-    );
+    const token = await sign(toAuthPayload({ ...user, isAdmin: false }), jwtSecret);
     return c.redirect(`${frontendUrl}/?token=${token}`);
   }
 
@@ -1507,7 +1625,6 @@ authRouter.get('/mock', async (c) => {
   let authenticatedStudentId: string | undefined;
   let isAdmin: boolean = isAptitek;
 
-  const databaseUrl = c.env.DATABASE_URL;
   if (databaseUrl) {
     try {
       const db = getDb(databaseUrl);
@@ -1624,7 +1741,15 @@ authRouter.get('/me', authMiddleware, async (c) => {
   }
 
   const databaseUrl = c.env.DATABASE_URL;
-  const debugProfile = findDebugProfile(userPayload.id) || findDebugProfile(userPayload.email);
+  const allowMockData = isMockDataEnabled(c.env);
+  if (!databaseUrl && !allowMockData) {
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+  }
+
+  const debugProfile = allowMockData
+    ? findDebugProfile(userPayload.id) || findDebugProfile(userPayload.email)
+    : undefined;
+  let loadedDbProfile = false;
 
   // Données utilisateur réelles ou fallback JWT
   let userObj: User = debugProfile?.user || {
@@ -1686,7 +1811,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
     },
     currentLevel: 1,
   };
-  const battleObj: GameBattle[] = debugProfile?.battles || [];
+  let battleObj: GameBattle[] = debugProfile?.battles || [];
 
   if (debugProfile) {
     attachDebugSchoolMemberships(debugProfile);
@@ -1766,6 +1891,9 @@ authRouter.get('/me', authMiddleware, async (c) => {
             .from(cohorts)
             .where(eq(cohorts.id, membership.cohortId))
             .limit(1);
+          const [loadedGuild] = membership.guildId
+            ? await db.select().from(guilds).where(eq(guilds.id, membership.guildId)).limit(1)
+            : [];
 
           if (loadedCohorts.length > 0) {
             const cohortRecord = loadedCohorts[0];
@@ -1790,6 +1918,21 @@ authRouter.get('/me', authMiddleware, async (c) => {
               studentId: membership.studentId,
               cohortId: membership.cohortId,
               guildId: membership.guildId || undefined,
+              guild: loadedGuild
+                ? toGuild(loadedGuild, {
+                    id: cohortRecord.id,
+                    schoolId: cohortRecord.schoolId,
+                    school: cohortSchoolObj,
+                    campusId: cohortRecord.campusId || undefined,
+                    schoolYear: cohortRecord.schoolYear,
+                    grade: cohortRecord.grade as CohortGrade,
+                    level: cohortRecord.level,
+                    name: cohortRecord.name,
+                    majorSpeciality: cohortRecord.majorSpeciality || undefined,
+                    minorSpeciality: cohortRecord.minorSpeciality || undefined,
+                    description: cohortRecord.description || undefined,
+                  })
+                : undefined,
               institutionalEmail: membership.institutionalEmail || undefined,
               createdAt: membership.createdAt?.toISOString?.() || undefined,
               cohort: {
@@ -1818,6 +1961,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
           school: latestCohortSchool || schoolObj,
           cohortMemberships,
         };
+        loadedDbProfile = true;
 
         const loadedCharacters = await db
           .select()
@@ -1834,13 +1978,25 @@ authRouter.get('/me', authMiddleware, async (c) => {
             currentLevel: charRecord.currentLevel,
           };
         }
+
+        battleObj = (
+          await db
+            .select()
+            .from(gameBattles)
+            .where(eq(gameBattles.studentId, studentRecord.id))
+            .orderBy(desc(gameBattles.createdAt))
+        ).map(toGameBattle);
       }
     } catch (dbError: any) {
-      console.warn(
-        'Database error loading user profile, returning mock resilience profiles:',
-        dbError.message
-      );
+      console.warn('Database error loading user profile:', dbError.message);
+      if (!allowMockData) {
+        return c.json({ success: false, error: 'Profile could not be loaded.' }, 500);
+      }
     }
+  }
+
+  if (!allowMockData && !loadedDbProfile) {
+    return c.json({ success: false, error: 'Student profile not found.' }, 404);
   }
 
   return c.json({
@@ -1864,7 +2020,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   }
 
   const databaseUrl = c.env.DATABASE_URL;
-  const jwtSecret = c.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+  const jwtSecret = requireJwtSecret(c.env);
 
   let body: {
     displayName?: string;
@@ -1892,8 +2048,13 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     );
   }
 
+  const allowMockData = isMockDataEnabled(c.env);
+  if (!databaseUrl && !allowMockData) {
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+  }
+
   // Validation offline/resilience
-  if (!databaseUrl) {
+  if (!databaseUrl && allowMockData) {
     const defaultDomain = userPayload.isAdmin ? 'aptitek.io' : 'school.edu';
     if (
       body.institutionalEmail &&
@@ -2086,6 +2247,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         const latestMembership = latestMemberships[0];
         let latestCohort: any = undefined;
         let latestCohortSchool: any = undefined;
+        let latestGuild: GuildRecord | undefined = undefined;
         if (latestMembership) {
           const loadedCohorts = await db
             .select()
@@ -2101,6 +2263,15 @@ authRouter.put('/profile', authMiddleware, async (c) => {
               .where(eq(schools.id, latestCohort.schoolId))
               .limit(1);
             latestCohortSchool = loadedSchools[0];
+          }
+
+          if (latestMembership.guildId) {
+            const loadedGuilds = await db
+              .select()
+              .from(guilds)
+              .where(eq(guilds.id, latestMembership.guildId))
+              .limit(1);
+            latestGuild = loadedGuilds[0];
           }
         }
 
@@ -2186,6 +2357,21 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                     studentId: updatedMembership.studentId,
                     cohortId: updatedMembership.cohortId,
                     guildId: updatedMembership.guildId || undefined,
+                    guild: latestGuild
+                      ? toGuild(latestGuild, {
+                          id: latestCohort.id,
+                          schoolId: latestCohort.schoolId,
+                          school: latestSchoolObj,
+                          campusId: latestCohort.campusId || undefined,
+                          schoolYear: latestCohort.schoolYear,
+                          grade: latestCohort.grade,
+                          level: latestCohort.level,
+                          name: latestCohort.name,
+                          majorSpeciality: latestCohort.majorSpeciality || undefined,
+                          minorSpeciality: latestCohort.minorSpeciality || undefined,
+                          description: latestCohort.description || undefined,
+                        })
+                      : undefined,
                     institutionalEmail: updatedMembership.institutionalEmail || undefined,
                     createdAt: updatedMembership.createdAt?.toISOString?.() || undefined,
                     cohort: {
@@ -2234,7 +2420,10 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         }
       }
     } catch (dbError: any) {
-      console.warn('Database error saving user profile, returning local updates:', dbError.message);
+      console.warn('Database error saving user profile:', dbError.message);
+      if (!allowMockData) {
+        return c.json({ success: false, error: 'Profile could not be saved.' }, 500);
+      }
     }
   }
 

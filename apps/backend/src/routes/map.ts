@@ -15,9 +15,12 @@ import {
 } from '../db/schema';
 import { DEBUG_ACTIVITIES, DEBUG_GUILDS } from '../dev/debugBackup';
 import type { UserPayload } from '../middleware/auth';
+import { isMockDataEnabled } from '../config/runtime';
 
 type Bindings = {
-  DATABASE_URL: string;
+  APP_ENV?: string;
+  ENABLE_MOCK_DATA?: string;
+  DATABASE_URL?: string;
 };
 type Variables = {
   user?: UserPayload;
@@ -59,6 +62,10 @@ mapRouter.get('/guilds', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
 
   if (!databaseUrl) {
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    }
+
     return c.json({
       success: true,
       source: 'mock',
@@ -97,6 +104,10 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
   const user = c.get('user');
 
   if (!databaseUrl) {
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    }
+
     return c.json({
       success: true,
       source: 'mock',
@@ -162,6 +173,10 @@ mapRouter.get('/map', async (c) => {
 
   // Si aucune URL de base de données n'est spécifiée, on renvoie les mocks
   if (!databaseUrl) {
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    }
+
     return c.json({
       success: true,
       source: 'mock',
@@ -174,6 +189,10 @@ mapRouter.get('/map', async (c) => {
     const activitiesFromDb = await db.select().from(gameActivities);
 
     if (activitiesFromDb.length === 0) {
+      if (!isMockDataEnabled(c.env)) {
+        return c.json({ success: true, source: 'database', activities: [] });
+      }
+
       return c.json({
         success: true,
         source: 'mock_fallback',
@@ -201,7 +220,11 @@ mapRouter.get('/map', async (c) => {
       })),
     });
   } catch (error: any) {
-    console.error('Erreur SQL, repli vers les données mocks:', error.message);
+    console.error('Map SQL error:', error.message);
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'Map activities could not be loaded.' }, 500);
+    }
+
     return c.json({
       success: true,
       source: 'mock_error_fallback',
@@ -215,6 +238,10 @@ mapRouter.get('/dashboard', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
 
   if (!databaseUrl) {
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    }
+
     return c.json({ success: true, source: 'mock', dashboard: DEBUG_DASHBOARD });
   }
 
@@ -234,6 +261,10 @@ mapRouter.get('/dashboard', async (c) => {
       : [];
 
     if (!latestMembership?.cohortId) {
+      if (!isMockDataEnabled(c.env)) {
+        return c.json({ success: false, error: 'Dashboard cohort context not found.' }, 404);
+      }
+
       return c.json({ success: true, source: 'mock_fallback', dashboard: DEBUG_DASHBOARD });
     }
 
@@ -244,6 +275,10 @@ mapRouter.get('/dashboard', async (c) => {
       .limit(1);
 
     if (!gauge) {
+      if (!isMockDataEnabled(c.env)) {
+        return c.json({ success: false, error: 'Dashboard gauge not found.' }, 404);
+      }
+
       return c.json({ success: true, source: 'mock_fallback', dashboard: DEBUG_DASHBOARD });
     }
 
@@ -299,7 +334,11 @@ mapRouter.get('/dashboard', async (c) => {
 
     return c.json({ success: true, source: 'database', dashboard });
   } catch (error: any) {
-    console.error('Dashboard SQL error, falling back to mock data:', error.message);
+    console.error('Dashboard SQL error:', error.message);
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'Dashboard data could not be loaded.' }, 500);
+    }
+
     return c.json({ success: true, source: 'mock_error_fallback', dashboard: DEBUG_DASHBOARD });
   }
 });

@@ -88,7 +88,7 @@ export function HeaderNotificationArea({
   return (
     <section
       aria-live="polite"
-      aria-label="Header notifications"
+      aria-label={t('dashboard.notifications.regionLabel')}
       className={cn(
         'grid w-full transition-all duration-300 ease-out',
         isOpen

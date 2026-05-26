@@ -32,9 +32,8 @@ export function HoldToConfirmButton({
     return () => clearTimeout(timeoutRef.current);
   }, []);
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    // Only respond to primary interaction
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
+  const startHold = () => {
+    clearTimeout(timeoutRef.current);
 
     isHeld.current = true;
     setIsSuccess(false);
@@ -56,6 +55,18 @@ export function HoldToConfirmButton({
     }, holdDuration);
   };
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // Only respond to primary interaction
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    startHold();
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    startHold();
+  };
+
   const cancelHold = () => {
     isHeld.current = false;
     clearTimeout(timeoutRef.current);
@@ -69,6 +80,7 @@ export function HoldToConfirmButton({
 
   return (
     <button
+      type="button"
       className={cn(
         'btn relative overflow-hidden transition-shadow hover:shadow-lg',
         isRound && 'btn-circle aspect-square overflow-visible rounded-full p-0',
@@ -79,6 +91,10 @@ export function HoldToConfirmButton({
       onPointerDown={handlePointerDown}
       onPointerUp={cancelHold}
       onPointerLeave={cancelHold}
+      onPointerCancel={cancelHold}
+      onKeyDown={handleKeyDown}
+      onKeyUp={cancelHold}
+      onBlur={cancelHold}
       onContextMenu={(e) => e.preventDefault()}
     >
       {isRound ? (

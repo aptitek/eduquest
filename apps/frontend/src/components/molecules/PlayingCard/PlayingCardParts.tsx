@@ -7,6 +7,7 @@ import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
 import { RadarGraph } from '../RadarGraph';
 import type { RadarGraphAxis, RadarGraphDataset } from '../RadarGraph';
 import { cn } from '../../../utils/cn';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 export const PLAYING_CARD_TRANSITION = {
   layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] },
@@ -118,6 +119,8 @@ export function PlayingCardTitleBlock({
   onTitleChange,
   className,
 }: PlayingCardTitleBlockProps) {
+  const { t } = useTranslation();
+
   if (size === 'full') {
     return (
       <motion.div
@@ -135,7 +138,7 @@ export function PlayingCardTitleBlock({
             <EditableText
               value={title}
               onChange={onTitleChange}
-              placeholder="Card title"
+              placeholder={t('playingCard.placeholders.title')}
               className="font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg"
               truncate={false}
             />

@@ -155,7 +155,7 @@ export function CardSpread<TItem>({
         return (
           <div
             key={getStableKey(item, index)}
-            style={style}
+            ref={(element) => applySpreadCardStyle(element, style)}
             className={cn(
               'absolute bottom-0 origin-bottom shadow-xl transition-[transform,filter] duration-300 [--card-x:var(--card-rest-x)] [--card-y:var(--card-rest-y)] [--card-rotation:var(--card-rest-rotation)] [--card-scale:var(--card-rest-scale)] [transform:translateX(var(--card-x))_translateY(var(--card-y))_rotate(var(--card-rotation))_scale(var(--card-scale))]',
               getSpreadPositionClassName(shape, side),
@@ -278,6 +278,23 @@ function getSpreadCardStyle({
     '--card-hover-y': '-1.2rem',
     '--card-hover-rotation': `${direction * ([2, 4, 6][Math.min(depth, 3) - 1] ?? 6)}deg`,
   };
+}
+
+function applySpreadCardStyle(element: HTMLDivElement | null, style: CardSpreadStyle) {
+  if (!element) return;
+
+  element.style.zIndex = String(style.zIndex);
+  element.style.setProperty('--card-rest-x', style['--card-rest-x']);
+  element.style.setProperty('--card-rest-y', style['--card-rest-y']);
+  element.style.setProperty('--card-rest-rotation', style['--card-rest-rotation']);
+  element.style.setProperty('--card-rest-scale', String(style['--card-rest-scale']));
+  element.style.setProperty('--card-open-x', style['--card-open-x']);
+  element.style.setProperty('--card-open-y', style['--card-open-y']);
+  element.style.setProperty('--card-open-rotation', style['--card-open-rotation']);
+  element.style.setProperty('--card-open-scale', String(style['--card-open-scale']));
+  element.style.setProperty('--card-hover-x', style['--card-hover-x']);
+  element.style.setProperty('--card-hover-y', style['--card-hover-y']);
+  element.style.setProperty('--card-hover-rotation', style['--card-hover-rotation']);
 }
 
 function getEmphasisPositionClassName(shape: CardSpreadShape, side: CardSpreadSide) {

@@ -10,6 +10,7 @@ import { useDashboardData } from '../../features/game/useDashboardData';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
+import { ENABLE_MOCK_DATA } from '../../config/deployment';
 import mascotUrl from '../../assets/mascot.svg';
 import { Coins } from 'lucide-react';
 import {
@@ -22,7 +23,7 @@ import {
   buildProgressBonusCards,
   getLatestCohortMembership,
 } from './DashboardDock/dashboardDockData';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 export interface DashboardDockProps {
   className?: string;
@@ -33,6 +34,10 @@ type EditableCardSideOverride = Partial<Record<PlayingCardEditableField, string>
 };
 
 export function DashboardDock({ className }: DashboardDockProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const layoutTransition = prefersReducedMotion
+    ? { layout: { duration: 0 } }
+    : { layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } };
   const [route, setRoute] = useState(() => getHashRoute());
   const [usesWideGuildDeck, setUsesWideGuildDeck] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
   const [classPodiumTarget, setClassPodiumTarget] = useState<HTMLElement | null>(null);
@@ -43,7 +48,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const dashboardData = useDashboardData();
   const { t } = useTranslation();
   const latestMembership = getLatestCohortMembership(student?.cohortMemberships);
-  const playerGuild = latestMembership?.guild || RIVAL_GUILDS[0];
+  const playerGuild = latestMembership?.guild || (ENABLE_MOCK_DATA ? RIVAL_GUILDS[0] : undefined);
   const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
   const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
   const isGuildPage = route === 'guild';
@@ -137,7 +142,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     return () => mediaQuery.removeEventListener('change', handleMediaChange);
   }, []);
 
-  if (!student || !character) return null;
+  if (!student || !character || !playerGuild) return null;
 
   const podiumCards = buildPodiumCards(t, playerGuild);
   const bonusCards = dashboardData?.rewards.length
@@ -150,7 +155,18 @@ export function DashboardDock({ className }: DashboardDockProps) {
         ribbonLabel: t('dashboard.dock.newRibbon'),
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
-    : buildCohortRewardCards(t);
+    : ENABLE_MOCK_DATA
+      ? buildCohortRewardCards(t)
+      : ([
+          {
+            kind: 'guild' as const,
+            id: 'empty-reward',
+            title: t('dashboard.rewards.empty.title'),
+            subtitle: t('dashboard.rewards.empty.subtitle'),
+            accentToken: 'neutral' as const,
+            faceDown: true,
+          },
+        ] as [PlayingCardData, ...PlayingCardData[]]);
   const progressBonusCards = buildProgressBonusCards(bonusCards, 'progress-active-bonus');
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
@@ -160,9 +176,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
         positionPercent: milestone.positionPercent,
         value: milestone.value,
       }))
-    : buildGaugeMilestones(t);
-  const gaugeCurrentPoints = dashboardData?.gauge.currentPoints ?? 460;
-  const gaugeTargetPoints = dashboardData?.gauge.targetPoints ?? 1000;
+    : ENABLE_MOCK_DATA
+      ? buildGaugeMilestones(t)
+      : [];
+  const gaugeCurrentPoints = dashboardData?.gauge.currentPoints ?? 0;
+  const gaugeTargetPoints = dashboardData?.gauge.targetPoints ?? 1;
   const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
   const classRemainingCard: PlayingCardData = {
     id: 'class-remaining-guilds-list',
@@ -278,7 +296,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const podiumContent = (
     <motion.div
       layout
-      transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+      transition={layoutTransition}
       className={cn(
         'overflow-visible [perspective:1600px]',
         isClassPage
@@ -334,7 +352,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const guildContent = (
     <motion.div
       layout
-      transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+      transition={layoutTransition}
       className={cn(
         'overflow-visible [perspective:1600px]',
         isGuildPage
@@ -361,7 +379,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const bonusContent = (
     <motion.div
       layout
-      transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+      transition={layoutTransition}
       className={cn(
         'overflow-visible [perspective:1600px]',
         isProgressPage
@@ -406,7 +424,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       >
         <div
           className={cn(
-            'absolute inset-x-0 bottom-0 flex h-64 w-screen items-end justify-center gap-4 overflow-visible px-3 sm:gap-6 lg:h-72 lg:gap-8 lg:px-4 xl:gap-10 2xl:gap-12',
+            'absolute inset-x-0 bottom-0 flex h-64 w-full items-end justify-start gap-4 overflow-x-auto overflow-y-visible px-3 sm:justify-center sm:gap-6 lg:h-72 lg:gap-8 lg:px-4 xl:gap-10 2xl:gap-12',
             isProgressPage && 'h-72 lg:h-80'
           )}
         >

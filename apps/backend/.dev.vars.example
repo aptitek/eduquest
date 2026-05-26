@@ -1,3 +1,16 @@
+APP_ENV=development
+ENABLE_MOCK_DATA=true
+ENABLE_DEBUG_AUTH=true
+FRONTEND_URL=http://localhost:5173
+JWT_SECRET=replace-with-a-local-development-secret
+
+# Optional for local database-backed development.
+# DATABASE_URL=postgresql://user:password@localhost:5432/eduquest
+
+# Required when testing GitHub OAuth locally.
+# GITHUB_CLIENT_ID=
+# GITHUB_CLIENT_SECRET=
+# GITHUB_REDIRECT_URI=http://localhost:8787/api/auth/github/callback
 # Local environment variables for Wrangler development (copy this to .dev.vars)
 
 # JWT Signing Secret (change in production)

@@ -11,7 +11,6 @@ import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import {
-  RIVAL_GUILDS,
   buildClassGuildHand,
   getLatestCohortMembership,
 } from '../../components/organisms/DashboardDock/dashboardDockData';
@@ -53,7 +52,7 @@ export function ClassPage() {
   }, []);
 
   const classGuilds = useMemo(() => {
-    return mergeGuilds(playerGuild ? [playerGuild, ...RIVAL_GUILDS] : RIVAL_GUILDS, guilds);
+    return mergeGuilds(playerGuild ? [playerGuild] : [], guilds);
   }, [guilds, playerGuild]);
   const podiumGuilds = useMemo(
     () => [...classGuilds].sort(sortByPointsThenName).slice(0, 3),
@@ -82,7 +81,7 @@ export function ClassPage() {
     <GameLayout>
       <GameHeader currentView="class" />
 
-      <main className="space-y-8 pb-8 pt-4">
+      <div className="space-y-8 pb-8 pt-4">
         <h2 className="sr-only">{t('class.title')}</h2>
 
         <section aria-labelledby="class-podium-title" className="space-y-4">
@@ -132,6 +131,7 @@ export function ClassPage() {
                       key={hand.id}
                       hand={hand}
                       isPlayerGuild={hand.title === playerGuild?.name}
+                      currentGuildLabel={t('class.currentGuild')}
                     />
                   ))}
                 </div>
@@ -139,9 +139,11 @@ export function ClassPage() {
             ))}
           </div>
 
-          {showAlphabetScrollbar ? <AlphabetScrollbar letters={visibleLetters} /> : null}
+          {showAlphabetScrollbar ? (
+            <AlphabetScrollbar letters={visibleLetters} ariaLabel={t('class.guildInitials')} />
+          ) : null}
         </motion.section>
-      </main>
+      </div>
     </GameLayout>
   );
 }
@@ -150,10 +152,12 @@ function ClassHandSection({
   hand,
   rank,
   isPlayerGuild,
+  currentGuildLabel,
 }: {
   hand: ReturnType<typeof buildClassGuildHand>;
   rank?: number;
   isPlayerGuild?: boolean;
+  currentGuildLabel: string;
 }) {
   return (
     <section
@@ -171,7 +175,7 @@ function ClassHandSection({
         ) : null}
         {isPlayerGuild ? (
           <span className="rounded-full border border-status-quest px-2 py-0.5 text-xs font-bold text-status-quest">
-            You
+            {currentGuildLabel}
           </span>
         ) : null}
         <h4 className="truncate font-display text-lg font-bold">{hand.title}</h4>
@@ -189,10 +193,10 @@ function ClassHandSection({
   );
 }
 
-function AlphabetScrollbar({ letters }: { letters: string[] }) {
+function AlphabetScrollbar({ letters, ariaLabel }: { letters: string[]; ariaLabel: string }) {
   return (
     <nav
-      aria-label="Guild initials"
+      aria-label={ariaLabel}
       className="sticky right-0 top-24 float-right -mr-1 -mt-10 flex max-h-[calc(100vh-8rem)] flex-col gap-1 rounded-full border border-gaming-border bg-gaming-card/90 p-1 shadow-xl backdrop-blur"
     >
       {letters.map((letter) => (

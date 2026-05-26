@@ -2,16 +2,19 @@ import { CompoundBadge } from '../../atoms/CompoundBadge';
 import { SchoolLogoBadge } from '../SchoolLogoBadge';
 import type { CohortRow } from '../../../features/management/types';
 import { formatSchoolYear, getCohortBadgeParts } from '../../../features/management/utils';
-import { getSeededBackgroundColor } from '../../../utils/colorHash';
+import { getSeededBackgroundClass } from '../../../utils/colorHash';
+import { cn } from '../../../utils/cn';
 
 function CohortYearBadge({ schoolYear }: { schoolYear: string }) {
   const label = formatSchoolYear(schoolYear);
 
   return (
     <span
-      className="badge badge-sm border-transparent font-semibold text-white shadow-sm"
+      className={cn(
+        'badge badge-sm border-transparent font-semibold text-white shadow-sm',
+        getSeededBackgroundClass(label)
+      )}
       title={schoolYear}
-      style={{ backgroundColor: getSeededBackgroundColor(label) }}
     >
       {label}
     </span>

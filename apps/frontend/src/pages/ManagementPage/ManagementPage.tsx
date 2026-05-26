@@ -279,7 +279,12 @@ export function ManagementPage() {
       onResetLogo={() => updateSelectedSchool({ logoUrl: '' }, true)}
     />
   ) : selectedCohortRow ? (
-    <CohortDetailCard cohort={selectedCohortRow} campusOptions={campusOptions} t={t} />
+    <CohortDetailCard
+      cohort={selectedCohortRow}
+      cohortOptions={cohortRows}
+      campusOptions={campusOptions}
+      t={t}
+    />
   ) : selectedStudentRow ? (
     <div className="h-full min-h-[18rem]">
       <InstitutionalProfileCard

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Github, Terminal, Gamepad2, Sparkles, ShieldAlert } from 'lucide-react';
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENABLE_DEV_TOOLS } from '../../config/deployment';
 import logoUrl from '../../assets/logo.svg';
 
 type MockStudentOption = {
@@ -19,9 +20,10 @@ export function LoginPage() {
   const { loginWithGithub, loginWithMock, error } = useAuth();
   const [mockStudents, setMockStudents] = useState<MockStudentOption[]>([]);
   const [selectedMockStudentId, setSelectedMockStudentId] = useState('');
+  const showDevLogin = ENABLE_DEV_TOOLS;
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (!showDevLogin) return;
 
     const loadMockStudents = async () => {
       try {
@@ -37,7 +39,7 @@ export function LoginPage() {
     };
 
     loadMockStudents();
-  }, []);
+  }, [showDevLogin]);
 
   return (
     <div className="min-h-screen bg-gaming-base flex flex-col justify-center items-center p-4 relative overflow-hidden font-body selection:bg-status-boss/30 selection:text-text-primary">
@@ -83,7 +85,7 @@ export function LoginPage() {
         <div className="bg-gaming-base/60 border border-gaming-border p-4 rounded-xl text-xs text-text-secondary leading-relaxed flex flex-col gap-2 relative">
           <div className="flex items-center gap-2 text-status-quest font-semibold font-display">
             <Terminal size={14} />
-            <span>SYSTEM_LORE_BOOT.SH</span>
+            <span>{t('auth.loreCommand')}</span>
           </div>
           <p>{t('auth.flavorText')}</p>
           <div className="absolute right-3 bottom-2 text-gaming-border opacity-30 select-none">
@@ -107,8 +109,8 @@ export function LoginPage() {
 
         {/* Call to Actions (Interactive Buttons) */}
         <div className="flex flex-col gap-3 w-full mt-2">
-          {/* GitHub Real OAuth CTA */}
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={loginWithGithub}
@@ -118,39 +120,44 @@ export function LoginPage() {
             <span>{t('auth.loginWithGithub')}</span>
           </motion.button>
 
-          {import.meta.env.DEV && mockStudents.length > 0 && (
-            <label className="flex flex-col gap-1.5 text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
-              <span>{t('auth.devStudentLabel')}</span>
-              <select
-                value={selectedMockStudentId}
-                onChange={(event) => setSelectedMockStudentId(event.target.value)}
-                className="select select-bordered w-full bg-gaming-base border-gaming-border text-sm normal-case text-text-primary"
+          {showDevLogin && (
+            <>
+              {mockStudents.length > 0 && (
+                <label className="flex flex-col gap-1.5 text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
+                  <span>{t('auth.devStudentLabel')}</span>
+                  <select
+                    value={selectedMockStudentId}
+                    onChange={(event) => setSelectedMockStudentId(event.target.value)}
+                    className="select select-bordered w-full bg-gaming-base border-gaming-border text-sm normal-case text-text-primary"
+                  >
+                    {mockStudents.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.displayName} · {student.cohortNames.join(', ')} · Lvl {student.level}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => loginWithMock(selectedMockStudentId)}
+                className="w-full py-3 px-4 rounded-xl border border-gaming-border bg-gaming-base/40 text-text-secondary font-semibold font-display flex items-center justify-center gap-3 transition-all hover:bg-gaming-card cursor-pointer"
               >
-                {mockStudents.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.displayName} · {student.cohortNames.join(', ')} · Lvl {student.level}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <Terminal size={16} className="text-status-campfire" />
+                <span>{t('auth.developerBypass')}</span>
+              </motion.button>
+            </>
           )}
-
-          {/* Local Developer Bypass CTA */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => loginWithMock(selectedMockStudentId)}
-            className="w-full py-3 px-4 rounded-xl border border-gaming-border bg-gaming-base/40 text-text-secondary font-semibold font-display flex items-center justify-center gap-3 transition-all hover:bg-gaming-card cursor-pointer"
-          >
-            <Terminal size={16} className="text-status-campfire" />
-            <span>{t('auth.developerBypass')}</span>
-          </motion.button>
         </div>
 
-        {/* Bypass Visual Warning Banner */}
-        <div className="text-[10px] text-text-muted text-center max-w-[280px]">
-          {t('auth.bypassWarning')}
-        </div>
+        {showDevLogin && (
+          <div className="text-[10px] text-text-muted text-center max-w-[280px]">
+            {t('auth.bypassWarning')}
+          </div>
+        )}
       </motion.div>
 
       {/*TODO: Remove duplicate logo, site. Just one clickable logo with an alt text. */}
@@ -170,7 +177,7 @@ export function LoginPage() {
         >
           <img
             src={logoUrl}
-            alt="Aptitek Logo"
+            alt={t('auth.aptitekLogoAlt')}
             className="h-6 w-auto opacity-70 hover:opacity-100 transition-opacity"
           />
         </a>

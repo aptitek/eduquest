@@ -13,6 +13,7 @@ export const fr = {
     campfire: 'Feu de Camp',
     quest: 'Quête',
     boss: 'Combat de Boss',
+    emptyPlayingHands: 'Aucune main de cartes à afficher.',
   },
   layout: {
     title: 'EduQuest',
@@ -22,6 +23,8 @@ export const fr = {
     footer: "EduQuest © 2026 | Système de Gestion d'Apprentissage en Jeu de Rôle",
     loadingSession: 'Chargement de la session de jeu...',
     loadingMap: 'Génération de la carte interactive...',
+    appIconAlt: 'Icône Aptipiou',
+    primaryNav: 'Navigation principale',
   },
   header: {
     reconnecting: 'Reconnexion...',
@@ -37,6 +40,8 @@ export const fr = {
       online: 'En ligne',
       busy: 'Occupé (ne pas déranger)',
       offline: 'Hors ligne (invisible)',
+      openMenu: 'Ouvrir le menu utilisateur',
+      avatarAlt: 'Avatar utilisateur',
     },
   },
   dashboard: {
@@ -75,9 +80,11 @@ export const fr = {
       miniGame: { title: 'Mini-jeu', subtitle: 'Quiz débloqué' },
       techHelp: { title: 'Aide technique', subtitle: 'Support bonus' },
       reroll: { title: 'Relance', subtitle: 'Correction tardive' },
+      empty: { title: 'Aucune récompense', subtitle: 'Connectez les données de production.' },
     },
     notifications: {
       label: 'Notifications',
+      regionLabel: 'Notifications de l’en-tête',
       buttonLabel: '{label} : {count} active(s)',
       dismiss: 'Fermer la notification',
       cohortQuest: {
@@ -156,6 +163,7 @@ export const fr = {
       emailDomain: 'Domaine e-mail',
       createdAt: 'Créé',
       resetLogo: "Réinitialiser le logo de l'école",
+      changeLogo: "Modifier le logo de l'école",
     },
     cohorts: {
       name: 'Cohorte',
@@ -197,6 +205,8 @@ export const fr = {
       and: 'et',
       revoke: 'Révoquer',
       revokePermanently: 'Maintenir pour révoquer définitivement',
+      major: 'Majeure',
+      minor: 'Mineure',
     },
     card: {
       flip: 'Retourner la carte',
@@ -223,6 +233,8 @@ export const fr = {
     remaining: 'Toutes les guildes',
     guilds: 'Annuaire des guildes',
     guildCount: 'guildes',
+    currentGuild: 'Vous',
+    guildInitials: 'Initiales des guildes',
   },
   progress: {
     nav: 'Progression',
@@ -236,6 +248,8 @@ export const fr = {
     currentClassRibbon: 'Classe active',
     chooseClass: 'Choisir une classe',
     otherClasses: 'Autres classes disponibles',
+    activeCardDescription:
+      'Votre carte aventurier active. Changez de classe ci-dessous pour mettre à jour son rôle.',
   },
   game: {
     classes: {
@@ -259,11 +273,23 @@ export const fr = {
     startBoss: 'Lancer le Combat',
     startQuest: 'Résoudre la Quête',
     completedSuccess: 'Défi accompli avec succès !',
+    completing: 'Validation en cours...',
+    completionError: "L'activité n'a pas pu être validée. Veuillez réessayer.",
     bossDesc:
       "Affrontez le gardien de ce module pédagogique en soumettant votre livrable final. Les statistiques d'intelligence (INT) sont critiques.",
     questDesc:
       'Explorez cette quête pratique pour maîtriser de nouveaux concepts de programmation.',
     campfireDesc: 'Reposez-vous au coin du feu et suivez la conférence du Maître du Jeu.',
+  },
+  playingCard: {
+    flip: 'Retourner la carte',
+    backAlt: 'Dos de carte',
+    placeholders: {
+      title: 'Titre de la carte',
+      ribbon: 'Ruban',
+      subtitle: 'Sous-titre',
+      description: 'Description de la carte',
+    },
   },
   auth: {
     loginTitle: 'Se Connecter à EduQuest',
@@ -279,6 +305,8 @@ export const fr = {
     logout: 'Déconnexion',
     loginError: 'Échec de synchronisation avec la guilde GitHub.',
     invalidSession: 'Session de jeu expirée. Veuillez vous reconnecter.',
+    loreCommand: 'SYSTEM_LORE_BOOT.SH',
+    aptitekLogoAlt: 'Logo Aptitek',
   },
   profile: {
     title: "Profil de l'Aventurier",
@@ -342,6 +370,8 @@ export const fr = {
       pressEnterToAddPronoun: 'Entrée pour ajouter',
       customPronouns: 'Saisir des pronoms personnalisés…',
       resetAvatar: "Réinitialiser l'avatar avec l'avatar GitHub",
+      changeAvatar: "Modifier l'avatar",
+      avatarAlt: 'Avatar',
       pronouns: {
         he: 'Il',
         him: 'Lui',

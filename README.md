@@ -107,19 +107,43 @@ Frontend production build uses manual Vite chunks for React, Framer Motion, TanS
 
 ## Environment
 
-The backend reads Cloudflare Worker bindings/environment values:
+The app has explicit development and production deployment modes. Mock data and debug auth are only available when `APP_ENV`/`VITE_APP_ENV` are not `production`.
+
+Frontend values:
 
 ```bash
+VITE_APP_ENV=development
+VITE_BACKEND_BASE_URL=http://localhost:8787
+VITE_ENABLE_DEV_TOOLS=true
+VITE_ENABLE_MOCK_DATA=true
+```
+
+For production frontend builds, set:
+
+```bash
+VITE_APP_ENV=production
+VITE_BACKEND_BASE_URL=https://your-api.example.com
+VITE_ENABLE_DEV_TOOLS=false
+VITE_ENABLE_MOCK_DATA=false
+```
+
+Backend Worker values:
+
+```bash
+APP_ENV=development
 DATABASE_URL=postgresql://...
 JWT_SECRET=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 GITHUB_REDIRECT_URI=http://localhost:8787/api/auth/github/callback
 FRONTEND_URL=http://localhost:5173
+ENABLE_MOCK_DATA=true
 ENABLE_DEBUG_AUTH=true
 ```
 
-`DATABASE_URL` is optional for local debug flows. When it is absent, the backend returns debug data from the local mock backup. When it is present, routes use PostgreSQL through Drizzle.
+`DATABASE_URL` is optional only for development/mock deployments. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; mock data, mock auth, and debug backup endpoints are disabled even if their flags are set.
+
+Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local starting points. Do not commit real `.env` or `.dev.vars` files.
 
 ## Database
 

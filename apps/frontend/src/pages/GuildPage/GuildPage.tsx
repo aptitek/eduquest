@@ -1,7 +1,6 @@
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
-  RIVAL_GUILDS,
   getLatestCohortMembership,
 } from '../../components/organisms/DashboardDock/dashboardDockData';
 import { GameLayout } from '../../components/templates/GameLayout';
@@ -20,14 +19,26 @@ export function GuildPage() {
   }
 
   const latestMembership = getLatestCohortMembership(student.cohortMemberships);
-  const playerGuild = latestMembership?.guild || RIVAL_GUILDS[0];
+  const playerGuild = latestMembership?.guild;
+
+  if (!playerGuild) {
+    return (
+      <GameLayout>
+        <GameHeader currentView="guild" />
+        <div className="rounded-3xl border border-gaming-border bg-gaming-card/70 p-10 text-center font-display text-text-muted">
+          {t('guild.emptyState')}
+        </div>
+      </GameLayout>
+    );
+  }
+
   const guildName = playerGuild.name || t('dashboard.dock.playerGuild');
 
   return (
     <GameLayout>
       <GameHeader currentView="guild" />
 
-      <main className="pb-8 pt-4">
+      <div className="pb-8 pt-4">
         <h2 className="sr-only">{t('guild.title')}</h2>
         <section
           aria-label={t('guild.subtitle').replace('{guildName}', guildName)}
@@ -35,7 +46,7 @@ export function GuildPage() {
         >
           <div id="guild-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
         </section>
-      </main>
+      </div>
     </GameLayout>
   );
 }

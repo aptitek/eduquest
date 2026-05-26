@@ -196,36 +196,41 @@ export function EditableAvatar({
 
   return (
     <div className="flex flex-col items-center gap-1.5 w-full">
-      <div
-        className={cn(
-          'avatar group relative rounded-full',
-          isEditing && !isUploading && 'cursor-pointer'
-        )}
-        onClick={handleContainerClick}
-      >
-        <div
+      <div className="avatar relative rounded-full">
+        <button
+          type="button"
           className={cn(
-            'overflow-hidden rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base',
-            avatarSizeClass
+            'group relative rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-gaming-base',
+            isEditing && !isUploading && 'cursor-pointer'
           )}
+          onClick={handleContainerClick}
+          aria-label={t('profile.institutionalCard.changeAvatar')}
+          disabled={!isEditing || isUploading}
         >
-          <img src={optimisticSrc || src} alt="Avatar" className="w-full h-full object-cover" />
-        </div>
-
-        {isEditing && (
-          <div
+          <span
             className={cn(
-              'absolute inset-0 flex items-center justify-center rounded-full bg-primary/95 text-primary-content opacity-0 transition-opacity group-hover:opacity-100',
+              'block overflow-hidden rounded-full ring ring-solarized-blue/20 ring-offset-2 ring-offset-gaming-base',
               avatarSizeClass
             )}
           >
-            {isUploading ? (
-              <span className="loading loading-spinner text-primary-content"></span>
-            ) : (
-              <Camera className="text-primary-content drop-shadow" size={cameraSize} />
-            )}
-          </div>
-        )}
+            <img src={optimisticSrc || src} alt={t('profile.institutionalCard.avatarAlt')} className="w-full h-full object-cover" />
+          </span>
+
+          {isEditing && (
+            <span
+              className={cn(
+                'absolute inset-0 flex items-center justify-center rounded-full bg-primary/95 text-primary-content opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100',
+                avatarSizeClass
+              )}
+            >
+              {isUploading ? (
+                <span className="loading loading-spinner text-primary-content"></span>
+              ) : (
+                <Camera className="text-primary-content drop-shadow" size={cameraSize} />
+              )}
+            </span>
+          )}
+        </button>
 
         {isEditing && (
           <input

@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../game/gameStore';
+import { BACKEND_BASE_URL, ENABLE_DEV_TOOLS } from '../../config/deployment';
 
-export const BACKEND_BASE_URL = 'http://localhost:8787';
+export { BACKEND_BASE_URL };
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unknown authentication error';
+}
 
 function getCohortInviteToken() {
   return new URLSearchParams(window.location.search).get('cohortInvite');
@@ -42,8 +47,8 @@ export function useAuth() {
         } else {
           throw new Error('Malformed server session payload');
         }
-      } catch (err: any) {
-        console.warn('Authentication validation failed:', err.message);
+      } catch (err: unknown) {
+        console.warn('Authentication validation failed:', getErrorMessage(err));
         localStorage.removeItem('eduquest_token');
         clearStoreSession();
         setError('invalidSession');
@@ -104,6 +109,8 @@ export function useAuth() {
   }, []);
 
   const loginWithMock = useCallback((studentId?: string) => {
+    if (!ENABLE_DEV_TOOLS) return;
+
     const url = new URL(`${BACKEND_BASE_URL}/api/auth/mock`);
     if (studentId) url.searchParams.set('studentId', studentId);
     const cohortInvite = getCohortInviteToken();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
@@ -52,7 +52,9 @@ export function BadgeDropdown({
   const showArrow = showArrowProp ?? showPencil;
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
+  const listboxId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +76,7 @@ export function BadgeDropdown({
   }, [catalog, getOptionText, query]);
 
   const selected = value.filter(Boolean);
+  const activeOption = visibleOptions[activeOptionIndex];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -107,6 +110,10 @@ export function BadgeDropdown({
       window.removeEventListener('scroll', updatePanelPosition, true);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    setActiveOptionIndex(0);
+  }, [query, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -155,8 +162,29 @@ export function BadgeDropdown({
   };
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveOptionIndex((current) =>
+        visibleOptions.length === 0 ? 0 : Math.min(current + 1, visibleOptions.length - 1)
+      );
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveOptionIndex((current) =>
+        visibleOptions.length === 0 ? 0 : Math.max(current - 1, 0)
+      );
+      return;
+    }
+
     if (event.key !== 'Enter') return;
     event.preventDefault();
+
+    if (activeOption) {
+      commitSelection(activeOption);
+      return;
+    }
 
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -179,6 +207,7 @@ export function BadgeDropdown({
             className="z-[80] max-h-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gaming-border bg-gaming-card p-2 shadow-2xl"
             style={panelStyle}
             role="listbox"
+            id={listboxId}
             aria-multiselectable={multiple}
           >
             <input
@@ -187,24 +216,34 @@ export function BadgeDropdown({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={handleInputKeyDown}
+              role="combobox"
+              aria-controls={listboxId}
+              aria-expanded={isOpen}
+              aria-activedescendant={
+                activeOption ? `${listboxId}-option-${activeOptionIndex}` : undefined
+              }
               placeholder={searchPlaceholder}
               className="input input-bordered input-xs mb-2 h-8 min-h-0 w-full bg-gaming-base border-gaming-border text-sm text-text-primary"
             />
 
             <div className="flex max-h-64 flex-wrap gap-1 overflow-y-auto">
               {visibleOptions.length > 0 ? (
-                visibleOptions.map((item) => {
+                visibleOptions.map((item, optionIndex) => {
                   const isSelected = selected.includes(item);
                   return (
                     <button
                       key={item}
+                      id={`${listboxId}-option-${optionIndex}`}
                       type="button"
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => commitSelection(item)}
+                      onMouseEnter={() => setActiveOptionIndex(optionIndex)}
                       className={cn(
                         badgeClass,
                         'cursor-pointer transition-colors hover:badge-primary hover:text-primary-content hover:border-primary',
+                        activeOptionIndex === optionIndex &&
+                          'badge-primary border-primary text-primary-content',
                         isSelected && 'badge-primary border-primary text-primary-content'
                       )}
                     >
@@ -243,6 +282,7 @@ export function BadgeDropdown({
         )}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-controls={listboxId}
       >
         <span
           className={cn(

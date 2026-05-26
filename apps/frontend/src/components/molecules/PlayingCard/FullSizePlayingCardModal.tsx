@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '../../../utils/cn';
+import { keepFocusInContainer } from '../../../utils/focusTrap';
 import { FullSizePlayingCardStack } from './FullSizePlayingCardStack';
 import type { FullSizePlayingCardStackItem, FullSizePlayingCardStackVariant } from './FullSizePlayingCardStack';
 
@@ -34,20 +35,26 @@ export function FullSizePlayingCardModal({
   onClose,
   className,
 }: FullSizePlayingCardModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isOpen) return undefined;
 
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
+      keepFocusInContainer(event, dialogRef.current);
     };
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => dialogRef.current?.focus());
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus();
     };
   }, [isOpen, onClose]);
 
@@ -55,10 +62,15 @@ export function FullSizePlayingCardModal({
 
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={title || 'Playing card hand'}
-      className={cn('pointer-events-none fixed inset-0 z-[70] overflow-hidden text-text-primary', className)}
+      tabIndex={-1}
+      className={cn(
+        'pointer-events-none fixed inset-0 z-[70] overflow-hidden text-text-primary outline-none',
+        className
+      )}
     >
       <div className="absolute inset-0 bg-gaming-base/95 md:hidden" />
 

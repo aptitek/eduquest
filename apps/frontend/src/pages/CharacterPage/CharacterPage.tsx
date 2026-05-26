@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { GAME_CHARACTER_CLASSES, type GameCharacterClass } from '@eduquest/shared';
+import {
+  GAME_CHARACTER_CLASSES,
+  type GameCharacter,
+  type GameCharacterClass,
+} from '@eduquest/shared';
 import { UserRound } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
@@ -57,7 +61,9 @@ export function CharacterPage() {
       characterClass: character.characterClass,
       classLabel: currentClassLabel,
       level: character.currentLevel,
+      stats: character.stats,
       bio: user.bio,
+      fallbackDescription: t('character.activeCardDescription'),
     }),
     playerCardOverride,
     updatePlayerCardField,
@@ -89,7 +95,7 @@ export function CharacterPage() {
     <GameLayout>
       <GameHeader currentView="character" />
 
-      <main className="space-y-8 pb-8 pt-4">
+      <div className="space-y-8 pb-8 pt-4">
         <section aria-labelledby="character-title" className="space-y-5">
           <div className="flex items-center gap-3">
             <UserRound className="text-status-quest" size={22} aria-hidden />
@@ -127,7 +133,7 @@ export function CharacterPage() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </GameLayout>
   );
 }
@@ -175,14 +181,18 @@ function buildPlayerCharacterCard({
   characterClass,
   classLabel,
   level,
+  stats,
   bio,
+  fallbackDescription,
 }: {
   name: string;
   avatarUrl?: string;
   characterClass: GameCharacterClass;
   classLabel: string;
   level: number;
+  stats: GameCharacter['stats'];
   bio?: string;
+  fallbackDescription: string;
 }): PlayingCardData {
   return {
     id: 'character-page-player',
@@ -196,16 +206,16 @@ function buildPlayerCharacterCard({
     front: {
       title: name,
       subtitle: `${classLabel} · ${level}`,
-      description: bio || 'Your active adventurer card. Change class below to update its role.',
+      description: bio || fallbackDescription,
       illustrationUrl: avatarUrl,
       illustrationAlt: name,
       ribbonText: classLabel,
       ribbonEditable: false,
       stats: [
-        { id: 'str', label: 'STR', value: 62 },
-        { id: 'dex', label: 'DEX', value: 68 },
-        { id: 'int', label: 'INT', value: 78 },
-        { id: 'cha', label: 'CHA', value: 72 },
+        { id: 'str', label: 'STR', value: stats.str ?? stats.force ?? 0 },
+        { id: 'dex', label: 'DEX', value: stats.dex ?? stats.dexterity ?? 0 },
+        { id: 'int', label: 'INT', value: stats.int ?? stats.intelligence ?? 0 },
+        { id: 'cha', label: 'CHA', value: stats.cha ?? stats.charisma ?? 0 },
         { id: 'xp', label: 'XP', value: Math.min(level * 8, 100) },
       ],
     },

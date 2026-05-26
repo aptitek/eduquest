@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { getSeededBackgroundColor } from '../../../utils/colorHash';
+import { getSeededBackgroundClass } from '../../../utils/colorHash';
 import { cn } from '../../../utils/cn';
 
 export type CornerRibbonPosition = 'top-left' | 'top-right';
@@ -85,6 +85,19 @@ const iconCornerPositionClassMap: Record<CornerRibbonSize, Record<CornerRibbonPo
   },
 };
 
+const tokenBackgroundClassMap: Record<string, string> = {
+  'var(--color-accent-scholar)': 'bg-accent-scholar',
+  'var(--color-accent-champion)': 'bg-accent-champion',
+  'var(--color-accent-guide)': 'bg-accent-guide',
+  'var(--color-accent-specialist)': 'bg-accent-specialist',
+  'var(--color-status-quest)': 'bg-status-quest',
+  'var(--color-status-campfire)': 'bg-status-campfire',
+  'var(--color-status-completed)': 'bg-status-completed',
+  'var(--color-status-boss)': 'bg-status-boss',
+  'var(--color-status-danger)': 'bg-status-danger',
+  'var(--color-accent-neutral)': 'bg-accent-neutral',
+};
+
 export function CornerRibbon({
   children,
   icon,
@@ -100,9 +113,12 @@ export function CornerRibbon({
 }: CornerRibbonProps) {
   const textLength = getTextLength(children);
   const textFit = textLength > 14 ? 'long' : textLength > 7 ? 'medium' : 'short';
-  const backgroundColor = color || (colorSeed ? getSeededBackgroundColor(colorSeed) : undefined);
+  const backgroundClassName = color
+    ? tokenBackgroundClassMap[color] || 'bg-status-quest'
+    : colorSeed
+      ? getSeededBackgroundClass(colorSeed)
+      : 'bg-status-quest';
   const hasText = textLength > 0;
-  const backgroundStyle = backgroundColor ? { backgroundColor } : undefined;
   const interactiveClass = onClick
     ? 'pointer-events-auto cursor-pointer focus:outline-none'
     : 'pointer-events-none';
@@ -138,9 +154,9 @@ export function CornerRibbon({
             position === 'top-left'
               ? '[clip-path:polygon(0_0,100%_0,0_100%)]'
               : '[clip-path:polygon(0_0,100%_0,100%_100%)]',
+            backgroundClassName,
             ribbonClassName
           )}
-          style={backgroundStyle}
         />
       ) : null}
       {icon ? (
@@ -160,9 +176,9 @@ export function CornerRibbon({
           'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-white shadow-md',
           ribbonClassMap[size],
           ribbonPositionClassMap[size][position],
+          backgroundClassName,
           ribbonClassName
         )}
-        style={backgroundStyle}
       >
         {hasText ? (
           <span

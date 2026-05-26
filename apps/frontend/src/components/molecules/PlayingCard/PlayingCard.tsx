@@ -9,6 +9,7 @@ import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
 import type { RadarGraphAxis, RadarGraphDataset } from '../RadarGraph';
 import { cn } from '../../../utils/cn';
 import { readFileAsDataUrl } from '../../../utils/readFileAsDataUrl';
+import { useTranslation } from '../../../hooks/useTranslation';
 import {
   PLAYING_CARD_TRANSITION,
   PlayingCardArtFrame,
@@ -117,10 +118,6 @@ export interface PlayingCardProps extends PlayingCardData {
   auraClassName?: string;
 }
 
-type AccentStyle = CSSProperties & {
-  '--playing-card-accent': string;
-};
-
 const DEFAULT_CARD_COLOR = 'var(--color-status-quest)';
 
 const CHARACTER_CLASS_ACCENTS: Record<GameCharacterClass, PlayingCardAccent> = {
@@ -143,6 +140,19 @@ const ACCENT_COLOR_MAP: Record<PlayingCardAccent, string> = {
   neutral: 'var(--color-accent-neutral)',
 };
 
+const ACCENT_VARIABLE_CLASS_MAP: Record<PlayingCardAccent, string> = {
+  scholar: '[--playing-card-accent:var(--color-accent-scholar)]',
+  champion: '[--playing-card-accent:var(--color-accent-champion)]',
+  guide: '[--playing-card-accent:var(--color-accent-guide)]',
+  specialist: '[--playing-card-accent:var(--color-accent-specialist)]',
+  quest: '[--playing-card-accent:var(--color-status-quest)]',
+  campfire: '[--playing-card-accent:var(--color-status-campfire)]',
+  completed: '[--playing-card-accent:var(--color-status-completed)]',
+  boss: '[--playing-card-accent:var(--color-status-boss)]',
+  danger: '[--playing-card-accent:var(--color-status-danger)]',
+  neutral: '[--playing-card-accent:var(--color-accent-neutral)]',
+};
+
 export function PlayingCard({
   size = 'mini',
   auraClassName,
@@ -153,33 +163,34 @@ export function PlayingCard({
   onClick,
   ...card
 }: PlayingCardProps) {
+  const { t } = useTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
   const front = resolveFrontSide(card);
-  const color = resolveCardColor(card, front);
-  const style: AccentStyle = { '--playing-card-accent': color };
+  const accent = resolveCardAccent(card, front);
+  const color = ACCENT_COLOR_MAP[accent] || DEFAULT_CARD_COLOR;
   const layoutId = card.disableLayoutAnimation ? undefined : card.layoutId || card.id;
   const isFull = size === 'full';
   const isNano = size === 'nano';
   const hasBack = Boolean(isFull && (card.back || card.backSvgUrl));
+  const isActionable = Boolean(onClick);
 
   return (
     <motion.article
       layoutId={layoutId}
-      role={onClick ? 'button' : undefined}
-      tabIndex={interactive ? 0 : -1}
-      aria-hidden={interactive ? undefined : true}
-      aria-label={interactive ? front.title : undefined}
+      role={isActionable ? 'button' : undefined}
+      tabIndex={interactive && isActionable ? 0 : undefined}
+      aria-label={isActionable ? front.title : undefined}
       onClick={onClick}
       onKeyDown={(event) => {
-        if (!onClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        if (!isActionable || (event.key !== 'Enter' && event.key !== ' ')) return;
         event.preventDefault();
-        onClick();
+        onClick?.();
       }}
-      style={style}
       transition={PLAYING_CARD_TRANSITION}
       className={cn(
         'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl outline-none',
         'transition-[filter,box-shadow,width,transform,border-radius] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-[color:var(--playing-card-accent)]',
+        ACCENT_VARIABLE_CLASS_MAP[accent],
         isFull && 'w-full max-w-sm p-2',
         !isFull && !isNano && 'w-32 sm:w-36',
         isNano &&
@@ -218,7 +229,7 @@ export function PlayingCard({
 
         {hasBack ? (
           <CardFace className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            {resolveBackContent(card, color, sideClassName)}
+              {resolveBackContent(card, color, sideClassName, t('playingCard.backAlt'))}
           </CardFace>
         ) : null}
       </motion.div>
@@ -230,8 +241,8 @@ export function PlayingCard({
             event.stopPropagation();
             setIsFlipped((current) => !current);
           }}
-          aria-label={card.flipLabel || 'Flip card'}
-          title={card.flipLabel || 'Flip card'}
+          aria-label={card.flipLabel || t('playingCard.flip')}
+          title={card.flipLabel || t('playingCard.flip')}
           className="absolute bottom-3 right-3 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-gaming-border bg-gaming-base/95 text-text-secondary shadow-xl transition hover:scale-110 hover:border-status-quest hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-status-quest"
         >
           <RotateCw size={24} aria-hidden />
@@ -369,6 +380,7 @@ function FullCardSide({
   layoutId?: string;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const radarGraph = buildRadarGraph(side.stats, side.statsLabel || side.title, color);
   const canEdit = Boolean(side.editable);
   const canEditRibbon = canEdit && side.ribbonEditable !== false;
@@ -395,15 +407,15 @@ function FullCardSide({
             position={side.ribbonPosition || 'top-right'}
             size="md"
             color={color}
-          icon={resolveRibbonIcon(undefined, side)}
-          onClick={side.onRibbonClick}
-          ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
+            icon={resolveRibbonIcon(undefined, side)}
+            onClick={side.onRibbonClick}
+            ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
           >
             {canEditRibbon ? (
               <EditableText
                 value={side.ribbonText || ''}
                 onChange={(value) => updateField('ribbonText', value)}
-                placeholder="Ribbon"
+                placeholder={t('playingCard.placeholders.ribbon')}
                 className="text-inherit"
                 truncate={false}
               />
@@ -462,7 +474,7 @@ function FullCardSide({
                   <EditableText
                     value={side.subtitle || ''}
                     onChange={(value) => updateField('subtitle', value)}
-                    placeholder="Subtitle"
+                    placeholder={t('playingCard.placeholders.subtitle')}
                     className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted"
                     truncate={false}
                   />
@@ -477,7 +489,7 @@ function FullCardSide({
                   multiline
                   value={side.description || ''}
                   onChange={(value) => updateField('description', value)}
-                  placeholder="Card description"
+                  placeholder={t('playingCard.placeholders.description')}
                   truncate={false}
                   className="text-sm leading-relaxed text-text-secondary"
                 />
@@ -570,7 +582,12 @@ function getCharacterClassIcon(characterClass?: GameCharacterClass) {
   return undefined;
 }
 
-function resolveBackContent(card: PlayingCardData, color: string, className?: string) {
+function resolveBackContent(
+  card: PlayingCardData,
+  color: string,
+  className: string | undefined,
+  fallbackAlt: string
+) {
   if (isPlayingCardSide(card.back)) {
     return <FullCardSide side={card.back} color={card.back.color || color} className={className} />;
   }
@@ -579,7 +596,13 @@ function resolveBackContent(card: PlayingCardData, color: string, className?: st
     return card.back;
   }
 
-  return <DefaultCardBack svgUrl={card.backSvgUrl} svgAlt={card.backSvgAlt || 'Card back'} className={className} />;
+  return (
+    <DefaultCardBack
+      svgUrl={card.backSvgUrl}
+      svgAlt={card.backSvgAlt || fallbackAlt}
+      className={className}
+    />
+  );
 }
 
 function DefaultCardBack({ svgUrl, svgAlt, className }: { svgUrl?: string; svgAlt: string; className?: string }) {
@@ -601,15 +624,17 @@ function isPlayingCardSide(value: PlayingCardBack | undefined): value is Playing
   return Boolean(value && typeof value === 'object' && !isValidElement(value) && 'title' in value);
 }
 
-function resolveCardColor(card: PlayingCardData, front: PlayingCardSide) {
-  if (front.color) return front.color;
-  if (card.color) return card.color;
-  const accent = resolveAccentToken(card.accentToken || card.guild?.color, card.characterClass);
-  return ACCENT_COLOR_MAP[accent] || DEFAULT_CARD_COLOR;
+function resolveCardAccent(card: PlayingCardData, front: PlayingCardSide) {
+  return resolveAccentToken(
+    card.accentToken || card.guild?.color || String(front.color || card.color || ''),
+    card.characterClass
+  );
 }
 
 function resolveAccentToken(value: string | undefined, characterClass?: GameCharacterClass): PlayingCardAccent {
   if (value && value in ACCENT_COLOR_MAP) return value as PlayingCardAccent;
+  const tokenEntry = Object.entries(ACCENT_COLOR_MAP).find(([, tokenValue]) => tokenValue === value);
+  if (tokenEntry) return tokenEntry[0] as PlayingCardAccent;
   if (characterClass) return CHARACTER_CLASS_ACCENTS[characterClass];
   return 'quest';
 }

@@ -105,29 +105,38 @@ export function EditableSchoolLogo({
     <div
       className={cn(
         'group relative flex h-32 w-full shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gaming-border bg-gaming-base/50 p-2',
-        isEditing && !isUploading && 'cursor-pointer',
         className
       )}
-      title={name}
-      onClick={handleContainerClick}
     >
-      {displaySrc ? (
-        <img src={displaySrc} alt={name} className="h-full w-full object-contain" />
-      ) : (
-        <span className="px-3 text-center text-lg font-display font-semibold text-text-secondary">
-          {name}
-        </span>
-      )}
+      <button
+        type="button"
+        title={name}
+        onClick={handleContainerClick}
+        aria-label={t('management.schools.changeLogo')}
+        disabled={!isEditing || isUploading}
+        className={cn(
+          'flex h-full w-full items-center justify-center rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-gaming-base',
+          isEditing && !isUploading && 'cursor-pointer'
+        )}
+      >
+        {displaySrc ? (
+          <img src={displaySrc} alt={name} className="h-full w-full object-contain" />
+        ) : (
+          <span className="px-3 text-center text-lg font-display font-semibold text-text-secondary">
+            {name}
+          </span>
+        )}
 
-      {isEditing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-primary/95 text-primary-content opacity-0 transition-opacity group-hover:opacity-100">
-          {isUploading ? (
-            <span className="loading loading-spinner text-primary-content"></span>
-          ) : (
-            <Camera className="text-primary-content drop-shadow" size={32} />
-          )}
-        </div>
-      )}
+        {isEditing && (
+          <span className="absolute inset-0 flex items-center justify-center bg-primary/95 text-primary-content opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {isUploading ? (
+              <span className="loading loading-spinner text-primary-content"></span>
+            ) : (
+              <Camera className="text-primary-content drop-shadow" size={32} />
+            )}
+          </span>
+        )}
+      </button>
 
       {isEditing && (
         <input

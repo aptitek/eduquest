@@ -6,7 +6,9 @@ import { cn } from '../../utils/cn';
 interface ActivityDetailPanelProps {
   selectedActivity: Activity | null;
   completedActivityIds: string[];
-  onComplete: (activity: Activity) => void;
+  onComplete: (activity: Activity) => void | Promise<void>;
+  completingActivityId?: string | null;
+  completionError?: string | null;
 }
 
 // Visual lookups mapping game node types to semantic design styles backed by Solarized Dark tokens
@@ -26,6 +28,8 @@ export function ActivityDetailPanel({
   selectedActivity,
   completedActivityIds,
   onComplete,
+  completingActivityId,
+  completionError,
 }: ActivityDetailPanelProps) {
   const { t } = useTranslation();
 
@@ -42,6 +46,7 @@ export function ActivityDetailPanel({
   }
 
   const isCompleted = completedActivityIds.includes(selectedActivity.id);
+  const isCompleting = completingActivityId === selectedActivity.id;
   const type = selectedActivity.type;
 
   // Prepare design states safely before rendering (KISS)
@@ -107,9 +112,23 @@ export function ActivityDetailPanel({
 
         {/* Action button container */}
         <div className="flex flex-col gap-3">
+          {completionError ? (
+            <div role="alert" className="alert alert-warning text-sm">
+              {completionError}
+            </div>
+          ) : null}
           {!isCompleted ? (
-            <button onClick={() => onComplete(selectedActivity)} className={buttonStyle}>
-              {type === 'boss' ? t('detailPanel.startBoss') : t('detailPanel.startQuest')}
+            <button
+              type="button"
+              onClick={() => onComplete(selectedActivity)}
+              disabled={isCompleting}
+              className={buttonStyle}
+            >
+              {isCompleting
+                ? t('detailPanel.completing')
+                : type === 'boss'
+                  ? t('detailPanel.startBoss')
+                  : t('detailPanel.startQuest')}
             </button>
           ) : (
             <div className="text-center text-xs text-text-muted italic p-3 border border-dashed border-gaming-border rounded-lg">

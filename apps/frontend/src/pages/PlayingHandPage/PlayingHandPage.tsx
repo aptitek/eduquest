@@ -2,6 +2,7 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { PlayingHand } from '../../components/molecules/PlayingCard';
 import type { PlayingHandData } from '../../components/molecules/PlayingCard';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export interface PlayingHandPageProps {
   title: string;
@@ -15,13 +16,16 @@ export function PlayingHandPage({
   title,
   hands,
   currentView = 'map',
-  emptyState = 'No playing hands to display.',
+  emptyState,
 }: PlayingHandPageProps) {
+  const { t } = useTranslation();
+  const resolvedEmptyState = emptyState || t('common.emptyPlayingHands');
+
   return (
     <GameLayout>
       <GameHeader currentView={currentView} />
 
-      <main className="pb-8 pt-4">
+      <div className="pb-8 pt-4">
         <h2 className="sr-only">{title}</h2>
 
         {hands.length ? (
@@ -45,10 +49,10 @@ export function PlayingHandPage({
           </div>
         ) : (
           <div className="rounded-3xl border border-gaming-border bg-gaming-card/70 p-10 text-center font-display text-text-muted">
-            {emptyState}
+            {resolvedEmptyState}
           </div>
         )}
-      </main>
+      </div>
     </GameLayout>
   );
 }

@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
 
@@ -22,38 +21,12 @@ export function AdaptiveTooltipBadge({
   badgeClassName,
   tooltipClassName,
 }: AdaptiveTooltipBadgeProps) {
-  const containerRef = useRef<HTMLSpanElement>(null);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  const [tooltipAnchor, setTooltipAnchor] = useState<{ x: number; y: number } | null>(null);
   const renderedCompactLabel = compactLabel ?? label;
-  const showPortalTooltip = mode === 'dot' && isTooltipOpen && tooltipAnchor && typeof document !== 'undefined';
-
-  useLayoutEffect(() => {
-    if (mode !== 'dot' || !isTooltipOpen) return undefined;
-
-    const updateAnchor = () => {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      setTooltipAnchor({
-        x: rect.left + rect.width / 2,
-        y: rect.top,
-      });
-    };
-
-    updateAnchor();
-    window.addEventListener('scroll', updateAnchor, true);
-    window.addEventListener('resize', updateAnchor);
-
-    return () => {
-      window.removeEventListener('scroll', updateAnchor, true);
-      window.removeEventListener('resize', updateAnchor);
-    };
-  }, [isTooltipOpen, mode]);
+  const showTooltip = mode === 'dot' && isTooltipOpen;
 
   return (
     <span
-      ref={containerRef}
       className={cn('group/adaptive-tooltip relative inline-flex h-5 w-5 items-center justify-center', className)}
       onMouseEnter={() => setIsTooltipOpen(true)}
       onMouseLeave={() => setIsTooltipOpen(false)}
@@ -78,20 +51,16 @@ export function AdaptiveTooltipBadge({
               badgeClassName
             )}
           />
-          {showPortalTooltip
-            ? createPortal(
-                <span
-                  className={cn(
-                    'pointer-events-none fixed z-[100] w-max max-w-32 -translate-x-1/2 -translate-y-full rounded-xl border border-gaming-border/70 bg-gaming-card/95 px-2 py-1 text-center text-[0.65rem] font-bold text-text-primary opacity-100 shadow-xl backdrop-blur',
-                    tooltipClassName
-                  )}
-                  style={{ left: tooltipAnchor.x, top: tooltipAnchor.y - 6 }}
-                >
-                  {label}
-                </span>,
-                document.body
-              )
-            : null}
+          {showTooltip ? (
+            <span
+              className={cn(
+                'pointer-events-none absolute bottom-full left-1/2 z-[100] mb-1 w-max max-w-32 -translate-x-1/2 rounded-xl border border-gaming-border/70 bg-gaming-card/95 px-2 py-1 text-center text-[0.65rem] font-bold text-text-primary opacity-100 shadow-xl backdrop-blur',
+                tooltipClassName
+              )}
+            >
+              {label}
+            </span>
+          ) : null}
         </>
       )}
     </span>

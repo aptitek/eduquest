@@ -304,11 +304,11 @@ export function RadarGraph({
             return (
               <span
                 key={axis.id}
+                ref={(element) => applyAxisLabelPosition(element, position)}
                 className={cn(
                   'absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2',
                   canEdit && 'pointer-events-none'
                 )}
-                style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <AdaptiveTooltipBadge
                   label={axis.label}
@@ -360,6 +360,16 @@ function getCompactAxisLabel(label: string) {
   const words = label.trim().split(/\s+/).filter(Boolean);
   if (words.length > 1) return words.map((word) => word[0]).join('').slice(0, 2);
   return label.trim().slice(0, 2);
+}
+
+function applyAxisLabelPosition(
+  element: HTMLSpanElement | null,
+  position: { x: number; y: number }
+) {
+  if (!element) return;
+
+  element.style.left = `${position.x}%`;
+  element.style.top = `${position.y}%`;
 }
 
 export default RadarGraph;

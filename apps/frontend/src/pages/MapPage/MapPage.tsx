@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, GameBattle } from '@eduquest/shared';
+import type { Activity, GameBattle } from '@eduquest/shared';
 import { useGameStore } from '../../features/game/gameStore';
 import { completeMapActivity, fetchMapActivities } from '../../features/game/api';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -18,6 +18,8 @@ export function MapPage() {
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
+  const [completingActivityId, setCompletingActivityId] = useState<string | null>(null);
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   // Chargement de la carte depuis le Backend Hono
   const fetchMapData = async () => {
@@ -26,7 +28,7 @@ export function MapPage() {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
       setActivities(await fetchMapActivities(token));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.warn('Could not load map activities.', error);
       setActivities([]);
     } finally {
@@ -42,23 +44,26 @@ export function MapPage() {
 
   // Soumission / Résolution d'un nœud
   const handleCompleteActivity = async (act: Activity) => {
-    if (completedActivityIds.includes(act.id)) return;
+    if (completedActivityIds.includes(act.id) || completingActivityId) return;
 
-    const token = localStorage.getItem('eduquest_token');
-    const newBattle: GameBattle = token
-      ? await completeMapActivity(token, act.id)
-      : {
-          id: `battle_${Date.now()}`,
-          studentId: student?.id || 'stud_1',
-          activityId: act.id,
-          grade: act.isGraded ? 0.9 : undefined,
-          createdAt: new Date().toISOString(),
-        };
+    setCompletingActivityId(act.id);
+    setCompletionError(null);
 
-    addBattle(newBattle);
-    const xpReward = act.type === 'boss' ? 200 : act.type === 'quest' ? 100 : 50;
-    gainXp(xpReward);
-    setSelectedActivity(null);
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const newBattle: GameBattle = await completeMapActivity(token, act.id);
+
+      addBattle(newBattle);
+      const xpReward = act.type === 'boss' ? 200 : act.type === 'quest' ? 100 : 50;
+      gainXp(xpReward);
+      setSelectedActivity(null);
+    } catch (error) {
+      console.warn('Could not complete map activity.', error);
+      setCompletionError(t('detailPanel.completionError'));
+    } finally {
+      setCompletingActivityId(null);
+    }
   };
 
   if (!character || !student) {
@@ -91,6 +96,8 @@ export function MapPage() {
           selectedActivity={selectedActivity}
           completedActivityIds={completedActivityIds}
           onComplete={handleCompleteActivity}
+          completingActivityId={completingActivityId}
+          completionError={completionError}
         />
       </MapContainer>
     </GameLayout>

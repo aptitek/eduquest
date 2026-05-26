@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { cn } from '../../utils/cn';
 
-export interface GraphNode {
+export interface GraphNode<TMetadata = unknown> {
   id: string;
   label: string;
   prerequisites?: string[];
@@ -9,18 +9,18 @@ export interface GraphNode {
   isLocked?: boolean;
   icon?: React.ReactNode;
   customClass?: string;
-  [key: string]: any; // Allow passing extra metadata
+  metadata?: TMetadata;
 }
 
-interface GenericGraphProps {
-  nodes: GraphNode[];
+interface GenericGraphProps<TMetadata = unknown> {
+  nodes: GraphNode<TMetadata>[];
   width?: number;
   height?: number;
-  onSelectNode?: (node: GraphNode) => void;
+  onSelectNode?: (node: GraphNode<TMetadata>) => void;
   className?: string;
 }
 
-interface LayoutNode extends GraphNode {
+interface LayoutNode<TMetadata = unknown> extends GraphNode<TMetadata> {
   x: number;
   y: number;
 }
@@ -28,7 +28,11 @@ interface LayoutNode extends GraphNode {
 /**
  * Deterministic layered DAG graph layout resolver (Sugiyama style) (KISS).
  */
-function calculateGraphLayout(nodes: GraphNode[], width: number, height: number): LayoutNode[] {
+function calculateGraphLayout<TMetadata>(
+  nodes: GraphNode<TMetadata>[],
+  width: number,
+  height: number
+): LayoutNode<TMetadata>[] {
   if (nodes.length === 0) return [];
 
   const layers: Map<string, number> = new Map();
@@ -77,7 +81,7 @@ function calculateGraphLayout(nodes: GraphNode[], width: number, height: number)
   const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
   const totalLayers = sortedLayers.length;
 
-  const layoutNodes: LayoutNode[] = [];
+  const layoutNodes: LayoutNode<TMetadata>[] = [];
 
   // 4. Assign dynamic spatial coordinates (x, y) centered vertically
   const paddingX = 100;
@@ -115,21 +119,22 @@ function calculateGraphLayout(nodes: GraphNode[], width: number, height: number)
   return layoutNodes;
 }
 
-export function GenericGraph({
+export function GenericGraph<TMetadata = unknown>({
   nodes,
   width = 800,
   height = 600,
   onSelectNode,
   className,
-}: GenericGraphProps) {
+}: GenericGraphProps<TMetadata>) {
   const layoutedNodes = calculateGraphLayout(nodes, width, height);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.style.height = `${height}px`;
+      containerRef.current.style.minWidth = `${Math.min(width, 640)}px`;
     }
-  }, [height]);
+  }, [height, width]);
 
   const setNodeStyle = (x: number, y: number) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -143,7 +148,7 @@ export function GenericGraph({
     <div
       ref={containerRef}
       className={cn(
-        'relative w-full overflow-hidden shadow-xl bg-gaming-base border border-gaming-border rounded-lg',
+        'relative w-full overflow-auto shadow-xl bg-gaming-base border border-gaming-border rounded-lg',
         className
       )}
     >
@@ -201,8 +206,11 @@ export function GenericGraph({
           className="flex flex-col items-center gap-2 group z-10"
         >
           <button
+            type="button"
             onClick={() => onSelectNode?.(node)}
             disabled={node.isLocked}
+            aria-label={node.label}
+            title={node.label}
             className={cn(
               'w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300',
               node.customClass
@@ -210,8 +218,8 @@ export function GenericGraph({
                 : node.isLocked
                   ? 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed'
                   : node.isCompleted
-                    ? 'bg-status-completed/10 border-status-completed text-status-completed hover:border-status-completed cursor-pointer hover:scale-110 shadow-lg'
-                    : 'bg-gaming-card hover:scale-110 cursor-pointer shadow-md'
+                    ? 'bg-status-completed/10 border-status-completed text-status-completed hover:border-status-completed cursor-pointer motion-safe:hover:scale-110 shadow-lg'
+                    : 'bg-gaming-card motion-safe:hover:scale-110 cursor-pointer shadow-md'
             )}
           >
             {node.icon}

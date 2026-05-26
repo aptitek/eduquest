@@ -12,6 +12,7 @@ import {
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
+import { ENABLE_MOCK_DATA } from '../../config/deployment';
 import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
@@ -101,7 +102,9 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             }
           : undefined,
       }))
-    : fallbackNotifications;
+    : ENABLE_MOCK_DATA
+      ? fallbackNotifications
+      : [];
   const activeNotifications = dashboardNotifications.filter(
     (notification) => !dismissedNotificationIds.has(notification.id)
   );
@@ -112,12 +115,12 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
 
   return (
     <header className="relative z-50 flex w-full flex-col gap-2">
-      <div className="flex min-h-16 justify-between rounded-lg border border-gaming-border bg-gaming-card text-xs shadow-md">
+      <div className="flex min-h-16 flex-wrap justify-between gap-y-2 rounded-lg border border-gaming-border bg-gaming-card text-xs shadow-md lg:flex-nowrap">
         {/* Partie Gauche : Logo & Version */}
-        <div className="flex min-w-0 items-stretch">
+        <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
           <div className="flex items-center gap-3 px-4">
             <div className="w-8 h-8 rounded-lg bg-gaming-base flex items-center justify-center shadow-md overflow-hidden p-1 border border-gaming-border">
-              <img src={iconUrl} alt="Aptipiou Icon" className="w-full h-full object-contain" />
+              <img src={iconUrl} alt={t('layout.appIconAlt')} className="w-full h-full object-contain" />
             </div>
             <h1 className="text-lg font-bold font-display tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary">
               {t('layout.title')}{' '}
@@ -125,7 +128,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             </h1>
           </div>
 
-          <nav className="flex border-l border-gaming-border" aria-label="Primary">
+          <nav className="flex min-w-max border-l border-gaming-border" aria-label={t('layout.primaryNav')}>
             <button
               type="button"
               aria-current={currentView === 'map' ? 'page' : undefined}
@@ -206,7 +209,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
         </div>
 
         {/* Partie Droite : Character, Account & Notifications */}
-        <div className="flex items-center gap-3 px-4">
+        <div className="flex shrink-0 items-center gap-3 px-4">
           {!isOnline && (
             <div className="tooltip tooltip-left" data-tip={t('header.connectionLost')}>
               <StatusIndicator status="error" isPulsing={true} />

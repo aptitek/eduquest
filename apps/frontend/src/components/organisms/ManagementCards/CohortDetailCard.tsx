@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clipboard, ExternalLink, Trash2, UserPlus, X } from 'lucide-react';
 import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
@@ -11,9 +11,9 @@ import {
   type ManagementCohortInvite,
 } from '../../../features/management/api';
 import type { CohortRow } from '../../../features/management/types';
-import { mockCohorts } from '../../../features/management/mockData';
 import { formatGrade } from '../../../features/management/utils';
 import aptitekLogoUrl from '../../../assets/logo.svg';
+import { keepFocusInContainer } from '../../../utils/focusTrap';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -48,10 +48,12 @@ function formatTimeRemaining(expiresAt: string, t: (key: string) => string) {
 
 export function CohortDetailCard({
   cohort,
+  cohortOptions,
   campusOptions,
   t,
 }: {
   cohort: CohortRow;
+  cohortOptions: CohortRow[];
   campusOptions: string[];
   t: (key: string) => string;
 }) {
@@ -72,23 +74,25 @@ export function CohortDetailCard({
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [hasCopiedInvite, setHasCopiedInvite] = useState(false);
   const [isQrFullscreenOpen, setIsQrFullscreenOpen] = useState(false);
+  const inviteDialogRef = useRef<HTMLDivElement>(null);
+  const qrDialogRef = useRef<HTMLDivElement>(null);
   const resolvedLogoUrl =
     cohort.school?.logoUrl || (cohort.schoolName === 'Aptitek' ? aptitekLogoUrl : undefined);
   const schoolYearOptions = Array.from(
-    new Set([cohort.schoolYear, ...mockCohorts.map((item) => item.schoolYear)])
+    new Set([cohort.schoolYear, ...cohortOptions.map((item) => item.schoolYear)])
   );
   const gradeOptions = ['Licence', 'Bachelor', 'Engineer', 'Master', 'Doctorate'];
   const levelOptions = ['1', '2', '3', '4', '5'];
   const majorOptions = Array.from(
     new Set(
-      [cohort.majorSpeciality, ...mockCohorts.map((item) => item.majorSpeciality)].filter(
+      [cohort.majorSpeciality, ...cohortOptions.map((item) => item.majorSpeciality)].filter(
         (value): value is string => Boolean(value)
       )
     )
   );
   const minorOptions = Array.from(
     new Set(
-      [cohort.minorSpeciality, ...mockCohorts.map((item) => item.minorSpeciality)].filter(
+      [cohort.minorSpeciality, ...cohortOptions.map((item) => item.minorSpeciality)].filter(
         (value): value is string => Boolean(value)
       )
     )
@@ -129,6 +133,39 @@ export function CohortDetailCard({
       isMounted = false;
     };
   }, [cohort.id]);
+
+  useEffect(() => {
+    if (!isInviteModalOpen) return undefined;
+
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    requestAnimationFrame(() => {
+      (isQrFullscreenOpen ? qrDialogRef.current : inviteDialogRef.current)?.focus();
+    });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      keepFocusInContainer(
+        event,
+        isQrFullscreenOpen ? qrDialogRef.current : inviteDialogRef.current
+      );
+      if (event.key === 'Escape') {
+        if (isQrFullscreenOpen) {
+          setIsQrFullscreenOpen(false);
+          return;
+        }
+        closeInviteModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [isInviteModalOpen, isQrFullscreenOpen]);
 
   const openInviteModal = async () => {
     setIsInviteModalOpen(true);
@@ -209,7 +246,14 @@ export function CohortDetailCard({
   const inviteModal =
     isInviteModalOpen && typeof document !== 'undefined'
       ? createPortal(
-          <div className="fixed inset-0 z-50 flex bg-gaming-base p-5 md:p-10 lg:p-12">
+          <div
+            ref={inviteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cohort-invite-title"
+            tabIndex={-1}
+            className="fixed inset-0 z-50 flex bg-gaming-base p-5 outline-none md:p-10 lg:p-12"
+          >
             <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-gaming-grid)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-gaming-grid)_1px,transparent_1px)] bg-[size:32px_32px] opacity-30" />
             <div className="relative grid min-h-0 w-full flex-1 overflow-hidden rounded-3xl border border-gaming-border bg-gaming-card shadow-2xl lg:grid-cols-[minmax(0,1fr)_minmax(22rem,32rem)]">
               <div className="flex min-h-0 flex-col overflow-y-auto">
@@ -218,7 +262,10 @@ export function CohortDetailCard({
                     <p className="text-xs font-display font-semibold uppercase tracking-[0.35em] text-status-quest">
                       {t('management.cohorts.inviteEyebrow')}
                     </p>
-                    <h2 className="mt-3 text-3xl font-display font-bold text-text-primary md:text-5xl">
+                    <h2
+                      id="cohort-invite-title"
+                      className="mt-3 text-3xl font-display font-bold text-text-primary md:text-5xl"
+                    >
                       {t('management.cohorts.inviteTitle')}
                     </h2>
                     <p className="mt-3 text-sm leading-relaxed text-text-secondary md:text-base">
@@ -336,7 +383,14 @@ export function CohortDetailCard({
               </aside>
 
               {isQrFullscreenOpen && qrCodeUrl && (
-                <div className="fixed inset-0 z-[60] flex bg-gaming-base p-5 md:p-10">
+                <div
+                  ref={qrDialogRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t('management.cohorts.qrFullscreen')}
+                  tabIndex={-1}
+                  className="fixed inset-0 z-[60] flex bg-gaming-base p-5 outline-none md:p-10"
+                >
                   <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-gaming-grid)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-gaming-grid)_1px,transparent_1px)] bg-[size:32px_32px] opacity-30" />
                   <div className="relative flex min-h-0 w-full flex-1 items-center justify-center rounded-3xl border border-gaming-border bg-solarized-base3 p-8 shadow-2xl">
                     <button
@@ -477,9 +531,9 @@ export function CohortDetailCard({
                 setDraft((current) => ({ ...current, majorSpeciality: next[0] || '' }))
               }
               multiple={false}
-              placeholder="Major"
-              searchPlaceholder="Major"
-              emptyFilterHint="Major"
+              placeholder={t('management.cohorts.major')}
+              searchPlaceholder={t('management.cohorts.major')}
+              emptyFilterHint={t('management.cohorts.major')}
               badgeClassName="border-gaming-border bg-gaming-base text-text-secondary"
               selectedMaxWidth="max-w-[10rem]"
               showArrow
@@ -491,9 +545,9 @@ export function CohortDetailCard({
                 setDraft((current) => ({ ...current, minorSpeciality: next[0] || '' }))
               }
               multiple={false}
-              placeholder="Minor"
-              searchPlaceholder="Minor"
-              emptyFilterHint="Minor"
+              placeholder={t('management.cohorts.minor')}
+              searchPlaceholder={t('management.cohorts.minor')}
+              emptyFilterHint={t('management.cohorts.minor')}
               badgeClassName="border-gaming-border bg-gaming-base text-text-secondary"
               selectedMaxWidth="max-w-[10rem]"
               showArrow

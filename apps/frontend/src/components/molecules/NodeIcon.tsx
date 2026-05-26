@@ -28,20 +28,21 @@ export function NodeIcon({ type, isCompleted, isLocked, onClick }: NodeIconProps
       return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed';
     }
     if (isCompleted) {
-      return 'bg-status-completed/10 border-status-completed text-status-completed hover:border-status-completed cursor-pointer hover:scale-110 shadow-lg';
+      return 'bg-status-completed/10 border-status-completed text-status-completed hover:border-status-completed cursor-pointer motion-safe:hover:scale-110 shadow-lg';
     }
     switch (type) {
       case 'campfire':
-        return 'bg-status-campfire/10 border-status-campfire text-status-campfire hover:border-status-campfire cursor-pointer hover:scale-110 animate-pulse';
+        return 'bg-status-campfire/10 border-status-campfire text-status-campfire hover:border-status-campfire cursor-pointer motion-safe:hover:scale-110 motion-safe:animate-pulse';
       case 'quest':
-        return 'bg-status-quest/10 border-status-quest text-status-quest hover:border-status-quest cursor-pointer hover:scale-110';
+        return 'bg-status-quest/10 border-status-quest text-status-quest hover:border-status-quest cursor-pointer motion-safe:hover:scale-110';
       case 'boss':
-        return 'bg-status-boss/10 border-status-boss text-status-boss hover:border-status-boss cursor-pointer hover:scale-110 animate-bounce';
+        return 'bg-status-boss/10 border-status-boss text-status-boss hover:border-status-boss cursor-pointer motion-safe:hover:scale-110 motion-safe:animate-bounce';
     }
   };
 
   return (
     <button
+      type="button"
       onClick={!isLocked ? onClick : undefined}
       className={cn(
         'w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300',

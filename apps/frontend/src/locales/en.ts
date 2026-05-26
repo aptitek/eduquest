@@ -15,6 +15,7 @@ export const en: TranslationKeys = {
     campfire: 'Campfire',
     quest: 'Quest',
     boss: 'Boss Battle',
+    emptyPlayingHands: 'No playing hands to display.',
   },
   layout: {
     title: 'EduQuest',
@@ -24,6 +25,8 @@ export const en: TranslationKeys = {
     footer: 'EduQuest © 2026 | Role-Playing Learning Management System',
     loadingSession: 'Loading game session...',
     loadingMap: 'Generating interactive map...',
+    appIconAlt: 'Aptipiou icon',
+    primaryNav: 'Primary navigation',
   },
   header: {
     reconnecting: 'Reconnecting...',
@@ -39,6 +42,8 @@ export const en: TranslationKeys = {
       online: 'Online',
       busy: 'Busy (do not disturb)',
       offline: 'Offline (invisible)',
+      openMenu: 'Open user menu',
+      avatarAlt: 'User avatar',
     },
   },
   dashboard: {
@@ -76,9 +81,11 @@ export const en: TranslationKeys = {
       miniGame: { title: 'Mini game', subtitle: 'Quiz unlock' },
       techHelp: { title: 'Tech help', subtitle: 'Bonus support' },
       reroll: { title: 'Reroll', subtitle: 'Late grading' },
+      empty: { title: 'No reward data', subtitle: 'Connect production dashboard data.' },
     },
     notifications: {
       label: 'Notifications',
+      regionLabel: 'Header notifications',
       buttonLabel: '{label}: {count} active',
       dismiss: 'Dismiss notification',
       cohortQuest: {
@@ -157,6 +164,7 @@ export const en: TranslationKeys = {
       emailDomain: 'Email domain',
       createdAt: 'Created',
       resetLogo: 'Reset school logo',
+      changeLogo: 'Change school logo',
     },
     cohorts: {
       name: 'Cohort',
@@ -198,6 +206,8 @@ export const en: TranslationKeys = {
       and: 'and',
       revoke: 'Revoke',
       revokePermanently: 'Hold to revoke permanently',
+      major: 'Major',
+      minor: 'Minor',
     },
     card: {
       flip: 'Flip card',
@@ -224,6 +234,8 @@ export const en: TranslationKeys = {
     remaining: 'All guilds',
     guilds: 'Guild directory',
     guildCount: 'guilds',
+    currentGuild: 'You',
+    guildInitials: 'Guild initials',
   },
   progress: {
     nav: 'Progress',
@@ -237,6 +249,7 @@ export const en: TranslationKeys = {
     currentClassRibbon: 'Active class',
     chooseClass: 'Choose a class',
     otherClasses: 'Other available classes',
+    activeCardDescription: 'Your active adventurer card. Change class below to update its role.',
   },
   game: {
     classes: {
@@ -260,10 +273,22 @@ export const en: TranslationKeys = {
     startBoss: 'Start Battle',
     startQuest: 'Solve Quest',
     completedSuccess: 'Challenge successfully completed!',
+    completing: 'Completing...',
+    completionError: 'The activity could not be completed. Please try again.',
     bossDesc:
       'Confront the guardian of this educational module by submitting your final deliverable. Intelligence (INT) statistics are critical.',
     questDesc: 'Explore this hands-on quest to master new programming concepts.',
     campfireDesc: "Rest by the fire and follow the Game Master's talk.",
+  },
+  playingCard: {
+    flip: 'Flip card',
+    backAlt: 'Card back',
+    placeholders: {
+      title: 'Card title',
+      ribbon: 'Ribbon',
+      subtitle: 'Subtitle',
+      description: 'Card description',
+    },
   },
   auth: {
     loginTitle: 'Sign in to EduQuest',
@@ -279,6 +304,8 @@ export const en: TranslationKeys = {
     logout: 'Logout',
     loginError: 'Failed to synchronize with GitHub Guild.',
     invalidSession: 'Game session expired. Please sign in again.',
+    loreCommand: 'SYSTEM_LORE_BOOT.SH',
+    aptitekLogoAlt: 'Aptitek logo',
   },
   profile: {
     title: "Adventurer's Profile",
@@ -342,6 +369,8 @@ export const en: TranslationKeys = {
       pressEnterToAddPronoun: 'Press Enter to add',
       customPronouns: 'Type custom pronouns…',
       resetAvatar: 'Reset avatar to GitHub avatar',
+      changeAvatar: 'Change avatar',
+      avatarAlt: 'Avatar',
       pronouns: {
         he: 'He',
         him: 'Him',
