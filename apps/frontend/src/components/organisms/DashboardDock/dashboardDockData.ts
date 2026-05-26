@@ -1,4 +1,4 @@
-import type { StudentCohort } from '@eduquest/shared';
+import type { GameCharacterClass, StudentCohort } from '@eduquest/shared';
 import type { PlayingCardData, PlayingHandData } from '../../molecules/PlayingCard';
 import type { DockGuild } from './types';
 
@@ -10,6 +10,7 @@ interface MockGuildHandOptions {
   playerName: string;
   playerAvatar: string;
   characterLevel: number;
+  characterClass: GameCharacterClass;
   characterClassLabel: string;
   activeCardIndex: number;
 }
@@ -242,6 +243,7 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
       id: 'player',
       layoutId: 'guild-hand-player',
       kind: 'character',
+      characterClass: options.characterClass,
       title: options.playerName,
       subtitle: `LVL ${options.characterLevel}`,
       illustrationUrl: options.playerAvatar,
@@ -251,7 +253,7 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
         description: `${options.characterClassLabel} level ${options.characterLevel}. A reliable active member ready to turn boosts into progress.`,
         color: 'var(--color-status-quest)',
         illustrationUrl: options.playerAvatar,
-        ribbonText: `LVL ${options.characterLevel}`,
+        ribbonText: options.characterClassLabel,
         stats: [
           { id: 'logic', label: 'Logic', value: 78 },
           { id: 'speed', label: 'Speed', value: 63 },
@@ -265,14 +267,15 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
       id: 'guide',
       layoutId: 'guild-hand-guide',
       kind: 'character',
+      characterClass: 'guide',
       title: t('dashboard.dock.guildmate'),
-      subtitle: t('dashboard.dock.hiddenMember'),
+      subtitle: t('game.classes.guide'),
       accentToken: 'guide',
       front: {
         title: t('dashboard.dock.guildmate'),
         description: 'Mock support member. This card previews how hidden guildmates will appear once real data is connected.',
         color: 'var(--color-accent-guide)',
-        ribbonText: t('dashboard.dock.hiddenMember'),
+        ribbonText: t('game.classes.guide'),
         stats: [
           { id: 'logic', label: 'Logic', value: 54 },
           { id: 'speed', label: 'Speed', value: 58 },
@@ -286,14 +289,15 @@ export function buildMockGuildCardHands(t: Translate, options: MockGuildHandOpti
       id: 'specialist',
       layoutId: 'guild-hand-specialist',
       kind: 'character',
+      characterClass: 'specialist',
       title: t('dashboard.dock.guildmate'),
-      subtitle: t('dashboard.dock.hiddenMember'),
+      subtitle: t('game.classes.specialist'),
       accentToken: 'specialist',
       front: {
         title: t('dashboard.dock.guildmate'),
         description: 'Mock specialist member with a more technical profile and a strong reward conversion angle.',
         color: 'var(--color-accent-specialist)',
-        ribbonText: t('dashboard.dock.hiddenMember'),
+        ribbonText: t('game.classes.specialist'),
         stats: [
           { id: 'logic', label: 'Logic', value: 88 },
           { id: 'speed', label: 'Speed', value: 49 },
@@ -359,14 +363,15 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
         id: `${layoutPrefix}-member-1`,
         layoutId: `${layoutPrefix}-member-1`,
         kind: 'character',
+        characterClass: 'guide',
         title: t('dashboard.dock.guildmate'),
-        subtitle: t('dashboard.dock.hiddenMember'),
+        subtitle: t('game.classes.guide'),
         accentToken: 'guide',
         front: {
           title: t('dashboard.dock.guildmate'),
           description: 'Mock support member. This previews where class member details will appear.',
           color: 'var(--color-accent-guide)',
-          ribbonText: t('dashboard.dock.hiddenMember'),
+          ribbonText: t('game.classes.guide'),
           stats: [
             { id: 'logic', label: 'Logic', value: 54 },
             { id: 'speed', label: 'Speed', value: 58 },
@@ -380,14 +385,15 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
         id: `${layoutPrefix}-member-2`,
         layoutId: `${layoutPrefix}-member-2`,
         kind: 'character',
+        characterClass: 'specialist',
         title: t('dashboard.dock.guildmate'),
-        subtitle: t('dashboard.dock.hiddenMember'),
+        subtitle: t('game.classes.specialist'),
         accentToken: 'specialist',
         front: {
           title: t('dashboard.dock.guildmate'),
           description: 'Mock specialist member with a technical profile and reward conversion angle.',
           color: 'var(--color-accent-specialist)',
-          ribbonText: t('dashboard.dock.hiddenMember'),
+          ribbonText: t('game.classes.specialist'),
           stats: [
             { id: 'logic', label: 'Logic', value: 88 },
             { id: 'speed', label: 'Speed', value: 49 },

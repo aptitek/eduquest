@@ -231,6 +231,27 @@ export const en: TranslationKeys = {
     activeBonuses: 'Active bonus cards',
     nextVote: 'Available for next vote',
   },
+  character: {
+    eyebrow: 'Character sheet',
+    title: 'Character',
+    currentClassRibbon: 'Active class',
+    chooseClass: 'Choose a class',
+    otherClasses: 'Other available classes',
+  },
+  game: {
+    classes: {
+      scholar: 'Scholar',
+      champion: 'Champion',
+      guide: 'Guide',
+      specialist: 'Specialist',
+    },
+    classDescriptions: {
+      scholar: 'An analytical class focused on understanding, logic, and methodical problem solving.',
+      champion: 'A resilient class built to push the group forward, keep tempo, and finish quests.',
+      guide: 'A support class that amplifies cooperation and helps the guild progress.',
+      specialist: 'An expert class that excels at technical challenges and targeted solutions.',
+    },
+  },
   detailPanel: {
     noSelectedTitle: 'No target selected',
     noSelectedDesc:

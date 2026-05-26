@@ -230,6 +230,27 @@ export const fr = {
     activeBonuses: 'Cartes bonus actives',
     nextVote: 'Disponibles au prochain vote',
   },
+  character: {
+    eyebrow: 'Fiche personnage',
+    title: 'Personnage',
+    currentClassRibbon: 'Classe active',
+    chooseClass: 'Choisir une classe',
+    otherClasses: 'Autres classes disponibles',
+  },
+  game: {
+    classes: {
+      scholar: 'Érudit·e',
+      champion: 'Champion·ne',
+      guide: 'Guide',
+      specialist: 'Spécialiste',
+    },
+    classDescriptions: {
+      scholar: 'Une classe analytique orientée compréhension, logique et résolution méthodique.',
+      champion: 'Une classe robuste faite pour pousser le groupe, tenir le rythme et finir les quêtes.',
+      guide: 'Une classe de soutien qui amplifie la coopération et aide la guilde à progresser.',
+      specialist: 'Une classe experte qui excelle dans les défis techniques et les solutions ciblées.',
+    },
+  },
   detailPanel: {
     noSelectedTitle: 'Aucune cible sélectionnée',
     noSelectedDesc:

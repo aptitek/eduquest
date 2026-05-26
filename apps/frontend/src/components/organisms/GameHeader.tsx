@@ -16,7 +16,7 @@ import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'luci
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
-  currentView?: 'map' | 'management' | 'guild' | 'class' | 'progress';
+  currentView?: 'map' | 'management' | 'guild' | 'class' | 'progress' | 'character';
 }
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
@@ -218,11 +218,14 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
                 size="nano"
                 kind="character"
                 title={formatUserDisplayName(user)}
-                ribbonLabel={`LVL ${character.currentLevel}`}
+                ribbonLabel={t(`game.classes.${character.characterClass}`)}
                 characterClass={character.characterClass}
                 illustrationUrl={user.avatarUrl || user.githubAvatarUrl}
                 illustrationAlt={formatUserDisplayName(user)}
-                interactive={false}
+                interactive
+                onClick={() => {
+                  window.location.hash = 'character';
+                }}
                 className="absolute left-1/2 top-0 -translate-x-1/2"
               />
             </div>

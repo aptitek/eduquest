@@ -6,7 +6,8 @@ export type CornerRibbonPosition = 'top-left' | 'top-right';
 export type CornerRibbonSize = 'sm' | 'md' | 'lg';
 
 export interface CornerRibbonProps {
-  children: ReactNode;
+  children?: ReactNode;
+  icon?: ReactNode;
   position?: CornerRibbonPosition;
   size?: CornerRibbonSize;
   color?: CSSProperties['backgroundColor'];
@@ -14,6 +15,8 @@ export interface CornerRibbonProps {
   className?: string;
   ribbonClassName?: string;
   textClassName?: string;
+  onClick?: () => void;
+  ariaLabel?: string;
 }
 
 const containerClassMap: Record<CornerRibbonSize, string> = {
@@ -61,8 +64,30 @@ const textClassMap: Record<CornerRibbonSize, { short: string; medium: string; lo
   },
 };
 
+const iconSizeClassMap: Record<CornerRibbonSize, string> = {
+  sm: '[&>svg]:h-4 [&>svg]:w-4',
+  md: '[&>svg]:h-5 [&>svg]:w-5',
+  lg: '[&>svg]:h-6 [&>svg]:w-6',
+};
+
+const iconCornerPositionClassMap: Record<CornerRibbonSize, Record<CornerRibbonPosition, string>> = {
+  sm: {
+    'top-left': 'left-1.5 top-1.5',
+    'top-right': 'right-1.5 top-1.5',
+  },
+  md: {
+    'top-left': 'left-2 top-2',
+    'top-right': 'right-2 top-2',
+  },
+  lg: {
+    'top-left': 'left-2.5 top-2.5',
+    'top-right': 'right-2.5 top-2.5',
+  },
+};
+
 export function CornerRibbon({
   children,
+  icon,
   position = 'top-right',
   size = 'md',
   color,
@@ -70,41 +95,91 @@ export function CornerRibbon({
   className,
   ribbonClassName,
   textClassName,
+  onClick,
+  ariaLabel,
 }: CornerRibbonProps) {
   const textLength = getTextLength(children);
   const textFit = textLength > 14 ? 'long' : textLength > 7 ? 'medium' : 'short';
   const backgroundColor = color || (colorSeed ? getSeededBackgroundColor(colorSeed) : undefined);
+  const hasText = textLength > 0;
+  const backgroundStyle = backgroundColor ? { backgroundColor } : undefined;
+  const interactiveClass = onClick
+    ? 'pointer-events-auto cursor-pointer focus:outline-none'
+    : 'pointer-events-none';
 
-  return (
+  const innerRibbon = (
     <span
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={ariaLabel}
+      onClick={(event) => {
+        if (!onClick) return;
+        event.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(event) => {
+        if (!onClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
       className={cn(
-        'pointer-events-none absolute top-0 z-10 block overflow-hidden',
+        'absolute top-0 z-10 block overflow-hidden',
+        interactiveClass,
         position === 'top-left' ? 'left-0' : 'right-0',
         containerClassMap[size],
         className
       )}
     >
+      {icon ? (
+        <span
+          className={cn(
+            'absolute inset-0 z-0 block bg-status-quest',
+            position === 'top-left'
+              ? '[clip-path:polygon(0_0,100%_0,0_100%)]'
+              : '[clip-path:polygon(0_0,100%_0,100%_100%)]',
+            ribbonClassName
+          )}
+          style={backgroundStyle}
+        />
+      ) : null}
+      {icon ? (
+        <span
+          className={cn(
+            'absolute z-10 flex items-center justify-center text-white drop-shadow-sm',
+            iconCornerPositionClassMap[size][position],
+            iconSizeClassMap[size]
+          )}
+          aria-hidden
+        >
+          {icon}
+        </span>
+      ) : null}
       <span
         className={cn(
-          'absolute block bg-status-quest text-center font-bold uppercase leading-none text-white shadow-md',
+          'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-white shadow-md',
           ribbonClassMap[size],
           ribbonPositionClassMap[size][position],
           ribbonClassName
         )}
-        style={backgroundColor ? { backgroundColor } : undefined}
+        style={backgroundStyle}
       >
-        <span
-          className={cn(
-            'block whitespace-nowrap px-2 drop-shadow-sm',
-            textClassMap[size][textFit],
-            textClassName
-          )}
-        >
-          {children}
-        </span>
+        {hasText ? (
+          <span
+            className={cn(
+              'block whitespace-nowrap px-2 drop-shadow-sm',
+              textClassMap[size][textFit],
+              textClassName
+            )}
+          >
+            {children}
+          </span>
+        ) : null}
       </span>
     </span>
   );
+
+  return innerRibbon;
 }
 
 function getTextLength(children: ReactNode) {

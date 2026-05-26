@@ -197,12 +197,16 @@ export function DashboardDock({ className }: DashboardDockProps) {
         : card
     ) as [PlayingCardData, ...PlayingCardData[]],
   }));
+  const openCharacterPage = () => {
+    window.location.hash = 'character';
+  };
   const guildHandBase = buildMockGuildCardHands(t, {
     guild: playerGuild,
     guildName: playerGuild.name || t('dashboard.dock.playerGuild'),
     playerName,
     playerAvatar,
     characterLevel: character.currentLevel,
+    characterClass: character.characterClass,
     characterClassLabel: t(`game.classes.${character.characterClass}`),
     activeCardIndex: 0,
   })[0];
@@ -220,13 +224,24 @@ export function DashboardDock({ className }: DashboardDockProps) {
       }
 
       if (card.id === 'player') {
-        return makeEditableDashboardCard({
+        const playerCard = makeEditableDashboardCard({
           card,
           cardKey: 'player',
           sideOverrides: editableCardSides,
           onFieldChange: updateEditableCardField,
           onStatChange: updateEditableCardStat,
         });
+
+        return {
+          ...playerCard,
+          onRibbonClick: openCharacterPage,
+          front: playerCard.front
+            ? {
+                ...playerCard.front,
+                onRibbonClick: openCharacterPage,
+              }
+            : playerCard.front,
+        };
       }
 
       return card;

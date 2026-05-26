@@ -2,7 +2,7 @@ import { isValidElement, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
-import { RotateCw, Shield } from 'lucide-react';
+import { BookOpen, HandHelping, RotateCw, Shield, Sparkles, Trophy } from 'lucide-react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import { EditableSchoolLogo } from '../EditableSchoolLogo';
 import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
@@ -55,6 +55,7 @@ export interface PlayingCardSide {
   illustrationAlt?: string;
   illustration?: ReactNode;
   ribbonText?: string;
+  ribbonIcon?: ReactNode;
   ribbonPosition?: CornerRibbonPosition;
   stats?: PlayingCardStat[];
   statsLabel?: string;
@@ -62,6 +63,7 @@ export interface PlayingCardSide {
   editable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
   onStatChange?: (statId: string, value: number) => void;
+  onRibbonClick?: () => void;
   className?: string;
 }
 
@@ -84,6 +86,7 @@ export interface PlayingCardData {
   faceDown?: boolean;
   ribbonText?: string;
   ribbonLabel?: string;
+  ribbonIcon?: ReactNode;
   ribbonPosition?: CornerRibbonPosition;
   ribbonClassName?: string;
   stats?: PlayingCardStat[];
@@ -99,6 +102,7 @@ export interface PlayingCardData {
   editable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
   onStatChange?: (statId: string, value: number) => void;
+  onRibbonClick?: () => void;
   onClick?: () => void;
   className?: string;
   innerClassName?: string;
@@ -276,7 +280,10 @@ function PlayingCardFront({
               position={side.ribbonPosition || 'top-right'}
               size="sm"
               color={color}
+              icon={resolveRibbonIcon(card, side)}
               ribbonClassName={ribbonClassName}
+              onClick={side.onRibbonClick}
+              ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
             >
               {side.ribbonText}
             </PlayingCardRibbon>
@@ -318,7 +325,10 @@ function PlayingCardFront({
           position={side.ribbonPosition || 'top-right'}
           size="sm"
           color={color}
+              icon={resolveRibbonIcon(card, side)}
           ribbonClassName={ribbonClassName}
+              onClick={side.onRibbonClick}
+              ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
         >
           {side.ribbonText}
         </PlayingCardRibbon>
@@ -381,6 +391,9 @@ function FullCardSide({
             position={side.ribbonPosition || 'top-right'}
             size="md"
             color={color}
+          icon={resolveRibbonIcon(undefined, side)}
+          onClick={side.onRibbonClick}
+          ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
           >
             {canEdit ? (
               <EditableText
@@ -508,9 +521,11 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     return {
       ...card.front,
       ribbonText: card.front.ribbonText || card.ribbonText || card.ribbonLabel,
+      ribbonIcon: card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
       editable: card.front.editable ?? card.editable,
       onFieldChange: card.front.onFieldChange || card.onFieldChange,
       onStatChange: card.front.onStatChange || card.onStatChange,
+      onRibbonClick: card.front.onRibbonClick || card.onRibbonClick,
     };
   }
 
@@ -525,6 +540,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     illustrationAlt: card.illustrationAlt || title,
     illustration: card.illustration,
     ribbonText: card.ribbonText || card.ribbonLabel,
+    ribbonIcon: card.ribbonIcon || getCharacterClassIcon(card.characterClass),
     ribbonPosition: card.ribbonPosition,
     stats: card.stats,
     statsLabel: card.statsLabel,
@@ -532,7 +548,20 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
       editable: card.editable,
       onFieldChange: card.onFieldChange,
       onStatChange: card.onStatChange,
+      onRibbonClick: card.onRibbonClick,
   };
+}
+
+function resolveRibbonIcon(card: PlayingCardData | undefined, side: PlayingCardSide) {
+  return side.ribbonIcon || getCharacterClassIcon(card?.characterClass);
+}
+
+function getCharacterClassIcon(characterClass?: GameCharacterClass) {
+  if (characterClass === 'scholar') return <BookOpen size={18} aria-hidden />;
+  if (characterClass === 'champion') return <Trophy size={18} aria-hidden />;
+  if (characterClass === 'guide') return <HandHelping size={18} aria-hidden />;
+  if (characterClass === 'specialist') return <Sparkles size={18} aria-hidden />;
+  return undefined;
 }
 
 function resolveBackContent(card: PlayingCardData, color: string, className?: string) {

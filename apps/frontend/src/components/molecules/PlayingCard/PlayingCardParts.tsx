@@ -169,25 +169,39 @@ export function PlayingCardTitleBlock({
 }
 
 export interface PlayingCardRibbonProps {
-  children: ReactNode;
+  children?: ReactNode;
+  icon?: ReactNode;
   size: 'sm' | 'md';
   color: string;
   position?: CornerRibbonPosition;
   ribbonClassName?: string;
   layoutId?: string;
+  onClick?: () => void;
+  ariaLabel?: string;
 }
 
 export function PlayingCardRibbon({
   children,
+  icon,
   size,
   color,
   position = 'top-right',
   ribbonClassName,
   layoutId,
+  onClick,
+  ariaLabel,
 }: PlayingCardRibbonProps) {
   return (
     <motion.div layoutId={layoutId} transition={PLAYING_CARD_TRANSITION} className="contents">
-      <CornerRibbon position={position} size={size} color={color} ribbonClassName={ribbonClassName}>
+      <CornerRibbon
+        icon={icon}
+        position={position}
+        size={size}
+        color={color}
+        ribbonClassName={ribbonClassName}
+        onClick={onClick}
+        ariaLabel={ariaLabel}
+      >
         {children}
       </CornerRibbon>
     </motion.div>

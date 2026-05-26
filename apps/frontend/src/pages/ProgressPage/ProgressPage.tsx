@@ -2,6 +2,7 @@ import { Gift } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { PlayingCard } from '../../components/molecules/PlayingCard';
+import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
   buildCohortRewardCards,
@@ -42,13 +43,11 @@ export function ProgressPage() {
           <h3 id="progress-next-vote-title" className="sr-only">
             {t('progress.nextVote')}
           </h3>
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {nextVoteCards.map((card) => (
-              <div key={card.id} className="mx-auto w-full max-w-xs">
-                <PlayingCard {...card} size="full" className="w-full" />
-              </div>
-            ))}
-          </div>
+          <ResponsiveCardGrid
+            items={nextVoteCards}
+            getKey={(card, index) => card.id || `next-vote-${index}`}
+            renderItem={(card) => <PlayingCard {...card} size="full" className="w-full" />}
+          />
         </section>
       </main>
     </GameLayout>

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { User, Student, GameCharacter, Activity, GameBattle } from '@eduquest/shared';
+import { User, Student, GameCharacter, Activity, GameBattle, GameCharacterClass } from '@eduquest/shared';
 
 interface GameState {
   user: User | null;
@@ -14,6 +14,8 @@ interface GameState {
     battles?: GameBattle[]
   ) => void;
   patchUser: (patch: Partial<User>) => void;
+  patchCharacter: (patch: Partial<GameCharacter>) => void;
+  setCharacterClass: (characterClass: GameCharacterClass) => void;
   setActivities: (activities: Activity[]) => void;
   setBattles: (battles: GameBattle[]) => void;
   addBattle: (battle: GameBattle) => void;
@@ -31,6 +33,20 @@ export const useGameStore = create<GameState>((set) => ({
   setUserSession: (user, student, character, battles = []) =>
     set({ user, student, character, battles }),
   patchUser: (patch) => set((state) => (state.user ? { user: { ...state.user, ...patch } } : {})),
+  patchCharacter: (patch) =>
+    set((state) => (state.character ? { character: { ...state.character, ...patch } } : {})),
+  setCharacterClass: (characterClass) =>
+    set((state) =>
+      state.character
+        ? {
+            character: {
+              ...state.character,
+              characterClass,
+              updatedAt: new Date().toISOString(),
+            },
+          }
+        : {}
+    ),
   setActivities: (activities) => set({ activities }),
   setBattles: (battles) => set({ battles }),
   addBattle: (battle) => set((state) => ({ battles: [...state.battles, battle] })),

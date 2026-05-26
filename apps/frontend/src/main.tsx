@@ -5,6 +5,7 @@ import { MapPage } from './pages/MapPage/MapPage';
 import { GuildPage } from './pages/GuildPage/GuildPage';
 import { ClassPage } from './pages/ClassPage/ClassPage';
 import { ProgressPage } from './pages/ProgressPage/ProgressPage';
+import { CharacterPage } from './pages/CharacterPage/CharacterPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
@@ -101,6 +102,10 @@ function App() {
 
   if (route === 'progress') {
     return <ProgressPage />;
+  }
+
+  if (route === 'character') {
+    return <CharacterPage />;
   }
 
   return <MapPage />;
