@@ -42,8 +42,8 @@ export function useAuth() {
         }
 
         const data = await response.json();
-        if (data.success && data.user && data.student && data.character) {
-          setUserSession(data.user, data.student, data.character, data.activityCompletions || []);
+        if (data.success && data.user && (data.user.isAdmin || (data.student && data.character))) {
+          setUserSession(data.user, data.student || null, data.character || null, data.activityCompletions || []);
         } else {
           throw new Error('Malformed server session payload');
         }

@@ -136,6 +136,15 @@ export const fr = {
       constitution: 'Bonus de constitution',
       charisma: 'Bonus de charisme',
       charismaPassive: 'Passif charisme',
+      difficulty: 'Bonus de difficulté',
+    },
+    spend: {
+      base: 'Coût des votes',
+      charismaDiscount: 'Réduction charisme',
+      notification: {
+        title: '-{amount} or de guilde',
+        description: '{finalCost} or dépensés pour {votes} vote(s).',
+      },
     },
     breakdownLine: '{label} : {signedEffect}',
   },
@@ -427,6 +436,7 @@ export const fr = {
       addEmail: 'Ajouter un e-mail',
       cohort: 'Cohorte',
       addCohort: 'Ajouter une cohorte',
+      removeCohort: 'Retirer la cohorte',
       filterCohorts: 'Choisir une cohorte…',
       chooseCohort: 'Choisir une cohorte',
       institutionalEmail: 'E-mail institutionnel',

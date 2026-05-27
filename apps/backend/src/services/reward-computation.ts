@@ -1,61 +1,46 @@
-import type { DomainEvent, DomainEventType } from '@eduquest/shared';
+import type { DomainEvent } from '@eduquest/shared';
 import { and, eq, sql } from 'drizzle-orm';
-import {
-  cohortProgress,
-  gameActivities,
-  guilds,
-  pointTransactions,
-} from '../db/schema';
+import { cohortProgress, guilds, pointTransactions } from '../db/schema';
 import { createEventContext, publishEvent } from '../events';
-import { RewardBreakdownBuilder } from './reward-breakdown';
-import {
-  GuildSnapshotRepository,
-  PointTransactionActiveDaysRepository,
-  type RewardActivityInput,
-} from './rewards';
+import { RewardBalanceConfigService } from './reward-balance-config';
+import { RewardContextResolver } from './reward-context-resolver';
+import { RewardPipeline } from './reward-pipeline';
+import { isRewardTriggerEvent, RewardPolicyRegistry } from './reward-policy-registry';
+import { PointTransactionActiveDaysRepository } from './rewards';
 
 type RewardDb = ReturnType<typeof import('../db').getDb>;
-
-const REWARD_TRIGGER_EVENTS = [
-  'activity.completed',
-  'activity.validated',
-  'github.ci.passed',
-  'github.pr.merged',
-] as const satisfies readonly DomainEventType[];
-
-export type RewardTriggerEvent = (typeof REWARD_TRIGGER_EVENTS)[number];
-
-export interface ResolvedRewardTrigger {
-  trigger: RewardTriggerEvent;
-  guildId: string;
-  cohortId?: string;
-  studentId?: string;
-  activityId?: string;
-  activity?: RewardActivityInput;
-  basePoints?: number;
-}
 
 export class RewardComputationService {
   constructor(private readonly db: RewardDb) {}
 
-  static isRewardTrigger(eventType: DomainEventType): eventType is RewardTriggerEvent {
-    return (REWARD_TRIGGER_EVENTS as readonly string[]).includes(eventType);
-  }
+  static isRewardTrigger = isRewardTriggerEvent;
 
-  async processEvent(event: DomainEvent<RewardTriggerEvent>): Promise<boolean> {
-    const resolved = await this.resolveTrigger(event);
-    if (!resolved) {
+  async processEvent(event: DomainEvent): Promise<boolean> {
+    if (!isRewardTriggerEvent(event.type)) {
       return false;
     }
 
-    if (resolved.activityId && resolved.studentId) {
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db);
+    const policyRegistry = RewardPolicyRegistry.fromBalanceConfig(balanceConfig);
+    const policy = policyRegistry.resolveForEvent(event);
+
+    if (!policy) {
+      return false;
+    }
+
+    const context = await new RewardContextResolver(this.db, balanceConfig).resolve(event, policy);
+    if (!context) {
+      return false;
+    }
+
+    if (context.activityId && context.studentId) {
       const [existingTransaction] = await this.db
         .select({ id: pointTransactions.id })
         .from(pointTransactions)
         .where(
           and(
-            eq(pointTransactions.activityId, resolved.activityId),
-            eq(pointTransactions.studentId, resolved.studentId),
+            eq(pointTransactions.activityId, context.activityId),
+            eq(pointTransactions.studentId, context.studentId),
             eq(pointTransactions.transactionType, 'EARNED')
           )
         )
@@ -66,21 +51,19 @@ export class RewardComputationService {
       }
     }
 
-    const guild = await new GuildSnapshotRepository(this.db).getGuild(resolved.guildId);
-    const activity = resolved.activity || {
-      id: resolved.activityId || `event:${event.id}`,
-      basePoints: resolved.basePoints || 0,
-      targetAttribute: null,
-    };
-
-    const breakdown = await RewardBreakdownBuilder.build({
-      guild,
-      guildId: resolved.guildId,
-      studentId: resolved.studentId,
-      cohortId: resolved.cohortId,
-      activity,
-      trigger: resolved.trigger,
+    const breakdown = await RewardPipeline.compute({
+      guildProfile: context.guildProfile,
+      studentId: context.studentId,
+      cohortId: context.cohortId,
+      activityId: context.activityId,
+      trigger: event.type,
+      policy: context.policy,
+      basePoints: context.basePoints,
+      targetAttribute: context.targetAttribute,
+      difficulty: context.difficulty,
+      hoursEarly: context.hoursEarly,
       activeDaysRepository: new PointTransactionActiveDaysRepository(this.db),
+      balanceConfig,
     });
 
     if (breakdown.finalAmount <= 0) {
@@ -94,25 +77,25 @@ export class RewardComputationService {
           gold: sql`${guilds.gold} + ${breakdown.finalAmount}`,
           updatedAt: new Date(),
         })
-        .where(eq(guilds.id, resolved.guildId))
+        .where(eq(guilds.id, context.guildId))
         .returning({ gold: guilds.gold });
 
       await tx.insert(pointTransactions).values({
-        guildId: resolved.guildId,
-        studentId: resolved.studentId,
-        activityId: resolved.activityId,
+        guildId: context.guildId,
+        studentId: context.studentId,
+        activityId: context.activityId,
         amount: breakdown.finalAmount,
         transactionType: 'EARNED',
       });
 
-      if (resolved.cohortId) {
+      if (context.cohortId) {
         await tx
           .update(cohortProgress)
           .set({
             currentPoints: sql`${cohortProgress.currentPoints} + ${breakdown.finalAmount}`,
             updatedAt: new Date(),
           })
-          .where(eq(cohortProgress.cohortId, resolved.cohortId));
+          .where(eq(cohortProgress.cohortId, context.cohortId));
       }
 
       return updatedGuild.gold;
@@ -120,73 +103,23 @@ export class RewardComputationService {
 
     breakdown.balance = balance;
 
-    const eventContext = createEventContext({ db: this.db });
     await publishEvent(
       {
         type: 'reward.calculated',
         source: 'service.reward-computation',
         payload: {
-          guildId: resolved.guildId,
-          cohortId: resolved.cohortId,
-          activityId: resolved.activityId,
-          studentId: resolved.studentId,
-          trigger: resolved.trigger,
+          guildId: context.guildId,
+          cohortId: context.cohortId,
+          activityId: context.activityId,
+          studentId: context.studentId,
+          trigger: event.type,
           breakdown,
           balance,
         },
       },
-      eventContext
+      createEventContext({ db: this.db })
     );
 
     return true;
-  }
-
-  private async resolveTrigger(
-    event: DomainEvent<RewardTriggerEvent>
-  ): Promise<ResolvedRewardTrigger | null> {
-    switch (event.type) {
-      case 'activity.completed':
-      case 'activity.validated': {
-        const payload = event.payload as
-          | import('@eduquest/shared').ActivityCompletedPayload
-          | import('@eduquest/shared').ActivityValidatedPayload;
-        if (!payload.guildId) {
-          return null;
-        }
-
-        const [activity] = await this.db
-          .select({
-            id: gameActivities.id,
-            basePoints: gameActivities.basePoints,
-            targetAttribute: gameActivities.targetAttribute,
-          })
-          .from(gameActivities)
-          .where(eq(gameActivities.id, payload.activityId))
-          .limit(1);
-
-        if (!activity) {
-          return null;
-        }
-
-        return {
-          trigger: event.type,
-          guildId: payload.guildId,
-          cohortId: payload.cohortId,
-          studentId: payload.studentId,
-          activityId: payload.activityId,
-          activity: {
-            id: activity.id,
-            basePoints: activity.basePoints,
-            targetAttribute: activity.targetAttribute,
-          },
-        };
-      }
-      case 'github.ci.passed':
-      case 'github.pr.merged': {
-        return null;
-      }
-      default:
-        return null;
-    }
   }
 }

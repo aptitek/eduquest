@@ -4,6 +4,7 @@ import {
   type RewardSystemConfig,
   type RewardSystemConfigOverrides,
   type StudentAttribute,
+  type VoteSpendBreakdown,
 } from '@eduquest/shared';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import {
@@ -15,6 +16,9 @@ import {
   students,
 } from '../db/schema';
 import { createEventContext, publishEvent } from '../events';
+import { RewardBalanceConfigService } from './reward-balance-config';
+import { loadGuildStatProfile } from './guild-profile-loader';
+import { SpendBreakdownBuilder } from './spend-breakdown';
 
 export type {
   RewardActivityType,
@@ -32,6 +36,8 @@ export class RewardSystemConfigService {
         modifiers: { ...DEFAULT_REWARD_SYSTEM_CONFIG.modifiers },
         strategies: { ...DEFAULT_REWARD_SYSTEM_CONFIG.strategies },
         voting: { ...DEFAULT_REWARD_SYSTEM_CONFIG.voting },
+        caps: { ...DEFAULT_REWARD_SYSTEM_CONFIG.caps },
+        difficultyMultipliers: { ...DEFAULT_REWARD_SYSTEM_CONFIG.difficultyMultipliers },
       };
     }
 
@@ -55,6 +61,14 @@ export class RewardSystemConfigService {
       voting: {
         ...DEFAULT_REWARD_SYSTEM_CONFIG.voting,
         ...overrides.voting,
+      },
+      caps: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.caps,
+        ...overrides.caps,
+      },
+      difficultyMultipliers: {
+        ...DEFAULT_REWARD_SYSTEM_CONFIG.difficultyMultipliers,
+        ...overrides.difficultyMultipliers,
       },
     };
   }
@@ -89,6 +103,14 @@ export class RewardSystemConfigService {
         voting: {
           ...merged.voting,
           ...override.voting,
+        },
+        caps: {
+          ...merged.caps,
+          ...override.caps,
+        },
+        difficultyMultipliers: {
+          ...merged.difficultyMultipliers,
+          ...override.difficultyMultipliers,
         },
       };
     }, {});
@@ -180,6 +202,7 @@ export interface VoteSpendResult {
   votes: number;
   cost: number;
   balance: number;
+  breakdown: VoteSpendBreakdown;
 }
 
 export class GuildModifiers {
@@ -563,32 +586,22 @@ export class VotingCostService {
     private readonly configOverrides?: RewardSystemConfigOverrides
   ) {}
 
-  static calculateCost(
+  static buildBreakdown(
     votes: number,
-    guild: Guild,
-    configOverrides?: RewardSystemConfigOverrides
-  ): number {
-    if (!Number.isFinite(votes)) {
-      throw new Error('Expected votes to be a finite number.');
-    }
-
-    if (!Number.isInteger(votes) || votes < 0) {
-      throw new Error('votes must be a positive integer or zero.');
-    }
-
-    const config = RewardSystemConfigService.resolve(configOverrides);
-    const quadraticVotes = Math.pow(votes, config.voting.quadraticExponent);
-    const charismaSum = GuildModifiers.attributeSum(guild, 'charisma', config);
-    const charismaDiscount = Math.max(
-      config.voting.minimumDiscountFactor,
-      1 - config.voting.charismaDiscountMultiplier * charismaSum
-    );
-
-    return Math.ceil(quadraticVotes * charismaDiscount);
-  }
-
-  calculateCost(votes: number, guild: Guild): number {
-    return VotingCostService.calculateCost(votes, guild, this.configOverrides);
+    guildProfile: import('./guild-stat-calculator').GuildStatProfile,
+    config: RewardSystemConfig,
+    guildId: string,
+    studentId?: string,
+    balanceConfigVersion?: number
+  ): VoteSpendBreakdown {
+    return SpendBreakdownBuilder.build({
+      votes,
+      guildProfile,
+      config,
+      guildId,
+      studentId,
+      balanceConfigVersion,
+    });
   }
 
   async spendGuildVotes(input: VoteSpendInput): Promise<VoteSpendResult> {
@@ -597,10 +610,30 @@ export class VotingCostService {
     }
 
     return this.db.transaction(async (tx: RewardDb) => {
-      const guild = await new GuildSnapshotRepository(tx).getGuild(input.guildId);
-      const cost = this.calculateCost(input.votes, guild);
+      const balanceConfig = await RewardBalanceConfigService.getActiveConfig(tx);
+      const config = balanceConfig.rewardSystem;
+      const guildProfile = await loadGuildStatProfile(tx, input.guildId, balanceConfig);
+      const breakdown = SpendBreakdownBuilder.build({
+        votes: input.votes,
+        guildProfile,
+        config,
+        guildId: input.guildId,
+        studentId: input.studentId,
+        balanceConfigVersion: balanceConfig.version,
+      });
+      const cost = breakdown.finalCost;
 
-      if ((guild.gold || 0) < cost) {
+      const [guildRecord] = await tx
+        .select({ gold: guilds.gold })
+        .from(guilds)
+        .where(eq(guilds.id, input.guildId))
+        .limit(1);
+
+      if (!guildRecord) {
+        throw new Error('Guild not found.');
+      }
+
+      if ((guildRecord.gold || 0) < cost) {
         throw new Error('Guild does not have enough gold to buy these votes.');
       }
 
@@ -620,11 +653,14 @@ export class VotingCostService {
         transactionType: 'SPENT_VOTE',
       });
 
+      breakdown.balance = updatedGuild.gold;
+
       const result = {
         guildId: input.guildId,
         votes: input.votes,
         cost,
         balance: updatedGuild.gold,
+        breakdown,
       };
 
       const eventContext = createEventContext({ db: tx });
@@ -652,6 +688,7 @@ export class VotingCostService {
             amount: result.cost,
             balance: result.balance,
             reason: 'votes',
+            breakdown,
           },
         },
         eventContext

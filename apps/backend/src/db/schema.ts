@@ -64,6 +64,7 @@ export const cohorts = pgTable('cohorts', {
   startYear: integer('start_year').notNull(),
   grade: text('grade').notNull(),
   level: integer('level').notNull(),
+  currentStep: integer('current_step').default(1).notNull(),
   name: text('name').notNull(),
   majorSpeciality: text('major_speciality'),
   minorSpeciality: text('minor_speciality'),
@@ -208,6 +209,11 @@ export const gameActivityCompletionTypeEnum = pgEnum('game_activity_completion_t
 
 export const gameCharacterMoveTypeEnum = pgEnum('game_character_move_type', ['enter', 'move']);
 
+export const gameActivityParticipationModeEnum = pgEnum('game_activity_participation_mode', [
+  'solo',
+  'guild',
+]);
+
 // Table des classes de personnage. Les libellés affichés doivent être traduits côté UI depuis `name_i18n_key`.
 export const gameCharacterClasses = pgTable('game_character_classes', {
   slug: text('slug').primaryKey(),
@@ -279,6 +285,9 @@ export const gameActivities = pgTable('game_activities', {
   mapY: integer('map_y').default(0).notNull(),
   sectorDepth: integer('sector_depth').default(0).notNull(),
   requiredLevel: integer('required_level').default(1).notNull(),
+  stepRanges: jsonb('step_ranges').default([]).notNull(),
+  cardColor: text('card_color'),
+  participationMode: gameActivityParticipationModeEnum('participation_mode').default('solo').notNull(),
   basePoints: integer('base_points').default(0).notNull(),
   targetAttribute: gameTargetAttributeEnum('target_attribute'),
   metadata: jsonb('metadata').default({}).notNull(),
@@ -424,6 +433,17 @@ export const notifications = pgTable('notifications', {
   sortOrder: integer('sort_order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const rewardBalanceConfigs = pgTable('reward_balance_configs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  version: integer('version').notNull(),
+  label: text('label'),
+  config: jsonb('config').notNull(),
+  isActive: boolean('is_active').default(false).notNull(),
+  effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 // ==========================================

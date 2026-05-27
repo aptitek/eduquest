@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { CohortProgressData } from '@eduquest/shared';
 import { fetchCohortProgressData } from './api';
 
-export function useCohortProgressData() {
+export function useCohortProgressData(enabled = true, gameId?: string | null) {
   const [progressData, setProgressData] = useState<CohortProgressData | null>(null);
-
-  useEffect(() => {
+  const loadProgressData = useCallback(() => {
     const token = localStorage.getItem('eduquest_token');
-    if (!token) return;
+    if (!enabled || !token) return undefined;
 
     let isMounted = true;
-    fetchCohortProgressData(token)
+    fetchCohortProgressData(token, gameId)
       .then((data) => {
         if (isMounted) setProgressData(data);
       })
@@ -21,7 +20,27 @@ export function useCohortProgressData() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [enabled, gameId]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setProgressData(null);
+      return undefined;
+    }
+
+    return loadProgressData();
+  }, [enabled, loadProgressData]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    const handleRewardCardsUpdated = () => {
+      loadProgressData();
+    };
+
+    window.addEventListener('eduquest:reward-cards-updated', handleRewardCardsUpdated);
+    return () => window.removeEventListener('eduquest:reward-cards-updated', handleRewardCardsUpdated);
+  }, [enabled, loadProgressData]);
 
   return progressData;
 }

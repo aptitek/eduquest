@@ -20,10 +20,13 @@ const ALPHABET_SCROLL_MIN_LETTERS = 5;
 
 export function ClassPage() {
   const { t } = useTranslation();
-  const { student } = useGameStore();
+  const { student, selectedGameId } = useGameStore();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(true);
-  const latestMembership = getLatestCohortMembership(student?.cohortMemberships);
+  const latestMembership =
+    (selectedGameId &&
+      student?.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
+    getLatestCohortMembership(student?.cohortMemberships);
   const playerGuild = latestMembership?.guild;
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export function ClassPage() {
       try {
         const token = localStorage.getItem('eduquest_token');
         if (!token) throw new Error('Missing session token.');
-        const apiGuilds = await fetchGuilds(token);
+        const apiGuilds = await fetchGuilds(token, selectedGameId);
         if (isMounted) setGuilds(apiGuilds);
       } catch (error) {
         console.warn('Could not load class guilds.', error);
@@ -49,7 +52,7 @@ export function ClassPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedGameId]);
 
   const classGuilds = useMemo(() => {
     return mergeGuilds(playerGuild ? [playerGuild] : [], guilds);

@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/index.css';
+import '@xyflow/react/dist/style.css';
 import { MapPage } from './pages/MapPage/MapPage';
 import { GuildPage } from './pages/GuildPage/GuildPage';
 import { ClassPage } from './pages/ClassPage/ClassPage';
@@ -90,6 +91,10 @@ function App() {
 
   if (route === 'management' && user.isAdmin) {
     return <ManagementPage />;
+  }
+
+  if (user.isAdmin && ['guild', 'character'].includes(route)) {
+    return <MapPage />;
   }
 
   if (route === 'guild') {

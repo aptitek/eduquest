@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { mapRouter } from './routes/map';
 import { authRouter } from './routes/auth';
+import { adminRouter } from './routes/admin';
+import { rewardsRouter } from './routes/rewards';
 import { assetRouter, publicAssetRouter } from './routes/assets';
 import { webhooksRouter } from './routes/webhooks';
 import { authMiddleware } from './middleware/auth';
@@ -33,7 +35,7 @@ app.use(
       if (!allowedOrigin) return null;
       return origin === allowedOrigin ? origin : allowedOrigin;
     },
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   })
 );
@@ -45,8 +47,11 @@ app.route('/api/webhooks', webhooksRouter);
 
 // Enforcer l'authentification sur les endpoints protégés du jeu
 app.use('/api/map', authMiddleware);
+app.use('/api/games', authMiddleware);
 app.use('/api/guilds', authMiddleware);
 app.use('/api/dashboard', authMiddleware);
+app.use('/api/rewards/*', authMiddleware);
+app.use('/api/admin/*', authMiddleware);
 app.use('/api/assets/*', authMiddleware);
 
 app.get('/', (c) => {
@@ -55,6 +60,8 @@ app.get('/', (c) => {
 
 // Montage du sous-routeur d'activités/carte sous le préfixe /api
 app.route('/api', mapRouter);
+app.route('/api/admin', adminRouter);
+app.route('/api', rewardsRouter);
 app.route('/api', assetRouter);
 
 export default app;

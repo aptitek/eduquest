@@ -1,20 +1,68 @@
-import type { Activity, ActivityType, GameActivityEdge } from '@eduquest/shared';
-import { GenericGraph, GraphEdge, GraphNode } from '../molecules/GenericGraph';
-import { BookOpen, Compass, Flame, Hammer, HelpCircle, Lock, Shield, Snowflake, Swords, User, Users } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import type { Activity, ActivityType, GameActivityEdge, GameCharacterClass, GameMapNodeOccupancy } from '@eduquest/shared';
+import { GenericGraph, GraphEdge, GraphNode, type GraphNodeAnnularSegment } from '../molecules/GenericGraph';
+import { AvatarAccordionStack, type AvatarAccordionMember } from '../molecules/AvatarAccordionStack';
+import { BookOpen, CheckCircle2, CloudFog, Compass, Flame, Hammer, HelpCircle, Lock, Shield, Snowflake, Swords, User, Users } from 'lucide-react';
 import { getActivityVisualVariant } from '../../features/game/activityPresentation';
+
+interface PlayerMapMarker {
+  activityId: string | null;
+  previousActivityId?: string;
+  characterClass: GameCharacterClass;
+  illustrationUrl?: string;
+  label: string;
+}
 
 interface GameMapProps {
   activities: Activity[];
   edges: GameActivityEdge[];
+  nodeOccupancies?: GameMapNodeOccupancy[];
+  playerMarker?: PlayerMapMarker;
+  canEditLocked?: boolean;
+  showCompletionState?: boolean;
   onSelectNode: (activity: Activity) => void;
 }
+
+const SOLO_OCCUPANCY_COLOR = 'var(--color-status-locked)';
+const FALLBACK_GUILD_COLOR = 'var(--color-status-quest)';
+
+const CHARACTER_CLASS_COLORS: Record<GameCharacterClass, string> = {
+  scholar: 'var(--color-accent-scholar)',
+  champion: 'var(--color-accent-champion)',
+  guide: 'var(--color-accent-guide)',
+  specialist: 'var(--color-accent-specialist)',
+};
+
+const MAP_AVATAR_TRAVEL_KEYFRAMES = `
+@keyframes map-avatar-travel {
+  0% {
+    opacity: 0.25;
+    transform: translate(var(--travel-x, 0), var(--travel-y, 0)) scale(0.72);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+`;
 
 export function GameMap({
   activities,
   edges,
+  nodeOccupancies = [],
+  playerMarker,
+  canEditLocked = false,
+  showCompletionState = true,
   onSelectNode,
 }: GameMapProps) {
-  const getIcon = (type: ActivityType, isLocked: boolean) => {
+  type NodeStatus = 'FOG_OF_WAR' | 'ACTIVE';
+
+  const getIcon = (type: ActivityType, status: NodeStatus, isLocked: boolean) => {
+    if (status === 'FOG_OF_WAR') return <CloudFog size={20} />;
     if (isLocked) return <Lock size={20} />;
     switch (type) {
       case 'onboarding':
@@ -40,24 +88,23 @@ export function GameMap({
     }
   };
 
-  const getColors = (activity: Activity) => {
-    const isCompleted = Boolean(activity.isCompleted);
-    const isLocked = Boolean(activity.isLocked);
+  const getColors = (activity: Activity, status: NodeStatus) => {
+    const isLocked = !canEditLocked && Boolean(activity.isLocked);
 
-    if (activity.isStormed) {
-      return 'bg-gaming-base border-status-boss/50 text-status-boss/60 cursor-not-allowed opacity-60';
+    if (!canEditLocked && status === 'FOG_OF_WAR') {
+      return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed opacity-50 blur-[1px]';
     }
     if (activity.isCurrent) {
       return 'bg-status-quest/20 border-status-quest text-status-quest cursor-pointer motion-safe:hover:scale-110 shadow-glow-primary ring-2 ring-status-quest/40';
     }
-    if (!activity.isRevealed) {
+    if (!canEditLocked && !activity.isRevealed) {
       return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed opacity-40';
     }
     if (isLocked) {
       return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed';
     }
-    if (isCompleted) {
-      return 'bg-status-completed/10 border-status-completed text-status-completed hover:border-status-completed cursor-pointer motion-safe:hover:scale-110 shadow-lg';
+    if (activity.cardColor) {
+      return 'cursor-pointer motion-safe:hover:scale-110 shadow-lg';
     }
     switch (getActivityVisualVariant(activity.type)) {
       case 'campfire':
@@ -69,22 +116,56 @@ export function GameMap({
     }
   };
 
+  const getColorStyle = (activity: Activity, status: NodeStatus): CSSProperties | undefined => {
+    const isLocked = !canEditLocked && Boolean(activity.isLocked);
+
+    if (!activity.cardColor || isLocked) return undefined;
+    if (!canEditLocked && (status === 'FOG_OF_WAR' || !activity.isRevealed)) return undefined;
+
+    return {
+      backgroundColor: `color-mix(in srgb, ${activity.cardColor} 18%, transparent)`,
+      borderColor: activity.cardColor,
+      color: activity.cardColor,
+      boxShadow: `0 0 18px color-mix(in srgb, ${activity.cardColor} 28%, transparent)`,
+    };
+  };
+
   // Convert Activity list to reusable Generic GraphNode list (KISS)
+  const occupancyByActivityId = new Map(nodeOccupancies.map((occupancy) => [occupancy.activityId, occupancy]));
+  const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const graphNodes: GraphNode<Activity>[] = activities.map((act) => {
-    const locked = Boolean(act.isLocked || act.isStormed);
+    const visibilityStatus: NodeStatus = act.isRevealed ? 'ACTIVE' : 'FOG_OF_WAR';
+    const displayStatus: NodeStatus = canEditLocked ? 'ACTIVE' : visibilityStatus;
+    const locked = !canEditLocked && (displayStatus !== 'ACTIVE' || Boolean(act.isLocked));
+    const isFogged = displayStatus === 'FOG_OF_WAR';
+    const isCompleted = showCompletionState && Boolean(act.isCompleted);
+    const hasPlayerMarker = playerMarker && (playerMarker.activityId ? playerMarker.activityId === act.id : act.isCurrent);
+    const occupancy = occupancyByActivityId.get(act.id);
+    const marker = buildMapNodeMarker({
+      playerMarker: hasPlayerMarker ? playerMarker : undefined,
+      occupancy,
+      activity: act,
+      activityById,
+    });
 
     return {
       id: act.id,
       label: act.title,
+      displayLabel: isFogged ? '???' : act.title,
       x: act.mapX,
       y: act.mapY,
-      isCompleted: Boolean(act.isCompleted),
+      isCompleted,
       isLocked: locked,
-      isHidden: !act.isRevealed,
-      isStormed: act.isStormed,
-      icon: getIcon(act.type, locked),
-      customClass: getColors(act),
-      metadata: act,
+      isHidden: false,
+      icon: getIcon(act.type, displayStatus, locked),
+      badge: isCompleted ? (
+        <CheckCircle2 size={18} strokeWidth={3.25} className="text-status-completed drop-shadow-[0_0_6px_var(--color-status-completed)]" />
+      ) : undefined,
+      marker,
+      annularSegments: buildAnnularSegments(act, occupancy),
+      customClass: getColors(act, displayStatus),
+      customStyle: getColorStyle(act, displayStatus),
+      metadata: isFogged ? undefined : act,
     };
   });
   const nodeById = new Map(graphNodes.map((node) => [node.id, node]));
@@ -96,23 +177,234 @@ export function GameMap({
       id: edge.id,
       from: edge.fromActivityId,
       to: edge.toActivityId,
-      isCompleted: Boolean(fromNode?.isCompleted && toNode?.isCompleted),
+      isCompleted: showCompletionState && Boolean(fromNode?.isCompleted && toNode?.isCompleted),
       isLocked: Boolean(fromNode?.isLocked || toNode?.isLocked),
       isHidden: Boolean(fromNode?.isHidden || toNode?.isHidden),
     };
   });
 
   return (
-    <GenericGraph
-      nodes={graphNodes}
-      edges={graphEdges}
-      width={1000}
-      height={600}
-      onSelectNode={(node) => {
-        if (node.metadata) onSelectNode(node.metadata);
+    <>
+      <style>{MAP_AVATAR_TRAVEL_KEYFRAMES}</style>
+      <GenericGraph
+        nodes={graphNodes}
+        edges={graphEdges}
+        width={1000}
+        height="100%"
+        className="h-full min-h-0"
+        allowLockedSelection={canEditLocked}
+        editable={canEditLocked}
+        connectable={canEditLocked}
+        deletable={canEditLocked}
+        onSelectNode={(node) => {
+          if (node.metadata) onSelectNode(node.metadata);
+        }}
+      />
+    </>
+  );
+}
+
+function buildMapNodeMarker({
+  playerMarker,
+  occupancy,
+  activity,
+  activityById,
+}: {
+  playerMarker?: PlayerMapMarker;
+  occupancy?: GameMapNodeOccupancy;
+  activity: Activity;
+  activityById: Map<string, Activity>;
+}) {
+  const guildMarkers =
+    activity.participationMode === 'guild'
+      ? (occupancy?.segments || []).flatMap((segment) => {
+          if (segment.kind !== 'guild' || !segment.members?.length) return [];
+          return [
+            <GuildMemberMapMarker
+              key={segment.guildId || `${activity.id}-${segment.guildName || segment.color}`}
+              color={segment.color || FALLBACK_GUILD_COLOR}
+              members={segment.members}
+              currentActivity={activity}
+              activityById={activityById}
+            />,
+          ];
+        })
+      : [];
+
+  if (!playerMarker && guildMarkers.length === 0) return undefined;
+
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      {playerMarker ? (
+        <AvatarAccordionStack
+          members={[
+            {
+              id: 'current-player',
+              name: playerMarker.label,
+              avatarUrl: playerMarker.illustrationUrl,
+            },
+          ]}
+          color={CHARACTER_CLASS_COLORS[playerMarker.characterClass]}
+          size="md"
+          getAvatarStyle={() => getTravelStyle(getTravelVector(activityById, playerMarker.previousActivityId, activity))}
+        />
+      ) : null}
+      {guildMarkers}
+    </div>
+  );
+}
+
+function GuildMemberMapMarker({
+  color,
+  members,
+  currentActivity,
+  activityById,
+}: {
+  color: string;
+  members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>;
+  currentActivity: Activity;
+  activityById: Map<string, Activity>;
+}) {
+  const avatarMembers = toAvatarMembers(members);
+
+  return (
+    <AvatarAccordionStack
+      members={avatarMembers}
+      color={color}
+      size="sm"
+      className="shrink-0"
+      getAvatarStyle={(member) => {
+        const occupancyMember = members.find((candidate) => candidate.studentId === member.id);
+        return getTravelStyle(getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity));
       }}
     />
   );
+}
+
+function toAvatarMembers(
+  members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>
+): AvatarAccordionMember[] {
+  return members.map((member) => ({
+    id: member.studentId,
+    name: member.displayName,
+    avatarUrl: member.avatarUrl,
+    subtitle: member.characterClass,
+  }));
+}
+
+function getTravelStyle(travel?: { x: number; y: number }): CSSProperties | undefined {
+  const hasTravel = travel && (Math.abs(travel.x) > 1 || Math.abs(travel.y) > 1);
+  if (!hasTravel) return undefined;
+
+  return {
+    '--travel-x': `${travel.x}px`,
+    '--travel-y': `${travel.y}px`,
+    animation: 'map-avatar-travel 900ms cubic-bezier(0.22, 1, 0.36, 1)',
+  } as CSSProperties;
+}
+
+function getTravelVector(
+  activityById: Map<string, Activity>,
+  fromActivityId: string | undefined,
+  currentActivity: Activity
+) {
+  if (!fromActivityId || fromActivityId === currentActivity.id) return undefined;
+
+  const fromActivity = activityById.get(fromActivityId);
+  if (!fromActivity) return undefined;
+
+  return {
+    x: fromActivity.mapX - currentActivity.mapX,
+    y: fromActivity.mapY - currentActivity.mapY,
+  };
+}
+
+function buildAnnularSegments(
+  activity: Activity,
+  occupancy: GameMapNodeOccupancy | undefined
+): GraphNodeAnnularSegment[] | undefined {
+  if (!occupancy || occupancy.totalStudents <= 0) return undefined;
+
+  if (activity.participationMode !== 'guild') {
+    const studentCount = occupancy.segments.reduce((total, segment) => total + segment.studentCount, 0);
+    return studentCount > 0
+      ? [
+          {
+            id: `${activity.id}-solo`,
+            color: SOLO_OCCUPANCY_COLOR,
+            value: studentCount,
+            total: occupancy.totalStudents,
+            label: `${studentCount} students`,
+            kind: 'solo',
+            members: occupancy.segments.flatMap((segment) =>
+              (segment.members || []).map((member) => ({
+                id: member.studentId,
+                name: member.displayName,
+                avatarUrl: member.avatarUrl,
+                subtitle: member.characterClass,
+              }))
+            ),
+          },
+        ]
+      : undefined;
+  }
+
+  const segments = occupancy.segments.flatMap<GraphNodeAnnularSegment>((segment) => {
+    if (segment.studentCount <= 0) return [];
+
+    return {
+      id: segment.guildId || `${activity.id}-${segment.kind}`,
+      color: segment.kind === 'guild' ? segment.color || FALLBACK_GUILD_COLOR : SOLO_OCCUPANCY_COLOR,
+      value: segment.studentCount,
+      total: occupancy.totalStudents,
+      label: segment.guildName || `${segment.studentCount} students`,
+      iconUrl: segment.guildIconUrl,
+      kind: segment.kind,
+      members: (segment.members || []).map((member) => ({
+        id: member.studentId,
+        name: member.displayName,
+        avatarUrl: member.avatarUrl,
+        subtitle: member.characterClass,
+      })),
+    };
+  });
+
+  return segments.length > 0 ? orderSegmentsByColor(segments) : undefined;
+}
+
+function orderSegmentsByColor(segments: GraphNodeAnnularSegment[]) {
+  const remaining = [...segments].sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));
+  const ordered: GraphNodeAnnularSegment[] = [];
+
+  while (remaining.length > 0) {
+    const previousColor = ordered[ordered.length - 1]?.color;
+    const nextIndex = remaining.findIndex((segment) => segment.color !== previousColor);
+    const [next] = remaining.splice(nextIndex === -1 ? 0 : nextIndex, 1);
+    ordered.push(next);
+  }
+
+  if (ordered.length <= 2 || ordered[0].color !== ordered[ordered.length - 1]?.color) return ordered;
+
+  const lastIndex = ordered.length - 1;
+  const swapIndex = ordered.findIndex((candidate, index) => {
+    if (index === 0 || index === lastIndex) return false;
+    const left = ordered[index - 1];
+    const right = ordered[index + 1];
+    const last = ordered[lastIndex];
+
+    return (
+      candidate.color !== ordered[0].color &&
+      candidate.color !== ordered[lastIndex - 1].color &&
+      last.color !== left.color &&
+      last.color !== right.color
+    );
+  });
+
+  if (swapIndex === -1) return ordered;
+
+  const swapped = [...ordered];
+  [swapped[swapIndex], swapped[lastIndex]] = [swapped[lastIndex], swapped[swapIndex]];
+  return swapped;
 }
 
 export default GameMap;

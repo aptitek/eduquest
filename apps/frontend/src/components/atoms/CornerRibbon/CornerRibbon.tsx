@@ -96,6 +96,15 @@ const tokenBackgroundClassMap: Record<string, string> = {
   'var(--color-status-boss)': 'bg-status-boss',
   'var(--color-status-danger)': 'bg-status-danger',
   'var(--color-accent-neutral)': 'bg-accent-neutral',
+  'var(--color-solarized-yellow)': 'bg-solarized-yellow',
+  'var(--color-solarized-orange)': 'bg-solarized-orange',
+  'var(--color-solarized-red)': 'bg-solarized-red',
+  'var(--color-solarized-magenta)': 'bg-solarized-magenta',
+  'var(--color-solarized-violet)': 'bg-solarized-violet',
+  'var(--color-solarized-blue)': 'bg-solarized-blue',
+  'var(--color-solarized-cyan)': 'bg-solarized-cyan',
+  'var(--color-solarized-green)': 'bg-solarized-green',
+  'var(--color-solarized-base0)': 'bg-solarized-base0',
 };
 
 export function CornerRibbon({
@@ -164,7 +173,8 @@ export function CornerRibbon({
           className={cn(
             'absolute z-10 flex items-center justify-center text-white drop-shadow-sm',
             iconCornerPositionClassMap[size][position],
-            iconSizeClassMap[size]
+            iconSizeClassMap[size],
+            ribbonClassName
           )}
           aria-hidden
         >

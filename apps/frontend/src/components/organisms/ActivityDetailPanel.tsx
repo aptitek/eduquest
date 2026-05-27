@@ -43,7 +43,7 @@ export function ActivityDetailPanel({
 
   if (!selectedActivity) {
     return (
-      <div className="bg-gaming-card border border-gaming-border p-6 rounded-lg flex flex-col items-center justify-center text-center text-text-muted gap-4 h-[600px] relative overflow-hidden">
+      <div className="relative flex h-full min-h-0 flex-col items-center justify-center gap-4 overflow-hidden rounded-lg border border-gaming-border bg-gaming-card p-4 text-center text-text-muted">
         <Target size={48} className="text-text-muted animate-pulse" />
         <div>
           <h4 className="font-bold text-text-primary mb-1">{t('detailPanel.noSelectedTitle')}</h4>
@@ -75,8 +75,8 @@ export function ActivityDetailPanel({
   );
 
   return (
-    <div className="bg-gaming-card border border-gaming-border p-6 rounded-lg flex flex-col justify-between h-[600px] relative overflow-hidden">
-      <div className="flex flex-col gap-6 h-full justify-between">
+    <div className="relative flex h-full min-h-0 flex-col justify-between overflow-hidden rounded-lg border border-gaming-border bg-gaming-card p-4">
+      <div className="flex h-full min-h-0 flex-col justify-between gap-4">
         <div>
           <div className="flex justify-between items-start mb-4">
             <span

@@ -23,7 +23,7 @@ function createProviderRegistry(): EventProviderRegistry {
 function registerDefaultHandlers(bus: EventBus): void {
   bus.subscribeAll(auditEventHandler, 'audit-log');
   bus.subscribeMany(
-    ['activity.completed', 'activity.validated', 'github.ci.passed', 'github.pr.merged'],
+    ['activity.validated', 'github.ci.passed', 'github.pr.reviewed', 'github.pr.merged'],
     rewardComputationHandler,
     'reward-computation'
   );

@@ -16,6 +16,7 @@ describe('map routes', () => {
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
     expect(payload.map.run).toMatchObject({ status: 'active' });
+    expect(payload.map.cohortCurrentStep).toBeUndefined();
     expect(payload.map.activities[0]).toEqual(
       expect.objectContaining({
         mapX: expect.any(Number),
@@ -24,9 +25,50 @@ describe('map routes', () => {
         metadata: expect.any(Object),
       })
     );
+    expect(payload.map.activities[0].stepRanges).toBeUndefined();
     expect(payload.map.edges.length).toBeGreaterThan(0);
     expect(payload.map.completions.length).toBeGreaterThan(0);
     expect(payload.map.currentActivityId).toBe('debug_activity_variables');
+    expect(payload.map.nodeOccupancies).toContainEqual(
+      expect.objectContaining({
+        activityId: 'debug_activity_variables',
+        totalStudents: 3,
+        segments: [
+          expect.objectContaining({
+            kind: 'solo',
+            studentCount: 1,
+            members: [
+              expect.objectContaining({
+                studentId: 'debug_student_lina',
+                displayName: 'Lina MOREL',
+                avatarUrl: expect.any(String),
+                characterClass: 'guide',
+              }),
+            ],
+          }),
+        ],
+      })
+    );
+    expect(payload.map.nodeOccupancies).toContainEqual(
+      expect.objectContaining({
+        activityId: 'debug_activity_api_bridge',
+        totalStudents: 3,
+        segments: expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'guild',
+            guildName: expect.any(String),
+            color: expect.any(String),
+            studentCount: 1,
+            members: [
+              expect.objectContaining({
+                displayName: expect.any(String),
+                avatarUrl: expect.any(String),
+              }),
+            ],
+          }),
+        ]),
+      })
+    );
     expect(payload.map.activities).toContainEqual(
       expect.objectContaining({ id: 'debug_activity_variables', isCurrent: true })
     );

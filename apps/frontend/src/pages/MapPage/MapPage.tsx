@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { Activity, GameActivityCompletion } from '@eduquest/shared';
+import type { Activity, GameActivityCompletion, GameActivityEdge } from '@eduquest/shared';
 import { useGameStore } from '../../features/game/gameStore';
-import { completeMapActivity, fetchMapActivities, moveCharacterToActivity } from '../../features/game/api';
+import {
+  completeMapActivity,
+  fetchMapActivities,
+  moveCharacterToActivity,
+} from '../../features/game/api';
 import { getActivityXpReward } from '../../features/game/activityPresentation';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -11,15 +15,22 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 import { MapContainer, MapArea, LoadingMap } from '../../components/organisms/MapContainer';
 import { GameMap } from '../../components/organisms/GameMap';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
+import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
+import { formatUserDisplayName } from '../../utils/displayName';
 
 export function MapPage() {
   const { t } = useTranslation();
   const {
     student,
     character,
+    user,
     activities,
     activityEdges,
     activityCompletions,
+    nodeOccupancies,
+    currentActivityId,
+    currentMove,
+    selectedGameId,
     setActivities,
     setMapData,
     addActivityCompletion,
@@ -38,7 +49,9 @@ export function MapPage() {
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      setMapData(await fetchMapActivities(token));
+      const mapData = await fetchMapActivities(token, selectedGameId);
+      setMapData(mapData);
+      setSelectedActivity(null);
     } catch (error: unknown) {
       console.warn('Could not load map activities.', error);
       setActivities([]);
@@ -49,19 +62,30 @@ export function MapPage() {
 
   useEffect(() => {
     fetchMapData();
-  }, []);
+  }, [selectedGameId]);
+
+  useEffect(() => {
+    const handleCohortStepUpdated = () => {
+      fetchMapData();
+    };
+
+    window.addEventListener('eduquest:cohort-step-updated', handleCohortStepUpdated);
+    return () => window.removeEventListener('eduquest:cohort-step-updated', handleCohortStepUpdated);
+  }, [selectedGameId]);
 
   const completedActivityIds = activityCompletions.map((completion) => completion.activityId);
 
   const handleSelectActivity = async (activity: Activity) => {
     setSelectedActivity(activity);
-    if (activity.isCurrent || activity.isLocked || activity.isStormed) return;
+    if (user?.isAdmin) return;
+    if (activity.isCurrent || activity.isLocked) return;
 
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      const result = await moveCharacterToActivity(token, activity.id);
+      const result = await moveCharacterToActivity(token, activity.id, selectedGameId);
       setCurrentMove(result.move, result.currentActivityId);
+      setSelectedActivity({ ...activity, isCurrent: true });
     } catch (error) {
       console.warn('Could not track character move.', error);
     }
@@ -77,7 +101,7 @@ export function MapPage() {
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      const completion: GameActivityCompletion = await completeMapActivity(token, act.id);
+      const completion: GameActivityCompletion = await completeMapActivity(token, act.id, selectedGameId);
 
       addActivityCompletion(completion);
       gainXp(getActivityXpReward(act));
@@ -90,7 +114,7 @@ export function MapPage() {
     }
   };
 
-  if (!character || !student) {
+  if (!user?.isAdmin && (!character || !student)) {
     return (
       <div className="flex items-center justify-center min-h-screen text-text-muted font-display">
         {t('layout.loadingSession')}
@@ -99,7 +123,7 @@ export function MapPage() {
   }
 
   return (
-    <GameLayout>
+    <GameLayout fitToViewport>
       <GameHeader />
 
       <MapContainer>
@@ -110,21 +134,143 @@ export function MapPage() {
             <GameMap
               activities={activities}
               edges={activityEdges}
+              nodeOccupancies={nodeOccupancies}
+              playerMarker={
+                !user?.isAdmin && user && character
+                  ? {
+                      activityId: currentActivityId,
+                      previousActivityId: currentMove?.fromActivityId,
+                      characterClass: character.characterClass,
+                      illustrationUrl: user.avatarUrl || user.githubAvatarUrl,
+                      label: formatUserDisplayName(user),
+                    }
+                  : undefined
+              }
+              canEditLocked={Boolean(user?.isAdmin)}
+              showCompletionState={!user?.isAdmin}
               onSelectNode={handleSelectActivity}
             />
           )}
         </MapArea>
 
-        <ActivityDetailPanel
-          selectedActivity={selectedActivity}
-          completedActivityIds={completedActivityIds}
-          onComplete={handleCompleteActivity}
-          completingActivityId={completingActivityId}
-          completionError={completionError}
-        />
+        {selectedActivity ? (
+          <ActivityCard
+            activity={toActivityCardData(selectedActivity, activities, activityEdges)}
+            canEdit={Boolean(user?.isAdmin)}
+            showCompletionAction={!user?.isAdmin}
+            isCompleted={completedActivityIds.includes(selectedActivity.id)}
+            isResolving={completingActivityId === selectedActivity.id}
+            resolveError={completionError}
+            onResolve={
+              user?.isAdmin || selectedActivity.isLocked
+                ? undefined
+                : () => handleCompleteActivity(selectedActivity)
+            }
+            className="h-full min-h-0 w-full max-w-none"
+          />
+        ) : (
+          <ActivityDetailPanel
+            selectedActivity={null}
+            completedActivityIds={completedActivityIds}
+            onComplete={handleCompleteActivity}
+            completingActivityId={completingActivityId}
+            completionError={completionError}
+          />
+        )}
       </MapContainer>
     </GameLayout>
   );
 }
 
 export default MapPage;
+
+function toActivityCardData(
+  activity: Activity,
+  activities: Activity[],
+  edges: GameActivityEdge[]
+): ActivityCardData {
+  const metadata = (activity.metadata || {}) as Record<string, unknown>;
+  const activityById = new Map(activities.map((candidate) => [candidate.id, candidate]));
+  const adjacentNodes = edges
+    .filter((edge) => edge.fromActivityId === activity.id || edge.toActivityId === activity.id)
+    .map((edge) => (edge.fromActivityId === activity.id ? edge.toActivityId : edge.fromActivityId))
+    .map((activityId) => activityById.get(activityId)?.title)
+    .filter((title): title is string => Boolean(title));
+  const resources = getActivityResources(metadata, activity.url);
+
+  return {
+    title: activity.title,
+    subtitle: `${formatActivityType(activity.type)} · ${activity.isGraded ? 'Gamifié' : 'Non gamifié'}`,
+    description:
+      getStringMetadata(metadata, 'description') ||
+      getStringMetadata(metadata, 'lore') ||
+      getStringMetadata(metadata, 'summary') ||
+      'Consultez les ressources, avancez dans la quête et résolvez ce nœud pour faire progresser votre parcours.',
+    illustrationUrl: getStringMetadata(metadata, 'illustrationUrl'),
+    illustrationAlt: getStringMetadata(metadata, 'illustrationAlt') || activity.title,
+    goldReward: getActivityXpReward(activity),
+    cardColor: activity.cardColor || getStringMetadata(metadata, 'cardColor'),
+    participationMode: activity.participationMode || 'solo',
+    resources,
+    selectedIcon: getStringMetadata(metadata, 'iconKey') || activity.type,
+    mapX: activity.mapX,
+    mapY: activity.mapY,
+    stepRanges: activity.stepRanges || [{ startStep: Math.max(activity.requiredLevel - 1, 0) }],
+    adjacentNodes,
+  };
+}
+
+function getStringMetadata(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getNestedStringMetadata(metadata: Record<string, unknown>, objectKey: string, key: string) {
+  const value = metadata[objectKey];
+  if (!value || typeof value !== 'object') return undefined;
+  const nestedValue = (value as Record<string, unknown>)[key];
+  return typeof nestedValue === 'string' ? nestedValue : undefined;
+}
+
+function getActivityResources(metadata: Record<string, unknown>, activityUrl?: string): ActivityResourceLink[] {
+  const resources = [
+    ...getResourceList(metadata),
+    resourceFromUrl(getStringMetadata(metadata, 'geniallyUrl'), 'Genially'),
+    resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'projectUrl'), 'Project'),
+    resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'gradingUrl'), 'Grading'),
+    resourceFromUrl(getStringMetadata(metadata, 'rubricUrl'), 'Rubric'),
+    resourceFromUrl(activityUrl, 'Activity'),
+  ].filter((resource): resource is ActivityResourceLink => Boolean(resource?.url));
+
+  const seenUrls = new Set<string>();
+  return resources.filter((resource) => {
+    if (seenUrls.has(resource.url)) return false;
+    seenUrls.add(resource.url);
+    return true;
+  });
+}
+
+function getResourceList(metadata: Record<string, unknown>): ActivityResourceLink[] {
+  const resources = metadata.resources;
+  if (!Array.isArray(resources)) return [];
+
+  return resources.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+
+    const resource = item as Record<string, unknown>;
+    const title = typeof resource.title === 'string' ? resource.title : undefined;
+    const url = typeof resource.url === 'string' ? resource.url : undefined;
+    return url ? [{ title, url }] : [];
+  });
+}
+
+function resourceFromUrl(url?: string, title?: string): ActivityResourceLink | undefined {
+  return url ? { title, url } : undefined;
+}
+
+function formatActivityType(type: Activity['type']) {
+  return type
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}

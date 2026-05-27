@@ -1,3 +1,5 @@
+import type { RewardPolicyId } from './reward-policies';
+
 export type StudentAttribute =
   | 'strength'
   | 'dexterity'
@@ -14,16 +16,27 @@ export type RewardActivityType =
   | 'constitution'
   | 'charisma';
 
+export const STUDENT_ATTRIBUTES: StudentAttribute[] = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+];
+
 export interface RewardSystemConfig {
   guild: {
     minStudents: number;
     maxStudents: number;
     targetSizeForModifier: number;
     sizeModifierPerMissingStudent: number;
+    statCapPerAttribute: number;
   };
   attributes: {
     levelOneMaxValue: number;
     earningMultiplier: number;
+    guildEarningMultiplier: number;
   };
   modifiers: {
     charismaPassiveMultiplier: number;
@@ -32,11 +45,21 @@ export interface RewardSystemConfig {
     dexterityHoursEarlyMultiplier: number;
     constitutionActiveDaysMultiplier: number;
     constitutionActiveWindowDays: number;
+    constitutionActiveDaysCap: number;
   };
   voting: {
     quadraticExponent: number;
     charismaDiscountMultiplier: number;
     minimumDiscountFactor: number;
+  };
+  caps: {
+    maxGoldPerEvent: number;
+    maxDexterityGoldPerEvent: number;
+  };
+  difficultyMultipliers: {
+    1: number;
+    2: number;
+    3: number;
   };
 }
 
@@ -44,24 +67,44 @@ export type RewardSystemConfigOverrides = {
   [Section in keyof RewardSystemConfig]?: Partial<RewardSystemConfig[Section]>;
 };
 
+export interface RewardBalanceConfigPayload {
+  rewardSystem?: RewardSystemConfigOverrides;
+  policyIds?: Partial<Record<RewardPolicyId, { fixedBasePoints?: number }>>;
+  label?: string;
+}
+
 export type RewardModifierKind =
   | 'base'
   | 'guild_size'
   | 'attribute'
   | 'charisma_passive'
+  | 'charisma_discount'
+  | 'constitution'
   | 'early_bonus'
   | 'activity_streak'
-  | 'event_bonus';
+  | 'event_bonus'
+  | 'difficulty';
+
+export interface CharacterStatValue {
+  base: number;
+  manual: number;
+  rawTotal: number;
+  effective: number;
+}
+
+export interface GuildStatValue {
+  rawSum: number;
+  cappedSum: number;
+  sizeModifier: number;
+  effective: number;
+}
 
 export interface RewardModifier {
   id: string;
   kind: RewardModifierKind;
   labelI18nKey: string;
-  /** Points added (or net change) by this modifier step. */
   effect: number;
-  /** Optional multiplier applied at this step (e.g. guild size ×1.5). */
   multiplier?: number;
-  /** Optional metadata for UI (attribute name, student count, etc.). */
   detail?: Record<string, string | number>;
 }
 
@@ -76,6 +119,9 @@ export interface RewardComputationBreakdown {
   activityId?: string;
   cohortId?: string;
   trigger: string;
+  policyId?: string;
+  actorScope?: 'student' | 'guild';
+  balanceConfigVersion?: number;
   balance?: number;
 }
 
@@ -84,28 +130,57 @@ export interface RewardNotificationContext {
   breakdown: RewardComputationBreakdown;
 }
 
+export interface VoteSpendBreakdown {
+  votes: number;
+  baseCost: number;
+  subtotal: number;
+  modifiers: RewardModifier[];
+  finalCost: number;
+  guildId: string;
+  studentId?: string;
+  balanceConfigVersion?: number;
+  balance?: number;
+}
+
+export interface VoteSpendNotificationContext {
+  type: 'vote_spend';
+  breakdown: VoteSpendBreakdown;
+}
+
 export const DEFAULT_REWARD_SYSTEM_CONFIG: RewardSystemConfig = {
   guild: {
     minStudents: 1,
     maxStudents: 3,
     targetSizeForModifier: 3,
-    sizeModifierPerMissingStudent: 0.5,
+    sizeModifierPerMissingStudent: 0.35,
+    statCapPerAttribute: 12,
   },
   attributes: {
     levelOneMaxValue: 5,
-    earningMultiplier: 0.05,
+    earningMultiplier: 0.13,
+    guildEarningMultiplier: 0.06,
   },
   modifiers: {
-    charismaPassiveMultiplier: 0.02,
+    charismaPassiveMultiplier: 0.028,
   },
   strategies: {
-    dexterityHoursEarlyMultiplier: 0.5,
-    constitutionActiveDaysMultiplier: 0.1,
+    dexterityHoursEarlyMultiplier: 0.2,
+    constitutionActiveDaysMultiplier: 0.04,
     constitutionActiveWindowDays: 7,
+    constitutionActiveDaysCap: 5,
   },
   voting: {
-    quadraticExponent: 2,
-    charismaDiscountMultiplier: 0.05,
+    quadraticExponent: 1,
+    charismaDiscountMultiplier: 0.045,
     minimumDiscountFactor: 0.25,
+  },
+  caps: {
+    maxGoldPerEvent: 500,
+    maxDexterityGoldPerEvent: 100,
+  },
+  difficultyMultipliers: {
+    1: 1,
+    2: 1.25,
+    3: 1.5,
   },
 };

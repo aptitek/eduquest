@@ -8,7 +8,7 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 
 export function GuildPage() {
   const { t } = useTranslation();
-  const { student, character } = useGameStore();
+  const { student, character, selectedGameId } = useGameStore();
 
   if (!student || !character) {
     return (
@@ -18,7 +18,10 @@ export function GuildPage() {
     );
   }
 
-  const latestMembership = getLatestCohortMembership(student.cohortMemberships);
+  const latestMembership =
+    (selectedGameId &&
+      student.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
+    getLatestCohortMembership(student.cohortMemberships);
   const playerGuild = latestMembership?.guild;
 
   if (!playerGuild) {

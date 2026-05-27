@@ -11,6 +11,7 @@ export interface HoldToConfirmButtonProps {
   className?: string;
   variant?: string;
   shape?: HoldToConfirmButtonShape;
+  disabled?: boolean;
 }
 
 export function HoldToConfirmButton({
@@ -20,12 +21,14 @@ export function HoldToConfirmButton({
   className,
   variant = 'btn-error',
   shape = 'default',
+  disabled = false,
 }: HoldToConfirmButtonProps) {
   const controls = useAnimation();
   const [isSuccess, setIsSuccess] = useState(false);
   const isHeld = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const isRound = shape === 'round';
+  const idleProgressState = isRound ? { pathLength: 0, opacity: 0 } : { scaleX: 0, opacity: 0.2 };
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -33,13 +36,14 @@ export function HoldToConfirmButton({
   }, []);
 
   const startHold = () => {
+    if (disabled) return;
     clearTimeout(timeoutRef.current);
 
     isHeld.current = true;
     setIsSuccess(false);
 
     controls.start({
-      ...(isRound ? { pathLength: 1 } : { scaleX: 1 }),
+      ...(isRound ? { pathLength: 1, opacity: 0.85 } : { scaleX: 1 }),
       transition: { duration: holdDuration / 1000, ease: 'linear' },
     });
 
@@ -48,7 +52,7 @@ export function HoldToConfirmButton({
         setIsSuccess(true);
         onConfirm();
         controls.start({ opacity: 0, transition: { duration: 0.2 } }).then(() => {
-          controls.set(isRound ? { pathLength: 0, opacity: 0.85 } : { scaleX: 0, opacity: 0.2 });
+          controls.set(idleProgressState);
           setIsSuccess(false);
         });
       }
@@ -72,7 +76,7 @@ export function HoldToConfirmButton({
     clearTimeout(timeoutRef.current);
     if (!isSuccess) {
       controls.start({
-        ...(isRound ? { pathLength: 0 } : { scaleX: 0 }),
+        ...idleProgressState,
         transition: { duration: 0.3, ease: 'easeOut' },
       });
     }
@@ -83,11 +87,13 @@ export function HoldToConfirmButton({
       type="button"
       className={cn(
         'btn relative overflow-hidden transition-shadow hover:shadow-lg',
-        isRound && 'btn-circle aspect-square overflow-visible rounded-full p-0',
+        isRound && 'btn-circle min-h-0 overflow-visible rounded-full p-0',
         variant,
         isSuccess && 'animate-pulse',
+        disabled && 'btn-disabled cursor-not-allowed opacity-60',
         className
       )}
+      disabled={disabled}
       onPointerDown={handlePointerDown}
       onPointerUp={cancelHold}
       onPointerLeave={cancelHold}
@@ -111,7 +117,7 @@ export function HoldToConfirmButton({
             stroke="currentColor"
             strokeLinecap="round"
             strokeWidth="8"
-            initial={{ pathLength: 0, opacity: 0.85 }}
+            initial={idleProgressState}
             animate={controls}
           />
         </svg>

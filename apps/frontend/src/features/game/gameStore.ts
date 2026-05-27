@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   User,
   Student,
+  Game,
   GameCharacter,
   Activity,
   GameActivityCompletion,
@@ -9,6 +10,7 @@ import {
   GameCharacterMove,
   GameCharacterClass,
   GameMapData,
+  GameMapNodeOccupancy,
   GameMapRun,
 } from '@eduquest/shared';
 
@@ -19,13 +21,16 @@ interface GameState {
   activities: Activity[];
   activityEdges: GameActivityEdge[];
   mapRun: GameMapRun | null;
+  availableGames: Game[];
+  selectedGameId: string | null;
   activityCompletions: GameActivityCompletion[];
+  nodeOccupancies: GameMapNodeOccupancy[];
   currentActivityId: string | null;
   currentMove: GameCharacterMove | null;
   setUserSession: (
     user: User,
-    student: Student,
-    character: GameCharacter,
+    student: Student | null,
+    character: GameCharacter | null,
     activityCompletions?: GameActivityCompletion[]
   ) => void;
   patchUser: (patch: Partial<User>) => void;
@@ -33,6 +38,8 @@ interface GameState {
   setCharacterClass: (characterClass: GameCharacterClass) => void;
   setActivities: (activities: Activity[]) => void;
   setMapData: (mapData: GameMapData) => void;
+  setAvailableGames: (games: Game[]) => void;
+  setSelectedGameId: (gameId: string | null) => void;
   setActivityCompletions: (activityCompletions: GameActivityCompletion[]) => void;
   addActivityCompletion: (completion: GameActivityCompletion) => void;
   setCurrentMove: (move: GameCharacterMove, currentActivityId: string) => void;
@@ -47,7 +54,10 @@ export const useGameStore = create<GameState>((set) => ({
   activities: [],
   activityEdges: [],
   mapRun: null,
+  availableGames: [],
+  selectedGameId: null,
   activityCompletions: [],
+  nodeOccupancies: [],
   currentActivityId: null,
   currentMove: null,
 
@@ -75,9 +85,12 @@ export const useGameStore = create<GameState>((set) => ({
       activityEdges: mapData.edges,
       mapRun: mapData.run,
       activityCompletions: mapData.completions,
+      nodeOccupancies: mapData.nodeOccupancies || [],
       currentActivityId: mapData.currentActivityId || null,
       currentMove: mapData.currentMove || null,
     }),
+  setAvailableGames: (availableGames) => set({ availableGames }),
+  setSelectedGameId: (selectedGameId) => set({ selectedGameId }),
   setActivityCompletions: (activityCompletions) => set({ activityCompletions }),
   addActivityCompletion: (completion) =>
     set((state) => ({
@@ -108,7 +121,10 @@ export const useGameStore = create<GameState>((set) => ({
       activities: [],
       activityEdges: [],
       mapRun: null,
+      availableGames: [],
+      selectedGameId: null,
       activityCompletions: [],
+      nodeOccupancies: [],
       currentActivityId: null,
       currentMove: null,
     }),

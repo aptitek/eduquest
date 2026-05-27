@@ -80,9 +80,21 @@ export interface Cohort {
   updatedAt?: string;
 }
 
+// A cohort owns one playable game context. Maps, guilds, progress, votes, and steps belong to this game.
+export interface Game {
+  id: string;
+  cohortId: string;
+  cohort?: Cohort;
+  name: string;
+  currentStep: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Table `guilds` : Groupes de JDR restreints à une cohort
 export interface Guild {
   id: string;
+  gameId?: string;
   cohortId: string;
   cohort?: Cohort;
   name: string;
@@ -176,6 +188,8 @@ export const GAME_ACTIVITY_TYPES = [
   'boss',
 ] as const;
 
+export const ACTIVITY_ICON_KEYS = GAME_ACTIVITY_TYPES;
+
 // Type d'activité du jeu
 export type ActivityType = (typeof GAME_ACTIVITY_TYPES)[number];
 
@@ -186,6 +200,13 @@ export type ActivityMetadata = Record<string, unknown> & {
   resources?: Array<{ title: string; url: string }>;
   rubricUrl?: string;
 };
+
+export interface ActivityStepRange {
+  startStep: number;
+  endStep?: number;
+}
+
+export type ActivityParticipationMode = 'solo' | 'guild';
 
 // Table `game_activities` : Activités sur la carte
 export interface Activity {
@@ -203,11 +224,13 @@ export interface Activity {
   mapY: number;
   sectorDepth: number;
   requiredLevel: number;
+  stepRanges?: ActivityStepRange[];
+  cardColor?: string;
+  participationMode?: ActivityParticipationMode;
   basePoints?: number;
   metadata?: ActivityMetadata;
   isCompleted?: boolean;
   isRevealed?: boolean;
-  isStormed?: boolean;
   isLocked?: boolean;
   isCurrent?: boolean;
   createdAt?: string;
@@ -264,11 +287,39 @@ export interface GameCharacterMove {
   createdAt?: string;
 }
 
+export type GameMapOccupancySegmentKind = 'guild' | 'solo';
+
+export interface GameMapOccupancyMember {
+  studentId: string;
+  displayName: string;
+  avatarUrl?: string;
+  characterClass?: GameCharacterClass;
+  fromActivityId?: string;
+  toActivityId?: string;
+}
+
+export interface GameMapOccupancySegment {
+  kind: GameMapOccupancySegmentKind;
+  studentCount: number;
+  guildId?: string;
+  guildName?: string;
+  guildIconUrl?: string;
+  color?: string;
+  members?: GameMapOccupancyMember[];
+}
+
+export interface GameMapNodeOccupancy {
+  activityId: string;
+  totalStudents: number;
+  segments: GameMapOccupancySegment[];
+}
+
 export interface GameMapData {
   run: GameMapRun;
   activities: Activity[];
   edges: GameActivityEdge[];
   completions: GameActivityCompletion[];
+  nodeOccupancies?: GameMapNodeOccupancy[];
   currentActivityId?: string;
   currentMove?: GameCharacterMove;
 }
@@ -286,6 +337,27 @@ export interface ProgressMilestone {
   descriptionI18nKey?: string;
   cost: number;
   reward: ProgressReward;
+}
+
+export interface GameRewardCard {
+  id: string;
+  gameId: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  cost: number;
+  accentToken?: string;
+  sortOrder: number;
+  createdAt?: string;
+}
+
+export interface GameRewardCardPayload {
+  title: string;
+  subtitle?: string;
+  description?: string;
+  cost: number;
+  accentToken?: string;
+  sortOrder?: number;
 }
 
 export type NotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';

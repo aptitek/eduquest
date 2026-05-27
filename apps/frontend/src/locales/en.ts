@@ -137,6 +137,15 @@ export const en: TranslationKeys = {
       constitution: 'Constitution bonus',
       charisma: 'Charisma bonus',
       charismaPassive: 'Charisma passive',
+      difficulty: 'Difficulty bonus',
+    },
+    spend: {
+      base: 'Vote cost',
+      charismaDiscount: 'Charisma discount',
+      notification: {
+        title: '-{amount} guild gold',
+        description: 'Spent {finalCost} gold for {votes} vote(s).',
+      },
     },
     breakdownLine: '{label}: {signedEffect}',
   },
@@ -427,6 +436,7 @@ export const en: TranslationKeys = {
       addEmail: 'Add email',
       cohort: 'Cohort',
       addCohort: 'Add cohort',
+      removeCohort: 'Remove cohort',
       filterCohorts: 'Choose a cohort…',
       chooseCohort: 'Choose a cohort',
       institutionalEmail: 'Institutional email',

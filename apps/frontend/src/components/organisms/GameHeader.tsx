@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { PlayingCard } from '../molecules/PlayingCard';
 import { useAuth } from '../../features/auth/useAuth';
+import { fetchSelectableGames } from '../../features/game/api';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
+import { useGameStore } from '../../features/game/gameStore';
 import {
   HeaderNotificationArea,
   HeaderNotificationButton,
@@ -16,7 +19,7 @@ import {
   formatRewardNotificationDescription,
   formatRewardNotificationTitle,
 } from '../../features/game/formatRewardNotification';
-import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
+import { Check, ChevronDown, Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
@@ -25,11 +28,21 @@ interface GameHeaderProps {
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const { user, character } = useAuth();
-  const dashboardData = useCohortProgressData();
+  const {
+    availableGames,
+    selectedGameId,
+    setAvailableGames,
+    setSelectedGameId,
+  } = useGameStore();
+  const dashboardData = useCohortProgressData(!user?.isAdmin, selectedGameId);
   const { t } = useTranslation();
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+  const [isGameMenuOpen, setIsGameMenuOpen] = useState(false);
+  const [gameMenuPosition, setGameMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const gameMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const gameMenuRef = useRef<HTMLUListElement>(null);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -46,6 +59,56 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isGameMenuOpen) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (gameMenuButtonRef.current?.contains(target) || gameMenuRef.current?.contains(target)) return;
+      setIsGameMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsGameMenuOpen(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isGameMenuOpen]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return undefined;
+
+    let isMounted = true;
+    fetchSelectableGames(token, selectedGameId)
+      .then(({ games, selectedGameId: nextSelectedGameId }) => {
+        if (!isMounted) return;
+
+        setAvailableGames(games);
+        const currentSelectionStillExists = Boolean(
+          selectedGameId && games.some((game) => game.id === selectedGameId)
+        );
+        const fallbackSelection = nextSelectedGameId || games[0]?.id || null;
+        if (!currentSelectionStillExists && selectedGameId !== fallbackSelection) {
+          setSelectedGameId(fallbackSelection);
+        }
+      })
+      .catch((error) => {
+        console.warn('Could not load selectable games.', error);
+        if (isMounted) setAvailableGames([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.isAdmin]);
 
   const dashboardNotifications: HeaderNotification[] = dashboardData?.notifications.length
     ? dashboardData.notifications.map((notification) => ({
@@ -77,6 +140,73 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const dismissNotification = (id: string) => {
     setDismissedNotificationIds((current) => new Set(current).add(id));
   };
+  const showGameSelector = user?.isAdmin ? availableGames.length > 0 : availableGames.length > 1;
+  const selectedGame = availableGames.find((game) => game.id === selectedGameId);
+  const openGameMenu = () => {
+    const rect = gameMenuButtonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setGameMenuPosition({
+        top: rect.bottom + 8,
+        left: Math.max(8, Math.min(window.innerWidth - 264, rect.right - 256)),
+      });
+    }
+    setIsGameMenuOpen((current) => !current);
+  };
+  const gameMenu =
+    showGameSelector && isGameMenuOpen && gameMenuPosition
+      ? createPortal(
+          <ul
+            ref={gameMenuRef}
+            className="menu fixed z-[100] w-64 rounded-box border border-gaming-border bg-gaming-card p-2 font-display text-xs font-bold uppercase tracking-[0.12em] text-text-secondary shadow-xl"
+            style={{ top: gameMenuPosition.top, left: gameMenuPosition.left }}
+          >
+            {availableGames.map((game) => {
+              const isSelected = game.id === selectedGameId;
+
+              return (
+                <li key={game.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGameId(game.id);
+                      setIsGameMenuOpen(false);
+                    }}
+                    className={cn(
+                      'flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition',
+                      isSelected ? 'bg-gaming-base text-status-quest' : 'hover:bg-gaming-base hover:text-text-primary'
+                    )}
+                  >
+                    <span className="truncate">{game.name}</span>
+                    {isSelected ? <Check size={14} aria-hidden /> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>,
+          document.body
+        )
+      : null;
+  const gameSelector = showGameSelector ? (
+    <>
+      <button
+        ref={gameMenuButtonRef}
+        type="button"
+        title={selectedGame?.name || 'Change game'}
+        onClick={openGameMenu}
+        className="flex h-full items-center justify-center border-r border-gaming-border px-2 text-text-secondary transition hover:bg-gaming-base hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-status-quest"
+        aria-expanded={isGameMenuOpen}
+        aria-haspopup="menu"
+        aria-label="Change game"
+      >
+        <ChevronDown
+          size={16}
+          className={cn('transition-transform', isGameMenuOpen && 'rotate-180')}
+          aria-hidden
+        />
+      </button>
+      {gameMenu}
+    </>
+  ) : null;
 
   return (
     <header className="relative z-50 flex w-full flex-col gap-2">
@@ -109,50 +239,92 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
               {t('map.nav')}
             </button>
 
-            <button
-              type="button"
-              aria-current={currentView === 'guild' ? 'page' : undefined}
-              onClick={() => {
-                window.location.hash = 'guild';
-              }}
-              className={cn(
-                'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                currentView === 'guild' && 'bg-gaming-base text-status-quest'
-              )}
-            >
-              <Users size={16} aria-hidden />
-              {t('guild.nav')}
-            </button>
+            {!user?.isAdmin ? (
+              <>
+                <button
+                  type="button"
+                  aria-current={currentView === 'guild' ? 'page' : undefined}
+                  onClick={() => {
+                    window.location.hash = 'guild';
+                  }}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    currentView === 'guild' && 'bg-gaming-base text-status-quest'
+                  )}
+                >
+                  <Users size={16} aria-hidden />
+                  {t('guild.nav')}
+                </button>
 
-            <button
-              type="button"
-              aria-current={currentView === 'class' ? 'page' : undefined}
-              onClick={() => {
-                window.location.hash = 'class';
-              }}
-              className={cn(
-                'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                currentView === 'class' && 'bg-gaming-base text-status-quest'
-              )}
-            >
-              <GraduationCap size={16} aria-hidden />
-              {t('class.nav')}
-            </button>
+                <button
+                  type="button"
+                  aria-current={currentView === 'class' ? 'page' : undefined}
+                  onClick={() => {
+                    window.location.hash = 'class';
+                  }}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    !gameSelector && 'border-r border-gaming-border',
+                    currentView === 'class' && 'bg-gaming-base text-status-quest'
+                  )}
+                >
+                  <GraduationCap size={16} aria-hidden />
+                  {t('class.nav')}
+                </button>
 
-            <button
-              type="button"
-              aria-current={currentView === 'progress' ? 'page' : undefined}
-              onClick={() => {
-                window.location.hash = 'progress';
-              }}
-              className={cn(
-                'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                currentView === 'progress' && 'bg-gaming-base text-status-quest'
-              )}
-            >
-              <Gift size={16} aria-hidden />
-              {t('progress.nav')}
-            </button>
+                {gameSelector}
+
+                <button
+                  type="button"
+                  aria-current={currentView === 'progress' ? 'page' : undefined}
+                  onClick={() => {
+                    window.location.hash = 'progress';
+                  }}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    currentView === 'progress' && 'bg-gaming-base text-status-quest'
+                  )}
+                >
+                  <Gift size={16} aria-hidden />
+                  {t('progress.nav')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  aria-current={currentView === 'class' ? 'page' : undefined}
+                  onClick={() => {
+                    window.location.hash = 'class';
+                  }}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    !gameSelector && 'border-r border-gaming-border',
+                    currentView === 'class' && 'bg-gaming-base text-status-quest'
+                  )}
+                >
+                  <GraduationCap size={16} aria-hidden />
+                  {t('class.nav')}
+                </button>
+
+                {gameSelector}
+
+                <button
+                  type="button"
+                  aria-current={currentView === 'progress' ? 'page' : undefined}
+                  onClick={() => {
+                    window.location.hash = 'progress';
+                  }}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    currentView === 'progress' && 'bg-gaming-base text-status-quest'
+                  )}
+                >
+                  <Gift size={16} aria-hidden />
+                  {t('progress.nav')}
+                </button>
+              </>
+            )}
 
             {user?.isAdmin && (
               <button

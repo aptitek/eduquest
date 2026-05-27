@@ -99,6 +99,20 @@
       "when": 1779876600000,
       "tag": "0013_character_moves",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1779963300000,
+      "tag": "0014_step_range_progression",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1779964200000,
+      "tag": "0015_activity_card_attributes",
+      "breakpoints": true
     }
   ]
 }

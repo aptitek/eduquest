@@ -1,11 +1,32 @@
 import type {
+  Game,
   CohortProgressData,
   GameActivityCompletion,
   GameCharacterMove,
   GameMapData,
+  GameRewardCard,
+  GameRewardCardPayload,
   Guild,
 } from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
+
+function withGameParam(path: string, gameId?: string | null) {
+  const url = new URL(`${BACKEND_BASE_URL}${path}`);
+  if (gameId) url.searchParams.set('gameId', gameId);
+  return url.toString();
+}
+
+type GamesResponse =
+  | {
+      success: true;
+      games: Game[];
+      selectedGameId?: string;
+      source?: string;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
 
 type DashboardResponse =
   | {
@@ -28,8 +49,29 @@ type GuildsResponse =
       error?: string;
     };
 
-export async function fetchCohortProgressData(token: string): Promise<CohortProgressData> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/dashboard`, {
+export async function fetchSelectableGames(
+  token: string,
+  gameId?: string | null
+): Promise<{ games: Game[]; selectedGameId?: string }> {
+  const response = await fetch(withGameParam('/api/games', gameId), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as GamesResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Games request failed.' : data.error || 'Games request failed.');
+  }
+
+  return { games: data.games, selectedGameId: data.selectedGameId };
+}
+
+export async function fetchCohortProgressData(
+  token: string,
+  gameId?: string | null
+): Promise<CohortProgressData> {
+  const response = await fetch(withGameParam('/api/dashboard', gameId), {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -44,8 +86,8 @@ export async function fetchCohortProgressData(token: string): Promise<CohortProg
   return data.progress;
 }
 
-export async function fetchGuilds(token: string): Promise<Guild[]> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds`, {
+export async function fetchGuilds(token: string, gameId?: string | null): Promise<Guild[]> {
+  const response = await fetch(withGameParam('/api/guilds', gameId), {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -91,6 +133,17 @@ type MoveCharacterResponse =
       error?: string;
     };
 
+type CohortStepResponse =
+  | {
+      success: true;
+      step?: { id: string; currentStep: number };
+      cohort?: { id: string; currentStep: number };
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
 type SpendGuildVotesResponse =
   | {
       success: true;
@@ -106,8 +159,28 @@ type SpendGuildVotesResponse =
       error?: string;
     };
 
-export async function fetchMapActivities(token: string): Promise<GameMapData> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/map`, {
+type RewardCardsResponse =
+  | {
+      success: true;
+      rewardCards: GameRewardCard[];
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type RewardCardResponse =
+  | {
+      success: true;
+      rewardCard: GameRewardCard;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+export async function fetchMapActivities(token: string, gameId?: string | null): Promise<GameMapData> {
+  const response = await fetch(withGameParam('/api/map', gameId), {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -123,9 +196,10 @@ export async function fetchMapActivities(token: string): Promise<GameMapData> {
 
 export async function completeMapActivity(
   token: string,
-  activityId: string
+  activityId: string,
+  gameId?: string | null
 ): Promise<GameActivityCompletion> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/map/activities/${activityId}/complete`, {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/complete`, gameId), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -144,9 +218,10 @@ export async function completeMapActivity(
 
 export async function moveCharacterToActivity(
   token: string,
-  activityId: string
+  activityId: string,
+  gameId?: string | null
 ): Promise<{ move: GameCharacterMove; currentActivityId: string }> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/map/activities/${activityId}/move`, {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/move`, gameId), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -159,6 +234,39 @@ export async function moveCharacterToActivity(
   }
 
   return { move: data.move, currentActivityId: data.currentActivityId };
+}
+
+export async function fetchCohortStep(token: string, cohortId: string): Promise<number> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/cohorts/${cohortId}/step`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as CohortStepResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Cohort step request failed.' : data.error || 'Cohort step request failed.');
+  }
+
+  return data.step?.currentStep ?? data.cohort?.currentStep ?? 0;
+}
+
+export async function updateCohortStep(token: string, cohortId: string, currentStep: number): Promise<number> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/cohorts/${cohortId}/step`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ currentStep }),
+  });
+  const data = (await response.json()) as CohortStepResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Cohort step update failed.' : data.error || 'Cohort step update failed.');
+  }
+
+  return data.cohort?.currentStep ?? data.step?.currentStep ?? currentStep;
 }
 
 export async function spendGuildVotes(token: string, guildId: string, votes = 1) {
@@ -177,4 +285,84 @@ export async function spendGuildVotes(token: string, guildId: string, votes = 1)
   }
 
   return data.voteSpend;
+}
+
+export async function fetchGameRewardCards(token: string, gameId: string): Promise<GameRewardCard[]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/reward-cards`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as RewardCardsResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Reward cards request failed.' : data.error || 'Reward cards request failed.');
+  }
+
+  return data.rewardCards;
+}
+
+export async function createGameRewardCard(
+  token: string,
+  gameId: string,
+  payload: GameRewardCardPayload
+): Promise<GameRewardCard> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/reward-cards`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as RewardCardResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Reward card create failed.' : data.error || 'Reward card create failed.');
+  }
+
+  return data.rewardCard;
+}
+
+export async function updateGameRewardCard(
+  token: string,
+  gameId: string,
+  rewardCardId: string,
+  payload: GameRewardCardPayload
+): Promise<GameRewardCard> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/reward-cards/${rewardCardId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as RewardCardResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Reward card update failed.' : data.error || 'Reward card update failed.');
+  }
+
+  return data.rewardCard;
+}
+
+export async function deleteGameRewardCard(
+  token: string,
+  gameId: string,
+  rewardCardId: string
+): Promise<GameRewardCard> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/reward-cards/${rewardCardId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as RewardCardResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Reward card delete failed.' : data.error || 'Reward card delete failed.');
+  }
+
+  return data.rewardCard;
 }

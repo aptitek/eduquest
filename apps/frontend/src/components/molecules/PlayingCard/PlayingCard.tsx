@@ -167,7 +167,7 @@ export function PlayingCard({
   const [isFlipped, setIsFlipped] = useState(false);
   const front = resolveFrontSide(card);
   const accent = resolveCardAccent(card, front);
-  const color = ACCENT_COLOR_MAP[accent] || DEFAULT_CARD_COLOR;
+  const color = resolveCardColor(card, front, accent);
   const layoutId = card.disableLayoutAnimation ? undefined : card.layoutId || card.id;
   const isFull = size === 'full';
   const isNano = size === 'nano';
@@ -187,6 +187,7 @@ export function PlayingCard({
         onClick?.();
       }}
       transition={PLAYING_CARD_TRANSITION}
+      style={{ '--playing-card-accent': color } as CSSProperties}
       className={cn(
         'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl outline-none',
         'transition-[filter,box-shadow,width,transform,border-radius] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-[color:var(--playing-card-accent)]',
@@ -276,7 +277,15 @@ function PlayingCardFront({
   }
 
   if (size === 'full') {
-    return <FullCardSide side={side} color={color} layoutId={layoutId} className={className} />;
+    return (
+      <FullCardSide
+        side={side}
+        color={color}
+        ribbonClassName={ribbonClassName}
+        layoutId={layoutId}
+        className={className}
+      />
+    );
   }
 
   if (size === 'nano') {
@@ -372,11 +381,13 @@ function PlayingCardFront({
 function FullCardSide({
   side,
   color,
+  ribbonClassName,
   layoutId,
   className,
 }: {
   side: PlayingCardSide;
   color: string;
+  ribbonClassName?: string;
   layoutId?: string;
   className?: string;
 }) {
@@ -408,6 +419,7 @@ function FullCardSide({
             size="md"
             color={color}
             icon={resolveRibbonIcon(undefined, side)}
+            ribbonClassName={ribbonClassName}
             onClick={side.onRibbonClick}
             ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
           >
@@ -629,6 +641,10 @@ function resolveCardAccent(card: PlayingCardData, front: PlayingCardSide) {
     card.accentToken || card.guild?.color || String(front.color || card.color || ''),
     card.characterClass
   );
+}
+
+function resolveCardColor(card: PlayingCardData, front: PlayingCardSide, accent: PlayingCardAccent) {
+  return String(front.color || card.color || ACCENT_COLOR_MAP[accent] || DEFAULT_CARD_COLOR);
 }
 
 function resolveAccentToken(value: string | undefined, characterClass?: GameCharacterClass): PlayingCardAccent {

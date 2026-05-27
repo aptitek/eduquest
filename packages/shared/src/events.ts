@@ -49,6 +49,7 @@ export interface GuildGoldSpentPayload {
   amount: number;
   balance: number;
   reason: 'votes' | 'reward' | 'manual';
+  breakdown?: VoteSpendBreakdown;
 }
 
 export interface GuildVotesSpentPayload {
@@ -74,7 +75,7 @@ export interface ProgressBoostedPayload {
   cost: number;
 }
 
-import type { RewardComputationBreakdown } from './rewards';
+import type { RewardComputationBreakdown, VoteSpendBreakdown } from './rewards';
 
 export interface RewardCalculatedPayload {
   guildId: string;

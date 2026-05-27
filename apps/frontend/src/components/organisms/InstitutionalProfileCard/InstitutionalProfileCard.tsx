@@ -6,6 +6,7 @@ import { EditableAvatar } from '../../molecules/EditableAvatar';
 import { SplitEditableText } from '../../molecules/SplitEditableText';
 import { EditablePronouns } from '../../molecules/EditablePronouns';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown/BadgeDropdown';
+import { EditableList } from '../../molecules/EditableList';
 import { SchoolLogoBadge } from '../../molecules/SchoolLogoBadge';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { Cohort, User } from '@eduquest/shared';
@@ -233,6 +234,10 @@ export function InstitutionalProfileCard({
     if (!nextCohort || !onCohortsChange) return;
     onCohortsChange([...selectedCohortValues, nextCohort]);
     setCohortSchoolDraft(null);
+  };
+  const removeCohort = (cohortId: string) => {
+    if (!onCohortsChange) return;
+    onCohortsChange(selectedCohortValues.filter((selectedCohortId) => selectedCohortId !== cohortId));
   };
   const showRoleBadge = !hideRoleBadge;
   const showRoleHeaderBadge = showRoleBadge && !useRoleRibbon;
@@ -489,43 +494,63 @@ export function InstitutionalProfileCard({
 
               {canEditCohorts && (
                 <div className="border-t border-gaming-border p-2.5">
-                  <div className="flex flex-col gap-1.5">
-                    <BadgeDropdown
-                      options={addableSchoolOptions}
-                      value={cohortSchoolDraft ? [cohortSchoolDraft] : []}
-                      onChange={(next) => setCohortSchoolDraft(next[0] || null)}
-                      multiple={false}
-                      placeholder="+"
-                      searchPlaceholder={ic('filterSchool')}
-                      emptyFilterHint={ic('chooseSchool')}
-                      className="w-full"
-                      badgeClassName="btn btn-xs btn-outline h-6 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-2 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
-                      selectedMaxWidth="max-w-full"
-                      fullWidth
-                      renderBadge={(school) =>
-                        renderCohortSchoolBadge ? renderCohortSchoolBadge(school) : school
-                      }
-                      showArrow={false}
-                    />
-
-                    {cohortSchoolDraft && (
-                      <BadgeDropdown
-                        options={addableCohortOptions}
-                        value={[]}
-                        onChange={(next) => addCohort(next[0])}
-                        multiple={false}
-                        placeholder={ic('cohort')}
-                        searchPlaceholder={ic('filterCohorts')}
-                        emptyFilterHint={ic('chooseCohort')}
-                        className="w-full"
-                        badgeClassName="btn btn-xs btn-outline h-6 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-2 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
-                        selectedMaxWidth="max-w-full"
-                        fullWidth
-                        renderBadge={renderSelectedCohortBadge || renderCohortBadge}
-                        showArrow={false}
-                      />
+                  <EditableList
+                    items={selectedCohortValues}
+                    getKey={(cohortId) => cohortId}
+                    renderItem={(cohortId) => (
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 truncate">
+                          {renderSelectedCohortContent(cohortId)}
+                        </span>
+                        <span className="shrink-0 text-xs text-text-muted">
+                          {getCohortSchoolName?.(cohortId) || schoolName || ic('school')}
+                        </span>
+                      </div>
                     )}
-                  </div>
+                    onRemove={(cohortId) => removeCohort(cohortId)}
+                    removeLabel={ic('removeCohort')}
+                    emptyState={ic('chooseCohort')}
+                    addControl={
+                      <div className="flex flex-col gap-1.5">
+                      <BadgeDropdown
+                          options={addableSchoolOptions}
+                          value={cohortSchoolDraft ? [cohortSchoolDraft] : []}
+                          onChange={(next) => setCohortSchoolDraft(next[0] || null)}
+                          multiple={false}
+                          placeholder="+"
+                          searchPlaceholder={ic('filterSchool')}
+                          emptyFilterHint={ic('chooseSchool')}
+                          className="w-full"
+                          badgeClassName="btn btn-xs btn-outline h-6 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-2 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
+                          selectedMaxWidth="max-w-full"
+                          fullWidth
+                          renderBadge={(school) =>
+                            renderCohortSchoolBadge ? renderCohortSchoolBadge(school) : school
+                          }
+                          showArrow={false}
+                        />
+
+                        {cohortSchoolDraft && (
+                          <BadgeDropdown
+                            options={addableCohortOptions}
+                            value={[]}
+                            onChange={(next) => addCohort(next[0])}
+                            multiple={false}
+                            placeholder={ic('cohort')}
+                            searchPlaceholder={ic('filterCohorts')}
+                            emptyFilterHint={ic('chooseCohort')}
+                            className="w-full"
+                            badgeClassName="btn btn-xs btn-outline h-6 min-h-0 w-full border-gaming-border bg-gaming-base/30 px-2 text-text-secondary hover:border-primary hover:bg-primary hover:text-primary-content"
+                            selectedMaxWidth="max-w-full"
+                            fullWidth
+                            renderBadge={renderSelectedCohortBadge || renderCohortBadge}
+                            showArrow={false}
+                          />
+                        )}
+                      </div>
+                    }
+                    itemClassName="bg-gaming-card/40"
+                      />
                 </div>
               )}
             </div>

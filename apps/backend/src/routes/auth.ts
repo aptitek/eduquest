@@ -16,6 +16,7 @@ import type {
   CohortMembership,
 } from '@eduquest/shared';
 import { GAME_CHARACTER_CLASSES } from '@eduquest/shared';
+import type { RewardBalanceConfigPayload } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
   addresses,
@@ -43,6 +44,8 @@ import {
   requireFrontendUrl,
   requireJwtSecret,
 } from '../config/runtime';
+import { RewardBalanceConfigService } from '../services/reward-balance-config';
+import { RewardPreviewService } from '../services/reward-preview';
 
 type Bindings = {
   APP_ENV?: string;
@@ -791,27 +794,29 @@ authRouter.get('/github/callback', async (c) => {
             })
             .where(eq(users.id, userId));
 
-          const existingStudents = await db
-            .select()
-            .from(students)
-            .where(eq(students.userId, userId))
-            .limit(1);
+          if (!isAdmin) {
+            const existingStudents = await db
+              .select()
+              .from(students)
+              .where(eq(students.userId, userId))
+              .limit(1);
 
-          if (existingStudents[0]) {
-            authenticatedStudentId = existingStudents[0].id;
-          } else if (cohortInvite) {
-            const [newStudent] = await db
-              .insert(students)
-              .values({
-                userId,
-              })
-              .returning();
+            if (existingStudents[0]) {
+              authenticatedStudentId = existingStudents[0].id;
+            } else if (cohortInvite) {
+              const [newStudent] = await db
+                .insert(students)
+                .values({
+                  userId,
+                })
+                .returning();
 
-            authenticatedStudentId = newStudent.id;
+              authenticatedStudentId = newStudent.id;
 
-            await db
-              .insert(gameCharacters)
-              .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+              await db
+                .insert(gameCharacters)
+                .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+            }
           }
         } else {
           // Création d'un nouvel utilisateur (Auto-registration)
@@ -831,23 +836,25 @@ authRouter.get('/github/callback', async (c) => {
           userId = newUser.id;
           isAdmin = newUser.isAdmin;
 
-          // Création du profil étudiant associé (RPG Persona)
-          const [newStudent] = await db
-            .insert(students)
-            .values({
-              userId: newUser.id,
-            })
-            .returning();
+          if (!isAdmin) {
+            // Création du profil étudiant associé (RPG Persona)
+            const [newStudent] = await db
+              .insert(students)
+              .values({
+                userId: newUser.id,
+              })
+              .returning();
 
-          authenticatedStudentId = newStudent.id;
+            authenticatedStudentId = newStudent.id;
 
-          // Création du personnage JDR avec stats de départ
-          await db
-            .insert(gameCharacters)
-            .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+            // Création du personnage JDR avec stats de départ
+            await db
+              .insert(gameCharacters)
+              .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+          }
         }
 
-        if (authenticatedStudentId) {
+        if (!isAdmin && authenticatedStudentId) {
           await assignStudentToInvitedCohort(databaseUrl, cohortInvite, userId);
         }
       } catch (dbError: any) {
@@ -1358,6 +1365,112 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
   });
 });
 
+function requireAdmin(c: { get: (key: 'user') => UserPayload | undefined }) {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return null;
+  }
+  return currentUser;
+}
+
+authRouter.get('/management/reward-balance', async (c) => {
+  if (!requireAdmin(c)) {
+    return c.json({ success: false, error: 'Forbidden' }, 403);
+  }
+
+  if (!c.env.DATABASE_URL) {
+    const config = await RewardBalanceConfigService.getActiveConfig();
+    return c.json({ success: true, config });
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const config = await RewardBalanceConfigService.getActiveConfig(db);
+  return c.json({ success: true, config });
+});
+
+authRouter.get('/management/reward-balance/versions', async (c) => {
+  if (!requireAdmin(c)) {
+    return c.json({ success: false, error: 'Forbidden' }, 403);
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return c.json({ success: true, versions: [] });
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const versions = await RewardBalanceConfigService.listVersions(db);
+  return c.json({ success: true, versions });
+});
+
+authRouter.put('/management/reward-balance', async (c) => {
+  const currentUser = requireAdmin(c);
+  if (!currentUser) {
+    return c.json({ success: false, error: 'Forbidden' }, 403);
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+  }
+
+  let body: RewardBalanceConfigPayload;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const created = await RewardBalanceConfigService.publish(db, body, currentUser.id);
+  const config = await RewardBalanceConfigService.getActiveConfig(db);
+
+  return c.json({ success: true, version: created, config });
+});
+
+authRouter.post('/management/reward-balance/preview', async (c) => {
+  if (!requireAdmin(c)) {
+    return c.json({ success: false, error: 'Forbidden' }, 403);
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+  }
+
+  let body: RewardBalanceConfigPayload & {
+    activityId?: string;
+    studentId?: string;
+    guildId?: string;
+    cohortId?: string;
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  if (!body.activityId || !body.studentId || !body.guildId) {
+    return c.json(
+      { success: false, error: 'activityId, studentId, and guildId are required.' },
+      400
+    );
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const { activityId, studentId, guildId, cohortId, ...configPayload } = body;
+  const breakdown = await new RewardPreviewService(db).preview({
+    activityId,
+    studentId,
+    guildId,
+    cohortId,
+    configOverride: configPayload,
+  });
+
+  if (!breakdown) {
+    return c.json({ success: false, error: 'Activity not found.' }, 404);
+  }
+
+  return c.json({ success: true, breakdown });
+});
+
 // 3. GET /api/auth/mock : Bypass développeur pour environnement local
 authRouter.get('/mock', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
@@ -1444,12 +1557,14 @@ authRouter.get('/mock', async (c) => {
           })
           .where(eq(users.id, userId));
 
-        const existingStudents = await db
-          .select()
-          .from(students)
-          .where(eq(students.userId, userId))
-          .limit(1);
-        authenticatedStudentId = existingStudents[0]?.id;
+        if (!isAdmin) {
+          const existingStudents = await db
+            .select()
+            .from(students)
+            .where(eq(students.userId, userId))
+            .limit(1);
+          authenticatedStudentId = existingStudents[0]?.id;
+        }
       } else {
         const [newUser] = await db
           .insert(users)
@@ -1467,21 +1582,23 @@ authRouter.get('/mock', async (c) => {
         userId = newUser.id;
         isAdmin = newUser.isAdmin;
 
-        const [newStudent] = await db
-          .insert(students)
-          .values({
-            userId: newUser.id,
-          })
-          .returning();
+        if (!isAdmin) {
+          const [newStudent] = await db
+            .insert(students)
+            .values({
+              userId: newUser.id,
+            })
+            .returning();
 
-        authenticatedStudentId = newStudent.id;
+          authenticatedStudentId = newStudent.id;
 
-        await db
-          .insert(gameCharacters)
-          .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+          await db
+            .insert(gameCharacters)
+            .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+        }
       }
 
-      if (authenticatedStudentId) {
+      if (!isAdmin && authenticatedStudentId) {
         await assignStudentToInvitedCohort(databaseUrl, cohortInvite, userId);
       }
     } catch (dbError: any) {
@@ -1542,47 +1659,61 @@ authRouter.get('/me', authMiddleware, async (c) => {
   };
 
   // Données de simulation par défaut (Offline/Resilient fallback)
-  let studentObj: Student = debugProfile?.student || {
-    id: 'stud_mock_1',
-    userId: userPayload.id,
-    cohortMemberships: [
-      {
+  let studentObj: Student | null = userObj.isAdmin
+    ? null
+    : debugProfile?.student || {
+        id: 'stud_mock_1',
         userId: userPayload.id,
-        cohortId: 'cohort_mock_1',
-        institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
-        cohort: {
-          id: 'cohort_mock_1',
-          schoolId: 'school_mock_1',
-          school: {
-            id: 'school_mock_1',
-            name: 'Aptitek',
-            emailDomain: 'school.edu',
+        cohortMemberships: [
+          {
+            userId: userPayload.id,
+            cohortId: 'cohort_mock_1',
+            institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
+            cohort: {
+              id: 'cohort_mock_1',
+              schoolId: 'school_mock_1',
+              school: {
+                id: 'school_mock_1',
+                name: 'Aptitek',
+                emailDomain: 'school.edu',
+              },
+              startYear: 2025,
+              grade: 'bachelor',
+              level: 3,
+              name: 'Frontend Mages',
+            },
           },
-          startYear: 2025,
-          grade: 'bachelor',
-          level: 3,
-          name: 'Frontend Mages',
-        },
-      },
-    ],
-  };
+        ],
+      };
 
-  let characterObj: GameCharacter = debugProfile?.character || {
-    studentId: 'stud_mock_1',
-    characterClass: DEFAULT_CHARACTER_CLASS,
-    stats: {
-      strength: 8,
-      dexterity: 10,
-      constitution: 10,
-      intelligence: 18,
-      wisdom: 12,
-      charisma: 12,
-    },
-  };
+  let characterObj: GameCharacter | null = userObj.isAdmin
+    ? null
+    : debugProfile?.character || {
+        studentId: 'stud_mock_1',
+        characterClass: DEFAULT_CHARACTER_CLASS,
+        stats: {
+          strength: 8,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 18,
+          wisdom: 12,
+          charisma: 12,
+        },
+      };
   let activityCompletionObj: GameActivityCompletion[] = debugProfile?.activityCompletions || [];
 
   if (debugProfile) {
     userObj = debugProfile.user;
+  }
+
+  if (!databaseUrl && userObj.isAdmin) {
+    return c.json({
+      success: true,
+      user: userObj,
+      student: null,
+      character: null,
+      activityCompletions: [],
+    });
   }
 
   // Si DB est configurée, charger les données réelles
@@ -1612,6 +1743,16 @@ authRouter.get('/me', authMiddleware, async (c) => {
           githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
           isAdmin: userRecord.isAdmin,
         };
+      }
+
+      if (userObj.isAdmin) {
+        return c.json({
+          success: true,
+          user: userObj,
+          student: null,
+          character: null,
+          activityCompletions: [],
+        });
       }
 
       const loadedStudents = await db
@@ -1838,46 +1979,50 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     isAdmin: userPayload.isAdmin,
   };
 
-  let studentObj = {
-    id: 'stud_mock_1',
-    userId: userPayload.id,
-    cohortMemberships: [
-      {
+  let studentObj: Student | null = userPayload.isAdmin
+    ? null
+    : {
+        id: 'stud_mock_1',
         userId: userPayload.id,
-        cohortId: 'cohort_mock_1',
-        institutionalEmail:
-          body.institutionalEmail ||
-          body.email?.split('@')[0] + '@school.edu' ||
-          userPayload.email.split('@')[0] + '@school.edu',
-        cohort: {
-          id: 'cohort_mock_1',
-          schoolId: 'school_mock_1',
-          school: {
-            id: 'school_mock_1',
-            name: 'Aptitek',
-            emailDomain: 'school.edu',
+        cohortMemberships: [
+          {
+            userId: userPayload.id,
+            cohortId: 'cohort_mock_1',
+            institutionalEmail:
+              body.institutionalEmail ||
+              body.email?.split('@')[0] + '@school.edu' ||
+              userPayload.email.split('@')[0] + '@school.edu',
+            cohort: {
+              id: 'cohort_mock_1',
+              schoolId: 'school_mock_1',
+              school: {
+                id: 'school_mock_1',
+                name: 'Aptitek',
+                emailDomain: 'school.edu',
+              },
+              startYear: 2025,
+              grade: 'bachelor',
+              level: 3,
+              name: 'Frontend Mages',
+            },
           },
-          startYear: 2025,
-          grade: 'bachelor',
-          level: 3,
-          name: 'Frontend Mages',
-        },
-      },
-    ],
-  };
+        ],
+      };
 
-  let characterObj: GameCharacter = {
-    studentId: 'stud_mock_1',
-    characterClass: normalizeGameCharacterClass(body.characterClass),
-    stats: {
-      strength: 8,
-      dexterity: 10,
-      constitution: 10,
-      intelligence: 18,
-      wisdom: 12,
-      charisma: 12,
-    },
-  };
+  let characterObj: GameCharacter | null = userPayload.isAdmin
+    ? null
+    : {
+        studentId: 'stud_mock_1',
+        characterClass: normalizeGameCharacterClass(body.characterClass),
+        stats: {
+          strength: 8,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 18,
+          wisdom: 12,
+          charisma: 12,
+        },
+      };
 
   if (databaseUrl) {
     try {
@@ -1918,16 +2063,21 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         };
       }
 
-      // 2. Mise à jour de la table `students`
-      const existingStudents = await db
-        .select()
-        .from(students)
-        .where(eq(students.userId, userPayload.id))
-        .limit(1);
+      if (userObj.isAdmin) {
+        studentObj = null;
+        characterObj = null;
+      } else {
 
-      if (existingStudents.length > 0) {
-        const studentRecord = existingStudents[0];
-        const studentId = studentRecord.id;
+        // 2. Mise à jour de la table `students`
+        const existingStudents = await db
+          .select()
+          .from(students)
+          .where(eq(students.userId, userPayload.id))
+          .limit(1);
+
+        if (existingStudents.length > 0) {
+          const studentRecord = existingStudents[0];
+          const studentId = studentRecord.id;
 
         const latestMemberships = await db
           .select()
@@ -2081,6 +2231,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             stats: toGameCharacterStats(updatedChar),
           };
         }
+      }
       }
     } catch (dbError: any) {
       console.warn('Database error saving user profile:', dbError.message);

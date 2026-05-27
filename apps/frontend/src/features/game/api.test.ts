@@ -6,11 +6,13 @@ vi.mock('../auth/useAuth', () => ({
 
 import {
   completeMapActivity,
+  fetchCohortStep,
   fetchCohortProgressData,
   fetchGuilds,
   fetchMapActivities,
   moveCharacterToActivity,
   spendGuildVotes,
+  updateCohortStep,
 } from './api';
 
 describe('game API client', () => {
@@ -44,7 +46,7 @@ describe('game API client', () => {
     const map = {
       run: { id: 'run-1', cohortId: 'cohort-1', currentSectorDepth: 0, fogRevealDepth: 1, status: 'active' },
       activities: [
-        { id: 'activity-1', type: 'practical', title: 'Quest', isGraded: true, mapX: 10, mapY: 20, sectorDepth: 1, requiredLevel: 1, basePoints: 100 },
+        { id: 'activity-1', type: 'practical', title: 'Quest', isGraded: true, mapX: 10, mapY: 20, sectorDepth: 1, requiredLevel: 1, stepRanges: [{ startStep: 0 }], basePoints: 100 },
       ],
       edges: [],
       completions: [],
@@ -100,6 +102,31 @@ describe('game API client', () => {
         headers: { Authorization: 'Bearer token-1' },
       }
     );
+  });
+
+  it('loads hidden cohort step from the admin route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, step: { id: 'cohort-1', currentStep: 4 } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCohortStep('token-1', 'cohort-1')).resolves.toBe(4);
+    expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/admin/cohorts/cohort-1/step', {
+      headers: { Authorization: 'Bearer token-1' },
+    });
+  });
+
+  it('updates hidden cohort step through the admin route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, cohort: { id: 'cohort-1', currentStep: 5 } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(updateCohortStep('token-1', 'cohort-1', 5)).resolves.toBe(5);
+    expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/admin/cohorts/cohort-1/step', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token-1',
+      },
+      body: JSON.stringify({ currentStep: 5 }),
+    });
   });
 
   it('posts guild vote spending to the backend route', async () => {

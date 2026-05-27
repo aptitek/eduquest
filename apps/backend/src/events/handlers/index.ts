@@ -1,5 +1,10 @@
 import { desc } from 'drizzle-orm';
-import type { DomainEvent, DomainEventType, RewardNotificationContext } from '@eduquest/shared';
+import type {
+  DomainEvent,
+  DomainEventType,
+  RewardNotificationContext,
+  VoteSpendNotificationContext,
+} from '@eduquest/shared';
 import { auditLogs, notifications } from '../../db/schema';
 import type { EventContext, EventHandler } from '../context';
 
@@ -16,14 +21,6 @@ const NOTIFICATION_TEMPLATES: Partial<
     }
   >
 > = {
-  'guild.votes.spent': {
-    titleI18nKey: 'dashboard.notifications.rewardSpend.title',
-    descriptionI18nKey: 'dashboard.notifications.rewardSpend.description',
-    icon: 'gift',
-    tone: 'neutral',
-    actionLabelI18nKey: 'dashboard.notifications.rewardSpend.action',
-    actionTarget: 'review',
-  },
   'github.ci.passed': {
     titleI18nKey: 'dashboard.notifications.cohortQuest.title',
     descriptionI18nKey: 'dashboard.notifications.cohortQuest.description',
@@ -101,6 +98,32 @@ export const notificationEventHandler: EventHandler = async (event, context) => 
       tone: 'warning',
       actionLabelI18nKey: 'dashboard.notifications.rewardGold.action',
       actionTarget: 'collect',
+      context: notificationContext,
+      sortOrder,
+    });
+    return;
+  }
+
+  if (event.type === 'guild.gold.spent') {
+    const payload = event.payload as import('@eduquest/shared').GuildGoldSpentPayload;
+    if (payload.reason !== 'votes' || !payload.breakdown) {
+      return;
+    }
+
+    const sortOrder = await nextNotificationSortOrder(context.db);
+    const notificationContext: VoteSpendNotificationContext = {
+      type: 'vote_spend',
+      breakdown: payload.breakdown,
+    };
+
+    await context.db.insert(notifications).values({
+      guildId: payload.guildId,
+      titleI18nKey: 'rewards.spend.notification.title',
+      descriptionI18nKey: 'rewards.spend.notification.description',
+      icon: 'gift',
+      tone: 'neutral',
+      actionLabelI18nKey: 'dashboard.notifications.rewardSpend.action',
+      actionTarget: 'review',
       context: notificationContext,
       sortOrder,
     });
