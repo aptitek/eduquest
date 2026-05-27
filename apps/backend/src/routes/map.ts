@@ -266,6 +266,8 @@ function buildNodeOccupancies(
       displayName: formatOccupancyMemberName(member),
       avatarUrl: member.avatarUrl || member.githubAvatarUrl || undefined,
       characterClass: toCharacterClass(member.characterClass),
+      guildId: member.guildId || undefined,
+      guildName: member.guildName || undefined,
       fromActivityId: move.fromActivityId || undefined,
       toActivityId: move.toActivityId,
     };

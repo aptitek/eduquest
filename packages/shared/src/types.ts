@@ -294,6 +294,8 @@ export interface GameMapOccupancyMember {
   displayName: string;
   avatarUrl?: string;
   characterClass?: GameCharacterClass;
+  guildId?: string;
+  guildName?: string;
   fromActivityId?: string;
   toActivityId?: string;
 }

@@ -21,7 +21,7 @@ import {
 } from '@xyflow/react';
 import { X } from 'lucide-react';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
-import { AvatarAccordionStack, type AvatarAccordionMember } from './AvatarAccordionStack';
+import { AvatarDeck, type AvatarDeckMember } from './AvatarDeck';
 import { cn } from '../../utils/cn';
 
 export interface GraphNode<TMetadata = unknown> {
@@ -54,7 +54,7 @@ export interface GraphNodeAnnularSegment {
   members?: GraphNodeAnnularMember[];
 }
 
-export type GraphNodeAnnularMember = AvatarAccordionMember;
+export type GraphNodeAnnularMember = AvatarDeckMember;
 
 export interface GraphEdge {
   id: string;
@@ -460,7 +460,7 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
         </div>
       ) : null}
       {node.marker ? (
-        <div className="pointer-events-none absolute -top-5 left-1/2 z-30 -translate-x-1/2">
+        <div className="pointer-events-auto absolute -top-5 left-1/2 z-30 -translate-x-1/2">
           {node.marker}
         </div>
       ) : null}
@@ -590,7 +590,7 @@ function RingSectorPopover({ segment }: { segment: GraphNodeAnnularSegment }) {
         </div>
       </div>
       {segment.members?.length ? (
-        <AvatarAccordionStack members={segment.members} color={segment.color} className="min-w-0" />
+        <AvatarDeck members={segment.members} color={segment.color} className="min-w-0" />
       ) : null}
     </div>
   );

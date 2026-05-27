@@ -80,6 +80,30 @@ export function ClassPage() {
     remainingGuilds.length >= ALPHABET_SCROLL_MIN_GUILDS &&
     visibleLetters.length >= ALPHABET_SCROLL_MIN_LETTERS;
 
+  useEffect(() => {
+    if (loading) return;
+
+    const rawTarget = sessionStorage.getItem('eduquest_class_scroll_target');
+    if (!rawTarget) return;
+
+    sessionStorage.removeItem('eduquest_class_scroll_target');
+
+    let target: { guildName?: string; memberId?: string } = {};
+    try {
+      target = JSON.parse(rawTarget) as typeof target;
+    } catch {
+      target = {};
+    }
+
+    const element = target.guildName
+      ? document.getElementById(`class-guild-${slugify(target.guildName)}`)
+      : document.getElementById('class-guilds-title');
+
+    window.setTimeout(() => {
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  }, [loading, groupedHands]);
+
   return (
     <GameLayout>
       <GameHeader currentView="class" />
@@ -164,6 +188,7 @@ function ClassHandSection({
 }) {
   return (
     <section
+      id={`class-guild-${slugify(hand.title || 'guild')}`}
       aria-label={hand.title}
       className={cn(
         'relative overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-4 shadow-lg',

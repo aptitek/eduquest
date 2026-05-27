@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Activity, ActivityType, GameActivityEdge, GameCharacterClass, GameMapNodeOccupancy } from '@eduquest/shared';
 import { GenericGraph, GraphEdge, GraphNode, type GraphNodeAnnularSegment } from '../molecules/GenericGraph';
-import { AvatarAccordionStack, type AvatarAccordionMember } from '../molecules/AvatarAccordionStack';
+import { AvatarDeck, type AvatarDeckMember } from '../molecules/AvatarDeck';
 import { BookOpen, CheckCircle2, CloudFog, Compass, Flame, Hammer, HelpCircle, Lock, Shield, Snowflake, Swords, User, Users } from 'lucide-react';
 import { getActivityVisualVariant } from '../../features/game/activityPresentation';
 
@@ -223,6 +223,7 @@ function buildMapNodeMarker({
             <GuildMemberMapMarker
               key={segment.guildId || `${activity.id}-${segment.guildName || segment.color}`}
               color={segment.color || FALLBACK_GUILD_COLOR}
+              guildName={segment.guildName}
               members={segment.members}
               currentActivity={activity}
               activityById={activityById}
@@ -236,12 +237,13 @@ function buildMapNodeMarker({
   return (
     <div className="flex items-center justify-center gap-1.5">
       {playerMarker ? (
-        <AvatarAccordionStack
+        <AvatarDeck
           members={[
             {
               id: 'current-player',
               name: playerMarker.label,
               avatarUrl: playerMarker.illustrationUrl,
+              onClick: () => openClassTarget(),
             },
           ]}
           color={CHARACTER_CLASS_COLORS[playerMarker.characterClass]}
@@ -256,19 +258,21 @@ function buildMapNodeMarker({
 
 function GuildMemberMapMarker({
   color,
+  guildName,
   members,
   currentActivity,
   activityById,
 }: {
   color: string;
+  guildName?: string;
   members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>;
   currentActivity: Activity;
   activityById: Map<string, Activity>;
 }) {
-  const avatarMembers = toAvatarMembers(members);
+  const avatarMembers = toAvatarMembers(members, guildName);
 
   return (
-    <AvatarAccordionStack
+    <AvatarDeck
       members={avatarMembers}
       color={color}
       size="sm"
@@ -282,14 +286,31 @@ function GuildMemberMapMarker({
 }
 
 function toAvatarMembers(
-  members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>
-): AvatarAccordionMember[] {
+  members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>,
+  guildName?: string
+): AvatarDeckMember[] {
   return members.map((member) => ({
     id: member.studentId,
     name: member.displayName,
     avatarUrl: member.avatarUrl,
     subtitle: member.characterClass,
+    onClick: () => openClassTarget(member.guildName || guildName, member.studentId),
   }));
+}
+
+function openClassTarget(guildName?: string, memberId?: string) {
+  if (guildName || memberId) {
+    sessionStorage.setItem(
+      'eduquest_class_scroll_target',
+      JSON.stringify({
+        guildName,
+        memberId,
+      })
+    );
+  }
+
+  window.location.hash = 'class';
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
 function getTravelStyle(travel?: { x: number; y: number }): CSSProperties | undefined {
@@ -342,6 +363,7 @@ function buildAnnularSegments(
                 name: member.displayName,
                 avatarUrl: member.avatarUrl,
                 subtitle: member.characterClass,
+                onClick: () => openClassTarget(member.guildName || segment.guildName, member.studentId),
               }))
             ),
           },
@@ -365,6 +387,7 @@ function buildAnnularSegments(
         name: member.displayName,
         avatarUrl: member.avatarUrl,
         subtitle: member.characterClass,
+        onClick: () => openClassTarget(member.guildName || segment.guildName, member.studentId),
       })),
     };
   });
