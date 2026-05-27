@@ -119,7 +119,7 @@ FRONTEND_URL=http://localhost:5173
 ENABLE_DEBUG_AUTH=true
 ```
 
-`DATABASE_URL` est optionnel pour les flux locaux de debug. Sans cette variable, le backend renvoie les données de debug locales. Avec cette variable, les routes utilisent PostgreSQL via Drizzle.
+`DATABASE_URL` est requis pour les données de l'API, y compris les flux locaux de debug. Les routes utilisent PostgreSQL via Drizzle et ne retombent plus sur des fixtures embarquées.
 
 ## Base De Données
 

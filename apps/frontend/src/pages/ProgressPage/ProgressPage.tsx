@@ -32,7 +32,7 @@ export function ProgressPage() {
           faceDown: true,
         },
       ] as [PlayingCardData, ...PlayingCardData[]]);
-  const nextVoteCards = buildProgressBonusCards(fallbackBonusCards, 'progress-next-vote');
+  const nextVoteCards = buildProgressBonusCards(t, fallbackBonusCards, 'progress-next-vote');
 
   return (
     <GameLayout>

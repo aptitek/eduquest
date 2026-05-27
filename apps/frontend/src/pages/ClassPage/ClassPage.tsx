@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
 import { Trophy, UserRound, Users } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
@@ -7,7 +6,7 @@ import { GameLayout } from '../../components/templates/GameLayout';
 import { CompoundBadge } from '../../components/atoms/CompoundBadge';
 import { PlayingCard, PlayingHandPanel, type PlayingCardData } from '../../components/molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid/ResponsiveCardGrid';
-import { fetchClassRoster, type ClassRosterStudent } from '../../features/game/api';
+import { fetchClassRoster, type ClassRosterGuild, type ClassRosterStudent } from '../../features/game/api';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
@@ -22,7 +21,7 @@ const ALPHABET_SCROLL_MIN_LETTERS = 5;
 export function ClassPage() {
   const { t } = useTranslation();
   const { student, selectedGameId } = useGameStore();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [guilds, setGuilds] = useState<ClassRosterGuild[]>([]);
   const [unguildedStudents, setUnguildedStudents] = useState<ClassRosterStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const latestMembership =
@@ -303,8 +302,8 @@ function AlphabetScrollbar({ letters, ariaLabel }: { letters: string[]; ariaLabe
   );
 }
 
-function groupGuildsByInitial(guilds: Guild[]) {
-  const groups = guilds.reduce<Record<string, Guild[]>>((accumulator, guild) => {
+function groupGuildsByInitial(guilds: ClassRosterGuild[]) {
+  const groups = guilds.reduce<Record<string, ClassRosterGuild[]>>((accumulator, guild) => {
     const letter = getGuildInitial(guild);
     accumulator[letter] = accumulator[letter] || [];
     accumulator[letter].push(guild);
@@ -316,45 +315,49 @@ function groupGuildsByInitial(guilds: Guild[]) {
     .map(([letter, groupGuilds]) => ({ letter, guilds: groupGuilds }));
 }
 
-function mergeGuilds(primaryGuilds: readonly Partial<Guild>[], secondaryGuilds: readonly Guild[]) {
-  const guildMap = new Map<string, Guild>();
+function mergeGuilds(
+  primaryGuilds: readonly Partial<ClassRosterGuild>[],
+  secondaryGuilds: readonly ClassRosterGuild[]
+) {
+  const guildMap = new Map<string, ClassRosterGuild>();
 
   [...primaryGuilds, ...secondaryGuilds].forEach((guild) => {
     if (!guild.name) return;
     guildMap.set(getGuildIdentityKey(guild), {
       id: getGuildStableId(guild),
       name: guild.name,
-      cohortId: guild.cohortId || 'demo',
+      cohortId: guild.cohortId || '',
       description: guild.description,
       iconUrl: guild.iconUrl,
       iconKey: guild.iconKey,
       color: guild.color,
       gold: guild.gold || 0,
+      members: guild.members,
       createdAt: guild.createdAt || new Date().toISOString(),
       updatedAt: guild.updatedAt || new Date().toISOString(),
-    } as Guild);
+    } as ClassRosterGuild);
   });
 
   return Array.from(guildMap.values());
 }
 
-function sortByPointsThenName(a: Guild, b: Guild) {
+function sortByPointsThenName(a: ClassRosterGuild, b: ClassRosterGuild) {
   return (b.gold || 0) - (a.gold || 0) || sortByName(a, b);
 }
 
-function sortByName(a: Guild, b: Guild) {
+function sortByName(a: ClassRosterGuild, b: ClassRosterGuild) {
   return a.name.localeCompare(b.name);
 }
 
-function getGuildInitial(guild: Guild) {
+function getGuildInitial(guild: ClassRosterGuild) {
   return guild.name.trim().charAt(0).toLocaleUpperCase() || '#';
 }
 
-function getGuildStableId(guild: Partial<Guild>) {
+function getGuildStableId(guild: Partial<ClassRosterGuild>) {
   return guild.id || slugify(guild.name || 'guild');
 }
 
-function getGuildIdentityKey(guild: Partial<Guild>) {
+function getGuildIdentityKey(guild: Partial<ClassRosterGuild>) {
   return slugify(guild.name || getGuildStableId(guild));
 }
 

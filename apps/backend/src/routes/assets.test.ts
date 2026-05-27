@@ -5,6 +5,30 @@ import app from '../index';
 const JWT_SECRET = 'test-secret';
 
 describe('asset routes', () => {
+  it('does not accept the development JWT secret in production', async () => {
+    const bucket = createBucketMock();
+    const token = await sign(
+      { id: 'user-1', email: 'user@test.dev', isAdmin: false },
+      'eduquest-secret-key-1337-gaming-token',
+      'HS256'
+    );
+    const form = new FormData();
+    form.set('file', new File(['avatar-bytes'], 'avatar.webp', { type: 'image/webp' }));
+
+    const response = await app.request(
+      '/api/assets/avatar',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      },
+      { ASSETS: bucket, APP_ENV: 'production' }
+    );
+
+    expect(response.status).toBe(500);
+    expect(bucket.put).not.toHaveBeenCalled();
+  });
+
   it('stores authenticated avatar uploads in R2 and returns a public asset URL', async () => {
     const bucket = createBucketMock();
     const token = await tokenFor({ id: 'user-1', email: 'user@test.dev', isAdmin: false });
@@ -176,7 +200,7 @@ describe('asset routes', () => {
         },
         body: JSON.stringify({ avatarUrl: 'data:image/png;base64,abc123' }),
       },
-      { JWT_SECRET, APP_ENV: 'development', ENABLE_MOCK_DATA: 'true' }
+      { JWT_SECRET, APP_ENV: 'development' }
     );
     const payload = (await response.json()) as { errorKey?: string };
 
@@ -197,10 +221,49 @@ describe('asset routes', () => {
         },
         body: JSON.stringify({ logoUrl: 'data:image/svg+xml;base64,abc123' }),
       },
-      { JWT_SECRET, APP_ENV: 'development', ENABLE_MOCK_DATA: 'true' }
+      { JWT_SECRET, APP_ENV: 'development' }
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it('requires a database before accepting self-service profile updates', async () => {
+    const token = await tokenFor({ id: 'user-1', email: 'user@test.dev', isAdmin: false });
+
+    const response = await app.request(
+      '/api/auth/profile',
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          displayName: 'Updated profile',
+          email: 'admin@test.dev',
+          githubUsername: 'aptitek',
+        }),
+      },
+      { JWT_SECRET, APP_ENV: 'development' }
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(503);
+    expect(payload.error).toBe('DATABASE_URL is required.');
+  });
+
+  it('requires a GitHub webhook secret in production', async () => {
+    const response = await app.request(
+      '/api/webhooks/github',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'opened' }),
+      },
+      { APP_ENV: 'production' }
+    );
+
+    expect(response.status).toBe(401);
   });
 });
 

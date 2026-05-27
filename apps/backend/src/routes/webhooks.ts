@@ -5,8 +5,11 @@ import {
   publishEvents,
 } from '../events';
 import { getDb } from '../db';
+import { apiError } from './http';
+import { isProduction } from '../config/runtime';
 
 type Bindings = {
+  APP_ENV?: string;
   DATABASE_URL?: string;
   GITHUB_WEBHOOK_SECRET?: string;
 };
@@ -14,12 +17,13 @@ type Bindings = {
 const webhooksRouter = new Hono<{ Bindings: Bindings }>();
 
 async function verifyGitHubSignature(
-  secret: string | undefined,
+  env: Bindings,
   payload: string,
   signatureHeader: string | undefined
 ): Promise<boolean> {
+  const secret = env.GITHUB_WEBHOOK_SECRET;
   if (!secret) {
-    return true;
+    return !isProduction(env);
   }
 
   if (!signatureHeader?.startsWith('sha256=')) {
@@ -39,23 +43,33 @@ async function verifyGitHubSignature(
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 
-  return expected === signature;
+  return constantTimeEqual(expected, signature);
+}
+
+function constantTimeEqual(expected: string, actual: string) {
+  if (expected.length !== actual.length) return false;
+
+  let diff = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    diff |= expected.charCodeAt(index) ^ actual.charCodeAt(index);
+  }
+  return diff === 0;
 }
 
 webhooksRouter.post('/github', async (c) => {
   const rawBody = await c.req.text();
   const signature = c.req.header('x-hub-signature-256');
-  const isValid = await verifyGitHubSignature(c.env.GITHUB_WEBHOOK_SECRET, rawBody, signature);
+  const isValid = await verifyGitHubSignature(c.env, rawBody, signature);
 
   if (!isValid) {
-    return c.json({ success: false, error: 'Invalid GitHub webhook signature.' }, 401);
+    return apiError(c, 'Invalid GitHub webhook signature.', 401);
   }
 
   let payload: unknown;
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    return c.json({ success: false, error: 'Invalid JSON payload.' }, 400);
+    return apiError(c, 'Invalid JSON payload.', 400);
   }
 
   const providerRegistry = getEventProviderRegistry();

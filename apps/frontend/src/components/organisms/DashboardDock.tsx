@@ -237,7 +237,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         },
       ] as [PlayingCardData, ...PlayingCardData[]]);
   const progressBonusCards = withProgressBonusNewRibbonState(
-    buildProgressBonusCards(bonusCards, 'progress-active-bonus'),
+    buildProgressBonusCards(t, bonusCards, 'progress-active-bonus'),
     seenProgressBonusCardIds,
     markProgressBonusCardSeen,
     isProgressPage

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { UserPayload } from '../middleware/auth';
+import { apiError, forbidden } from './http';
 
 type Bindings = {
   ASSETS?: R2Bucket;
@@ -53,18 +54,18 @@ export const publicAssetRouter = new Hono<{ Bindings: Bindings }>();
 assetRouter.post('/assets/:kind', async (c) => {
   const bucket = c.env.ASSETS;
   if (!bucket) {
-    return c.json({ success: false, error: 'Asset storage is not configured.' }, 503);
+    return apiError(c, 'Asset storage is not configured.', 503);
   }
 
   const kind = c.req.param('kind') as AssetKind;
   const policy = assetPolicies[kind];
   if (!policy) {
-    return c.json({ success: false, error: 'Unsupported asset kind.' }, 400);
+    return apiError(c, 'Unsupported asset kind.', 400);
   }
 
   const user = c.get('user');
   if (policy.requiresAdmin && !user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden.' }, 403);
+    return forbidden(c, 'Forbidden.');
   }
 
   const body = await c.req.parseBody();
@@ -72,20 +73,20 @@ assetRouter.post('/assets/:kind', async (c) => {
   const entityId = typeof body.entityId === 'string' ? body.entityId : undefined;
 
   if (!(file instanceof File)) {
-    return c.json({ success: false, error: 'Asset file is required.' }, 400);
+    return apiError(c, 'Asset file is required.', 400);
   }
 
   if (file.size > policy.maxBytes) {
-    return c.json({ success: false, error: 'Asset file is too large.' }, 400);
+    return apiError(c, 'Asset file is too large.', 400);
   }
 
   const contentType = normalizeContentType(file.type);
   if (!policy.allowedTypes.includes(contentType)) {
-    return c.json({ success: false, error: 'Unsupported asset type.' }, 400);
+    return apiError(c, 'Unsupported asset type.', 400);
   }
 
   if (contentType === 'image/svg+xml' && !policy.allowSvg) {
-    return c.json({ success: false, error: 'SVG is not allowed for this asset kind.' }, 400);
+    return apiError(c, 'SVG is not allowed for this asset kind.', 400);
   }
 
   const bytes = await file.arrayBuffer();
@@ -97,7 +98,7 @@ assetRouter.post('/assets/:kind', async (c) => {
         : bytes;
   } catch (error) {
     console.warn('Rejected unsafe SVG upload:', error instanceof Error ? error.message : error);
-    return c.json({ success: false, error: 'Unsafe SVG content.' }, 400);
+    return apiError(c, 'Unsafe SVG content.', 400);
   }
   const key = buildAssetKey(kind, user, entityId, contentType);
 

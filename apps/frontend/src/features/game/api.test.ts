@@ -36,7 +36,23 @@ describe('game API client', () => {
   it('loads unguilded students from the class roster response', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       success: true,
-      guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 }],
+      guilds: [
+        {
+          id: 'guild-1',
+          name: 'Solarized Sentinels',
+          cohortId: 'cohort-1',
+          gold: 180,
+          members: [
+            {
+              id: 'student-2',
+              userId: 'user-2',
+              displayName: 'Grace Hopper',
+              characterClass: 'guide',
+              stats: { strength: 2, dexterity: 6, constitution: 3, intelligence: 5, wisdom: 4, charisma: 3 },
+            },
+          ],
+        },
+      ],
       unguildedStudents: [
         {
           id: 'student-1',
@@ -50,7 +66,23 @@ describe('game API client', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(fetchClassRoster('token-1', 'cohort-1')).resolves.toEqual({
-      guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 }],
+      guilds: [
+        {
+          id: 'guild-1',
+          name: 'Solarized Sentinels',
+          cohortId: 'cohort-1',
+          gold: 180,
+          members: [
+            {
+              id: 'student-2',
+              userId: 'user-2',
+              displayName: 'Grace Hopper',
+              characterClass: 'guide',
+              stats: { strength: 2, dexterity: 6, constitution: 3, intelligence: 5, wisdom: 4, charisma: 3 },
+            },
+          ],
+        },
+      ],
       unguildedStudents: [
         {
           id: 'student-1',

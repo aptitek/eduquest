@@ -44,7 +44,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const [isGameMenuOpen, setIsGameMenuOpen] = useState(false);
   const [gameMenuPosition, setGameMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const gameMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const gameMenuRef = useRef<HTMLUListElement>(null);
+  const gameMenuRef = useRef<HTMLUListElement | null>(null);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -216,9 +216,13 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     showGameSelector && isGameMenuOpen && gameMenuPosition
       ? createPortal(
           <ul
-            ref={gameMenuRef}
+            ref={(node) => {
+              gameMenuRef.current = node;
+              if (!node) return;
+              node.style.top = `${gameMenuPosition.top}px`;
+              node.style.left = `${gameMenuPosition.left}px`;
+            }}
             className="menu fixed z-[100] w-64 rounded-box border border-gaming-border bg-gaming-card p-2 font-display text-xs font-bold uppercase tracking-[0.12em] text-text-secondary shadow-xl"
-            style={{ top: gameMenuPosition.top, left: gameMenuPosition.left }}
           >
             {availableGames.map((game) => {
               const isSelected = game.id === selectedGameId;
@@ -251,12 +255,12 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
       <button
         ref={gameMenuButtonRef}
         type="button"
-        title={selectedGame?.name || 'Change game'}
+        title={selectedGame?.name || t('header.changeGame')}
         onClick={openGameMenu}
         className="flex h-full items-center justify-center border-r border-gaming-border px-2 text-text-secondary transition hover:bg-gaming-base hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-status-quest"
         aria-expanded={isGameMenuOpen}
         aria-haspopup="menu"
-        aria-label="Change game"
+        aria-label={t('header.changeGame')}
       >
         <ChevronDown
           size={16}

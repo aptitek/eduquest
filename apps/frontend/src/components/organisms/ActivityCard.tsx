@@ -23,10 +23,16 @@ import type {
   BossActivitySubmissionField,
 } from '@eduquest/shared';
 import type { ActivityCompletionDraft } from '../../features/game/api';
-import { PlayingCard, type PlayingCardEditableField, type PlayingCardSide } from '../molecules/PlayingCard';
+import {
+  PlayingCard,
+  type PlayingCardEditableField,
+  type PlayingCardSide,
+} from '../molecules/PlayingCard';
 import { EditableList } from '../molecules/EditableList';
 import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
 import { EditableText } from '../atoms/EditableText';
+import { useTranslation } from '../../hooks/useTranslation';
+import { SOLARIZED_SWATCH_OPTIONS, resolveColorTextClassName } from '../../styles/colorTokens';
 import { cn } from '../../utils/cn';
 
 const LucideIconSelector = lazy(() =>
@@ -60,17 +66,7 @@ const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
   boss: Swords,
 };
 
-const CARD_COLOR_OPTIONS = [
-  { label: 'Yellow', value: 'var(--color-solarized-yellow)', className: 'bg-solarized-yellow' },
-  { label: 'Orange', value: 'var(--color-solarized-orange)', className: 'bg-solarized-orange' },
-  { label: 'Red', value: 'var(--color-solarized-red)', className: 'bg-solarized-red' },
-  { label: 'Magenta', value: 'var(--color-solarized-magenta)', className: 'bg-solarized-magenta' },
-  { label: 'Violet', value: 'var(--color-solarized-violet)', className: 'bg-solarized-violet' },
-  { label: 'Blue', value: 'var(--color-solarized-blue)', className: 'bg-solarized-blue' },
-  { label: 'Cyan', value: 'var(--color-solarized-cyan)', className: 'bg-solarized-cyan' },
-  { label: 'Green', value: 'var(--color-solarized-green)', className: 'bg-solarized-green' },
-  { label: 'Base0', value: 'var(--color-solarized-base0)', className: 'bg-solarized-base0' },
-] as const;
+const CARD_COLOR_OPTIONS = SOLARIZED_SWATCH_OPTIONS;
 
 export interface ActivityResourceLink {
   title?: string;
@@ -106,27 +102,8 @@ export interface ActivityCardProps {
   className?: string;
 }
 
-export const MOCK_ACTIVITY_CARD: ActivityCardData = {
-  title: 'La Forêt des Variables',
-  subtitle: 'Pratique · Non gamifié',
-  description:
-    'Une clairière ancienne cache des fragments de logique. Les aventuriers doivent retrouver les constantes perdues et stabiliser les variables avant que la tempête ne referme le chemin.',
-  illustrationUrl:
-    'https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=900&q=80',
-  illustrationAlt: 'Mystical forest path for an EduQuest activity',
-  goldReward: 120,
-  cardColor: 'var(--color-solarized-blue)',
-  participationMode: 'solo',
-  resources: [{ title: 'Ressource intégrée Genially', url: 'https://view.genial.ly/placeholder' }],
-  selectedIcon: 'TreePine',
-  mapX: 340,
-  mapY: 180,
-  stepRanges: [{ startStep: 2, endStep: 5 }, { startStep: 8 }],
-  adjacentNodes: ['Feu de camp Git', 'Pont des API'],
-};
-
 export function ActivityCard({
-  activity = MOCK_ACTIVITY_CARD,
+  activity,
   canEdit = false,
   showCompletionAction = true,
   isCompleted = false,
@@ -135,25 +112,45 @@ export function ActivityCard({
   onResolve,
   className,
 }: ActivityCardProps) {
-  const [draft, setDraft] = useState(activity);
-  const hasBossAnswerFields = Boolean(showCompletionAction && !isCompleted && draft.answerFields?.length);
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<ActivityCardData | undefined>(activity);
+  const hasBossAnswerFields = Boolean(
+    showCompletionAction && !isCompleted && draft?.answerFields?.length
+  );
 
   useEffect(() => {
     setDraft(activity);
   }, [activity]);
 
+  if (!draft) {
+    return (
+      <div
+        className={cn(
+          'flex min-h-0 items-center justify-center rounded-2xl border border-dashed border-gaming-border bg-gaming-card/60 p-6 text-center text-sm text-text-muted',
+          className
+        )}
+      >
+        {t('activityCard.emptyState')}
+      </div>
+    );
+  }
+
+  const updateDraft = (updater: (current: ActivityCardData) => ActivityCardData) => {
+    setDraft((current) => (current ? updater(current) : current));
+  };
+
   const updateNumber = (field: 'mapX' | 'mapY', value: string) => {
-    setDraft((current) => ({ ...current, [field]: Number(value) || 0 }));
+    updateDraft((current) => ({ ...current, [field]: Number(value) || 0 }));
   };
   const updateCardColor = (cardColor: string) => {
-    setDraft((current) => ({ ...current, cardColor: cardColor || undefined }));
+    updateDraft((current) => ({ ...current, cardColor: cardColor || undefined }));
   };
   const updateParticipationMode = (participationMode: ActivityParticipationMode) => {
-    setDraft((current) => ({ ...current, participationMode }));
+    updateDraft((current) => ({ ...current, participationMode }));
   };
 
   const updateCardField = (field: PlayingCardEditableField, value: string) => {
-    setDraft((current) => {
+    updateDraft((current) => {
       if (field === 'ribbonText') return { ...current, goldReward: Number(value) || 0 };
       if (field === 'illustrationUrl') return { ...current, illustrationUrl: value || undefined };
       if (field === 'title' || field === 'subtitle' || field === 'description') {
@@ -164,35 +161,43 @@ export function ActivityCard({
   };
 
   const updateStepRange = (index: number, field: keyof ActivityStepRange, value: string) => {
-    setDraft((current) => ({
+    updateDraft((current) => ({
       ...current,
       stepRanges: current.stepRanges.map((range, rangeIndex) =>
         rangeIndex === index
-          ? { ...range, [field]: value === '' && field === 'endStep' ? undefined : Number(value) || 0 }
+          ? {
+              ...range,
+              [field]: value === '' && field === 'endStep' ? undefined : Number(value) || 0,
+            }
           : range
       ),
     }));
   };
   const addStepRange = () => {
-    setDraft((current) => ({ ...current, stepRanges: [...current.stepRanges, { startStep: 0 }] }));
+    updateDraft((current) => ({
+      ...current,
+      stepRanges: [...current.stepRanges, { startStep: 0 }],
+    }));
   };
   const removeStepRange = (index: number) => {
-    setDraft((current) => ({
+    updateDraft((current) => ({
       ...current,
       stepRanges: current.stepRanges.filter((_, rangeIndex) => rangeIndex !== index),
     }));
   };
   const updateAdjacentNode = (index: number, value: string) => {
-    setDraft((current) => ({
+    updateDraft((current) => ({
       ...current,
-      adjacentNodes: current.adjacentNodes.map((node, nodeIndex) => (nodeIndex === index ? value : node)),
+      adjacentNodes: current.adjacentNodes.map((node, nodeIndex) =>
+        nodeIndex === index ? value : node
+      ),
     }));
   };
   const addAdjacentNode = () => {
-    setDraft((current) => ({ ...current, adjacentNodes: [...current.adjacentNodes, ''] }));
+    updateDraft((current) => ({ ...current, adjacentNodes: [...current.adjacentNodes, ''] }));
   };
   const removeAdjacentNode = (index: number) => {
-    setDraft((current) => ({
+    updateDraft((current) => ({
       ...current,
       adjacentNodes: current.adjacentNodes.filter((_, nodeIndex) => nodeIndex !== index),
     }));
@@ -201,7 +206,7 @@ export function ActivityCard({
   const activityFront = buildActivityFrontSide({
     activity: draft,
     canEdit,
-    onResourcesChange: (resources) => setDraft((current) => ({ ...current, resources })),
+    onResourcesChange: (resources) => updateDraft((current) => ({ ...current, resources })),
     onFieldChange: updateCardField,
   });
 
@@ -209,7 +214,9 @@ export function ActivityCard({
     <div
       className={cn(
         'flex min-h-0 justify-center',
-        hasBossAnswerFields ? 'flex-col items-center gap-4 overflow-y-auto pb-4' : showCompletionAction && 'pb-28 pr-24',
+        hasBossAnswerFields
+          ? 'flex-col items-center gap-4 overflow-y-auto pb-4'
+          : showCompletionAction && 'pb-28 pr-24',
         className
       )}
     >
@@ -227,22 +234,27 @@ export function ActivityCard({
           ribbonClassName="bg-status-campfire text-solarized-base3"
           ribbonEditable={canEdit}
           front={activityFront}
-          back={canEdit ? (
-            <ActivityCardBack
-              activity={draft}
-              onIconSelect={(selectedIcon) => setDraft((current) => ({ ...current, selectedIcon }))}
-              onNumberChange={updateNumber}
-              onCardColorChange={updateCardColor}
-              onParticipationModeChange={updateParticipationMode}
-              onStepRangeChange={updateStepRange}
-              onStepRangeAdd={addStepRange}
-              onStepRangeRemove={removeStepRange}
-              onAdjacentNodeChange={updateAdjacentNode}
-              onAdjacentNodeAdd={addAdjacentNode}
-              onAdjacentNodeRemove={removeAdjacentNode}
-            />
-          ) : undefined}
-          flipLabel="Basculer vue étudiant/admin"
+          back={
+            canEdit ? (
+              <ActivityCardBack
+                activity={draft}
+                onIconSelect={(selectedIcon) =>
+                  updateDraft((current) => ({ ...current, selectedIcon }))
+                }
+                onNumberChange={updateNumber}
+                onCardColorChange={updateCardColor}
+                onParticipationModeChange={updateParticipationMode}
+                onStepRangeChange={updateStepRange}
+                onStepRangeAdd={addStepRange}
+                onStepRangeRemove={removeStepRange}
+                onAdjacentNodeChange={updateAdjacentNode}
+                onAdjacentNodeAdd={addAdjacentNode}
+                onAdjacentNodeRemove={removeAdjacentNode}
+                t={t}
+              />
+            ) : undefined
+          }
+          flipLabel={t('activityCard.flipAdminView')}
           className="h-full max-h-full w-auto max-w-full"
           sideClassName="h-full"
         />
@@ -260,8 +272,12 @@ export function ActivityCard({
                 error={resolveError}
                 onComplete={onResolve}
                 mode={draft.participationMode}
-                completeLabel={draft.participationMode === 'guild' ? 'Vote' : 'Complete'}
-                completedLabel="Quest Resolved"
+                completeLabel={
+                  draft.participationMode === 'guild'
+                    ? t('activityCard.vote')
+                    : t('activityCard.complete')
+                }
+                completedLabel={t('activityCard.questResolved')}
               />
             </div>
           </div>
@@ -273,6 +289,7 @@ export function ActivityCard({
           isResolving={isResolving}
           error={resolveError}
           onSubmit={onResolve}
+          t={t}
         />
       ) : null}
     </div>
@@ -284,11 +301,13 @@ function BossSubmissionForm({
   isResolving,
   error,
   onSubmit,
+  t,
 }: {
   fields: BossActivityAnswerField[];
   isResolving?: boolean;
   error?: string | null;
   onSubmit?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
+  t: (path: string) => string;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [files, setFiles] = useState<Record<string, File[]>>({});
@@ -309,9 +328,9 @@ function BossSubmissionForm({
     >
       <div>
         <h3 className="font-display text-sm font-black uppercase tracking-[0.18em] text-status-boss">
-          Boss Submission
+          {t('activityCard.bossSubmission')}
         </h3>
-        <p className="text-xs text-text-muted">Submit your answer links and project files.</p>
+        <p className="text-xs text-text-muted">{t('activityCard.bossSubmissionHelp')}</p>
       </div>
 
       {fields.map((field) => (
@@ -321,18 +340,28 @@ function BossSubmissionForm({
           value={answers[field.id] || ''}
           files={files[field.id] || []}
           onValueChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
-          onFilesChange={(nextFiles) => setFiles((current) => ({ ...current, [field.id]: nextFiles }))}
+          onFilesChange={(nextFiles) =>
+            setFiles((current) => ({ ...current, [field.id]: nextFiles }))
+          }
+          t={t}
         />
       ))}
 
       {error ? (
-        <div role="alert" className="rounded-xl border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-xs font-semibold text-status-danger">
+        <div
+          role="alert"
+          className="rounded-xl border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-xs font-semibold text-status-danger"
+        >
           {error}
         </div>
       ) : null}
 
-      <button type="submit" className="btn w-full border-none bg-status-boss text-gaming-base" disabled={isResolving || !onSubmit}>
-        {isResolving ? 'Submitting...' : 'Submit Boss Answer'}
+      <button
+        type="submit"
+        className="btn w-full border-none bg-status-boss text-gaming-base"
+        disabled={isResolving || !onSubmit}
+      >
+        {isResolving ? t('activityCard.submitting') : t('activityCard.submitBossAnswer')}
       </button>
     </form>
   );
@@ -344,12 +373,14 @@ function BossSubmissionField({
   files,
   onValueChange,
   onFilesChange,
+  t,
 }: {
   field: BossActivityAnswerField;
   value: string;
   files: File[];
   onValueChange: (value: string) => void;
   onFilesChange: (files: File[]) => void;
+  t: (path: string) => string;
 }) {
   const maxFiles = field.maxFiles || 1;
   const maxBytes = field.maxBytes || 10 * 1024 * 1024;
@@ -367,11 +398,19 @@ function BossSubmissionField({
             required={field.required}
             multiple={maxFiles > 1}
             accept={field.accept}
-            onChange={(event) => onFilesChange(Array.from(event.target.files || []).slice(0, maxFiles))}
+            onChange={(event) =>
+              onFilesChange(Array.from(event.target.files || []).slice(0, maxFiles))
+            }
             className="file-input file-input-bordered w-full border-gaming-border bg-gaming-base text-sm"
           />
           <p className="text-xs text-text-muted">
-            {files.length > 0 ? `${files.length}/${maxFiles} file(s) selected.` : `Up to ${maxFiles} file(s), ${formatBytes(maxBytes)} each.`}
+            {files.length > 0
+              ? t('activityCard.filesSelected')
+                  .replace('{count}', String(files.length))
+                  .replace('{max}', String(maxFiles))
+              : t('activityCard.fileLimit')
+                  .replace('{max}', String(maxFiles))
+                  .replace('{size}', formatBytes(maxBytes))}
           </p>
         </>
       ) : (
@@ -473,6 +512,8 @@ function ActivityResourceList({
   onChange: (resources: ActivityResourceLink[]) => void;
   onUrlChange: (index: number, url: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <EditableList
       items={resources}
@@ -485,10 +526,14 @@ function ActivityResourceList({
         />
       )}
       onAdd={canEdit ? () => onChange([...resources, { url: '' }]) : undefined}
-      onRemove={canEdit ? (_resource, index) => onChange(resources.filter((_, itemIndex) => itemIndex !== index)) : undefined}
-      addLabel="Add Resource"
-      removeLabel="Remove Resource"
-      emptyState="No Resources Yet."
+      onRemove={
+        canEdit
+          ? (_resource, index) => onChange(resources.filter((_, itemIndex) => itemIndex !== index))
+          : undefined
+      }
+      addLabel={t('activityCard.addResource')}
+      removeLabel={t('activityCard.removeResource')}
+      emptyState={t('activityCard.noResources')}
       className="text-sm"
     />
   );
@@ -503,6 +548,7 @@ function ResourceUrlRow({
   canEdit: boolean;
   onUrlChange: (url: string) => void;
 }) {
+  const { t } = useTranslation();
   const faviconUrl = getFaviconUrl(resource.url);
 
   return (
@@ -519,7 +565,7 @@ function ResourceUrlRow({
         <EditableText
           value={resource.url}
           onChange={onUrlChange}
-          placeholder="https://example.com/resource"
+          placeholder={t('activityCard.resourceUrlPlaceholder')}
           className="min-w-0 text-sm text-text-secondary"
           truncate={false}
         />
@@ -533,7 +579,7 @@ function ResourceUrlRow({
           {resource.url}
         </a>
       ) : (
-        <span className="text-sm text-text-muted">Empty resource</span>
+        <span className="text-sm text-text-muted">{t('activityCard.emptyResource')}</span>
       )}
     </div>
   );
@@ -560,6 +606,7 @@ interface ActivityCardBackProps {
   onAdjacentNodeChange: (index: number, value: string) => void;
   onAdjacentNodeAdd: () => void;
   onAdjacentNodeRemove: (index: number) => void;
+  t: (path: string) => string;
 }
 
 function ActivityCardBack({
@@ -574,6 +621,7 @@ function ActivityCardBack({
   onAdjacentNodeChange,
   onAdjacentNodeAdd,
   onAdjacentNodeRemove,
+  t,
 }: ActivityCardBackProps) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.1rem] bg-gaming-card text-text-primary">
@@ -582,25 +630,37 @@ function ActivityCardBack({
           <Suspense
             fallback={
               <div className="rounded-xl border border-gaming-border bg-gaming-base px-3 py-4 text-sm text-text-muted">
-                Loading icon selector...
+                {t('activityCard.loadingIconSelector')}
               </div>
             }
           >
-            <LucideIconSelector value={activity.selectedIcon} onChange={onIconSelect} />
+            <LucideIconSelector
+              value={activity.selectedIcon}
+              onChange={onIconSelect}
+              searchPlaceholder={t('activityCard.iconSearchPlaceholder')}
+            />
           </Suspense>
         </section>
 
         <section className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <NumberField label="X" value={activity.mapX} onChange={(value) => onNumberChange('mapX', value)} />
-            <NumberField label="Y" value={activity.mapY} onChange={(value) => onNumberChange('mapY', value)} />
+            <NumberField
+              label="X"
+              value={activity.mapX}
+              onChange={(value) => onNumberChange('mapX', value)}
+            />
+            <NumberField
+              label="Y"
+              value={activity.mapY}
+              onChange={(value) => onNumberChange('mapY', value)}
+            />
           </div>
         </section>
 
         <section className="space-y-3">
           <ActivityColorSelector value={activity.cardColor} onChange={onCardColorChange} />
           <label className="space-y-1.5 text-sm">
-            <span className="font-bold text-text-secondary">Activity Mode</span>
+            <span className="font-bold text-text-secondary">{t('activityCard.activityMode')}</span>
             <select
               value={activity.participationMode}
               onChange={(event) =>
@@ -608,15 +668,15 @@ function ActivityCardBack({
               }
               className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
             >
-              <option value="solo">Alone</option>
-              <option value="guild">With Guild</option>
+              <option value="solo">{t('activityCard.modeSolo')}</option>
+              <option value="guild">{t('activityCard.modeGuild')}</option>
             </select>
           </label>
         </section>
 
         <section className="space-y-3 pb-2">
           <h4 className="font-display text-xs font-black uppercase tracking-[0.2em] text-text-secondary">
-            Visibility
+            {t('activityCard.visibility')}
           </h4>
           <div className="space-y-3 rounded-xl border border-gaming-border bg-gaming-base p-3">
             <EditableList
@@ -625,13 +685,13 @@ function ActivityCardBack({
               renderItem={(range, index) => (
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField
-                    label="After Step"
+                    label={t('activityCard.afterStep')}
                     value={range.startStep}
                     min={0}
                     onChange={(value) => onStepRangeChange(index, 'startStep', value)}
                   />
                   <NumberField
-                    label="Before Step"
+                    label={t('activityCard.beforeStep')}
                     value={range.endStep ?? ''}
                     min={0}
                     onChange={(value) => onStepRangeChange(index, 'endStep', value)}
@@ -640,14 +700,14 @@ function ActivityCardBack({
               )}
               onAdd={onStepRangeAdd}
               onRemove={(_range, index) => onStepRangeRemove(index)}
-              addLabel="Add Window"
-              removeLabel="Remove Window"
-              emptyState="No Step Windows Yet."
+              addLabel={t('activityCard.addWindow')}
+              removeLabel={t('activityCard.removeWindow')}
+              emptyState={t('activityCard.noStepWindows')}
               itemClassName="bg-gaming-card/40"
             />
           </div>
           <div className="space-y-1.5 text-sm">
-            <span className="font-bold text-text-secondary">Adjacent Nodes</span>
+            <span className="font-bold text-text-secondary">{t('activityCard.adjacentNodes')}</span>
             <EditableList
               items={activity.adjacentNodes}
               getKey={(node, index) => `${node || 'adjacent-node'}-${index}`}
@@ -655,16 +715,16 @@ function ActivityCardBack({
                 <EditableText
                   value={node}
                   onChange={(value) => onAdjacentNodeChange(index, value)}
-                  placeholder="Adjacent Node Title"
+                  placeholder={t('activityCard.adjacentNodePlaceholder')}
                   className="min-w-0 text-sm text-text-secondary"
                   truncate={false}
                 />
               )}
               onAdd={onAdjacentNodeAdd}
               onRemove={(_node, index) => onAdjacentNodeRemove(index)}
-              addLabel="Add Adjacent Node"
-              removeLabel="Remove Adjacent Node"
-              emptyState="No Adjacent Nodes Yet."
+              addLabel={t('activityCard.addAdjacentNode')}
+              removeLabel={t('activityCard.removeAdjacentNode')}
+              emptyState={t('activityCard.noAdjacentNodes')}
               itemClassName="bg-gaming-card/40"
             />
           </div>
@@ -681,14 +741,16 @@ function ActivityColorSelector({
   value?: string;
   onChange: (cardColor: string) => void;
 }) {
+  const { t } = useTranslation();
   const selectedValue = value || CARD_COLOR_OPTIONS[5].value;
 
   return (
     <fieldset className="space-y-1.5">
-      <legend className="font-bold text-text-secondary">Card Color</legend>
+      <legend className="font-bold text-text-secondary">{t('activityCard.cardColor')}</legend>
       <div className="grid grid-cols-9 gap-1.5">
         {CARD_COLOR_OPTIONS.map((option) => {
           const isSelected = selectedValue === option.value;
+          const label = t(option.labelKey);
 
           return (
             <button
@@ -701,11 +763,14 @@ function ActivityColorSelector({
                   ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
                   : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
               )}
-              aria-label={`Use ${option.label} card color`}
+              aria-label={t('activityCard.useCardColor').replace('{color}', label)}
               aria-pressed={isSelected}
-              title={option.label}
+              title={label}
             >
-              <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
+              <span
+                className={cn('block h-full w-full rounded-md shadow-sm', option.className)}
+                aria-hidden
+              />
             </button>
           );
         })}
@@ -714,9 +779,17 @@ function ActivityColorSelector({
   );
 }
 
-function ActivityIcon({ iconId, size = 24, color }: { iconId: string; size?: number; color?: string }) {
+function ActivityIcon({
+  iconId,
+  size = 24,
+  color,
+}: {
+  iconId: string;
+  size?: number;
+  color?: string;
+}) {
   const Icon = PUBLIC_ICON_MAP[iconId] || Sparkles;
-  return <Icon size={size} aria-hidden style={color ? { color } : undefined} />;
+  return <Icon size={size} aria-hidden className={color ? resolveColorTextClassName(color) : undefined} />;
 }
 
 function NumberField({

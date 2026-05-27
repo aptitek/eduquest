@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
 export interface EmbeddedFrameProps {
@@ -17,11 +18,13 @@ export function EmbeddedFrame({
   src,
   className,
   frameClassName,
-  placeholder = 'Embedded content',
+  placeholder,
   allowFullScreen = true,
   showControls = true,
 }: EmbeddedFrameProps) {
+  const { t } = useTranslation();
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const resolvedPlaceholder = placeholder || t('embeddedFrame.placeholder');
 
   const openInNewTab = () => {
     window.open(src, '_blank', 'noopener,noreferrer');
@@ -47,7 +50,7 @@ export function EmbeddedFrame({
             <h4 className="truncate font-display text-xs font-bold uppercase tracking-[0.18em] text-text-muted">
               {title}
             </h4>
-            <p className="truncate text-xs text-text-muted">{src || placeholder}</p>
+            <p className="truncate text-xs text-text-muted">{src || resolvedPlaceholder}</p>
           </div>
 
           {showControls ? (
@@ -58,12 +61,12 @@ export function EmbeddedFrame({
                 className="inline-flex items-center gap-1 rounded-full border border-status-quest/40 px-2 py-1 text-xs font-bold text-status-quest transition hover:bg-status-quest/10 focus:outline-none focus:ring-2 focus:ring-status-quest"
               >
                 <Maximize2 size={13} aria-hidden />
-                Expand
+                {t('embeddedFrame.expand')}
               </button>
               <button
                 type="button"
                 onClick={openInNewTab}
-                aria-label={`Open ${title} in a new tab`}
+                aria-label={t('embeddedFrame.openInNewTab').replace('{title}', title)}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gaming-border text-text-secondary transition hover:border-status-quest hover:text-status-quest focus:outline-none focus:ring-2 focus:ring-status-quest"
               >
                 <ExternalLink size={13} aria-hidden />
@@ -75,7 +78,7 @@ export function EmbeddedFrame({
         <div className="h-28 overflow-hidden rounded-xl border border-dashed border-gaming-border bg-gaming-card/70">
           {src ? frame : (
             <div className="flex h-full items-center justify-center text-center text-xs text-text-muted">
-              {placeholder}
+              {resolvedPlaceholder}
             </div>
           )}
         </div>
@@ -95,7 +98,7 @@ export function EmbeddedFrame({
                 className="inline-flex items-center gap-2 rounded-full border border-gaming-border px-3 py-2 text-xs font-bold text-text-secondary transition hover:border-status-quest hover:text-status-quest focus:outline-none focus:ring-2 focus:ring-status-quest"
               >
                 <ExternalLink size={14} aria-hidden />
-                New tab
+                {t('embeddedFrame.newTab')}
               </button>
               <button
                 type="button"
@@ -103,7 +106,7 @@ export function EmbeddedFrame({
                 className="inline-flex items-center gap-2 rounded-full border border-status-quest/40 px-3 py-2 text-xs font-bold text-status-quest transition hover:bg-status-quest/10 focus:outline-none focus:ring-2 focus:ring-status-quest"
               >
                 <Minimize2 size={14} aria-hidden />
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>

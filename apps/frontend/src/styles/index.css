@@ -22,50 +22,66 @@
     --color-solarized-cyan: #2aa198;
     --color-solarized-green: #859900;
 
-    /* Design Tokens - Solarized Dark default theme mappings */
-    --color-bg-base: var(--color-solarized-base03);
-    --color-bg-card: var(--color-solarized-base02);
+    /* Generic design roles - Solarized Dark default theme mappings */
+    --color-surface-base: var(--color-solarized-base03);
+    --color-surface-card: var(--color-solarized-base02);
+    --color-content-primary: var(--color-solarized-base1);
+    --color-content-secondary: var(--color-solarized-base0);
+    --color-content-muted: var(--color-solarized-base01);
+    --color-line: var(--color-solarized-base02);
+    --color-grid: color-mix(in srgb, var(--color-content-muted) 12%, transparent);
+    --color-mask-solid: var(--color-solarized-base03);
 
-    --color-text-primary: var(--color-solarized-base1);
-    --color-text-secondary: var(--color-solarized-base0);
-    --color-text-muted: var(--color-solarized-base01);
-    --color-border: var(--color-solarized-base02);
+    --color-tone-muted: var(--color-solarized-base01);
+    --color-tone-info: var(--color-solarized-blue);
+    --color-tone-success: var(--color-solarized-green);
+    --color-tone-warning: var(--color-solarized-yellow);
+    --color-tone-danger: var(--color-solarized-red);
+    --color-tone-accent: var(--color-solarized-magenta);
+    --color-tone-special: var(--color-solarized-violet);
 
-    /* Technological grid lines derived from base01 */
-    --color-gaming-grid: rgba(88, 110, 117, 0.12);
+    /* Compatibility aliases for existing Tailwind/DaisyUI classes. */
+    --color-bg-base: var(--color-surface-base);
+    --color-bg-card: var(--color-surface-card);
+    --color-text-primary: var(--color-content-primary);
+    --color-text-secondary: var(--color-content-secondary);
+    --color-text-muted: var(--color-content-muted);
+    --color-border: var(--color-line);
+    --color-gaming-grid: var(--color-grid);
 
-    /* Semantic Progression Tokens */
-    --color-status-locked: var(--color-solarized-base01);
-    --color-status-completed: var(--color-solarized-green);
-    --color-status-campfire: var(--color-solarized-yellow);
-    --color-status-quest: var(--color-solarized-blue);
-    --color-status-boss: var(--color-solarized-magenta);
-    --color-status-danger: var(--color-solarized-red);
+    --color-status-locked: var(--color-tone-muted);
+    --color-status-completed: var(--color-tone-success);
+    --color-status-campfire: var(--color-tone-warning);
+    --color-status-quest: var(--color-tone-info);
+    --color-status-boss: var(--color-tone-accent);
+    --color-status-danger: var(--color-tone-danger);
 
-    --color-accent-primary: var(--color-status-boss);
-    --color-accent-scholar: var(--color-status-quest);
-    --color-accent-champion: var(--color-status-danger);
-    --color-accent-guide: var(--color-status-completed);
-    --color-accent-specialist: var(--color-solarized-violet);
-    --color-accent-neutral: var(--color-text-muted);
+    --color-accent-primary: var(--color-tone-accent);
+    --color-accent-scholar: var(--color-tone-info);
+    --color-accent-champion: var(--color-tone-danger);
+    --color-accent-guide: var(--color-tone-success);
+    --color-accent-specialist: var(--color-tone-special);
+    --color-accent-neutral: var(--color-tone-muted);
 
     --shadow-glow-primary: 0 0 36px color-mix(in srgb, var(--color-accent-primary) 38%, transparent);
     --shadow-glow-gold: 0 0 22px color-mix(in srgb, var(--color-status-campfire) 35%, transparent);
     --shadow-dock: 0 -24px 60px color-mix(in srgb, var(--color-solarized-base03) 65%, transparent);
-    --shadow-inset-highlight: inset 0 1px 2px color-mix(in srgb, var(--color-solarized-base3) 14%, transparent);
-    --shadow-marker: var(--shadow-inset-highlight), 0 0 14px color-mix(in srgb, var(--color-solarized-base03) 45%, transparent);
+    --shadow-inset-highlight: inset 0 1px 2px
+      color-mix(in srgb, var(--color-solarized-base3) 14%, transparent);
+    --shadow-marker:
+      var(--shadow-inset-highlight),
+      0 0 14px color-mix(in srgb, var(--color-solarized-base03) 45%, transparent);
   }
 
   [data-theme='light'] {
-    --color-bg-base: var(--color-solarized-base3);
-    --color-bg-card: var(--color-solarized-base2);
-
-    --color-text-primary: var(--color-solarized-base03);
-    --color-text-secondary: var(--color-solarized-base00);
-    --color-text-muted: var(--color-solarized-base01);
-    --color-border: var(--color-solarized-base1);
-
-    --color-gaming-grid: color-mix(in srgb, var(--color-solarized-base1) 24%, transparent);
+    --color-surface-base: var(--color-solarized-base3);
+    --color-surface-card: var(--color-solarized-base2);
+    --color-content-primary: var(--color-solarized-base03);
+    --color-content-secondary: var(--color-solarized-base00);
+    --color-content-muted: var(--color-solarized-base01);
+    --color-line: var(--color-solarized-base1);
+    --color-grid: color-mix(in srgb, var(--color-solarized-base1) 24%, transparent);
+    --color-mask-solid: var(--color-solarized-base03);
   }
 
   html,
@@ -89,4 +105,3 @@
     color: var(--color-text-primary);
   }
 }
-

@@ -35,7 +35,7 @@ The repository is a TypeScript monorepo using npm workspaces.
 - npm 9+.
 - Task, optional but recommended: [taskfile.dev](https://taskfile.dev).
 - Wrangler, installed through the root dev dependencies.
-- PostgreSQL if you want to run against a real database. Without `DATABASE_URL`, the backend uses debug/mock fallback behavior.
+- PostgreSQL for backend API data. Without `DATABASE_URL`, database-backed API routes return a configuration error.
 
 ## Installation
 
@@ -115,7 +115,6 @@ Frontend values:
 VITE_APP_ENV=development
 VITE_BACKEND_BASE_URL=http://localhost:8787
 VITE_ENABLE_DEV_TOOLS=true
-VITE_ENABLE_MOCK_DATA=true
 ```
 
 For production frontend builds, set:
@@ -124,7 +123,6 @@ For production frontend builds, set:
 VITE_APP_ENV=production
 VITE_BACKEND_BASE_URL=https://your-api.example.com
 VITE_ENABLE_DEV_TOOLS=false
-VITE_ENABLE_MOCK_DATA=false
 ```
 
 Backend Worker values:
@@ -137,7 +135,6 @@ GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 GITHUB_REDIRECT_URI=http://localhost:8787/api/auth/github/callback
 FRONTEND_URL=http://localhost:5173
-ENABLE_MOCK_DATA=true
 ENABLE_DEBUG_AUTH=true
 ```
 
@@ -147,7 +144,7 @@ logos can be uploaded locally without creating a real Cloudflare bucket. Uploade
 objects are served by the Worker at `/assets/<object-key>` unless
 `ASSET_PUBLIC_BASE_URL` is set to a custom public bucket/CDN URL.
 
-`DATABASE_URL` is optional only for development/mock deployments. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; mock data, mock auth, and debug backup endpoints are disabled even if their flags are set.
+`DATABASE_URL` is required for API data, including local development auth. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; debug auth is disabled even if its flag is set.
 
 Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local starting points. Do not commit real `.env` or `.dev.vars` files.
 

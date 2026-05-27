@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { AvatarBadge } from '../../atoms/AvatarBadge';
 import { cn } from '../../../utils/cn';
 
@@ -12,6 +12,11 @@ export interface AvatarDeckMember {
   onClick?: () => void;
 }
 
+export interface AvatarDeckMotion {
+  travelX: number;
+  travelY: number;
+}
+
 interface AvatarDeckProps {
   members: AvatarDeckMember[];
   color?: string;
@@ -21,8 +26,7 @@ interface AvatarDeckProps {
   className?: string;
   avatarClassName?: string;
   labelClassName?: string;
-  getItemStyle?: (member: AvatarDeckMember, index: number) => CSSProperties | undefined;
-  getAvatarStyle?: (member: AvatarDeckMember, index: number) => CSSProperties | undefined;
+  getAvatarMotion?: (member: AvatarDeckMember, index: number) => AvatarDeckMotion | undefined;
 }
 
 const SIZE_CLASS_NAMES = {
@@ -51,8 +55,7 @@ export function AvatarDeck({
   className,
   avatarClassName,
   labelClassName,
-  getItemStyle,
-  getAvatarStyle,
+  getAvatarMotion,
 }: AvatarDeckProps) {
   if (members.length === 0) return null;
 
@@ -67,12 +70,7 @@ export function AvatarDeck({
         sizeClassNames.container,
         className
       )}
-      style={
-        {
-          '--deck-rest-width': `${restWidth}rem`,
-          '--deck-open-width': `${openWidth}rem`,
-        } as CSSProperties
-      }
+      ref={(node) => setDeckSizeProperties(node, restWidth, openWidth)}
       tabIndex={0}
     >
       {members.map((member, index) => {
@@ -81,35 +79,37 @@ export function AvatarDeck({
         const restX = isEmphasis ? 0 : depth * restStepRem;
         const openX = isEmphasis ? 0 : depth * openStepRem;
         const hoverX = isEmphasis ? 0 : depth * sizeClassNames.hoverOffset;
+        const motion = getAvatarMotion?.(member, index);
 
         return (
           <div
             key={member.id}
             className="absolute bottom-0 origin-bottom transition-[filter,transform] duration-300 [transform:translateX(var(--avatar-rest-x))_translateY(var(--avatar-rest-y))_scale(var(--avatar-rest-scale))] group-hover/avatar-deck:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/avatar-deck:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-hover/graph-node:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/graph-node:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))]"
-            style={
-              {
+            ref={(node) =>
+              setAvatarItemProperties(node, {
                 zIndex: members.length - index,
-                '--avatar-rest-x': `${restX}rem`,
-                '--avatar-rest-y': isEmphasis ? '0rem' : '0.12rem',
-                '--avatar-rest-scale': isEmphasis ? 1 : Math.max(1 - depth * 0.05, 0.84),
-                '--avatar-open-x': `${openX}rem`,
-                '--avatar-open-y': isEmphasis ? '-0.2rem' : '0rem',
-                '--avatar-open-scale': isEmphasis ? 1.08 : Math.max(1 - (depth - 1) * 0.035, 0.9),
-                '--avatar-hover-x': `${hoverX}rem`,
-                '--avatar-hover-y': '-0.75rem',
-                ...getItemStyle?.(member, index),
-              } as CSSProperties
+                restX,
+                restY: isEmphasis ? 0 : 0.12,
+                restScale: isEmphasis ? 1 : Math.max(1 - depth * 0.05, 0.84),
+                openX,
+                openY: isEmphasis ? -0.2 : 0,
+                openScale: isEmphasis ? 1.08 : Math.max(1 - (depth - 1) * 0.035, 0.9),
+                hoverX,
+              })
             }
           >
             <button
               type="button"
-              className="group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateX(var(--avatar-hover-x))_translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateX(var(--avatar-hover-x))_translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl"
+              className={cn(
+                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateX(var(--avatar-hover-x))_translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateX(var(--avatar-hover-x))_translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl',
+                motion && 'map-avatar-travel'
+              )}
               title={member.name}
               onClick={(event) => {
                 event.stopPropagation();
                 member.onClick?.();
               }}
-              style={getAvatarStyle?.(member, index)}
+              ref={(node) => setAvatarMotionProperties(node, motion)}
             >
               <AvatarBadge
                 name={member.name}
@@ -134,6 +134,43 @@ export function AvatarDeck({
       })}
     </div>
   );
+}
+
+function setDeckSizeProperties(node: HTMLDivElement | null, restWidth: number, openWidth: number) {
+  if (!node) return;
+  node.style.setProperty('--deck-rest-width', `${restWidth}rem`);
+  node.style.setProperty('--deck-open-width', `${openWidth}rem`);
+}
+
+function setAvatarItemProperties(
+  node: HTMLDivElement | null,
+  properties: {
+    zIndex: number;
+    restX: number;
+    restY: number;
+    restScale: number;
+    openX: number;
+    openY: number;
+    openScale: number;
+    hoverX: number;
+  }
+) {
+  if (!node) return;
+  node.style.zIndex = String(properties.zIndex);
+  node.style.setProperty('--avatar-rest-x', `${properties.restX}rem`);
+  node.style.setProperty('--avatar-rest-y', `${properties.restY}rem`);
+  node.style.setProperty('--avatar-rest-scale', String(properties.restScale));
+  node.style.setProperty('--avatar-open-x', `${properties.openX}rem`);
+  node.style.setProperty('--avatar-open-y', `${properties.openY}rem`);
+  node.style.setProperty('--avatar-open-scale', String(properties.openScale));
+  node.style.setProperty('--avatar-hover-x', `${properties.hoverX}rem`);
+  node.style.setProperty('--avatar-hover-y', '-0.75rem');
+}
+
+function setAvatarMotionProperties(node: HTMLButtonElement | null, motion?: AvatarDeckMotion) {
+  if (!node || !motion) return;
+  node.style.setProperty('--travel-x', `${motion.travelX}px`);
+  node.style.setProperty('--travel-y', `${motion.travelY}px`);
 }
 
 export default AvatarDeck;

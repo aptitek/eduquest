@@ -7,11 +7,32 @@ import type {
   GameCharacterClass,
   GameMapNodeOccupancy,
 } from '@eduquest/shared';
-import { GenericGraph, GraphEdge, GraphNode, type GraphNodeAnnularSegment } from '../molecules/GenericGraph';
-import { AvatarDeck, type AvatarDeckMember } from '../molecules/AvatarDeck';
-import { BookOpen, CheckCircle2, CloudFog, Compass, Flame, Hammer, HelpCircle, Lock, Shield, Snowflake, Swords, User, Users } from 'lucide-react';
+import {
+  GenericGraph,
+  GraphEdge,
+  GraphNode,
+  type GraphNodeAnnularSegment,
+} from '../molecules/GenericGraph';
+import { AvatarDeck, type AvatarDeckMember, type AvatarDeckMotion } from '../molecules/AvatarDeck';
+import {
+  BookOpen,
+  CheckCircle2,
+  CloudFog,
+  Compass,
+  Flame,
+  Hammer,
+  HelpCircle,
+  Lock,
+  Shield,
+  Snowflake,
+  Swords,
+  User,
+  Users,
+} from 'lucide-react';
 import { getActivityVisualVariant } from '../../features/game/activityPresentation';
 import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
+import { UI_COLOR_TOKENS } from '../../styles/colorTokens';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface PlayerMapMarker {
   activityId: string | null;
@@ -32,17 +53,17 @@ interface GameMapProps {
   onSelectNode: (activity: Activity) => void;
 }
 
-const SOLO_OCCUPANCY_COLOR = 'var(--color-status-locked)';
-const FALLBACK_GUILD_COLOR = 'var(--color-status-quest)';
-const EDGE_COLOR_LOCKED = 'var(--color-status-locked)';
-const EDGE_COLOR_TARGET = 'var(--color-status-quest)';
-const EDGE_COLOR_COMPLETED = 'var(--color-status-completed)';
+const SOLO_OCCUPANCY_COLOR = UI_COLOR_TOKENS.neutral;
+const FALLBACK_GUILD_COLOR = UI_COLOR_TOKENS.quest;
+const EDGE_COLOR_LOCKED = UI_COLOR_TOKENS.neutral;
+const EDGE_COLOR_TARGET = UI_COLOR_TOKENS.quest;
+const EDGE_COLOR_COMPLETED = UI_COLOR_TOKENS.completed;
 
 const CHARACTER_CLASS_COLORS: Record<GameCharacterClass, string> = {
-  scholar: 'var(--color-accent-scholar)',
-  champion: 'var(--color-accent-champion)',
-  guide: 'var(--color-accent-guide)',
-  specialist: 'var(--color-accent-specialist)',
+  scholar: UI_COLOR_TOKENS.scholar,
+  champion: UI_COLOR_TOKENS.champion,
+  guide: UI_COLOR_TOKENS.guide,
+  specialist: UI_COLOR_TOKENS.specialist,
 };
 
 const MAP_AVATAR_TRAVEL_KEYFRAMES = `
@@ -60,6 +81,10 @@ const MAP_AVATAR_TRAVEL_KEYFRAMES = `
     transform: translate(0, 0) scale(1);
   }
 }
+
+.map-avatar-travel {
+  animation: map-avatar-travel 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 `;
 
 export function GameMap({
@@ -72,6 +97,7 @@ export function GameMap({
   showCompletionState = true,
   onSelectNode,
 }: GameMapProps) {
+  const { t } = useTranslation();
   type NodeStatus = 'FOG_OF_WAR' | 'ACTIVE';
 
   const getIcon = (type: ActivityType, status: NodeStatus, isLocked: boolean) => {
@@ -144,7 +170,9 @@ export function GameMap({
   };
 
   // Convert Activity list to reusable Generic GraphNode list (KISS)
-  const occupancyByActivityId = new Map(nodeOccupancies.map((occupancy) => [occupancy.activityId, occupancy]));
+  const occupancyByActivityId = new Map(
+    nodeOccupancies.map((occupancy) => [occupancy.activityId, occupancy])
+  );
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const graphNodes: GraphNode<Activity>[] = activities.map((act) => {
     const visibilityStatus: NodeStatus = act.isRevealed ? 'ACTIVE' : 'FOG_OF_WAR';
@@ -152,7 +180,9 @@ export function GameMap({
     const locked = !canEditLocked && (displayStatus !== 'ACTIVE' || Boolean(act.isLocked));
     const isFogged = displayStatus === 'FOG_OF_WAR';
     const isCompleted = showCompletionState && Boolean(act.isCompleted);
-    const hasPlayerMarker = playerMarker && (playerMarker.activityId ? playerMarker.activityId === act.id : act.isCurrent);
+    const hasPlayerMarker =
+      playerMarker &&
+      (playerMarker.activityId ? playerMarker.activityId === act.id : act.isCurrent);
     const occupancy = occupancyByActivityId.get(act.id);
     const marker = buildMapNodeMarker({
       playerMarker: hasPlayerMarker ? playerMarker : undefined,
@@ -160,12 +190,13 @@ export function GameMap({
       activity: act,
       activityById,
       showGuildOccupancyMarkers,
+      t,
     });
 
     return {
       id: act.id,
       label: act.title,
-      displayLabel: isFogged ? '???' : act.title,
+      displayLabel: isFogged ? t('map.hiddenNode') : act.title,
       x: act.mapX,
       y: act.mapY,
       isCompleted,
@@ -173,7 +204,11 @@ export function GameMap({
       isHidden: false,
       icon: getIcon(act.type, displayStatus, locked),
       badge: isCompleted ? (
-        <CheckCircle2 size={18} strokeWidth={3.25} className="text-status-completed drop-shadow-[0_0_6px_var(--color-status-completed)]" />
+        <CheckCircle2
+          size={18}
+          strokeWidth={3.25}
+          className="text-status-completed drop-shadow-[0_0_6px_var(--color-status-completed)]"
+        />
       ) : undefined,
       marker,
       annularSegments: buildAnnularSegments(act, occupancy),
@@ -238,8 +273,10 @@ function resolveMapEdgeStyle({
   currentActivityId?: string | null;
 }): Pick<GraphEdge, 'color' | 'opacity' | 'strokeWidth' | 'strokeDasharray' | 'animation'> {
   const metadata = edge.metadata || {};
-  const manualAnimation = getEdgeAnimation(metadata.edgeAnimation) || getEdgeAnimation(metadata.animation);
-  const manualColor = getStringMetadata(metadata, 'edgeColor') || getStringMetadata(metadata, 'color');
+  const manualAnimation =
+    getEdgeAnimation(metadata.edgeAnimation) || getEdgeAnimation(metadata.animation);
+  const manualColor =
+    getStringMetadata(metadata, 'edgeColor') || getStringMetadata(metadata, 'color');
   const manualOpacity = getNumberMetadata(metadata, 'opacity', 0, 1);
   const manualStrokeWidth = getNumberMetadata(metadata, 'strokeWidth', 1, 8);
   const manualDash = getStringMetadata(metadata, 'strokeDasharray');
@@ -307,7 +344,12 @@ function getStringMetadata(metadata: Record<string, unknown>, key: string) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function getNumberMetadata(metadata: Record<string, unknown>, key: string, min: number, max: number) {
+function getNumberMetadata(
+  metadata: Record<string, unknown>,
+  key: string,
+  min: number,
+  max: number
+) {
   const value = metadata[key];
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.min(max, Math.max(min, value));
@@ -319,14 +361,16 @@ function buildMapNodeMarker({
   activity,
   activityById,
   showGuildOccupancyMarkers,
+  t,
 }: {
   playerMarker?: PlayerMapMarker;
   occupancy?: GameMapNodeOccupancy;
   activity: Activity;
   activityById: Map<string, Activity>;
   showGuildOccupancyMarkers?: boolean;
+  t: (path: string) => string;
 }) {
-  const adminGuildGroups = showGuildOccupancyMarkers ? buildAdminGuildMarkerGroups(occupancy) : [];
+  const adminGuildGroups = showGuildOccupancyMarkers ? buildAdminGuildMarkerGroups(occupancy, t) : [];
   const guildMarkers = showGuildOccupancyMarkers
     ? adminGuildGroups.length
       ? [
@@ -335,6 +379,7 @@ function buildMapNodeMarker({
             groups={adminGuildGroups}
             currentActivity={activity}
             activityById={activityById}
+            t={t}
           />,
         ]
       : []
@@ -370,7 +415,9 @@ function buildMapNodeMarker({
           ]}
           color={CHARACTER_CLASS_COLORS[playerMarker.characterClass]}
           size="md"
-          getAvatarStyle={() => getTravelStyle(getTravelVector(activityById, playerMarker.previousActivityId, activity))}
+          getAvatarMotion={() =>
+            getTravelMotion(getTravelVector(activityById, playerMarker.previousActivityId, activity))
+          }
         />
       ) : null}
       {guildMarkers}
@@ -399,9 +446,11 @@ function GuildMemberMapMarker({
       color={color}
       size="sm"
       className="shrink-0"
-      getAvatarStyle={(member) => {
+      getAvatarMotion={(member) => {
         const occupancyMember = members.find((candidate) => candidate.studentId === member.id);
-        return getTravelStyle(getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity));
+        return getTravelMotion(
+          getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity)
+        );
       }}
     />
   );
@@ -420,10 +469,12 @@ function AdminGuildMapMarker({
   groups,
   currentActivity,
   activityById,
+  t,
 }: {
   groups: AdminGuildMarkerGroup[];
   currentActivity: Activity;
   activityById: Map<string, Activity>;
+  t: (path: string) => string;
 }) {
   const guildMembers: AvatarDeckMember[] = groups.map((group) => ({
     id: group.id,
@@ -431,7 +482,7 @@ function AdminGuildMapMarker({
     avatarUrl: group.iconKey ? undefined : group.iconUrl,
     icon: group.iconKey ? renderLucideIcon(group.iconKey, 18) : undefined,
     color: group.color,
-    subtitle: `${group.members.length} present`,
+    subtitle: t('graph.presentCount').replace('{count}', String(group.members.length)),
     onClick: () => openClassTarget(group.name),
   }));
 
@@ -442,10 +493,12 @@ function AdminGuildMapMarker({
         color={FALLBACK_GUILD_COLOR}
         size="sm"
         className="shrink-0"
-        getAvatarStyle={(member) => {
+        getAvatarMotion={(member) => {
           const group = groups.find((candidate) => candidate.id === member.id);
-          const fromActivityId = group?.members.find((occupancyMember) => occupancyMember.fromActivityId)?.fromActivityId;
-          return getTravelStyle(getTravelVector(activityById, fromActivityId, currentActivity));
+          const fromActivityId = group?.members.find(
+            (occupancyMember) => occupancyMember.fromActivityId
+          )?.fromActivityId;
+          return getTravelMotion(getTravelVector(activityById, fromActivityId, currentActivity));
         }}
       />
       {groups.some((group) => group.members.length > 0) ? (
@@ -462,9 +515,17 @@ function AdminGuildMapMarker({
                   color={group.color}
                   size="sm"
                   className="min-w-0"
-                  getAvatarStyle={(member) => {
-                    const occupancyMember = group.members.find((candidate) => candidate.studentId === member.id);
-                    return getTravelStyle(getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity));
+                  getAvatarMotion={(member) => {
+                    const occupancyMember = group.members.find(
+                      (candidate) => candidate.studentId === member.id
+                    );
+                    return getTravelMotion(
+                      getTravelVector(
+                        activityById,
+                        occupancyMember?.fromActivityId,
+                        currentActivity
+                      )
+                    );
                   }}
                 />
               );
@@ -477,7 +538,8 @@ function AdminGuildMapMarker({
 }
 
 function buildAdminGuildMarkerGroups(
-  occupancy: GameMapNodeOccupancy | undefined
+  occupancy: GameMapNodeOccupancy | undefined,
+  t: (path: string) => string
 ): AdminGuildMarkerGroup[] {
   if (!occupancy) return [];
 
@@ -487,10 +549,12 @@ function buildAdminGuildMarkerGroups(
     if (segment.studentCount <= 0) continue;
 
     if (segment.kind === 'guild') {
-      const id = segment.guildId || `${occupancy.activityId}-${segment.guildName || segment.color || 'guild'}`;
+      const id =
+        segment.guildId ||
+        `${occupancy.activityId}-${segment.guildName || segment.color || 'guild'}`;
       groups.set(id, {
         id,
-        name: segment.guildName || 'Guild',
+        name: segment.guildName || t('graph.guild'),
         iconUrl: segment.guildIconUrl,
         iconKey: segment.guildIconKey,
         color: segment.color || FALLBACK_GUILD_COLOR,
@@ -503,7 +567,7 @@ function buildAdminGuildMarkerGroups(
       const id = member.guildId || member.guildName || `${occupancy.activityId}-unguilded`;
       const group = groups.get(id) || {
         id,
-        name: member.guildName || 'Unguilded',
+        name: member.guildName || t('class.unguildedTitle'),
         iconUrl: member.guildIconUrl,
         iconKey: member.guildIconKey,
         color: member.guildColor || segment.color || SOLO_OCCUPANCY_COLOR,
@@ -520,7 +584,9 @@ function buildAdminGuildMarkerGroups(
     }
   }
 
-  return Array.from(groups.values()).sort((a, b) => b.members.length - a.members.length || a.name.localeCompare(b.name));
+  return Array.from(groups.values()).sort(
+    (a, b) => b.members.length - a.members.length || a.name.localeCompare(b.name)
+  );
 }
 
 function toAvatarMembers(
@@ -551,15 +617,14 @@ function openClassTarget(guildName?: string, memberId?: string) {
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
-function getTravelStyle(travel?: { x: number; y: number }): CSSProperties | undefined {
+function getTravelMotion(travel?: { x: number; y: number }): AvatarDeckMotion | undefined {
   const hasTravel = travel && (Math.abs(travel.x) > 1 || Math.abs(travel.y) > 1);
   if (!hasTravel) return undefined;
 
   return {
-    '--travel-x': `${travel.x}px`,
-    '--travel-y': `${travel.y}px`,
-    animation: 'map-avatar-travel 900ms cubic-bezier(0.22, 1, 0.36, 1)',
-  } as CSSProperties;
+    travelX: travel.x,
+    travelY: travel.y,
+  };
 }
 
 function getTravelVector(
@@ -585,7 +650,10 @@ function buildAnnularSegments(
   if (!occupancy || occupancy.totalStudents <= 0) return undefined;
 
   if (activity.participationMode !== 'guild') {
-    const studentCount = occupancy.segments.reduce((total, segment) => total + segment.studentCount, 0);
+    const studentCount = occupancy.segments.reduce(
+      (total, segment) => total + segment.studentCount,
+      0
+    );
     return studentCount > 0
       ? [
           {
@@ -601,7 +669,8 @@ function buildAnnularSegments(
                 name: member.displayName,
                 avatarUrl: member.avatarUrl,
                 subtitle: member.characterClass,
-                onClick: () => openClassTarget(member.guildName || segment.guildName, member.studentId),
+                onClick: () =>
+                  openClassTarget(member.guildName || segment.guildName, member.studentId),
               }))
             ),
           },
@@ -614,7 +683,8 @@ function buildAnnularSegments(
 
     return {
       id: segment.guildId || `${activity.id}-${segment.kind}`,
-      color: segment.kind === 'guild' ? segment.color || FALLBACK_GUILD_COLOR : SOLO_OCCUPANCY_COLOR,
+      color:
+        segment.kind === 'guild' ? segment.color || FALLBACK_GUILD_COLOR : SOLO_OCCUPANCY_COLOR,
       value: segment.studentCount,
       total: occupancy.totalStudents,
       label: segment.guildName || `${segment.studentCount} students`,
@@ -645,7 +715,8 @@ function orderSegmentsByColor(segments: GraphNodeAnnularSegment[]) {
     ordered.push(next);
   }
 
-  if (ordered.length <= 2 || ordered[0].color !== ordered[ordered.length - 1]?.color) return ordered;
+  if (ordered.length <= 2 || ordered[0].color !== ordered[ordered.length - 1]?.color)
+    return ordered;
 
   const lastIndex = ordered.length - 1;
   const swapIndex = ordered.findIndex((candidate, index) => {

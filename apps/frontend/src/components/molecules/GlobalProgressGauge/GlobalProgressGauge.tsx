@@ -1,5 +1,14 @@
-import { type CSSProperties, type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Coins, Milestone } from 'lucide-react';
+import { SOLARIZED_GRADIENT_COLORS } from '../../../styles/colorTokens';
 import { cn } from '../../../utils/cn';
 import { GaugeIndicator } from '../../atoms/GaugeIndicator';
 
@@ -82,16 +91,7 @@ const PROGRESS_STROKE_WIDTH = 18;
 const MILESTONE_DOT_OFFSET = 0;
 const MILESTONE_LABEL_OFFSET = 38;
 const FALLBACK_SIZE = { width: 640, height: 208 };
-const MILESTONE_GRADIENT_COLORS = [
-  'var(--color-solarized-violet)',
-  'var(--color-solarized-blue)',
-  'var(--color-solarized-cyan)',
-  'var(--color-solarized-green)',
-  'var(--color-solarized-yellow)',
-  'var(--color-solarized-orange)',
-  'var(--color-solarized-red)',
-  'var(--color-solarized-magenta)',
-];
+const MILESTONE_GRADIENT_COLORS = SOLARIZED_GRADIENT_COLORS;
 
 export function GlobalProgressGauge({
   currentPoints = 0,
@@ -139,13 +139,14 @@ export function GlobalProgressGauge({
     () => getConicProgressGradient(progressPercent, colorStops),
     [colorStops, progressPercent]
   );
-  const renderedLeftIndicator =
-    leftIndicator ??
-    milestoneIndicator ??
-    <GaugeIndicator label={progressData.label} value={displayValue} />;
+  const renderedLeftIndicator = leftIndicator ?? milestoneIndicator ?? (
+    <GaugeIndicator label={progressData.label} value={displayValue} />
+  );
   const renderedRightIndicator = rightIndicator ?? goldIndicator;
   const compactLeftIndicatorValue =
-    leftIndicatorCompactValue ?? progressData.valueLabel ?? `${progressData.current}/${progressData.target}`;
+    leftIndicatorCompactValue ??
+    progressData.valueLabel ??
+    `${progressData.current}/${progressData.target}`;
   const compactRightIndicatorValue = rightIndicatorCompactValue;
   const renderedMiddle = middleContent ?? centerContent;
 
@@ -167,7 +168,11 @@ export function GlobalProgressGauge({
         <defs>
           <linearGradient id={`${gradientId}-progress`} x1="0%" x2="100%" y1="0%" y2="0%">
             {colorStops.map((stop) => (
-              <stop key={`${stop.color}-${stop.offset}`} offset={`${stop.offset}%`} stopColor={stop.color} />
+              <stop
+                key={`${stop.color}-${stop.offset}`}
+                offset={`${stop.offset}%`}
+                stopColor={stop.color}
+              />
             ))}
           </linearGradient>
         </defs>
@@ -204,8 +209,8 @@ export function GlobalProgressGauge({
             width: geometry.radius * 2 + PROGRESS_STROKE_WIDTH,
             height: geometry.radius * 2 + PROGRESS_STROKE_WIDTH,
             background: conicGradient,
-            mask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), black calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
-            WebkitMask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), black calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
+            mask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), var(--color-mask-solid) calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
+            WebkitMask: `radial-gradient(farthest-side, transparent calc(100% - ${PROGRESS_STROKE_WIDTH}px), var(--color-mask-solid) calc(100% - ${PROGRESS_STROKE_WIDTH - 1}px))`,
           }}
         />
       ) : null}
@@ -326,7 +331,13 @@ interface MilestoneBadgeProps {
   style?: CSSProperties;
 }
 
-function MilestoneBadge({ milestone, expandable, expanded = false, className, style }: MilestoneBadgeProps) {
+function MilestoneBadge({
+  milestone,
+  expandable,
+  expanded = false,
+  className,
+  style,
+}: MilestoneBadgeProps) {
   return (
     <span
       className={cn(

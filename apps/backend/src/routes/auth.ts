@@ -36,13 +36,6 @@ import {
 } from '../db/schema';
 import { authMiddleware, UserPayload } from '../middleware/auth';
 import {
-  findDebugProfile,
-  getDebugBackup,
-  getDebugProfile,
-  getDebugStudentOptions,
-} from '../dev/debugBackup';
-import {
-  isMockDataEnabled,
   isDebugAuthEnabled as runtimeDebugAuthEnabled,
   requireFrontendUrl,
   requireJwtSecret,
@@ -54,10 +47,10 @@ import {
   repairManualAllocation,
   type CharacterStatAllocation,
 } from '../services/character-class-reallocation';
+import { apiError, missingDatabaseUrl, parseRequiredJsonBody } from './http';
 
 type Bindings = {
   APP_ENV?: string;
-  ENABLE_MOCK_DATA?: string;
   DATABASE_URL?: string;
   JWT_SECRET?: string;
   GITHUB_CLIENT_ID?: string;
@@ -75,14 +68,7 @@ export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>
 
 const DEFAULT_CHARACTER_CLASS: GameCharacterClass = 'scholar';
 const GAME_CHARACTER_CLASS_SET = new Set<string>(GAME_CHARACTER_CLASSES);
-const debugCohortInvites: Array<{
-  id: string;
-  cohortId: string;
-  token: string;
-  expiresAt: string;
-  createdAt: string;
-  revokedAt?: string;
-}> = [];
+const AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 8;
 
 type AddressRecord = typeof addresses.$inferSelect;
 type CampusRecord = typeof campuses.$inferSelect;
@@ -356,20 +342,6 @@ function toManagementCohortInvite(
   };
 }
 
-function toDebugManagementCohortInvite(
-  invite: (typeof debugCohortInvites)[number],
-  frontendUrl: string
-): ManagementCohortInvite {
-  return {
-    id: invite.id,
-    cohortId: invite.cohortId,
-    token: invite.token,
-    url: buildCohortInviteUrl(frontendUrl, invite.token),
-    expiresAt: invite.expiresAt,
-    createdAt: invite.createdAt,
-  };
-}
-
 async function listActiveCohortInvites(
   databaseUrl: string | undefined,
   cohortId: string,
@@ -378,14 +350,7 @@ async function listActiveCohortInvites(
   const now = Date.now();
 
   if (!databaseUrl) {
-    return debugCohortInvites
-      .filter(
-        (invite) =>
-          invite.cohortId === cohortId &&
-          !invite.revokedAt &&
-          new Date(invite.expiresAt).getTime() > now
-      )
-      .map((invite) => toDebugManagementCohortInvite(invite, frontendUrl));
+    throw new Error('DATABASE_URL is required for cohort invites.');
   }
 
   const records = await getDb(databaseUrl)
@@ -469,46 +434,8 @@ async function assignStudentToInvitedCohort(
   }
 }
 
-function assignDebugProfileToInvitedCohort(
-  invite: CohortInvitePayload | null,
-  identifier?: string | null
-) {
-  if (!invite) return;
-
-  const backup = getDebugBackup();
-  const inviteRecord = debugCohortInvites.find((item) => item.id === invite.inviteId);
-  if (
-    !inviteRecord ||
-    inviteRecord.revokedAt ||
-    inviteRecord.cohortId !== invite.cohortId ||
-    new Date(inviteRecord.expiresAt).getTime() <= Date.now()
-  ) {
-    return;
-  }
-
-  const profile = getDebugProfile(identifier);
-  const cohort = backup.cohorts.find((item) => item.id === invite.cohortId);
-  if (!cohort) return;
-
-  const memberships = profile.student.cohortMemberships || [];
-  if (!memberships.some((membership) => membership.cohortId === invite.cohortId)) {
-    memberships.push({
-      userId: profile.user.id,
-      cohortId: cohort.id,
-      cohort,
-      createdAt: new Date().toISOString(),
-    });
-  }
-
-  profile.student.cohortMemberships = memberships;
-}
-
-async function getManagementBackup(
-  databaseUrl: string | undefined,
-  allowMockData: boolean
-): Promise<ManagementBackup> {
+async function getManagementBackup(databaseUrl: string | undefined): Promise<ManagementBackup> {
   if (!databaseUrl) {
-    if (allowMockData) return getDebugBackup();
     throw new Error('DATABASE_URL is required for management data.');
   }
 
@@ -636,24 +563,21 @@ function toDevStudentOption(profile: ManagementBackup['students'][number]): DevS
 }
 
 async function getDevStudentOptions(databaseUrl: string | undefined): Promise<DevStudentOption[]> {
-  if (!databaseUrl) return getDebugStudentOptions();
+  if (!databaseUrl) return [];
 
-  const backup = await getManagementBackup(databaseUrl, false);
+  const backup = await getManagementBackup(databaseUrl);
   return backup.students.filter((profile) => !profile.user.isAdmin).map(toDevStudentOption);
 }
 
-async function findDevDatabaseProfile(databaseUrl: string, identifier?: string | null) {
-  const backup = await getManagementBackup(databaseUrl, false);
-  const studentProfiles = backup.students.filter((profile) => !profile.user.isAdmin);
+async function findDevDatabaseUser(databaseUrl: string, identifier?: string | null) {
+  const db = getDb(databaseUrl);
+  const userRecords = await db.select().from(users).orderBy(desc(users.createdAt));
+  const selectableUsers = userRecords.map(toUser);
 
-  if (!identifier) return studentProfiles[0];
+  if (!identifier) return selectableUsers.find((user) => !user.isAdmin) || selectableUsers[0];
 
-  return studentProfiles.find(
-    ({ user, student }) =>
-      user.id === identifier ||
-      student.id === identifier ||
-      user.githubUsername === identifier ||
-      user.email === identifier
+  return selectableUsers.find(
+    (user) => user.id === identifier || user.githubUsername === identifier || user.email === identifier
   );
 }
 
@@ -672,6 +596,16 @@ function toAuthPayload(user: User): UserPayload {
     githubAvatarUrl: user.githubAvatarUrl,
     isAdmin: user.isAdmin,
   };
+}
+
+function signAuthToken(payload: UserPayload, jwtSecret: string) {
+  return sign(
+    {
+      ...payload,
+      exp: Math.floor(Date.now() / 1000) + AUTH_TOKEN_TTL_SECONDS,
+    },
+    jwtSecret
+  );
 }
 
 // 1. GET /api/auth/github : Redirige vers GitHub OAuth
@@ -787,7 +721,7 @@ authRouter.get('/github/callback', async (c) => {
     let isAdmin: boolean = isAptitek;
     const cohortInvite = await resolveCohortInvite(inviteToken, jwtSecret);
 
-    if (!databaseUrl && !isMockDataEnabled(c.env)) {
+    if (!databaseUrl) {
       throw new Error('DATABASE_URL must be configured for production OAuth sessions.');
     }
 
@@ -896,9 +830,7 @@ authRouter.get('/github/callback', async (c) => {
         }
       } catch (dbError: any) {
         console.error('Database registration error:', dbError.message);
-        if (!isMockDataEnabled(c.env)) {
-          throw dbError;
-        }
+        throw dbError;
       }
     }
 
@@ -912,7 +844,7 @@ authRouter.get('/github/callback', async (c) => {
       avatarUrl: avatarUrl,
       isAdmin,
     };
-    const token = await sign(payload, jwtSecret);
+    const token = await signAuthToken(payload, jwtSecret);
 
     // F. Redirection vers le frontend
     return c.redirect(`${frontendUrl}/?token=${token}`);
@@ -922,8 +854,9 @@ authRouter.get('/github/callback', async (c) => {
   }
 });
 
-authRouter.get('/mock-students', async (c) => {
+authRouter.get('/dev/students', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
+  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
 
   return c.json({
     success: true,
@@ -931,25 +864,9 @@ authRouter.get('/mock-students', async (c) => {
   });
 });
 
-authRouter.get('/debug-backup', (c) => {
-  if (!isDebugAuthEnabled(c)) return c.notFound();
-
-  return c.json({
-    success: true,
-    backup: getDebugBackup(),
-  });
-});
-
 authRouter.get('/character-classes', async (c) => {
   if (!c.env.DATABASE_URL) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({
-      success: true,
-      characterClasses: getDebugBackup().characterClasses,
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   const characterClasses = await getDb(c.env.DATABASE_URL)
@@ -978,7 +895,7 @@ authRouter.get('/management', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
+    backup: await getManagementBackup(c.env.DATABASE_URL),
   });
 });
 
@@ -996,6 +913,7 @@ authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
 
   const cohortId = c.req.param('cohortId');
   const frontendUrl = requireFrontendUrl(c.env);
+  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
 
   return c.json({
     success: true,
@@ -1016,16 +934,16 @@ authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
   }
 
   const cohortId = c.req.param('cohortId');
-  const backup = !c.env.DATABASE_URL ? getDebugBackup() : undefined;
-  const cohortExists = c.env.DATABASE_URL
-    ? (
-        await getDb(c.env.DATABASE_URL)
-          .select()
-          .from(cohorts)
-          .where(eq(cohorts.id, cohortId))
-          .limit(1)
-      ).length > 0
-    : backup?.cohorts.some((cohort) => cohort.id === cohortId);
+  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+
+  const cohortExists =
+    (
+      await getDb(c.env.DATABASE_URL)
+        .select()
+        .from(cohorts)
+        .where(eq(cohorts.id, cohortId))
+        .limit(1)
+    ).length > 0;
 
   if (!cohortExists) {
     return c.json(
@@ -1052,23 +970,13 @@ authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
   );
   const createdAt = new Date();
 
-  if (c.env.DATABASE_URL) {
-    await getDb(c.env.DATABASE_URL).insert(cohortInvites).values({
-      id: inviteId,
-      cohortId,
-      token,
-      expiresAt,
-      createdAt,
-    });
-  } else {
-    debugCohortInvites.push({
-      id: inviteId,
-      cohortId,
-      token,
-      expiresAt: expiresAt.toISOString(),
-      createdAt: createdAt.toISOString(),
-    });
-  }
+  await getDb(c.env.DATABASE_URL).insert(cohortInvites).values({
+    id: inviteId,
+    cohortId,
+    token,
+    expiresAt,
+    createdAt,
+  });
 
   return c.json({
     success: true,
@@ -1098,18 +1006,12 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
   const cohortId = c.req.param('cohortId');
   const inviteId = c.req.param('inviteId');
   const revokedAt = new Date();
+  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
 
-  if (c.env.DATABASE_URL) {
-    await getDb(c.env.DATABASE_URL)
-      .update(cohortInvites)
-      .set({ revokedAt })
-      .where(and(eq(cohortInvites.id, inviteId), eq(cohortInvites.cohortId, cohortId)));
-  } else {
-    const invite = debugCohortInvites.find(
-      (item) => item.id === inviteId && item.cohortId === cohortId
-    );
-    if (invite) invite.revokedAt = revokedAt.toISOString();
-  }
+  await getDb(c.env.DATABASE_URL)
+    .update(cohortInvites)
+    .set({ revokedAt })
+    .where(and(eq(cohortInvites.id, inviteId), eq(cohortInvites.cohortId, cohortId)));
 
   return c.json({
     success: true,
@@ -1155,30 +1057,7 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
   const cohortId = c.req.param('cohortId');
 
   if (!c.env.DATABASE_URL) {
-    const backup = getDebugBackup();
-    const cohortExists = backup.cohorts.some((cohort) => cohort.id === cohortId);
-    const classDefinition = backup.characterClasses.find((item) => item.slug === classSlug);
-    const baseStats = normalizeBaseStats(body.baseStats || {});
-
-    if (!cohortExists) return c.json({ success: false, error: 'Cohort not found' }, 404);
-    if (!classDefinition) return c.json({ success: false, error: 'Character class not found' }, 404);
-    if (!baseStats) return c.json({ success: false, error: 'Invalid base stats' }, 400);
-
-    classDefinition.baseStats = baseStats;
-    for (const profile of backup.students) {
-      const isInCohort = profile.student.cohortMemberships?.some(
-        (membership) => membership.cohortId === cohortId
-      );
-      if (!isInCohort || profile.character.characterClass !== classSlug) continue;
-
-      const repair = repairManualAllocation(
-        profile.character.stats as CharacterStatAllocation,
-        baseStats
-      );
-      profile.character.stats = repair.nextManual;
-    }
-
-    return c.json({ success: true, backup });
+    return missingDatabaseUrl(c);
   }
 
   const db = getDb(c.env.DATABASE_URL);
@@ -1279,7 +1158,7 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
 
     return c.json({
       success: true,
-      backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
+      backup: await getManagementBackup(c.env.DATABASE_URL),
     });
   } catch (error: any) {
     console.error('Character class management SQL error:', error.message);
@@ -1322,52 +1201,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
   const studentId = c.req.param('studentId');
 
   if (!c.env.DATABASE_URL) {
-    const backup = getDebugBackup();
-    const profile = backup.students.find((item) => item.student.id === studentId);
-    if (!profile) {
-      return c.json(
-        {
-          success: false,
-          error: 'Student not found',
-        },
-        404
-      );
-    }
-
-    profile.user = {
-      ...profile.user,
-      ...body.user,
-    };
-
-    if (body.cohortIds) {
-      profile.student.cohortMemberships = body.cohortIds.map((cohortId) => {
-        const existing = profile.student.cohortMemberships?.find(
-          (membership) => membership.cohortId === cohortId
-        );
-        return {
-          userId: profile.user.id,
-          cohortId,
-          cohort: backup.cohorts.find((cohort) => cohort.id === cohortId),
-          institutionalEmail: existing?.institutionalEmail,
-          createdAt: existing?.createdAt,
-        };
-      });
-    }
-
-    if (body.institutionalEmail !== undefined) {
-      const targetMembership =
-        profile.student.cohortMemberships?.find(
-          (membership) => membership.cohortId === body.institutionalEmailCohortId
-        ) || profile.student.cohortMemberships?.[0];
-      if (targetMembership) {
-        targetMembership.institutionalEmail = body.institutionalEmail || undefined;
-      }
-    }
-
-    return c.json({
-      success: true,
-      backup,
-    });
+    return missingDatabaseUrl(c);
   }
 
   const db = getDb(c.env.DATABASE_URL);
@@ -1504,7 +1338,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
+    backup: await getManagementBackup(c.env.DATABASE_URL),
   });
 });
 
@@ -1543,26 +1377,7 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
   }
 
   if (!c.env.DATABASE_URL) {
-    const backup = getDebugBackup();
-    const school = backup.schools.find((item) => item.id === schoolId);
-    if (!school) {
-      return c.json(
-        {
-          success: false,
-          error: 'School not found',
-        },
-        404
-      );
-    }
-
-    if (body.logoUrl !== undefined) {
-      school.logoUrl = body.logoUrl || undefined;
-    }
-
-    return c.json({
-      success: true,
-      backup,
-    });
+    return missingDatabaseUrl(c);
   }
 
   const db = getDb(c.env.DATABASE_URL);
@@ -1587,7 +1402,7 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
+    backup: await getManagementBackup(c.env.DATABASE_URL),
   });
 });
 
@@ -1601,7 +1416,7 @@ function requireAdmin(c: { get: (key: 'user') => UserPayload | undefined }) {
 
 authRouter.get('/management/reward-balance', async (c) => {
   if (!requireAdmin(c)) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
+    return apiError(c, 'Forbidden', 403);
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1616,7 +1431,7 @@ authRouter.get('/management/reward-balance', async (c) => {
 
 authRouter.get('/management/reward-balance/versions', async (c) => {
   if (!requireAdmin(c)) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
+    return apiError(c, 'Forbidden', 403);
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1631,19 +1446,15 @@ authRouter.get('/management/reward-balance/versions', async (c) => {
 authRouter.put('/management/reward-balance', async (c) => {
   const currentUser = requireAdmin(c);
   if (!currentUser) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
+    return apiError(c, 'Forbidden', 403);
   }
 
   if (!c.env.DATABASE_URL) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
-  let body: RewardBalanceConfigPayload;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
-  }
+  const body = await parseRequiredJsonBody<RewardBalanceConfigPayload>(c);
+  if (body instanceof Response) return body;
 
   const db = getDb(c.env.DATABASE_URL);
   const created = await RewardBalanceConfigService.publish(db, body, currentUser.id);
@@ -1654,30 +1465,23 @@ authRouter.put('/management/reward-balance', async (c) => {
 
 authRouter.post('/management/reward-balance/preview', async (c) => {
   if (!requireAdmin(c)) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
+    return apiError(c, 'Forbidden', 403);
   }
 
   if (!c.env.DATABASE_URL) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
-  let body: RewardBalanceConfigPayload & {
+  const body = await parseRequiredJsonBody<RewardBalanceConfigPayload & {
     activityId?: string;
     studentId?: string;
     guildId?: string;
     cohortId?: string;
-  };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
-  }
+  }>(c);
+  if (body instanceof Response) return body;
 
   if (!body.activityId || !body.studentId || !body.guildId) {
-    return c.json(
-      { success: false, error: 'activityId, studentId, and guildId are required.' },
-      400
-    );
+    return apiError(c, 'activityId, studentId, and guildId are required.', 400);
   }
 
   const db = getDb(c.env.DATABASE_URL);
@@ -1691,159 +1495,43 @@ authRouter.post('/management/reward-balance/preview', async (c) => {
   });
 
   if (!breakdown) {
-    return c.json({ success: false, error: 'Activity not found.' }, 404);
+    return apiError(c, 'Activity not found.', 404);
   }
 
   return c.json({ success: true, breakdown });
 });
 
-// 3. GET /api/auth/mock : Bypass développeur pour environnement local
-authRouter.get('/mock', async (c) => {
+// Dev-only login: explicit opt-in, database-backed, and disabled in production.
+authRouter.get('/dev/login', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
+  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
 
   const jwtSecret = requireJwtSecret(c.env);
   const frontendUrl = requireFrontendUrl(c.env);
   const cohortInvite = await resolveCohortInvite(c.req.query('invite'), jwtSecret);
+  const requestedUser = c.req.query('studentId') || c.req.query('username');
 
-  const requestedMockStudent = c.req.query('studentId') || c.req.query('username');
-  const mockUsername =
-    c.req.query('username') ||
-    getDebugProfile(requestedMockStudent).user.githubUsername ||
-    'wizard1337';
-  const isAptitek = mockUsername.toLowerCase() === 'aptitek';
-  const databaseUrl = c.env.DATABASE_URL;
-
-  if (databaseUrl && !isAptitek) {
-    try {
-      const profile = await findDevDatabaseProfile(databaseUrl, requestedMockStudent);
-      if (profile) {
-        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, profile.user.id);
-        await getDb(databaseUrl)
-          .update(users)
-          .set({ lastLogin: new Date(), updatedAt: new Date() })
-          .where(eq(users.id, profile.user.id));
-
-        const token = await sign(toAuthPayload(profile.user), jwtSecret);
-        return c.redirect(`${frontendUrl}/?token=${token}`);
-      }
-    } catch (dbError: any) {
-      console.error('DB dev login failed, trying offline debug data:', dbError.message);
+  try {
+    const user = await findDevDatabaseUser(c.env.DATABASE_URL, requestedUser);
+    if (!user) {
+      return c.redirect(`${frontendUrl}/?error=debug_user_not_found`);
     }
-  }
 
-  if (!isAptitek) {
-    assignDebugProfileToInvitedCohort(cohortInvite, requestedMockStudent);
-    const { user } = getDebugProfile(requestedMockStudent);
-    const token = await sign(toAuthPayload({ ...user, isAdmin: false }), jwtSecret);
+    if (!user.isAdmin) {
+      await assignStudentToInvitedCohort(c.env.DATABASE_URL, cohortInvite, user.id);
+    }
+
+    await getDb(c.env.DATABASE_URL)
+      .update(users)
+      .set({ lastLogin: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+
+    const token = await signAuthToken(toAuthPayload(user), jwtSecret);
     return c.redirect(`${frontendUrl}/?token=${token}`);
+  } catch (dbError: any) {
+    console.error('DB dev login failed:', dbError.message);
+    return c.redirect(`${frontendUrl}/?error=debug_login_failed`);
   }
-
-  const mockEmail = isAptitek ? 'aptitek@github.com' : 'wizard@github.com';
-  const mockAvatar =
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
-  const mockName = isAptitek ? 'Aptitek Master' : 'Archmage Coder';
-  let userId = isAptitek ? 'user_mock_aptitek' : 'user_mock_1337';
-  let authenticatedStudentId: string | undefined;
-  let isAdmin: boolean = isAptitek;
-
-  if (databaseUrl) {
-    try {
-      const db = getDb(databaseUrl);
-
-      // Self-healing: Ensure a default school exists in the database
-      const existingSchools = await db.select().from(schools).limit(1);
-      if (existingSchools.length === 0) {
-        await db.insert(schools).values({
-          name: 'Aptitek',
-          emailDomain: 'school.edu',
-        });
-      }
-
-      const existingUsers = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, mockEmail))
-        .limit(1);
-
-      if (existingUsers.length > 0) {
-        const userRecord = existingUsers[0];
-        userId = userRecord.id;
-        isAdmin = userRecord.isAdmin || isAptitek;
-
-        await db
-          .update(users)
-          .set({
-            lastLogin: new Date(),
-            githubUsername: mockUsername,
-            displayName: mockName,
-            githubAvatarUrl: mockAvatar,
-            avatarUrl: mockAvatar,
-            isAdmin: isAptitek ? true : userRecord.isAdmin,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, userId));
-
-        if (!isAdmin) {
-          const existingStudents = await db
-            .select()
-            .from(students)
-            .where(eq(students.userId, userId))
-            .limit(1);
-          authenticatedStudentId = existingStudents[0]?.id;
-        }
-      } else {
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            email: mockEmail,
-            githubSsoToken: 'mock-sso-token',
-            githubUsername: mockUsername,
-            displayName: mockName,
-            githubAvatarUrl: mockAvatar,
-            avatarUrl: mockAvatar,
-            isAdmin: isAptitek,
-          })
-          .returning();
-
-        userId = newUser.id;
-        isAdmin = newUser.isAdmin;
-
-        if (!isAdmin) {
-          const [newStudent] = await db
-            .insert(students)
-            .values({
-              userId: newUser.id,
-            })
-            .returning();
-
-          authenticatedStudentId = newStudent.id;
-
-          await db
-            .insert(gameCharacters)
-            .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
-        }
-      }
-
-      if (!isAdmin && authenticatedStudentId) {
-        await assignStudentToInvitedCohort(databaseUrl, cohortInvite, userId);
-      }
-    } catch (dbError: any) {
-      console.error('DB mock registration failed, playing offline mode:', dbError.message);
-    }
-  }
-
-  const payload: UserPayload = {
-    id: userId,
-    email: mockEmail,
-    githubUsername: mockUsername,
-    displayName: mockName,
-    githubAvatarUrl: mockAvatar,
-    avatarUrl: mockAvatar,
-    isAdmin,
-  };
-
-  const token = await sign(payload, jwtSecret);
-  return c.redirect(`${frontendUrl}/?token=${token}`);
 });
 
 // 4. GET /api/auth/me : Récupère la session courante (Sécurisé)
@@ -1858,18 +1546,14 @@ authRouter.get('/me', authMiddleware, async (c) => {
   }
 
   const databaseUrl = c.env.DATABASE_URL;
-  const allowMockData = isMockDataEnabled(c.env);
-  if (!databaseUrl && !allowMockData) {
+  if (!databaseUrl) {
     return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
-  const debugProfile = allowMockData
-    ? findDebugProfile(userPayload.id) || findDebugProfile(userPayload.email)
-    : undefined;
   let loadedDbProfile = false;
 
   // Données utilisateur réelles ou fallback JWT
-  let userObj: User = debugProfile?.user || {
+  let userObj: User = {
     id: userPayload.id,
     email: userPayload.email,
     githubUsername: userPayload.githubUsername,
@@ -1884,66 +1568,12 @@ authRouter.get('/me', authMiddleware, async (c) => {
     isAdmin: userPayload.isAdmin,
   };
 
-  // Données de simulation par défaut (Offline/Resilient fallback)
-  let studentObj: Student | null = userObj.isAdmin
-    ? null
-    : debugProfile?.student || {
-        id: 'stud_mock_1',
-        userId: userPayload.id,
-        cohortMemberships: [
-          {
-            userId: userPayload.id,
-            cohortId: 'cohort_mock_1',
-            institutionalEmail: userPayload.email.split('@')[0] + '@school.edu',
-            cohort: {
-              id: 'cohort_mock_1',
-              schoolId: 'school_mock_1',
-              school: {
-                id: 'school_mock_1',
-                name: 'Aptitek',
-                emailDomain: 'school.edu',
-              },
-              startYear: 2025,
-              grade: 'bachelor',
-              level: 3,
-              name: 'Frontend Mages',
-            },
-          },
-        ],
-      };
-
-  let characterObj: GameCharacter | null = userObj.isAdmin
-    ? null
-    : debugProfile?.character || {
-        studentId: 'stud_mock_1',
-        characterClass: DEFAULT_CHARACTER_CLASS,
-        stats: {
-          strength: 8,
-          dexterity: 10,
-          constitution: 10,
-          intelligence: 18,
-          wisdom: 12,
-          charisma: 12,
-        },
-      };
-  let activityCompletionObj: GameActivityCompletion[] = debugProfile?.activityCompletions || [];
-
-  if (debugProfile) {
-    userObj = debugProfile.user;
-  }
-
-  if (!databaseUrl && userObj.isAdmin) {
-    return c.json({
-      success: true,
-      user: userObj,
-      student: null,
-      character: null,
-      activityCompletions: [],
-    });
-  }
+  let studentObj: Student | null = null;
+  let characterObj: GameCharacter | null = null;
+  let activityCompletionObj: GameActivityCompletion[] = [];
 
   // Si DB est configurée, charger les données réelles
-  if (databaseUrl && !debugProfile) {
+  if (databaseUrl) {
     try {
       const db = getDb(databaseUrl);
 
@@ -1969,6 +1599,8 @@ authRouter.get('/me', authMiddleware, async (c) => {
           githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
           isAdmin: userRecord.isAdmin,
         };
+      } else {
+        return c.json({ success: false, error: 'User profile not found.' }, 404);
       }
 
       if (userObj.isAdmin) {
@@ -2096,13 +1728,11 @@ authRouter.get('/me', authMiddleware, async (c) => {
       }
     } catch (dbError: any) {
       console.warn('Database error loading user profile:', dbError.message);
-      if (!allowMockData) {
-        return c.json({ success: false, error: 'Profile could not be loaded.' }, 500);
-      }
+      return c.json({ success: false, error: 'Profile could not be loaded.' }, 500);
     }
   }
 
-  if (!allowMockData && !loadedDbProfile) {
+  if (!userObj.isAdmin && !loadedDbProfile) {
     return c.json({ success: false, error: 'Student profile not found.' }, 404);
   }
 
@@ -2155,11 +1785,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     );
   }
 
-  const allowMockData = isMockDataEnabled(c.env);
-  if (!databaseUrl && !allowMockData) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
-
   if (body.avatarUrl !== undefined && !isPersistableImageUrl(body.avatarUrl)) {
     return c.json(
       {
@@ -2171,29 +1796,15 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     );
   }
 
-  // Validation offline/resilience
-  if (!databaseUrl && allowMockData) {
-    const defaultDomain = userPayload.isAdmin ? 'aptitek.io' : 'school.edu';
-    if (
-      body.institutionalEmail &&
-      !body.institutionalEmail.toLowerCase().endsWith('@' + defaultDomain)
-    ) {
-      return c.json(
-        {
-          success: false,
-          error: `Institutional email must end with @${defaultDomain}`,
-          errorKey: 'profile.errors.institutionalEmailDomain',
-        },
-        400
-      );
-    }
+  if (!databaseUrl) {
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   // Objets mis à jour pour la réponse
   let userObj: User = {
     id: userPayload.id,
-    email: body.email ?? userPayload.email,
-    githubUsername: body.githubUsername ?? userPayload.githubUsername,
+    email: userPayload.email,
+    githubUsername: userPayload.githubUsername,
     firstName: body.firstName ?? userPayload.firstName,
     lastName: body.lastName ?? userPayload.lastName,
     displayName: body.displayName ?? userPayload.displayName,
@@ -2205,50 +1816,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     isAdmin: userPayload.isAdmin,
   };
 
-  let studentObj: Student | null = userPayload.isAdmin
-    ? null
-    : {
-        id: 'stud_mock_1',
-        userId: userPayload.id,
-        cohortMemberships: [
-          {
-            userId: userPayload.id,
-            cohortId: 'cohort_mock_1',
-            institutionalEmail:
-              body.institutionalEmail ||
-              body.email?.split('@')[0] + '@school.edu' ||
-              userPayload.email.split('@')[0] + '@school.edu',
-            cohort: {
-              id: 'cohort_mock_1',
-              schoolId: 'school_mock_1',
-              school: {
-                id: 'school_mock_1',
-                name: 'Aptitek',
-                emailDomain: 'school.edu',
-              },
-              startYear: 2025,
-              grade: 'bachelor',
-              level: 3,
-              name: 'Frontend Mages',
-            },
-          },
-        ],
-      };
-
-  let characterObj: GameCharacter | null = userPayload.isAdmin
-    ? null
-    : {
-        studentId: 'stud_mock_1',
-        characterClass: normalizeGameCharacterClass(body.characterClass),
-        stats: {
-          strength: 8,
-          dexterity: 10,
-          constitution: 10,
-          intelligence: 18,
-          wisdom: 12,
-          charisma: 12,
-        },
-      };
+  let studentObj: Student | null = null;
+  let characterObj: GameCharacter | null = null;
 
   if (databaseUrl) {
     try {
@@ -2261,8 +1830,6 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           displayName: body.displayName,
           firstName: body.firstName,
           lastName: body.lastName,
-          githubUsername: body.githubUsername,
-          email: body.email,
           avatarUrl: body.avatarUrl,
           birthDate: body.birthDate === null ? null : body.birthDate,
           bio: body.bio,
@@ -2287,6 +1854,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           githubAvatarUrl: updatedUser.githubAvatarUrl || undefined,
           isAdmin: updatedUser.isAdmin,
         };
+      } else {
+        return c.json({ success: false, error: 'User profile not found.' }, 404);
       }
 
       if (userObj.isAdmin) {
@@ -2301,9 +1870,11 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           .where(eq(students.userId, userPayload.id))
           .limit(1);
 
-        if (existingStudents.length > 0) {
-          const studentRecord = existingStudents[0];
-          const studentId = studentRecord.id;
+        const studentRecord = existingStudents[0];
+        if (!studentRecord) {
+          return c.json({ success: false, error: 'Student profile not found.' }, 404);
+        }
+        const studentId = studentRecord.id;
 
         const latestMemberships = await db
           .select()
@@ -2458,12 +2029,9 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           };
         }
       }
-      }
     } catch (dbError: any) {
       console.warn('Database error saving user profile:', dbError.message);
-      if (!allowMockData) {
-        return c.json({ success: false, error: 'Profile could not be saved.' }, 500);
-      }
+      return c.json({ success: false, error: 'Profile could not be saved.' }, 500);
     }
   }
 
@@ -2483,7 +2051,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     isAdmin: userObj.isAdmin,
   };
 
-  const newToken = await sign(newPayload, jwtSecret);
+  const newToken = await signAuthToken(newPayload, jwtSecret);
 
   return c.json({
     success: true,

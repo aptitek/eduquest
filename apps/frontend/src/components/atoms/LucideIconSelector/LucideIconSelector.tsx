@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { cn } from '../../../utils/cn';
+import { useTranslation } from '../../../hooks/useTranslation';
 import {
   filterLucideIconIds,
   renderLucideIcon,
@@ -34,11 +35,13 @@ export function LucideIconSelector({
   value,
   onChange,
   className,
-  searchPlaceholder = 'Search icons, e.g. sword, book, flame...',
+  searchPlaceholder,
   defaultIconIds = DEFAULT_ICON_IDS,
   limit = 72,
 }: LucideIconSelectorProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const resolvedSearchPlaceholder = searchPlaceholder || t('activityCard.iconSearchPlaceholder');
   const visibleIconIds = useMemo(() => {
     if (!query.trim()) return defaultIconIds.slice(0, limit);
     return filterLucideIconIds(query, limit);
@@ -52,7 +55,7 @@ export function LucideIconSelector({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={searchPlaceholder}
+          placeholder={resolvedSearchPlaceholder}
           className="w-full rounded-xl border border-gaming-border bg-gaming-base py-2 pl-9 pr-3 text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
         />
       </label>
@@ -63,7 +66,7 @@ export function LucideIconSelector({
             key={iconId}
             type="button"
             onClick={() => onChange(iconId)}
-            aria-label={`Use ${iconId} icon`}
+            aria-label={t('activityCard.useIcon').replace('{icon}', iconId)}
             aria-pressed={value === iconId}
             title={iconId}
             className={cn(

@@ -1,11 +1,11 @@
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 import type { GameCharacterClass, GameStats, School, User } from '@eduquest/shared';
-import type { DebugBackup } from './types';
+import type { ManagementBackup } from './types';
 
 type ManagementResponse =
   | {
       success: true;
-      backup: DebugBackup;
+      backup: ManagementBackup;
     }
   | {
       success: false;
@@ -32,7 +32,7 @@ type CohortInvitesResponse =
       error?: string;
     };
 
-export async function fetchManagementBackup(token: string): Promise<DebugBackup> {
+export async function fetchManagementBackup(token: string): Promise<ManagementBackup> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -89,7 +89,7 @@ export async function updateManagementStudent(
   token: string,
   studentId: string,
   update: ManagementStudentUpdate
-): Promise<DebugBackup> {
+): Promise<ManagementBackup> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/students/${studentId}`, {
     method: 'PUT',
     headers: {
@@ -114,7 +114,7 @@ export async function updateManagementSchool(
   token: string,
   schoolId: string,
   update: ManagementSchoolUpdate
-): Promise<DebugBackup> {
+): Promise<ManagementBackup> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/schools/${schoolId}`, {
     method: 'PUT',
     headers: {
@@ -140,7 +140,7 @@ export async function updateManagementCohortCharacterClass(
   cohortId: string,
   characterClass: GameCharacterClass,
   update: ManagementCharacterClassUpdate
-): Promise<DebugBackup> {
+): Promise<ManagementBackup> {
   const response = await fetch(
     `${BACKEND_BASE_URL}/api/auth/management/cohorts/${cohortId}/character-classes/${characterClass}`,
     {

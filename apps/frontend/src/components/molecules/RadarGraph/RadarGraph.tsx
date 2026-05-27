@@ -1,6 +1,8 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { AdaptiveTooltipBadge } from '../../atoms/AdaptiveTooltipBadge';
+import { UI_COLOR_TOKENS } from '../../../styles/colorTokens';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
 export interface RadarGraphAxis {
@@ -37,11 +39,11 @@ export interface RadarGraphProps {
 }
 
 const DEFAULT_COLORS = [
-  'var(--color-status-quest)',
-  'var(--color-status-campfire)',
-  'var(--color-accent-specialist)',
-  'var(--color-status-completed)',
-  'var(--color-status-danger)',
+  UI_COLOR_TOKENS.quest,
+  UI_COLOR_TOKENS.campfire,
+  UI_COLOR_TOKENS.specialist,
+  UI_COLOR_TOKENS.completed,
+  UI_COLOR_TOKENS.danger,
 ];
 const VIEWBOX_SIZE = 100;
 const VIEWBOX_MIN = -8;
@@ -90,6 +92,7 @@ export function RadarGraph({
   onValueChange,
   className,
 }: RadarGraphProps) {
+  const { t } = useTranslation();
   const titleId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -97,7 +100,8 @@ export function RadarGraph({
   const size = useElementSize(containerRef);
   const safeLevels = Math.max(Math.floor(levels), 1);
   const showInlineAxisLabels = size.width >= 180;
-  const editableDataset = datasets.find((dataset) => dataset.id === editableDatasetId) || datasets[0];
+  const editableDataset =
+    datasets.find((dataset) => dataset.id === editableDatasetId) || datasets[0];
   const canEdit = editable && Boolean(onValueChange) && Boolean(editableDataset);
 
   const chart = useMemo(() => {
@@ -224,7 +228,7 @@ export function RadarGraph({
           className
         )}
       >
-        Radar graph needs at least 3 axes.
+        {t('graph.radarGraphNeedsAxes')}
       </div>
     );
   }
@@ -246,7 +250,7 @@ export function RadarGraph({
         onPointerCancel={() => setActiveAxisId(null)}
       >
         <title id={titleId}>
-          {datasets.map((dataset) => dataset.label).join(', ') || 'Radar graph'}
+          {datasets.map((dataset) => dataset.label).join(', ') || t('graph.radarGraph')}
         </title>
 
         <g className="fill-none stroke-gaming-border/70">
@@ -321,7 +325,9 @@ export function RadarGraph({
                 strokeWidth={canEdit ? '1.15' : '0.55'}
                 role={canEdit ? 'slider' : undefined}
                 tabIndex={canEdit ? 0 : undefined}
-                aria-label={canEdit ? `${axis.label} value` : undefined}
+                aria-label={
+                  canEdit ? t('graph.axisValue').replace('{axis}', axis.label) : undefined
+                }
                 aria-valuemin={canEdit ? min : undefined}
                 aria-valuemax={canEdit ? editableMax : undefined}
                 aria-valuenow={canEdit ? clampValue(value, min, max) : undefined}
@@ -347,9 +353,7 @@ export function RadarGraph({
                     : undefined
                 }
                 onClick={canEdit ? (event) => event.stopPropagation() : undefined}
-                onKeyDown={
-                  canEdit ? (event) => handleMarkerKeyDown(event, axis, value) : undefined
-                }
+                onKeyDown={canEdit ? (event) => handleMarkerKeyDown(event, axis, value) : undefined}
               />
             ))
           : null}
@@ -434,7 +438,11 @@ function getViewBoxPercent(point: { x: number; y: number }) {
 
 function getCompactAxisLabel(label: string) {
   const words = label.trim().split(/\s+/).filter(Boolean);
-  if (words.length > 1) return words.map((word) => word[0]).join('').slice(0, 2);
+  if (words.length > 1)
+    return words
+      .map((word) => word[0])
+      .join('')
+      .slice(0, 2);
   return label.trim().slice(0, 2);
 }
 

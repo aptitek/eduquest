@@ -9,6 +9,7 @@ import {
   fetchGameRewardCards,
   updateGameRewardCard,
 } from '../../../features/game/api';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
 const ACCENT_OPTIONS: PlayingCardAccent[] = [
@@ -38,6 +39,7 @@ export interface GameRewardCardManagerProps {
 }
 
 export function GameRewardCardManager({ gameId, className }: GameRewardCardManagerProps) {
+  const { t } = useTranslation();
   const [rewardCards, setRewardCards] = useState<GameRewardCard[]>([]);
   const [draft, setDraft] = useState<GameRewardCardPayload>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       })
       .catch((loadError) => {
         console.warn('Could not load reward cards.', loadError);
-        if (isMounted) setError('Reward cards could not be loaded.');
+        if (isMounted) setError(t('rewardCards.loadError'));
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);
@@ -74,7 +76,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     };
   }, [gameId]);
 
-  const previewCard = useMemo(() => toPlayingCard(editingCard ? { ...editingCard, ...draft } : draft), [draft, editingCard]);
+  const previewCard = useMemo(() => toPlayingCard(t, editingCard ? { ...editingCard, ...draft } : draft), [draft, editingCard, t]);
 
   const startEditing = (card: GameRewardCard) => {
     setEditingId(card.id);
@@ -123,7 +125,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (saveError) {
       console.warn('Could not save reward card.', saveError);
-      setError('Reward card could not be saved.');
+      setError(t('rewardCards.saveError'));
     } finally {
       setIsSaving(false);
     }
@@ -144,7 +146,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (deleteError) {
       console.warn('Could not delete reward card.', deleteError);
-      setError('Reward card could not be deleted.');
+      setError(t('rewardCards.deleteError'));
     } finally {
       setIsSaving(false);
     }
@@ -155,13 +157,13 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-display text-xs font-black uppercase tracking-[0.22em] text-status-campfire">
-            Game rewards
+            {t('rewardCards.eyebrow')}
           </p>
           <h3 id="reward-card-manager-title" className="text-2xl font-bold">
-            Reward Cards
+            {t('rewardCards.title')}
           </h3>
         </div>
-        {isLoading ? <span className="text-sm text-text-muted">Loading...</span> : null}
+        {isLoading ? <span className="text-sm text-text-muted">{t('common.loading')}</span> : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -171,21 +173,21 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
           className="xl:grid-cols-2 2xl:grid-cols-3"
           renderItem={(card) => (
             <div className="space-y-3">
-              <PlayingCard {...toPlayingCard(card)} size="full" className="w-full" />
+              <PlayingCard {...toPlayingCard(t, card)} size="full" className="w-full" />
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => startEditing(card)}
                   className="btn btn-sm flex-1 border-gaming-border bg-gaming-card font-display text-xs uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary"
                 >
-                  Edit
+                  {t('rewardCards.edit')}
                 </button>
                 <button
                   type="button"
                   onClick={() => removeRewardCard(card)}
                   disabled={isSaving}
                   className="btn btn-sm border-status-danger/40 bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-gaming-base"
-                  aria-label={`Delete ${card.title}`}
+                  aria-label={t('rewardCards.deleteNamed').replace('{title}', card.title)}
                 >
                   <Trash2 size={14} aria-hidden />
                 </button>
@@ -197,12 +199,12 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
         <div className="rounded-3xl border border-gaming-border bg-gaming-card/70 p-4 shadow-xl">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h4 className="font-display text-sm font-black uppercase tracking-[0.18em] text-text-secondary">
-              {editingId ? 'Edit reward' : 'Create reward'}
+              {editingId ? t('rewardCards.editReward') : t('rewardCards.createReward')}
             </h4>
             {editingId ? (
               <button type="button" onClick={resetDraft} className="btn btn-ghost btn-xs text-text-muted">
                 <X size={14} aria-hidden />
-                Cancel
+                {t('common.cancel')}
               </button>
             ) : null}
           </div>
@@ -212,19 +214,19 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
           </div>
 
           <div className="space-y-3">
-            <TextInput label="Title" value={draft.title} onChange={(title) => setDraft((current) => ({ ...current, title }))} />
+            <TextInput label={t('rewardCards.fields.title')} value={draft.title} onChange={(title) => setDraft((current) => ({ ...current, title }))} />
             <TextInput
-              label="Subtitle"
+              label={t('rewardCards.fields.subtitle')}
               value={draft.subtitle || ''}
               onChange={(subtitle) => setDraft((current) => ({ ...current, subtitle }))}
             />
             <TextInput
-              label="Description"
+              label={t('rewardCards.fields.description')}
               value={draft.description || ''}
               onChange={(description) => setDraft((current) => ({ ...current, description }))}
             />
             <label className="block space-y-1.5 text-sm">
-              <span className="font-bold text-text-secondary">Cost</span>
+              <span className="font-bold text-text-secondary">{t('rewardCards.fields.cost')}</span>
               <input
                 type="number"
                 min={0}
@@ -236,7 +238,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
               />
             </label>
             <label className="block space-y-1.5 text-sm">
-              <span className="font-bold text-text-secondary">Accent</span>
+              <span className="font-bold text-text-secondary">{t('rewardCards.fields.accent')}</span>
               <select
                 value={draft.accentToken || 'quest'}
                 onChange={(event) =>
@@ -246,7 +248,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
               >
                 {ACCENT_OPTIONS.map((accent) => (
                   <option key={accent} value={accent}>
-                    {accent}
+                    {getAccentLabel(t, accent)}
                   </option>
                 ))}
               </select>
@@ -262,7 +264,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
             className="btn btn-primary mt-5 w-full font-display text-xs font-black uppercase tracking-[0.16em]"
           >
             {editingId ? <Save size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
-            {editingId ? 'Save reward' : 'Create reward'}
+            {editingId ? t('rewardCards.saveReward') : t('rewardCards.createReward')}
           </button>
         </div>
       </div>
@@ -291,23 +293,28 @@ function TextInput({
   );
 }
 
-function toPlayingCard(card: Partial<GameRewardCardPayload & GameRewardCard>): PlayingCardData {
+function toPlayingCard(t: (path: string) => string, card: Partial<GameRewardCardPayload & GameRewardCard>): PlayingCardData {
   return {
     id: card.id,
     kind: 'reward',
-    title: card.title || 'Reward title',
-    subtitle: card.subtitle || 'Reward subtitle',
+    title: card.title || t('rewardCards.previewTitle'),
+    subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
     description: card.description,
     accentToken: (card.accentToken || 'quest') as PlayingCardAccent,
-    ribbonLabel: `${card.cost ?? 0} pts`,
+    ribbonLabel: `${card.cost ?? 0} ${t('rewardCards.pointsShort')}`,
     ribbonClassName: 'bg-status-quest',
     front: {
-      title: card.title || 'Reward title',
-      subtitle: card.subtitle || 'Reward subtitle',
-      description: card.description || 'Describe the reward unlocked by this card.',
-      ribbonText: `${card.cost ?? 0} pts`,
+      title: card.title || t('rewardCards.previewTitle'),
+      subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
+      description: card.description || t('rewardCards.previewDescription'),
+      ribbonText: `${card.cost ?? 0} ${t('rewardCards.pointsShort')}`,
     },
   };
+}
+
+function getAccentLabel(t: (path: string) => string, accent: PlayingCardAccent) {
+  const translated = t(`rewardCards.accents.${accent}`);
+  return translated === `rewardCards.accents.${accent}` ? accent : translated;
 }
 
 export default GameRewardCardManager;

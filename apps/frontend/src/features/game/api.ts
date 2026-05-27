@@ -60,7 +60,7 @@ type DashboardResponse =
 type GuildsResponse =
   | {
       success: true;
-      guilds: Guild[];
+      guilds: ClassRosterGuild[];
       unguildedStudents?: ClassRosterStudent[];
       source?: string;
     }
@@ -91,8 +91,12 @@ export interface ClassRosterStudent {
   stats?: GameStats;
 }
 
+export interface ClassRosterGuild extends Guild {
+  members?: ClassRosterStudent[];
+}
+
 export interface ClassRoster {
-  guilds: Guild[];
+  guilds: ClassRosterGuild[];
   unguildedStudents: ClassRosterStudent[];
 }
 
@@ -148,7 +152,7 @@ export async function fetchCohortProgressData(
   return data.progress;
 }
 
-export async function fetchGuilds(token: string, gameId?: string | null): Promise<Guild[]> {
+export async function fetchGuilds(token: string, gameId?: string | null): Promise<ClassRosterGuild[]> {
   return (await fetchClassRoster(token, gameId)).guilds;
 }
 

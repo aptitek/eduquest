@@ -1,6 +1,7 @@
 import { CheckCircle2, Sparkles } from 'lucide-react';
 import type { ActivityParticipationMode } from '@eduquest/shared';
 import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 export interface QuestCompletionActionProps {
   isCompleted?: boolean;
@@ -18,14 +19,18 @@ export function QuestCompletionAction({
   error,
   onComplete,
   mode = 'solo',
-  completeLabel = 'Complete Quest',
-  completedLabel = 'Quest Resolved',
+  completeLabel,
+  completedLabel,
 }: QuestCompletionActionProps) {
+  const { t } = useTranslation();
+  const resolvedCompleteLabel = completeLabel || t('activityCard.completeQuest');
+  const resolvedCompletedLabel = completedLabel || t('activityCard.questResolved');
+
   if (isCompleted) {
     return (
       <div
-        aria-label={completedLabel}
-        title={completedLabel}
+        aria-label={resolvedCompletedLabel}
+        title={resolvedCompletedLabel}
         className="flex h-20 w-20 items-center justify-center text-status-completed drop-shadow-[0_0_14px_var(--color-status-completed)]"
       >
         <CheckCircle2 size={52} strokeWidth={3.5} aria-hidden />
@@ -57,7 +62,7 @@ export function QuestCompletionAction({
       >
         <span className="flex flex-col items-center gap-1">
           <Sparkles size={20} aria-hidden />
-          <span>{isResolving ? 'Resolving...' : completeLabel}</span>
+          <span>{isResolving ? t('activityCard.resolving') : resolvedCompleteLabel}</span>
         </span>
       </HoldToConfirmButton>
     </div>

@@ -11,7 +11,6 @@ import { getFrontendUrl } from './config/runtime';
 
 type Bindings = {
   APP_ENV?: string;
-  ENABLE_MOCK_DATA?: string;
   ENABLE_DEBUG_AUTH?: string;
   DATABASE_URL?: string;
   JWT_SECRET?: string;

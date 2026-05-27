@@ -39,17 +39,17 @@ export type CohortRow = Cohort & {
   studentCount: number;
 };
 
-export type DebugStudentProfile = {
+export type ManagementStudentProfile = {
   user: User;
   student: Student;
   character: GameCharacter;
 };
 
-export type DebugBackup = {
+export type ManagementBackup = {
   addresses: Address[];
   schools: School[];
   campuses: Campus[];
   cohorts: Cohort[];
   characterClasses: GameCharacterClassDefinition[];
-  students: DebugStudentProfile[];
+  students: ManagementStudentProfile[];
 };

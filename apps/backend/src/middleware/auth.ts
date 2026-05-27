@@ -1,5 +1,6 @@
 import { verify } from 'hono/jwt';
 import { MiddlewareHandler } from 'hono';
+import { getJwtSecret } from '../config/runtime';
 
 export type UserPayload = {
   id: string;
@@ -16,11 +17,21 @@ export type UserPayload = {
   githubAvatarUrl?: string;
 };
 
-const DEFAULT_JWT_SECRET = 'eduquest-secret-key-1337-gaming-token';
-
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
-  // Read JWT secret dynamically from Cloudflare Workers bindings at runtime
-  const secret = c.env?.JWT_SECRET || DEFAULT_JWT_SECRET;
+  // Read JWT secret dynamically from Cloudflare Workers bindings at runtime.
+  const secret = getJwtSecret(c.env || {});
+
+  if (!secret) {
+    console.error('JWT_SECRET is not configured for authenticated routes.');
+    return c.json(
+      {
+        success: false,
+        error: 'Server Configuration Error',
+        message: 'Authentication is not configured.',
+      },
+      500
+    );
+  }
 
   const authHeader = c.req.header('Authorization');
 

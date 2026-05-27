@@ -66,11 +66,11 @@ This file tracks the remaining project backlog. Completed items are kept only wh
 [x] Add more fog and redo the avoid area system instead of big visible circles. If needed try to find an existing react component to draw that with a neet effect. Try to keep it light weight 
 
 AUDIT
-[ ] Remove ALL hard coded mock data and translate everything using i18n except dynamic fields in the database like descriptions and names of guild/characters.
+[x] Remove ALL hard coded mock data and translate everything using i18n except dynamic fields in the database like descriptions and names of guild/characters.
 [ ] Remove all unused translations from the translation files
-[ ] Move mock data in the database and wire all the relevant API. Also add much more generated data like 3 cohorts of 10 to 30 students, with one that is yet to start making characters or even fill the profile card and one well along the game with guilds and such.
+[x] Move mock data in the database and wire all the relevant API. Also add much more generated data like 3 cohorts of 10 to 30 students, with one that is yet to start making characters or even fill the profile card and one well along the game with guilds and such.
 [ ] Refactor the API to follow DRY and KISS principles along with following the industry best practices
 [ ] Render missing translation keys in a visible debug style during development.
-[ ] Check ALL raw colors and enforce token design. Also refactor the tokens completely to factorize them into as little tokens and as generic tokens as possible. Re-check then for any and all non solarized colors in the theme.
+[x] Check ALL raw colors and enforce token design. Also refactor the tokens completely to factorize them into as little tokens and as generic tokens as possible. Re-check then for any and all non solarized colors in the theme.
 [ ] Do a comprehensive security audit of the entire app, especially sanitation of the inputs and prevent ANY privilege escalation from the students.
 [ ]

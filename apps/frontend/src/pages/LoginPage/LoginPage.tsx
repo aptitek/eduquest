@@ -6,7 +6,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { ENABLE_DEV_TOOLS } from '../../config/deployment';
 import logoUrl from '../../assets/logo.svg';
 
-type MockStudentOption = {
+type DevStudentOption = {
   id: string;
   displayName: string;
   email: string;
@@ -17,28 +17,28 @@ type MockStudentOption = {
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const { loginWithGithub, loginWithMock, error } = useAuth();
-  const [mockStudents, setMockStudents] = useState<MockStudentOption[]>([]);
-  const [selectedMockStudentId, setSelectedMockStudentId] = useState('');
+  const { loginWithGithub, loginWithDevUser, error } = useAuth();
+  const [devStudents, setDevStudents] = useState<DevStudentOption[]>([]);
+  const [selectedDevStudentId, setSelectedDevStudentId] = useState('');
   const showDevLogin = ENABLE_DEV_TOOLS;
 
   useEffect(() => {
     if (!showDevLogin) return;
 
-    const loadMockStudents = async () => {
+    const loadDevStudents = async () => {
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/api/auth/mock-students`);
+        const response = await fetch(`${BACKEND_BASE_URL}/api/auth/dev/students`);
         const data = await response.json();
         if (data.success && Array.isArray(data.students)) {
-          setMockStudents(data.students);
-          setSelectedMockStudentId((current) => current || data.students[0]?.id || '');
+          setDevStudents(data.students);
+          setSelectedDevStudentId((current) => current || data.students[0]?.id || '');
         }
       } catch (loadError) {
         console.warn('Could not load debug students for dev login.', loadError);
       }
     };
 
-    loadMockStudents();
+    loadDevStudents();
   }, [showDevLogin]);
 
   return (
@@ -126,17 +126,17 @@ export function LoginPage() {
 
           {showDevLogin && (
             <>
-              {mockStudents.length > 0 && (
+              {devStudents.length > 0 && (
                 <label className="flex flex-col gap-1.5 text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
                   <span>{t('auth.devStudentLabel')}</span>
                   <select
-                    value={selectedMockStudentId}
-                    onChange={(event) => setSelectedMockStudentId(event.target.value)}
+                    value={selectedDevStudentId}
+                    onChange={(event) => setSelectedDevStudentId(event.target.value)}
                     className="select select-bordered w-full bg-gaming-base border-gaming-border text-sm normal-case text-text-primary"
                   >
-                    {mockStudents.map((student) => (
+                    {devStudents.map((student) => (
                       <option key={student.id} value={student.id}>
-                        {student.displayName} · {student.cohortNames.join(', ')} · Lvl {student.level}
+                        {student.displayName} · {student.cohortNames.join(', ')} · {t('auth.levelShort')} {student.level}
                       </option>
                     ))}
                   </select>
@@ -147,7 +147,7 @@ export function LoginPage() {
                 type="button"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => loginWithMock(selectedMockStudentId)}
+                onClick={() => loginWithDevUser(selectedDevStudentId)}
                 className="w-full py-3 px-4 rounded-xl border border-gaming-border bg-gaming-base/40 text-text-secondary font-semibold font-display flex items-center justify-center gap-3 transition-all hover:bg-gaming-card cursor-pointer"
               >
                 <Terminal size={16} className="text-status-campfire" />

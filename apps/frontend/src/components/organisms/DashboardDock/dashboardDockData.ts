@@ -1,7 +1,8 @@
 import type { CohortMembership, GameCharacterClass, GameStats } from '@eduquest/shared';
 import type { PlayingCardData, PlayingHandData } from '../../molecules/PlayingCard';
 import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
-import type { DockGuild } from './types';
+import { resolveUiColorTokenValue } from '../../../styles/colorTokens';
+import type { DockGuild, DockGuildMember } from './types';
 
 type Translate = (path: string) => string;
 
@@ -23,10 +24,7 @@ interface ClassGuildHandOptions {
   activeCardIndex?: number;
 }
 
-export function buildPodiumCards(
-  t: Translate,
-  guilds: readonly DockGuild[]
-): PlayingCardData[] {
+export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): PlayingCardData[] {
   const podiumGuilds = [...guilds].sort((a, b) => (b.gold || 0) - (a.gold || 0));
 
   const toCard = (guild: DockGuild): PlayingCardData => ({
@@ -39,11 +37,7 @@ export function buildPodiumCards(
     ribbonIcon: renderGuildIcon(guild, 18),
   });
 
-  const podiumRibbonClassNames = [
-    'bg-status-campfire',
-    'bg-accent-neutral',
-    'bg-solarized-orange',
-  ];
+  const podiumRibbonClassNames = ['bg-status-campfire', 'bg-accent-neutral', 'bg-solarized-orange'];
 
   return podiumGuilds.slice(0, 3).map((guild, index) => ({
     ...toCard(guild),
@@ -53,6 +47,7 @@ export function buildPodiumCards(
 }
 
 export function buildProgressBonusCards(
+  t: Translate,
   cards: readonly [PlayingCardData, ...PlayingCardData[]],
   layoutPrefix = 'progress-bonus'
 ) {
@@ -64,9 +59,11 @@ export function buildProgressBonusCards(
       id: `${layoutPrefix}-${slug}`,
       layoutId: `${layoutPrefix}-${slug}`,
       front: {
-        title: card.title || `Bonus ${index + 1}`,
+        title:
+          card.title || t('dashboard.rewards.fallbackTitle').replace('{index}', String(index + 1)),
         subtitle: card.subtitle,
-        description: card.description || card.subtitle || 'Bonus card available to the cohort.',
+        description:
+          card.description || card.subtitle || t('dashboard.rewards.fallbackDescription'),
         color: resolveCardColor(card.accentToken),
         illustrationUrl: card.illustrationUrl,
         illustrationAlt: card.illustrationAlt || card.title,
@@ -89,31 +86,13 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
       subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.gold || 0)),
       front: {
         title: options.guildName,
-        description:
-          'A tactical guild card that tracks collective momentum, shared gold, and the next reward push.',
+        description: options.guild.description || t('dashboard.dock.guildCardDescription'),
         color: guildColor,
         illustration: renderGuildIcon(options.guild, 72, 'drop-shadow-lg'),
         ribbonText: t('dashboard.dock.playerGuild'),
         ribbonIcon: renderGuildIcon(options.guild, 18),
         stats: [
           { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
-          { id: 'quests', label: 'Quest', value: 74 },
-          { id: 'support', label: 'Aid', value: 68 },
-          { id: 'focus', label: 'Focus', value: 82 },
-          { id: 'luck', label: 'Luck', value: 55 },
-        ],
-      },
-      back: {
-        title: `${options.guildName} strategy`,
-        description: 'Guild planning notes for the next shared action.',
-        color: guildColor,
-        ribbonText: 'Plan',
-        ribbonIcon: renderGuildIcon(options.guild, 18),
-        stats: [
-          { id: 'risk', label: 'Risk', value: 42 },
-          { id: 'gain', label: 'Gain', value: 86 },
-          { id: 'cost', label: 'Cost', value: 38 },
-          { id: 'tempo', label: 'Tempo', value: 72 },
         ],
       },
     },
@@ -128,8 +107,11 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
       illustrationAlt: options.playerName,
       front: {
         title: options.playerName,
-        description: `${options.characterClassLabel}. A reliable active member ready to turn boosts into progress.`,
-        color: 'var(--color-status-quest)',
+        description: t('dashboard.dock.playerCardDescription').replace(
+          '{class}',
+          options.characterClassLabel
+        ),
+        color: resolveUiColorTokenValue('quest'),
         illustrationUrl: options.playerAvatar,
         ribbonText: options.characterClassLabel,
         stats: [
@@ -137,50 +119,6 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
           { id: 'dexterity', label: 'DEX', value: options.characterStats.dexterity ?? 0 },
           { id: 'intelligence', label: 'INT', value: options.characterStats.intelligence ?? 0 },
           { id: 'charisma', label: 'CHA', value: options.characterStats.charisma ?? 0 },
-        ],
-      },
-    },
-    {
-      id: 'guide',
-      layoutId: 'guild-hand-guide',
-      kind: 'character',
-      characterClass: 'guide',
-      title: t('dashboard.dock.guildmate'),
-      subtitle: t('game.classes.guide'),
-      accentToken: 'guide',
-      front: {
-        title: t('dashboard.dock.guildmate'),
-        description: t('dashboard.dock.hiddenMember'),
-        color: 'var(--color-accent-guide)',
-        ribbonText: t('game.classes.guide'),
-        stats: [
-          { id: 'logic', label: 'Logic', value: 54 },
-          { id: 'speed', label: 'Speed', value: 58 },
-          { id: 'team', label: 'Team', value: 90 },
-          { id: 'xp', label: 'XP', value: 46 },
-          { id: 'focus', label: 'Focus', value: 62 },
-        ],
-      },
-    },
-    {
-      id: 'specialist',
-      layoutId: 'guild-hand-specialist',
-      kind: 'character',
-      characterClass: 'specialist',
-      title: t('dashboard.dock.guildmate'),
-      subtitle: t('game.classes.specialist'),
-      accentToken: 'specialist',
-      front: {
-        title: t('dashboard.dock.guildmate'),
-        description: t('dashboard.dock.hiddenMember'),
-        color: 'var(--color-accent-specialist)',
-        ribbonText: t('game.classes.specialist'),
-        stats: [
-          { id: 'logic', label: 'Logic', value: 88 },
-          { id: 'speed', label: 'Speed', value: 49 },
-          { id: 'team', label: 'Team', value: 61 },
-          { id: 'xp', label: 'XP', value: 67 },
-          { id: 'focus', label: 'Focus', value: 76 },
         ],
       },
     },
@@ -204,6 +142,9 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
   const guildSlug = slugify(guildName);
   const layoutPrefix = options.layoutPrefix || `class-guild-${guildSlug}`;
   const guildColor = resolveCardColor(options.guild.color);
+  const memberCards = (options.guild.members || [])
+    .slice(0, 4)
+    .map((member, index) => buildGuildMemberCard(t, member, layoutPrefix, index));
 
   return {
     id: `${layoutPrefix}-hand`,
@@ -219,68 +160,28 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
         kind: 'guild',
         guild: options.guild,
         title: guildName,
-        subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.gold || 0)),
+        subtitle: t('dashboard.dock.goldSpent').replace(
+          '{amount}',
+          String(options.guild.gold || 0)
+        ),
         front: {
           title: guildName,
-          description:
-            'A class guild card tracking collective progress, ranking momentum, and team contribution.',
+          description: options.guild.description || t('dashboard.dock.classGuildCardDescription'),
           color: guildColor,
           illustration: renderGuildIcon(options.guild, 72, 'drop-shadow-lg'),
           ribbonText: t('dashboard.dock.playerGuild'),
           ribbonIcon: renderGuildIcon(options.guild, 18),
           stats: [
-            { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
-            { id: 'quests', label: 'Quest', value: 72 },
-            { id: 'support', label: 'Aid', value: 64 },
-            { id: 'focus', label: 'Focus', value: 78 },
-            { id: 'luck', label: 'Luck', value: 58 },
+            {
+              id: 'gold',
+              label: t('dashboard.dock.gold'),
+              value: options.guild.gold || 0,
+              max: 250,
+            },
           ],
         },
       },
-      {
-        id: `${layoutPrefix}-member-1`,
-        layoutId: `${layoutPrefix}-member-1`,
-        kind: 'character',
-        characterClass: 'guide',
-        title: t('dashboard.dock.guildmate'),
-        subtitle: t('game.classes.guide'),
-        accentToken: 'guide',
-        front: {
-          title: t('dashboard.dock.guildmate'),
-          description: t('dashboard.dock.hiddenMember'),
-          color: 'var(--color-accent-guide)',
-          ribbonText: t('game.classes.guide'),
-          stats: [
-            { id: 'logic', label: 'Logic', value: 54 },
-            { id: 'speed', label: 'Speed', value: 58 },
-            { id: 'team', label: 'Team', value: 90 },
-            { id: 'xp', label: 'XP', value: 46 },
-            { id: 'focus', label: 'Focus', value: 62 },
-          ],
-        },
-      },
-      {
-        id: `${layoutPrefix}-member-2`,
-        layoutId: `${layoutPrefix}-member-2`,
-        kind: 'character',
-        characterClass: 'specialist',
-        title: t('dashboard.dock.guildmate'),
-        subtitle: t('game.classes.specialist'),
-        accentToken: 'specialist',
-        front: {
-          title: t('dashboard.dock.guildmate'),
-          description: t('dashboard.dock.hiddenMember'),
-          color: 'var(--color-accent-specialist)',
-          ribbonText: t('game.classes.specialist'),
-          stats: [
-            { id: 'logic', label: 'Logic', value: 88 },
-            { id: 'speed', label: 'Speed', value: 49 },
-            { id: 'team', label: 'Team', value: 61 },
-            { id: 'xp', label: 'XP', value: 67 },
-            { id: 'focus', label: 'Focus', value: 76 },
-          ],
-        },
-      },
+      ...memberCards,
     ],
   };
 }
@@ -296,26 +197,59 @@ export function getLatestCohortMembership(memberships?: CohortMembership[]) {
 }
 
 function resolveCardColor(value: string | undefined) {
-  const colorMap: Record<string, string> = {
-    scholar: 'var(--color-accent-scholar)',
-    champion: 'var(--color-accent-champion)',
-    guide: 'var(--color-accent-guide)',
-    specialist: 'var(--color-accent-specialist)',
-    quest: 'var(--color-status-quest)',
-    campfire: 'var(--color-status-campfire)',
-    completed: 'var(--color-status-completed)',
-    boss: 'var(--color-status-boss)',
-    danger: 'var(--color-status-danger)',
-    neutral: 'var(--color-accent-neutral)',
-  };
-
-  return value ? colorMap[value] || value : 'var(--color-status-quest)';
+  return resolveUiColorTokenValue(value);
 }
 
 function slugify(value: string | undefined) {
-  return (value || 'guild').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return (value || 'guild')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }
 
 function renderGuildIcon(guild: DockGuild, size: number, className?: string) {
   return renderLucideIcon(guild.iconKey || 'Shield', size, className);
+}
+
+function buildGuildMemberCard(
+  t: Translate,
+  member: DockGuildMember,
+  layoutPrefix: string,
+  index: number
+): PlayingCardData {
+  const classLabel = member.characterClass
+    ? t(`game.classes.${member.characterClass}`)
+    : t('dashboard.dock.guildmate');
+  const subtitle = member.institutionalEmail || member.email || classLabel;
+
+  return {
+    id: `${layoutPrefix}-member-${member.id || index}`,
+    layoutId: `${layoutPrefix}-member-${member.id || index}`,
+    kind: 'character',
+    characterClass: member.characterClass || 'scholar',
+    title: member.displayName,
+    subtitle,
+    illustrationUrl: member.avatarUrl,
+    illustrationAlt: member.displayName,
+    accentToken: member.characterClass || 'neutral',
+    front: {
+      title: member.displayName,
+      subtitle,
+      description: t('dashboard.dock.hiddenMember'),
+      color: resolveCardColor(member.characterClass || 'neutral'),
+      illustrationUrl: member.avatarUrl,
+      illustrationAlt: member.displayName,
+      ribbonText: classLabel,
+      stats: member.stats
+        ? [
+            { id: 'strength', label: 'STR', value: member.stats.strength, max: 20 },
+            { id: 'dexterity', label: 'DEX', value: member.stats.dexterity, max: 20 },
+            { id: 'constitution', label: 'CON', value: member.stats.constitution, max: 20 },
+            { id: 'intelligence', label: 'INT', value: member.stats.intelligence, max: 20 },
+            { id: 'wisdom', label: 'WIS', value: member.stats.wisdom, max: 20 },
+            { id: 'charisma', label: 'CHA', value: member.stats.charisma, max: 20 },
+          ]
+        : undefined,
+    },
+  };
 }

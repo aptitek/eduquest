@@ -24,7 +24,7 @@ import {
 import { useManagementColumns } from '../../features/management/useManagementColumns';
 import type {
   CohortRow,
-  DebugBackup,
+  ManagementBackup,
   ManagementTab,
   SchoolRow,
   SelectedManagementEntity,
@@ -50,7 +50,7 @@ export function ManagementPage() {
   const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<SelectedManagementEntity | null>(null);
-  const [debugBackup, setDebugBackup] = useState<DebugBackup | null>(null);
+  const [managementBackup, setManagementBackup] = useState<ManagementBackup | null>(null);
   const [isManagementLoading, setIsManagementLoading] = useState(false);
   const [managementErrorKey, setManagementErrorKey] = useState<string | null>(null);
 
@@ -74,7 +74,7 @@ export function ManagementPage() {
       setManagementErrorKey(null);
       try {
         const backup = await fetchManagementBackup(token);
-        if (isMounted) setDebugBackup(backup);
+        if (isMounted) setManagementBackup(backup);
       } catch (error) {
         console.warn('Could not load management backup.', error);
         if (isMounted) setManagementErrorKey('management.errors.loadFailed');
@@ -90,14 +90,14 @@ export function ManagementPage() {
   }, [user?.isAdmin]);
 
   const schoolRows = useMemo<SchoolRow[]>(() => {
-    if (!debugBackup) return [];
+    if (!managementBackup) return [];
 
-    return debugBackup.schools.map((school) => {
-      const campus = debugBackup.campuses.find((item) => item.schoolId === school.id);
-      const cohortCount = debugBackup.cohorts.filter(
+    return managementBackup.schools.map((school) => {
+      const campus = managementBackup.campuses.find((item) => item.schoolId === school.id);
+      const cohortCount = managementBackup.cohorts.filter(
         (cohort) => cohort.schoolId === school.id
       ).length;
-      const studentCount = debugBackup.students.filter((profile) =>
+      const studentCount = managementBackup.students.filter((profile) =>
         profile.student.cohortMemberships?.some(
           (membership) => membership.cohort?.schoolId === school.id
         )
@@ -110,30 +110,30 @@ export function ManagementPage() {
         studentCount,
       };
     });
-  }, [debugBackup]);
+  }, [managementBackup]);
 
   const cohortRows = useMemo<CohortRow[]>(() => {
-    if (!debugBackup) return [];
+    if (!managementBackup) return [];
 
-    return debugBackup.cohorts.map((cohort) => ({
+    return managementBackup.cohorts.map((cohort) => ({
       ...cohort,
       schoolName:
         cohort.school?.name ||
-        debugBackup.schools.find((school) => school.id === cohort.schoolId)?.name ||
+        managementBackup.schools.find((school) => school.id === cohort.schoolId)?.name ||
         '-',
       campusName:
         cohort.campus?.name ||
-        debugBackup.campuses.find((campus) => campus.id === cohort.campusId)?.name ||
+        managementBackup.campuses.find((campus) => campus.id === cohort.campusId)?.name ||
         '-',
-      studentCount: debugBackup.students.filter((profile) =>
+      studentCount: managementBackup.students.filter((profile) =>
         profile.student.cohortMemberships?.some((membership) => membership.cohortId === cohort.id)
       ).length,
     }));
-  }, [debugBackup]);
+  }, [managementBackup]);
 
   const studentRows = useMemo<StudentRow[]>(() => {
-    if (debugBackup) {
-      return debugBackup.students
+    if (managementBackup) {
+      return managementBackup.students
         .filter(({ user: rowUser }) => !rowUser.isAdmin)
         .map(({ user: rowUser, student: rowStudent, character: rowCharacter }) => {
           const latestMembership = getLatestCohortMembership(rowStudent.cohortMemberships);
@@ -174,7 +174,7 @@ export function ManagementPage() {
         age: calculateAge(user.birthDate),
       },
     ];
-  }, [character, cohortRows, debugBackup, schoolRows, student, user]);
+  }, [character, cohortRows, managementBackup, schoolRows, student, user]);
   const schoolFilterOptions = useMemo(
     () => Array.from(new Set(studentRows.map((row) => row.school?.name || 'Aptitek'))),
     [studentRows]
@@ -228,7 +228,7 @@ export function ManagementPage() {
     setManagementErrorKey(null);
     try {
       const backup = await updateManagementSchool(token, selectedSchoolRow.id, update);
-      setDebugBackup(backup);
+      setManagementBackup(backup);
     } catch (error) {
       console.warn('Could not update management school.', error);
       setManagementErrorKey('management.errors.updateFailed');
@@ -248,7 +248,7 @@ export function ManagementPage() {
     setManagementErrorKey(null);
     try {
       const backup = await updateManagementStudent(token, selectedStudentRow.id, update);
-      setDebugBackup(backup);
+      setManagementBackup(backup);
     } catch (error) {
       console.warn('Could not update management student.', error);
       setManagementErrorKey('management.errors.updateFailed');
@@ -275,7 +275,7 @@ export function ManagementPage() {
         characterClass,
         { baseStats: characterClassUpdate }
       );
-      setDebugBackup(backup);
+      setManagementBackup(backup);
     } catch (error) {
       console.warn('Could not update management character class.', error);
       setManagementErrorKey('management.errors.updateFailed');
@@ -303,7 +303,7 @@ export function ManagementPage() {
       cohort={selectedCohortRow}
       cohortOptions={cohortRows}
       campusOptions={campusOptions}
-      characterClasses={debugBackup?.characterClasses || []}
+      characterClasses={managementBackup?.characterClasses || []}
       onUpdateCharacterClass={(characterClass, baseStats) =>
         updateSelectedCohortCharacterClass(baseStats, characterClass)
       }

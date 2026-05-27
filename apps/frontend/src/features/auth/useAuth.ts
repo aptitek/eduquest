@@ -108,10 +108,10 @@ export function useAuth() {
     window.location.href = url.toString();
   }, []);
 
-  const loginWithMock = useCallback((studentId?: string) => {
+  const loginWithDevUser = useCallback((studentId?: string) => {
     if (!ENABLE_DEV_TOOLS) return;
 
-    const url = new URL(`${BACKEND_BASE_URL}/api/auth/mock`);
+    const url = new URL(`${BACKEND_BASE_URL}/api/auth/dev/login`);
     if (studentId) url.searchParams.set('studentId', studentId);
     const cohortInvite = getCohortInviteToken();
     if (cohortInvite) url.searchParams.set('invite', cohortInvite);
@@ -130,7 +130,7 @@ export function useAuth() {
     loadingSession,
     error,
     loginWithGithub,
-    loginWithMock,
+    loginWithDevUser,
     logout,
   };
 }

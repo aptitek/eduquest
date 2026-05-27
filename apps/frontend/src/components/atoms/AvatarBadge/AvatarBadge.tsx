@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
+import { resolveColorBorderClassName } from '../../../styles/colorTokens';
 
 export interface AvatarBadgeProps {
   name: string;
@@ -26,14 +27,11 @@ export function AvatarBadge({
   return (
     <span
       className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-gaming-base font-black text-text-primary shadow-lg',
+        'flex shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-gaming-base font-black text-text-primary shadow-marker',
         SIZE_CLASS_NAMES[size],
+        resolveColorBorderClassName(color, 'neutral'),
         className
       )}
-      style={{
-        borderColor: color,
-        boxShadow: `0 0 12px color-mix(in srgb, ${color} 36%, transparent)`,
-      }}
       aria-label={name}
     >
       {icon ? (

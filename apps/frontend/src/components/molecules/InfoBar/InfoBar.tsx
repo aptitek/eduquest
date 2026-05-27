@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
 export type InfoBarTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -67,13 +68,15 @@ export function InfoBar({
   icon,
   tone = 'neutral',
   action,
-  dismissLabel = 'Dismiss',
+  dismissLabel,
   onDismiss,
   onAction,
   className,
 }: InfoBarProps) {
+  const { t } = useTranslation();
   const styles = toneStyles[tone];
   const Icon = getDefaultIcon(tone);
+  const resolvedDismissLabel = dismissLabel || t('common.dismiss');
 
   const handleAction = () => {
     action?.onSelect?.();
@@ -131,7 +134,7 @@ export function InfoBar({
             variant=""
             className="h-8 min-h-0 w-8 border border-gaming-border/70 bg-gaming-base/60 text-text-muted hover:bg-gaming-base hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
-            <span className="sr-only">{dismissLabel}</span>
+            <span className="sr-only">{resolvedDismissLabel}</span>
             <X size={15} aria-hidden />
           </HoldToConfirmButton>
         ) : null}

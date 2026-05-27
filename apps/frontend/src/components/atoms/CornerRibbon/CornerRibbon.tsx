@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { getSeededBackgroundClass } from '../../../utils/colorHash';
 import { cn } from '../../../utils/cn';
+import { resolveColorBackgroundClassName } from '../../../styles/colorTokens';
 
 export type CornerRibbonPosition = 'top-left' | 'top-right';
 export type CornerRibbonSize = 'sm' | 'md' | 'lg';
@@ -85,28 +86,6 @@ const iconCornerPositionClassMap: Record<CornerRibbonSize, Record<CornerRibbonPo
   },
 };
 
-const tokenBackgroundClassMap: Record<string, string> = {
-  'var(--color-accent-scholar)': 'bg-accent-scholar',
-  'var(--color-accent-champion)': 'bg-accent-champion',
-  'var(--color-accent-guide)': 'bg-accent-guide',
-  'var(--color-accent-specialist)': 'bg-accent-specialist',
-  'var(--color-status-quest)': 'bg-status-quest',
-  'var(--color-status-campfire)': 'bg-status-campfire',
-  'var(--color-status-completed)': 'bg-status-completed',
-  'var(--color-status-boss)': 'bg-status-boss',
-  'var(--color-status-danger)': 'bg-status-danger',
-  'var(--color-accent-neutral)': 'bg-accent-neutral',
-  'var(--color-solarized-yellow)': 'bg-solarized-yellow',
-  'var(--color-solarized-orange)': 'bg-solarized-orange',
-  'var(--color-solarized-red)': 'bg-solarized-red',
-  'var(--color-solarized-magenta)': 'bg-solarized-magenta',
-  'var(--color-solarized-violet)': 'bg-solarized-violet',
-  'var(--color-solarized-blue)': 'bg-solarized-blue',
-  'var(--color-solarized-cyan)': 'bg-solarized-cyan',
-  'var(--color-solarized-green)': 'bg-solarized-green',
-  'var(--color-solarized-base0)': 'bg-solarized-base0',
-};
-
 export function CornerRibbon({
   children,
   icon,
@@ -123,7 +102,7 @@ export function CornerRibbon({
   const textLength = getTextLength(children);
   const textFit = textLength > 14 ? 'long' : textLength > 7 ? 'medium' : 'short';
   const backgroundClassName = color
-    ? tokenBackgroundClassMap[color] || 'bg-status-quest'
+    ? resolveColorBackgroundClassName(color)
     : colorSeed
       ? getSeededBackgroundClass(colorSeed)
       : 'bg-status-quest';
@@ -172,7 +151,7 @@ export function CornerRibbon({
       {icon ? (
         <span
           className={cn(
-            'absolute z-10 flex items-center justify-center text-white drop-shadow-sm',
+            'absolute z-10 flex items-center justify-center text-solarized-base3 drop-shadow-sm',
             iconCornerPositionClassMap[size][position],
             iconSizeClassMap[size],
             ribbonClassName
@@ -184,7 +163,7 @@ export function CornerRibbon({
       ) : null}
       <span
         className={cn(
-          'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-white',
+          'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-solarized-base3',
           ribbonClassMap[size],
           ribbonPositionClassMap[size][position],
           icon ? 'shadow-none' : 'shadow-md',

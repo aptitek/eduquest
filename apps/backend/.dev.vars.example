@@ -1,5 +1,4 @@
 APP_ENV=development
-ENABLE_MOCK_DATA=true
 ENABLE_DEBUG_AUTH=true
 FRONTEND_URL=http://localhost:5173
 JWT_SECRET=replace-with-a-local-development-secret
@@ -8,8 +7,9 @@ JWT_SECRET=replace-with-a-local-development-secret
 # http://localhost:8787/assets/<key> through the Worker and local R2 simulation.
 # ASSET_PUBLIC_BASE_URL=http://localhost:8787/assets
 
-# Optional for local database-backed development.
-# DATABASE_URL=postgresql://user:password@localhost:5432/eduquest
+# Required for local API data. Development auth is database-backed and no longer
+# falls back to embedded mock fixtures.
+DATABASE_URL=postgresql://user:password@localhost:5432/eduquest
 
 # Required when testing GitHub OAuth locally.
 # GITHUB_CLIENT_ID=

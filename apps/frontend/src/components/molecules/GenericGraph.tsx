@@ -24,6 +24,7 @@ import { X } from 'lucide-react';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { AvatarDeck, type AvatarDeckMember } from './AvatarDeck';
 import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
+import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 
 export interface GraphNode<TMetadata = unknown> {
@@ -914,6 +915,7 @@ function AnnularNodeRing({
 }
 
 function RingSectorPopover({ segment }: { segment: GraphNodeAnnularSegment }) {
+  const { t } = useTranslation();
   const count = segment.members?.length || segment.value;
 
   return (
@@ -928,14 +930,16 @@ function RingSectorPopover({ segment }: { segment: GraphNodeAnnularSegment }) {
           ) : segment.iconUrl ? (
             <img src={segment.iconUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            getInitials(segment.label || 'Players')
+            getInitials(segment.label || t('graph.players'))
           )}
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-text-primary">
-            {segment.kind === 'solo' ? 'Characters here' : segment.label || 'Guild'}
+            {segment.kind === 'solo' ? t('graph.charactersHere') : segment.label || t('graph.guild')}
           </p>
-          <p className="text-xs text-text-muted">{count} present</p>
+          <p className="text-xs text-text-muted">
+            {t('graph.presentCount').replace('{count}', String(count))}
+          </p>
         </div>
       </div>
       {segment.members?.length ? (
@@ -983,6 +987,7 @@ function GraphFlowEdgeRenderer({
   markerEnd,
   data,
 }: EdgeProps<GraphFlowEdge>) {
+  const { t } = useTranslation();
   const { deleteElements } = useReactFlow<GraphFlowNode, GraphFlowEdge>();
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -1034,7 +1039,7 @@ function GraphFlowEdgeRenderer({
               className="h-7 w-7 shrink-0"
             >
               <X size={14} aria-hidden />
-              <span className="sr-only">Delete edge</span>
+              <span className="sr-only">{t('graph.deleteEdge')}</span>
             </HoldToConfirmButton>
           </div>
         </EdgeLabelRenderer>

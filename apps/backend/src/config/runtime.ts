@@ -2,7 +2,6 @@ export type AppEnvironment = 'development' | 'production';
 
 export type RuntimeBindings = {
   APP_ENV?: string;
-  ENABLE_MOCK_DATA?: string;
   ENABLE_DEBUG_AUTH?: string;
   DATABASE_URL?: string;
   FRONTEND_URL?: string;
@@ -21,16 +20,10 @@ export function isProduction(env: RuntimeBindings) {
   return getAppEnvironment(env) === 'production';
 }
 
-export function isMockDataEnabled(env: RuntimeBindings) {
-  if (isProduction(env)) return false;
-
-  return env.ENABLE_MOCK_DATA === 'true' || !env.DATABASE_URL;
-}
-
 export function isDebugAuthEnabled(env: RuntimeBindings) {
   if (isProduction(env)) return false;
 
-  return env.ENABLE_DEBUG_AUTH === 'true' || isMockDataEnabled(env);
+  return env.ENABLE_DEBUG_AUTH === 'true';
 }
 
 export function getFrontendUrl(env: RuntimeBindings) {

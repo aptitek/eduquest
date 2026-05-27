@@ -4,6 +4,7 @@ import { getDb } from '../db';
 import { cohortMemberships, gameActivities, students } from '../db/schema';
 import type { UserPayload } from '../middleware/auth';
 import { RewardPreviewService } from '../services/reward-preview';
+import { apiError, forbidden, requireDatabaseUrl } from './http';
 
 type Bindings = {
   DATABASE_URL?: string;
@@ -16,17 +17,15 @@ type Variables = {
 export const rewardsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 rewardsRouter.get('/rewards/preview', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = requireDatabaseUrl(c);
   const user = c.get('user');
   const activityId = c.req.query('activityId');
   const studentId = c.req.query('studentId');
 
-  if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
+  if (databaseUrl instanceof Response) return databaseUrl;
 
   if (!activityId || !studentId) {
-    return c.json({ success: false, error: 'activityId and studentId are required.' }, 400);
+    return apiError(c, 'activityId and studentId are required.', 400);
   }
 
   try {
@@ -40,7 +39,7 @@ rewardsRouter.get('/rewards/preview', async (c) => {
         .limit(1);
 
       if (studentRecord && studentRecord.id !== studentId) {
-        return c.json({ success: false, error: 'Forbidden.' }, 403);
+        return forbidden(c, 'Forbidden.');
       }
     }
 
@@ -55,7 +54,7 @@ rewardsRouter.get('/rewards/preview', async (c) => {
       .limit(1);
 
     if (!membership?.guildId) {
-      return c.json({ success: false, error: 'Guild membership not found.' }, 404);
+      return apiError(c, 'Guild membership not found.', 404);
     }
 
     const breakdown = await new RewardPreviewService(db).preview({
@@ -66,13 +65,13 @@ rewardsRouter.get('/rewards/preview', async (c) => {
     });
 
     if (!breakdown) {
-      return c.json({ success: false, error: 'Activity not found.' }, 404);
+      return apiError(c, 'Activity not found.', 404);
     }
 
     return c.json({ success: true, breakdown });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Reward preview failed.';
     console.error('Reward preview error:', message);
-    return c.json({ success: false, error: message }, 500);
+    return apiError(c, message, 500);
   }
 });

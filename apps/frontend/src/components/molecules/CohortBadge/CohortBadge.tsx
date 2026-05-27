@@ -11,7 +11,7 @@ function CohortYearBadge({ startYear }: { startYear: number }) {
   return (
     <span
       className={cn(
-        'badge badge-sm border-transparent font-semibold text-white shadow-sm',
+        'badge badge-sm border-transparent font-semibold text-solarized-base3 shadow-sm',
         getSeededBackgroundClass(label)
       )}
       title={String(startYear)}
@@ -40,9 +40,7 @@ export function CohortListBadge({
 }) {
   return (
     <span className="inline-flex max-w-full items-center gap-1">
-      {showSchoolYear ? (
-        <CohortYearBadge startYear={cohort.startYear} />
-      ) : null}
+      {showSchoolYear ? <CohortYearBadge startYear={cohort.startYear} /> : null}
       <CompoundBadge parts={getCohortBadgeParts(cohort)} />
     </span>
   );

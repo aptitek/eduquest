@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, inArray, isNull, or, sql, sum } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, sum } from 'drizzle-orm';
 import {
   type Activity,
   type BossActivityAnswerField,
@@ -35,22 +35,13 @@ import {
   students,
   users,
 } from '../db/schema';
-import {
-  DEBUG_ACTIVITIES,
-  DEBUG_ACTIVITY_EDGES,
-  DEBUG_COHORTS,
-  DEBUG_GUILDS,
-  DEBUG_MAP_RUN,
-  DEBUG_STUDENT_PROFILES,
-} from '../dev/debugBackup';
 import type { UserPayload } from '../middleware/auth';
-import { isMockDataEnabled } from '../config/runtime';
 import { createEventContext, publishEvent } from '../events';
 import { VotingCostService } from '../services/rewards';
+import { apiError, missingDatabaseUrl, parseJsonBody, requireAdminUser, requireDatabaseUrl } from './http';
 
 type Bindings = {
   APP_ENV?: string;
-  ENABLE_MOCK_DATA?: string;
   DATABASE_URL?: string;
   ASSETS?: R2Bucket;
 };
@@ -58,30 +49,6 @@ type Variables = {
   user?: UserPayload;
 };
 type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
-
-const DEBUG_COHORT_PROGRESS: CohortProgressData = {
-  gauge: {
-    currentPoints: 460,
-    targetPoints: 460,
-    labelI18nKey: 'dashboard.dock.milestone',
-    milestones: [
-      { id: 'spark', labelI18nKey: 'dashboard.milestones.spark.label', descriptionI18nKey: 'dashboard.milestones.spark.description', cost: 12, reward: { id: 'spark-reward', titleI18nKey: 'dashboard.rewards.deadline.title', subtitleI18nKey: 'dashboard.rewards.deadline.subtitle', accentToken: 'campfire' } },
-      { id: 'campfire', labelI18nKey: 'dashboard.milestones.campfire.label', descriptionI18nKey: 'dashboard.milestones.campfire.description', cost: 24, reward: { id: 'campfire-reward', titleI18nKey: 'dashboard.rewards.miniGame.title', subtitleI18nKey: 'dashboard.rewards.miniGame.subtitle', accentToken: 'completed' } },
-      { id: 'quest', labelI18nKey: 'dashboard.milestones.quest.label', descriptionI18nKey: 'dashboard.milestones.quest.description', cost: 38, reward: { id: 'quest-reward', titleI18nKey: 'dashboard.rewards.techHelp.title', subtitleI18nKey: 'dashboard.rewards.techHelp.subtitle', accentToken: 'quest' } },
-      { id: 'rally', labelI18nKey: 'dashboard.milestones.rally.label', descriptionI18nKey: 'dashboard.milestones.rally.description', cost: 52, reward: { id: 'rally-reward', titleI18nKey: 'dashboard.rewards.reroll.title', subtitleI18nKey: 'dashboard.rewards.reroll.subtitle', accentToken: 'specialist' } },
-      { id: 'treasure', labelI18nKey: 'dashboard.milestones.treasure.label', descriptionI18nKey: 'dashboard.milestones.treasure.description', cost: 66, reward: { id: 'treasure-reward', titleI18nKey: 'dashboard.milestones.treasure.label', accentToken: 'quest' } },
-      { id: 'boss', labelI18nKey: 'dashboard.milestones.boss.label', descriptionI18nKey: 'dashboard.milestones.boss.description', cost: 78, reward: { id: 'boss-reward', titleI18nKey: 'dashboard.milestones.boss.label', accentToken: 'danger' } },
-      { id: 'legend', labelI18nKey: 'dashboard.milestones.legend.label', descriptionI18nKey: 'dashboard.milestones.legend.description', cost: 90, reward: { id: 'legend-reward', titleI18nKey: 'dashboard.milestones.legend.label', accentToken: 'specialist' } },
-      { id: 'ascend', labelI18nKey: 'dashboard.milestones.ascend.label', descriptionI18nKey: 'dashboard.milestones.ascend.description', cost: 100, reward: { id: 'ascend-reward', titleI18nKey: 'dashboard.milestones.ascend.label', accentToken: 'completed' } },
-    ],
-  },
-  notifications: [
-    { id: 'cohort-quest', titleI18nKey: 'dashboard.notifications.cohortQuest.title', descriptionI18nKey: 'dashboard.notifications.cohortQuest.description', icon: 'map', tone: 'info', actionLabelI18nKey: 'dashboard.notifications.cohortQuest.action', actionTarget: 'map' },
-    { id: 'cohort-campfire', titleI18nKey: 'dashboard.notifications.cohortCampfire.title', descriptionI18nKey: 'dashboard.notifications.cohortCampfire.description', icon: 'sparkles', tone: 'success', actionLabelI18nKey: 'dashboard.notifications.cohortCampfire.action', actionTarget: 'acknowledge' },
-    { id: 'reward-gold', titleI18nKey: 'dashboard.notifications.rewardGold.title', descriptionI18nKey: 'dashboard.notifications.rewardGold.description', icon: 'coins', tone: 'warning', actionLabelI18nKey: 'dashboard.notifications.rewardGold.action', actionTarget: 'collect' },
-    { id: 'reward-spend', titleI18nKey: 'dashboard.notifications.rewardSpend.title', descriptionI18nKey: 'dashboard.notifications.rewardSpend.description', icon: 'gift', tone: 'neutral', actionLabelI18nKey: 'dashboard.notifications.rewardSpend.action', actionTarget: 'review' },
-  ],
-};
 
 type ActivityRecord = typeof gameActivities.$inferSelect;
 type ActivityEdgeRecord = typeof gameActivityEdges.$inferSelect;
@@ -561,6 +528,8 @@ function formatOccupancyMemberName(member: MapOccupancyMember) {
 }
 
 function toClassRosterStudent(student: ClassRosterStudentRecord) {
+  const characterClass = toCharacterClass(student.characterClass);
+
   return {
     id: student.studentId,
     userId: student.userId,
@@ -568,15 +537,17 @@ function toClassRosterStudent(student: ClassRosterStudentRecord) {
     email: student.email || undefined,
     institutionalEmail: student.institutionalEmail || undefined,
     avatarUrl: student.avatarUrl || student.githubAvatarUrl || undefined,
-    characterClass: toCharacterClass(student.characterClass),
-    stats: {
-      strength: student.strength || 0,
-      dexterity: student.dexterity || 0,
-      constitution: student.constitution || 0,
-      intelligence: student.intelligence || 0,
-      wisdom: student.wisdom || 0,
-      charisma: student.charisma || 0,
-    },
+    characterClass,
+    stats: characterClass
+      ? {
+          strength: student.strength || 0,
+          dexterity: student.dexterity || 0,
+          constitution: student.constitution || 0,
+          intelligence: student.intelligence || 0,
+          wisdom: student.wisdom || 0,
+          charisma: student.charisma || 0,
+        }
+      : undefined,
   };
 }
 
@@ -713,127 +684,79 @@ function buildMapData(
   };
 }
 
-function buildDebugMapData(includeStepRanges = false): GameMapData {
-  const completions = DEBUG_ACTIVITIES.slice(0, 2).map((activity, index): GameActivityCompletion => ({
-    id: `debug_completion_${activity.id}`,
-    studentId: 'debug_student',
-    cohortId: DEBUG_MAP_RUN.cohortId,
-    activityId: activity.id,
-    completionType: index === 0 ? 'read' : 'submission',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }));
+function getActivityLockState(
+  activity: Pick<ActivityRecord, 'id' | 'requiredLevel' | 'stepRanges'>,
+  activityRecords: Array<Pick<ActivityRecord, 'id' | 'requiredLevel' | 'stepRanges'>>,
+  edges: Array<Pick<GameActivityEdge, 'fromActivityId' | 'toActivityId'>>,
+  completions: Array<Pick<GameActivityCompletion, 'activityId'>>,
+  currentStep: number
+) {
+  const completedActivityIds = new Set(completions.map((completion) => completion.activityId));
+  const activityIds = new Set(activityRecords.map((record) => record.id));
+  const prerequisites = edges
+    .filter((edge) => edge.toActivityId === activity.id && activityIds.has(edge.fromActivityId))
+    .map((edge) => edge.fromActivityId);
+  const prerequisitesCompleted = prerequisites.every((id) => completedActivityIds.has(id));
+  const isRoot = prerequisites.length === 0;
+  const isCompleted = completedActivityIds.has(activity.id);
+  const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
+  const hasBeenRevealed = stepRanges.some((range) => currentStep > range.startStep);
+  const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
+  const isRevealed = isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
 
-  const currentMove: GameCharacterMove = {
-    id: 'debug_move_current',
-    studentId: 'debug_student',
-    cohortId: DEBUG_MAP_RUN.cohortId,
-    mapRunId: DEBUG_MAP_RUN.id,
-    fromActivityId: 'debug_activity_campfire_git',
-    toActivityId: 'debug_activity_variables',
-    moveType: 'move',
-    createdAt: new Date().toISOString(),
+  return {
+    isCompleted,
+    isRevealed,
+    isLocked: !isRevealed || !prerequisitesCompleted,
   };
+}
 
-  return buildMapData(
-    DEBUG_MAP_RUN,
-    DEBUG_ACTIVITIES.map((activity) => ({
-      id: activity.id,
-      cohortId: activity.cohortId || null,
-      templateActivityId: activity.templateActivityId || null,
-      mapRunId: activity.mapRunId || null,
-      type: activity.type,
-      title: activity.title,
-      startDate: activity.startDate ? new Date(activity.startDate) : null,
-      endDate: activity.endDate ? new Date(activity.endDate) : null,
-      url: activity.url || null,
-      isGraded: activity.isGraded,
-      mapX: activity.mapX,
-      mapY: activity.mapY,
-      sectorDepth: activity.sectorDepth,
-      requiredLevel: activity.requiredLevel,
-      stepRanges: activity.stepRanges || [],
-      cardColor: activity.cardColor || null,
-      participationMode: activity.participationMode || 'solo',
-      basePoints: activity.basePoints || 0,
-      targetAttribute: null,
-      metadata: activity.metadata || {},
-      createdAt: activity.createdAt ? new Date(activity.createdAt) : null,
-    })),
-    DEBUG_ACTIVITY_EDGES,
-    completions,
-    currentMove,
-    { currentStep: 3 },
-    includeStepRanges,
-    [
-      {
-        activityId: 'debug_activity_variables',
-        totalStudents: 3,
-        segments: [
-          {
-            kind: 'solo',
-            studentCount: 1,
-            members: [
-              {
-                studentId: 'debug_student_lina',
-                displayName: 'Lina MOREL',
-                avatarUrl:
-                  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&q=80',
-                characterClass: 'guide',
-                fromActivityId: 'debug_activity_campfire_git',
-                toActivityId: 'debug_activity_variables',
-              },
-            ],
-          },
-        ],
-      },
-      {
-        activityId: 'debug_activity_api_bridge',
-        totalStudents: 3,
-        segments: [
-          {
-            kind: 'guild',
-            guildId: DEBUG_GUILDS[1]?.id,
-            guildName: DEBUG_GUILDS[1]?.name,
-            guildIconUrl: DEBUG_GUILDS[1]?.iconUrl,
-            guildIconKey: DEBUG_GUILDS[1]?.iconKey,
-            color: DEBUG_GUILDS[1]?.color,
-            studentCount: 1,
-            members: [
-              {
-                studentId: 'debug_student_samir',
-                displayName: 'Samir BENALI',
-                avatarUrl:
-                  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
-                characterClass: 'champion',
-                fromActivityId: 'debug_activity_variables',
-                toActivityId: 'debug_activity_api_bridge',
-              },
-            ],
-          },
-          {
-            kind: 'guild',
-            guildId: DEBUG_GUILDS[2]?.id,
-            guildName: DEBUG_GUILDS[2]?.name,
-            guildIconUrl: DEBUG_GUILDS[2]?.iconUrl,
-            guildIconKey: DEBUG_GUILDS[2]?.iconKey,
-            color: DEBUG_GUILDS[2]?.color,
-            studentCount: 1,
-            members: [
-              {
-                studentId: 'debug_student_noa',
-                displayName: 'Noa CHEN',
-                avatarUrl:
-                  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
-                characterClass: 'specialist',
-                fromActivityId: 'debug_activity_variables',
-                toActivityId: 'debug_activity_api_bridge',
-              },
-            ],
-          },
-        ],
-      },
-    ]
+async function loadActivityAuthorizationState(
+  db: Database,
+  cohortId: string,
+  mapRunId: string,
+  studentId: string,
+  currentStep: number,
+  activity: ActivityRecord
+) {
+  const [activityRecords, edgeRecords, completionRecords] = await Promise.all([
+    db
+      .select()
+      .from(gameActivities)
+      .where(
+        or(
+          sql`${gameActivities.cohortId} IS NULL`,
+          eq(gameActivities.cohortId, cohortId),
+          eq(gameActivities.mapRunId, mapRunId)
+        )
+      ),
+    db
+      .select()
+      .from(gameActivityEdges)
+      .where(
+        or(
+          sql`${gameActivityEdges.cohortId} IS NULL AND ${gameActivityEdges.mapRunId} IS NULL`,
+          eq(gameActivityEdges.cohortId, cohortId),
+          eq(gameActivityEdges.mapRunId, mapRunId)
+        )
+      ),
+    db
+      .select()
+      .from(gameActivityCompletions)
+      .where(
+        and(
+          eq(gameActivityCompletions.studentId, studentId),
+          eq(gameActivityCompletions.cohortId, cohortId)
+        )
+      ),
+  ]);
+
+  return getActivityLockState(
+    activity,
+    activityRecords,
+    edgeRecords.map(toActivityEdge),
+    completionRecords.map(toActivityCompletion),
+    currentStep
   );
 }
 
@@ -1001,28 +924,7 @@ mapRouter.get('/games', async (c) => {
   const user = c.get('user');
 
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    const debugCohorts = user?.isAdmin
-      ? DEBUG_COHORTS
-      : DEBUG_COHORTS.filter((cohort) => cohort.id === DEBUG_MAP_RUN.cohortId);
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      games: debugCohorts.map((cohort) => ({
-        id: cohort.id,
-        cohortId: cohort.id,
-        cohort,
-        name: cohort.name,
-        currentStep: 1,
-        createdAt: cohort.createdAt,
-        updatedAt: cohort.updatedAt,
-      })),
-      selectedGameId: debugCohorts[0]?.id,
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1083,42 +985,7 @@ mapRouter.get('/guilds', async (c) => {
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      guilds: DEBUG_GUILDS,
-      unguildedStudents: DEBUG_STUDENT_PROFILES.flatMap(({ user, student, character }) => {
-        const membership = student.cohortMemberships?.find(
-          (item) => item.cohortId === (requestedCohortId || DEBUG_COHORTS[0]?.id)
-        );
-        if (!membership || membership.guildId) return [];
-
-        return [
-          toClassRosterStudent({
-            studentId: student.id,
-            userId: user.id,
-            displayName: user.displayName,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            avatarUrl: user.avatarUrl,
-            githubAvatarUrl: user.githubAvatarUrl,
-            institutionalEmail: membership.institutionalEmail,
-            characterClass: character.characterClass,
-            strength: character.stats.strength,
-            dexterity: character.stats.dexterity,
-            constitution: character.stats.constitution,
-            intelligence: character.stats.intelligence,
-            wisdom: character.stats.wisdom,
-            charisma: character.stats.charisma,
-          }),
-        ];
-      }),
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1136,7 +1003,7 @@ mapRouter.get('/guilds', async (c) => {
       .from(guilds)
       .where(eq(guilds.cohortId, cohortRecord.id))
       .orderBy(desc(guilds.gold));
-    const unguildedStudentRecords = await db
+    const rosterStudentRecords = await db
       .select({
         studentId: students.id,
         userId: users.id,
@@ -1146,6 +1013,7 @@ mapRouter.get('/guilds', async (c) => {
         email: users.email,
         avatarUrl: users.avatarUrl,
         githubAvatarUrl: users.githubAvatarUrl,
+        guildId: cohortMemberships.guildId,
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
         strength: gameCharacters.strength,
@@ -1159,7 +1027,21 @@ mapRouter.get('/guilds', async (c) => {
       .innerJoin(students, eq(students.userId, cohortMemberships.userId))
       .innerJoin(users, eq(users.id, cohortMemberships.userId))
       .leftJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
-      .where(and(eq(cohortMemberships.cohortId, cohortRecord.id), isNull(cohortMemberships.guildId)));
+      .where(eq(cohortMemberships.cohortId, cohortRecord.id));
+    const rosterStudents = rosterStudentRecords.map((record) => ({
+      student: toClassRosterStudent(record),
+      guildId: record.guildId,
+    }));
+    const membersByGuildId = rosterStudents.reduce<Map<string, ReturnType<typeof toClassRosterStudent>[]>>(
+      (groups, item) => {
+        if (!item.guildId) return groups;
+        const current = groups.get(item.guildId) || [];
+        current.push(item.student);
+        groups.set(item.guildId, current);
+        return groups;
+      },
+      new Map()
+    );
 
     return c.json({
       success: true,
@@ -1175,9 +1057,13 @@ mapRouter.get('/guilds', async (c) => {
         gold: guild.gold,
         createdAt: guild.createdAt?.toISOString?.(),
         updatedAt: guild.updatedAt?.toISOString?.(),
+        members: (membersByGuildId.get(guild.id) || []).sort((a, b) =>
+          a.displayName.localeCompare(b.displayName)
+        ),
       })),
-      unguildedStudents: unguildedStudentRecords
-        .map(toClassRosterStudent)
+      unguildedStudents: rosterStudents
+        .filter((item) => !item.guildId)
+        .map((item) => item.student)
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     });
   } catch (error: any) {
@@ -1204,20 +1090,7 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   }
 
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    const debugGuild = DEBUG_GUILDS.find((guild) => guild.id === guildId);
-    if (!debugGuild) {
-      return c.json({ success: false, error: 'Guild not found.' }, 404);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      guild: { ...debugGuild, iconKey, updatedAt: new Date().toISOString() },
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1283,6 +1156,16 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
       return c.json({ success: false, error: 'Student profile not found.' }, 404);
     }
 
+    const [studentMembership] = await db
+      .select({ guildId: cohortMemberships.guildId })
+      .from(cohortMemberships)
+      .where(and(eq(cohortMemberships.userId, user!.id), eq(cohortMemberships.guildId, guildId)))
+      .limit(1);
+
+    if (!studentMembership) {
+      return c.json({ success: false, error: 'Guild vote spend is not allowed.' }, 403);
+    }
+
     const result = await new VotingCostService(db).spendGuildVotes({
       guildId,
       studentId: studentRecord.id,
@@ -1303,23 +1186,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      completion: {
-        id: `completion_${Date.now()}`,
-        studentId: 'debug_student',
-        cohortId: DEBUG_MAP_RUN.cohortId,
-        activityId,
-        completionType: 'read',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1331,6 +1198,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
     }
 
     const { studentRecord, membership } = context;
+    const activeRun = await getOrCreateActiveRun(db, membership.cohortId);
 
     const [activity] = await db
       .select()
@@ -1340,7 +1208,8 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
           eq(gameActivities.id, activityId),
           or(
             sql`${gameActivities.cohortId} IS NULL`,
-            eq(gameActivities.cohortId, membership.cohortId)
+            eq(gameActivities.cohortId, membership.cohortId),
+            eq(gameActivities.mapRunId, activeRun.id)
           )
         )
       )
@@ -1368,6 +1237,18 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
         source: 'database',
         completion: toActivityCompletion(existingCompletion),
       });
+    }
+
+    const lockState = await loadActivityAuthorizationState(
+      db,
+      membership.cohortId,
+      activeRun.id,
+      studentRecord.id,
+      context.cohortRecord.currentStep,
+      activity
+    );
+    if (lockState.isLocked) {
+      return c.json({ success: false, error: 'Activity is locked for this student.' }, 403);
     }
 
     const submission = await parseCompletionSubmission(c, activity, studentRecord, membership);
@@ -1435,24 +1316,7 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      move: {
-        id: `move_${Date.now()}`,
-        studentId: 'debug_student',
-        cohortId: DEBUG_MAP_RUN.cohortId,
-        mapRunId: DEBUG_MAP_RUN.id,
-        toActivityId: activityId,
-        moveType: 'move',
-        createdAt: new Date().toISOString(),
-      },
-      currentActivityId: activityId,
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1483,6 +1347,18 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
 
     if (!activity) {
       return c.json({ success: false, error: 'Activity not found in active map.' }, 404);
+    }
+
+    const lockState = await loadActivityAuthorizationState(
+      db,
+      membership.cohortId,
+      activeRun.id,
+      studentRecord.id,
+      context.cohortRecord.currentStep,
+      activity
+    );
+    if (lockState.isLocked) {
+      return c.json({ success: false, error: 'Activity is locked for this student.' }, 403);
     }
 
     const [latestMove] = await db
@@ -1527,17 +1403,8 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
 mapRouter.get('/map', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
 
-  // Si aucune URL de base de données n'est spécifiée, on renvoie les mocks
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      map: buildDebugMapData(Boolean(c.get('user')?.isAdmin)),
-    });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1687,11 +1554,7 @@ mapRouter.get('/dashboard', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
 
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({ success: true, source: 'mock', progress: DEBUG_COHORT_PROGRESS });
+    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
   }
 
   try {
@@ -1784,38 +1647,19 @@ mapRouter.get('/dashboard', async (c) => {
 });
 
 mapRouter.get('/games/:gameId/reward-cards', async (c) => {
-  const user = c.get('user');
-  if (!user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
-  }
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
 
   const databaseUrl = c.env?.DATABASE_URL;
   if (!databaseUrl) {
-    if (!isMockDataEnabled(c.env)) {
-      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-    }
-
-    return c.json({
-      success: true,
-      source: 'mock',
-      rewardCards: DEBUG_COHORT_PROGRESS.gauge.milestones.map((milestone, index) => ({
-        id: milestone.id,
-        gameId: c.req.param('gameId'),
-        title: milestone.reward.titleI18nKey,
-        subtitle: milestone.reward.subtitleI18nKey,
-        description: milestone.descriptionI18nKey,
-        cost: milestone.cost,
-        accentToken: milestone.reward.accentToken,
-        sortOrder: index,
-      })),
-    });
+    return missingDatabaseUrl(c);
   }
 
   try {
     const db = getDb(databaseUrl);
     const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Game not found.' }, 404);
+      return apiError(c, 'Game not found.', 404);
     }
 
     const [progress] = await db
@@ -1841,31 +1685,27 @@ mapRouter.get('/games/:gameId/reward-cards', async (c) => {
     });
   } catch (error: any) {
     console.error('Reward cards SQL error:', error.message);
-    return c.json({ success: false, error: 'Reward cards could not be loaded.' }, 500);
+    return apiError(c, 'Reward cards could not be loaded.', 500);
   }
 });
 
 mapRouter.post('/games/:gameId/reward-cards', async (c) => {
-  const user = c.get('user');
-  if (!user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
-  }
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = c.env?.DATABASE_URL;
-  if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
 
-  const body = normalizeRewardCardPayload(await c.req.json().catch(() => undefined));
+  const body = normalizeRewardCardPayload(await parseJsonBody<GameRewardCardPayload>(c));
   if (!body) {
-    return c.json({ success: false, error: 'A title and non-negative integer cost are required.' }, 400);
+    return apiError(c, 'A title and non-negative integer cost are required.', 400);
   }
 
   try {
     const db = getDb(databaseUrl);
     const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Game not found.' }, 404);
+      return apiError(c, 'Game not found.', 404);
     }
 
     let [progress] = await db
@@ -1906,31 +1746,27 @@ mapRouter.post('/games/:gameId/reward-cards', async (c) => {
     return c.json({ success: true, rewardCard: toRewardCard(created, cohortRecord.id) }, 201);
   } catch (error: any) {
     console.error('Reward card create SQL error:', error.message);
-    return c.json({ success: false, error: 'Reward card could not be created.' }, 500);
+    return apiError(c, 'Reward card could not be created.', 500);
   }
 });
 
 mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
-  const user = c.get('user');
-  if (!user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
-  }
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = c.env?.DATABASE_URL;
-  if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
 
-  const body = normalizeRewardCardPayload(await c.req.json().catch(() => undefined));
+  const body = normalizeRewardCardPayload(await parseJsonBody<GameRewardCardPayload>(c));
   if (!body) {
-    return c.json({ success: false, error: 'A title and non-negative integer cost are required.' }, 400);
+    return apiError(c, 'A title and non-negative integer cost are required.', 400);
   }
 
   try {
     const db = getDb(databaseUrl);
     const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Game not found.' }, 404);
+      return apiError(c, 'Game not found.', 404);
     }
 
     const [progress] = await db
@@ -1940,7 +1776,7 @@ mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
       .limit(1);
 
     if (!progress) {
-      return c.json({ success: false, error: 'Game progress not found.' }, 404);
+      return apiError(c, 'Game progress not found.', 404);
     }
 
     const [updated] = await db
@@ -1963,32 +1799,28 @@ mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
       .returning();
 
     if (!updated) {
-      return c.json({ success: false, error: 'Reward card not found.' }, 404);
+      return apiError(c, 'Reward card not found.', 404);
     }
 
     return c.json({ success: true, rewardCard: toRewardCard(updated, cohortRecord.id) });
   } catch (error: any) {
     console.error('Reward card update SQL error:', error.message);
-    return c.json({ success: false, error: 'Reward card could not be updated.' }, 500);
+    return apiError(c, 'Reward card could not be updated.', 500);
   }
 });
 
 mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
-  const user = c.get('user');
-  if (!user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
-  }
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = c.env?.DATABASE_URL;
-  if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
     const db = getDb(databaseUrl);
     const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Game not found.' }, 404);
+      return apiError(c, 'Game not found.', 404);
     }
 
     const [progress] = await db
@@ -1998,7 +1830,7 @@ mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
       .limit(1);
 
     if (!progress) {
-      return c.json({ success: false, error: 'Game progress not found.' }, 404);
+      return apiError(c, 'Game progress not found.', 404);
     }
 
     const [deleted] = await db
@@ -2012,12 +1844,12 @@ mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
       .returning();
 
     if (!deleted) {
-      return c.json({ success: false, error: 'Reward card not found.' }, 404);
+      return apiError(c, 'Reward card not found.', 404);
     }
 
     return c.json({ success: true, rewardCard: toRewardCard(deleted, cohortRecord.id) });
   } catch (error: any) {
     console.error('Reward card delete SQL error:', error.message);
-    return c.json({ success: false, error: 'Reward card could not be deleted.' }, 500);
+    return apiError(c, 'Reward card could not be deleted.', 500);
   }
 });

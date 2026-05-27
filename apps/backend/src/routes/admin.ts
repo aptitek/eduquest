@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../db';
 import { cohorts } from '../db/schema';
 import type { UserPayload } from '../middleware/auth';
+import { apiError, parseJsonBody, requireAdminUser, requireDatabaseUrl } from './http';
 
 type Bindings = {
   DATABASE_URL?: string;
@@ -19,27 +20,17 @@ type CohortStepBody = {
 export const adminRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
-  const user = c.get('user');
-  if (!user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
-  }
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = c.env?.DATABASE_URL;
-  if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
 
-  let body: CohortStepBody;
-  try {
-    body = await c.req.json();
-  } catch {
-    body = {};
-  }
-
+  const body = await parseJsonBody<CohortStepBody>(c, {});
   const currentStep = normalizeStep(body.currentStep);
 
   if (currentStep === undefined) {
-    return c.json({ success: false, error: 'currentStep is required.' }, 400);
+    return apiError(c, 'currentStep is required.', 400);
   }
 
   try {
@@ -51,7 +42,7 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
       .limit(1);
 
     if (!existingCohort) {
-      return c.json({ success: false, error: 'Cohort not found.' }, 404);
+      return apiError(c, 'Cohort not found.', 404);
     }
 
     const [updatedCohort] = await db
@@ -83,20 +74,16 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
     });
   } catch (error: any) {
     console.error('Cohort step SQL error:', error.message);
-    return c.json({ success: false, error: 'Cohort step could not be updated.' }, 500);
+    return apiError(c, 'Cohort step could not be updated.', 500);
   }
 });
 
 adminRouter.get('/cohorts/:cohortId/step', async (c) => {
-  const user = c.get('user');
-  if (!user?.isAdmin) {
-    return c.json({ success: false, error: 'Forbidden' }, 403);
-  }
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = c.env?.DATABASE_URL;
-  if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
-  }
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
     const db = getDb(databaseUrl);
@@ -107,13 +94,13 @@ adminRouter.get('/cohorts/:cohortId/step', async (c) => {
       .limit(1);
 
     if (!cohort) {
-      return c.json({ success: false, error: 'Cohort not found.' }, 404);
+      return apiError(c, 'Cohort not found.', 404);
     }
 
     return c.json({ success: true, step: cohort });
   } catch (error: any) {
     console.error('Cohort step SQL error:', error.message);
-    return c.json({ success: false, error: 'Cohort step could not be loaded.' }, 500);
+    return apiError(c, 'Cohort step could not be loaded.', 500);
   }
 });
 

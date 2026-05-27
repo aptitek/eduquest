@@ -36,6 +36,16 @@ const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
   },
 ];
 
+function getDefaultBossAnswerFields(t: (path: string) => string): BossActivityAnswerField[] {
+  return DEFAULT_BOSS_ANSWER_FIELDS.map((field) => ({
+    ...field,
+    label:
+      field.id === 'workUrl'
+        ? t('activityCard.defaultFields.projectUrl')
+        : t('activityCard.defaultFields.projectFiles'),
+  }));
+}
+
 export function MapPage() {
   const { t } = useTranslation();
   const {
@@ -175,7 +185,7 @@ export function MapPage() {
         <MapSidePanel>
           {selectedActivity ? (
             <ActivityCard
-              activity={toActivityCardData(selectedActivity, activities, activityEdges)}
+              activity={toActivityCardData(selectedActivity, activities, activityEdges, t)}
               canEdit={Boolean(user?.isAdmin)}
               showCompletionAction={!user?.isAdmin}
               isCompleted={completedActivityIds.includes(selectedActivity.id)}
@@ -208,7 +218,8 @@ export default MapPage;
 function toActivityCardData(
   activity: Activity,
   activities: Activity[],
-  edges: GameActivityEdge[]
+  edges: GameActivityEdge[],
+  t: (path: string) => string
 ): ActivityCardData {
   const metadata = (activity.metadata || {}) as Record<string, unknown>;
   const activityById = new Map(activities.map((candidate) => [candidate.id, candidate]));
@@ -221,12 +232,12 @@ function toActivityCardData(
 
   return {
     title: activity.title,
-    subtitle: `${formatActivityType(activity.type)} · ${activity.isGraded ? 'Gamifié' : 'Non gamifié'}`,
+    subtitle: `${t(`common.${activity.type}`)} · ${activity.isGraded ? t('activityCard.graded') : t('activityCard.notGraded')}`,
     description:
       getStringMetadata(metadata, 'description') ||
       getStringMetadata(metadata, 'lore') ||
       getStringMetadata(metadata, 'summary') ||
-      'Consultez les ressources, avancez dans la quête et résolvez ce nœud pour faire progresser votre parcours.',
+      t('activityCard.defaultDescription'),
     illustrationUrl: getStringMetadata(metadata, 'illustrationUrl'),
     illustrationAlt: getStringMetadata(metadata, 'illustrationAlt') || activity.title,
     goldReward: getActivityXpReward(activity),
@@ -238,7 +249,7 @@ function toActivityCardData(
     mapY: activity.mapY,
     stepRanges: activity.stepRanges || [{ startStep: Math.max(activity.requiredLevel - 1, 0) }],
     adjacentNodes,
-    answerFields: getBossAnswerFields(activity),
+    answerFields: getBossAnswerFields(activity, t),
   };
 }
 
@@ -257,11 +268,11 @@ function getNestedStringMetadata(metadata: Record<string, unknown>, objectKey: s
 function getActivityResources(metadata: Record<string, unknown>, activityUrl?: string): ActivityResourceLink[] {
   const resources = [
     ...getResourceList(metadata),
-    resourceFromUrl(getStringMetadata(metadata, 'geniallyUrl'), 'Genially'),
-    resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'projectUrl'), 'Project'),
-    resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'gradingUrl'), 'Grading'),
-    resourceFromUrl(getStringMetadata(metadata, 'rubricUrl'), 'Rubric'),
-    resourceFromUrl(activityUrl, 'Activity'),
+    resourceFromUrl(getStringMetadata(metadata, 'geniallyUrl')),
+    resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'projectUrl')),
+    resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'gradingUrl')),
+    resourceFromUrl(getStringMetadata(metadata, 'rubricUrl')),
+    resourceFromUrl(activityUrl),
   ].filter((resource): resource is ActivityResourceLink => Boolean(resource?.url));
 
   const seenUrls = new Set<string>();
@@ -290,18 +301,11 @@ function resourceFromUrl(url?: string, title?: string): ActivityResourceLink | u
   return url ? { title, url } : undefined;
 }
 
-function formatActivityType(type: Activity['type']) {
-  return type
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function getBossAnswerFields(activity: Activity): BossActivityAnswerField[] | undefined {
+function getBossAnswerFields(activity: Activity, t: (path: string) => string): BossActivityAnswerField[] | undefined {
   if (activity.type !== 'boss' && activity.type !== 'mini_boss') return undefined;
   const metadata = (activity.metadata || {}) as Record<string, unknown>;
   const fields = Array.isArray(metadata.answerFields) ? metadata.answerFields : getNestedObjectArray(metadata, 'boss', 'answerFields');
-  return fields?.length ? (fields as BossActivityAnswerField[]) : DEFAULT_BOSS_ANSWER_FIELDS;
+  return fields?.length ? (fields as BossActivityAnswerField[]) : getDefaultBossAnswerFields(t);
 }
 
 function getNestedObjectArray(metadata: Record<string, unknown>, objectKey: string, key: string) {
