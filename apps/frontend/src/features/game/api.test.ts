@@ -8,6 +8,7 @@ import {
   completeMapActivity,
   fetchCohortStep,
   fetchCohortProgressData,
+  fetchClassRoster,
   fetchGuilds,
   fetchMapActivities,
   moveCharacterToActivity,
@@ -28,6 +29,39 @@ describe('game API client', () => {
       { id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 },
     ]);
     expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/guilds', {
+      headers: { Authorization: 'Bearer token-1' },
+    });
+  });
+
+  it('loads unguilded students from the class roster response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 }],
+      unguildedStudents: [
+        {
+          id: 'student-1',
+          userId: 'user-1',
+          displayName: 'Ada Lovelace',
+          characterClass: 'scholar',
+          stats: { strength: 1, dexterity: 2, constitution: 3, intelligence: 4, wisdom: 5, charisma: 6 },
+        },
+      ],
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchClassRoster('token-1', 'cohort-1')).resolves.toEqual({
+      guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 }],
+      unguildedStudents: [
+        {
+          id: 'student-1',
+          userId: 'user-1',
+          displayName: 'Ada Lovelace',
+          characterClass: 'scholar',
+          stats: { strength: 1, dexterity: 2, constitution: 3, intelligence: 4, wisdom: 5, charisma: 6 },
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/guilds?gameId=cohort-1', {
       headers: { Authorization: 'Bearer token-1' },
     });
   });
@@ -75,8 +109,31 @@ describe('game API client', () => {
       {
         method: 'POST',
         headers: { Authorization: 'Bearer token-1' },
+        body: undefined,
       }
     );
+  });
+
+  it('posts boss activity answers as multipart data when files are attached', async () => {
+    const completion = {
+      id: 'completion-1',
+      studentId: 'student-1',
+      cohortId: 'cohort-1',
+      activityId: 'activity-1',
+      completionType: 'battle',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, completion }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await completeMapActivity('token-1', 'activity-1', 'game-1', {
+      answers: [{ fieldId: 'workUrl', value: 'https://example.com/project' }],
+      files: { attachments: [new File(['zip'], 'project.zip', { type: 'application/zip' })] },
+    });
+
+    const [, request] = fetchMock.mock.calls[0];
+    expect(request.headers).toEqual({ Authorization: 'Bearer token-1' });
+    expect(request.body).toBeInstanceOf(FormData);
+    expect((request.body as FormData).get('answers')).toContain('workUrl');
   });
 
   it('posts character moves to the backend route', async () => {

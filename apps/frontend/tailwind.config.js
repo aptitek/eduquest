@@ -65,9 +65,9 @@ export default {
     themes: [
       {
         dark: {
-          primary: 'var(--color-status-quest)',
+          primary: 'var(--color-accent-primary)',
           'primary-content': 'var(--color-bg-base)',
-          secondary: 'var(--color-status-boss)',
+          secondary: 'var(--color-status-quest)',
           'secondary-content': 'var(--color-bg-base)',
           accent: 'var(--color-status-campfire)',
           'accent-content': 'var(--color-bg-base)',
@@ -89,9 +89,9 @@ export default {
       },
       {
         light: {
-          primary: 'var(--color-status-quest)',
+          primary: 'var(--color-accent-primary)',
           'primary-content': 'var(--color-bg-base)',
-          secondary: 'var(--color-status-boss)',
+          secondary: 'var(--color-status-quest)',
           'secondary-content': 'var(--color-bg-base)',
           accent: 'var(--color-status-campfire)',
           'accent-content': 'var(--color-bg-base)',

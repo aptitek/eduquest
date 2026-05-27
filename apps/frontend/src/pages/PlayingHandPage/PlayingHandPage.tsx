@@ -25,7 +25,7 @@ export function PlayingHandPage({
     <GameLayout>
       <GameHeader currentView={currentView} />
 
-      <div className="pb-8 pt-4">
+      <div>
         <h2 className="sr-only">{title}</h2>
 
         {hands.length ? (

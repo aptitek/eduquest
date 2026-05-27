@@ -9,6 +9,8 @@ import type {
   GameActivityCompletion,
   GameCharacter,
   GameCharacterClass,
+  GameCharacterClassDefinition,
+  GameStats,
   Guild,
   School,
   Student,
@@ -24,6 +26,7 @@ import {
   cohortInvites,
   cohortMemberships,
   gameActivityCompletions,
+  gameCharacterClasses,
   cohorts,
   gameCharacters,
   guilds,
@@ -46,6 +49,11 @@ import {
 } from '../config/runtime';
 import { RewardBalanceConfigService } from '../services/reward-balance-config';
 import { RewardPreviewService } from '../services/reward-preview';
+import {
+  normalizeBaseStats,
+  repairManualAllocation,
+  type CharacterStatAllocation,
+} from '../services/character-class-reallocation';
 
 type Bindings = {
   APP_ENV?: string;
@@ -91,6 +99,7 @@ type ManagementBackup = {
   schools: School[];
   campuses: Campus[];
   cohorts: Cohort[];
+  characterClasses: GameCharacterClassDefinition[];
   students: { user: User; student: Student; character: GameCharacter }[];
 };
 type ManagementStudentUpdateBody = {
@@ -113,6 +122,9 @@ type ManagementStudentUpdateBody = {
   institutionalSchoolId?: string;
 };
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'logoUrl'>>;
+type ManagementCharacterClassUpdateBody = {
+  baseStats?: Partial<GameStats>;
+};
 type CohortInvitePayload = {
   purpose: 'cohort_invite';
   inviteId: string;
@@ -216,6 +228,7 @@ function toGuild(record: GuildRecord, cohort?: Cohort): Guild {
     name: record.name,
     description: record.description || undefined,
     iconUrl: record.iconUrl || undefined,
+    iconKey: record.iconKey || undefined,
     color: record.color || undefined,
     gold: record.gold,
     createdAt: toIsoString(record.createdAt),
@@ -277,6 +290,25 @@ function toGameCharacterStats(record: GameCharacterRecord): GameCharacter['stats
     intelligence: record.intelligence,
     wisdom: record.wisdom,
     charisma: record.charisma,
+  };
+}
+
+function toGameCharacterClassDefinition(
+  record: typeof gameCharacterClasses.$inferSelect
+): GameCharacterClassDefinition {
+  return {
+    slug: normalizeGameCharacterClass(record.slug),
+    nameI18nKey: record.nameI18nKey,
+    baseStats: {
+      strength: record.baseStrength,
+      dexterity: record.baseDexterity,
+      constitution: record.baseConstitution,
+      intelligence: record.baseIntelligence,
+      wisdom: record.baseWisdom,
+      charisma: record.baseCharisma,
+    },
+    sortOrder: record.sortOrder,
+    createdAt: toIsoString(record.createdAt),
   };
 }
 
@@ -487,6 +519,7 @@ async function getManagementBackup(
     campusRecords,
     cohortRecords,
     guildRecords,
+    characterClassRecords,
     userRecords,
     studentRecords,
     cohortMembershipRecords,
@@ -497,6 +530,7 @@ async function getManagementBackup(
     db.select().from(campuses),
     db.select().from(cohorts),
     db.select().from(guilds),
+    db.select().from(gameCharacterClasses),
     db.select().from(users),
     db.select().from(students),
     db.select().from(cohortMemberships),
@@ -570,6 +604,9 @@ async function getManagementBackup(
     schools: Array.from(schoolMap.values()),
     campuses: Array.from(campusMap.values()),
     cohorts: Array.from(cohortMap.values()),
+    characterClasses: characterClassRecords
+      .map(toGameCharacterClassDefinition)
+      .sort((a, b) => a.sortOrder - b.sortOrder),
     students: studentProfiles,
   };
 }
@@ -903,6 +940,29 @@ authRouter.get('/debug-backup', (c) => {
   });
 });
 
+authRouter.get('/character-classes', async (c) => {
+  if (!c.env.DATABASE_URL) {
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    }
+
+    return c.json({
+      success: true,
+      characterClasses: getDebugBackup().characterClasses,
+    });
+  }
+
+  const characterClasses = await getDb(c.env.DATABASE_URL)
+    .select()
+    .from(gameCharacterClasses)
+    .orderBy(gameCharacterClasses.sortOrder);
+
+  return c.json({
+    success: true,
+    characterClasses: characterClasses.map(toGameCharacterClassDefinition),
+  });
+});
+
 authRouter.use('/management/*', authMiddleware);
 authRouter.get('/management', async (c) => {
   const currentUser = c.get('user');
@@ -1059,6 +1119,172 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
       requireFrontendUrl(c.env)
     ),
   });
+});
+
+authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return c.json(
+      {
+        success: false,
+        error: 'Forbidden',
+      },
+      403
+    );
+  }
+
+  let body: ManagementCharacterClassUpdateBody;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid JSON body',
+      },
+      400
+    );
+  }
+
+  const rawClassSlug = c.req.param('classSlug');
+  if (!GAME_CHARACTER_CLASS_SET.has(rawClassSlug)) {
+    return c.json({ success: false, error: 'Character class not found' }, 404);
+  }
+
+  const classSlug = rawClassSlug as GameCharacterClass;
+  const cohortId = c.req.param('cohortId');
+
+  if (!c.env.DATABASE_URL) {
+    const backup = getDebugBackup();
+    const cohortExists = backup.cohorts.some((cohort) => cohort.id === cohortId);
+    const classDefinition = backup.characterClasses.find((item) => item.slug === classSlug);
+    const baseStats = normalizeBaseStats(body.baseStats || {});
+
+    if (!cohortExists) return c.json({ success: false, error: 'Cohort not found' }, 404);
+    if (!classDefinition) return c.json({ success: false, error: 'Character class not found' }, 404);
+    if (!baseStats) return c.json({ success: false, error: 'Invalid base stats' }, 400);
+
+    classDefinition.baseStats = baseStats;
+    for (const profile of backup.students) {
+      const isInCohort = profile.student.cohortMemberships?.some(
+        (membership) => membership.cohortId === cohortId
+      );
+      if (!isInCohort || profile.character.characterClass !== classSlug) continue;
+
+      const repair = repairManualAllocation(
+        profile.character.stats as CharacterStatAllocation,
+        baseStats
+      );
+      profile.character.stats = repair.nextManual;
+    }
+
+    return c.json({ success: true, backup });
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
+  const baseStats = normalizeBaseStats(
+    body.baseStats || {},
+    balanceConfig.rewardSystem.attributes.levelOneMaxValue
+  );
+
+  if (!baseStats) {
+    return c.json({ success: false, error: 'Invalid base stats' }, 400);
+  }
+
+  try {
+    const [cohortRecord] = await db
+      .select()
+      .from(cohorts)
+      .where(eq(cohorts.id, cohortId))
+      .limit(1);
+
+    if (!cohortRecord) {
+      return c.json({ success: false, error: 'Cohort not found' }, 404);
+    }
+
+    const [classRecord] = await db
+      .select()
+      .from(gameCharacterClasses)
+      .where(eq(gameCharacterClasses.slug, classSlug))
+      .limit(1);
+
+    if (!classRecord) {
+      return c.json({ success: false, error: 'Character class not found' }, 404);
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(gameCharacterClasses)
+        .set({
+          baseStrength: baseStats.strength,
+          baseDexterity: baseStats.dexterity,
+          baseConstitution: baseStats.constitution,
+          baseIntelligence: baseStats.intelligence,
+          baseWisdom: baseStats.wisdom,
+          baseCharisma: baseStats.charisma,
+        })
+        .where(eq(gameCharacterClasses.slug, classSlug));
+
+      const affectedCharacters = await tx
+        .select({
+          studentId: gameCharacters.studentId,
+          strength: gameCharacters.strength,
+          dexterity: gameCharacters.dexterity,
+          constitution: gameCharacters.constitution,
+          intelligence: gameCharacters.intelligence,
+          wisdom: gameCharacters.wisdom,
+          charisma: gameCharacters.charisma,
+        })
+        .from(cohortMemberships)
+        .innerJoin(students, eq(students.userId, cohortMemberships.userId))
+        .innerJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+        .where(
+          and(
+            eq(cohortMemberships.cohortId, cohortId),
+            eq(gameCharacters.characterClass, classSlug)
+          )
+        );
+
+      for (const character of affectedCharacters) {
+        const repair = repairManualAllocation(
+          {
+            strength: character.strength,
+            dexterity: character.dexterity,
+            constitution: character.constitution,
+            intelligence: character.intelligence,
+            wisdom: character.wisdom,
+            charisma: character.charisma,
+          },
+          baseStats,
+          balanceConfig.rewardSystem.attributes.levelOneMaxValue
+        );
+
+        if (!repair.changed) continue;
+
+        await tx
+          .update(gameCharacters)
+          .set({
+            strength: repair.nextManual.strength,
+            dexterity: repair.nextManual.dexterity,
+            constitution: repair.nextManual.constitution,
+            intelligence: repair.nextManual.intelligence,
+            wisdom: repair.nextManual.wisdom,
+            charisma: repair.nextManual.charisma,
+            updatedAt: new Date(),
+          })
+          .where(eq(gameCharacters.studentId, character.studentId));
+      }
+    });
+
+    return c.json({
+      success: true,
+      backup: await getManagementBackup(c.env.DATABASE_URL, isMockDataEnabled(c.env)),
+    });
+  } catch (error: any) {
+    console.error('Character class management SQL error:', error.message);
+    return c.json({ success: false, error: 'Character class could not be updated.' }, 500);
+  }
 });
 
 authRouter.put('/management/students/:studentId', async (c) => {

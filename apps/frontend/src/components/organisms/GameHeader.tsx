@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
+import { EditableFieldContext, EditableText } from '../atoms/EditableText';
+import { InfoBar } from '../molecules/InfoBar';
 import { PlayingCard } from '../molecules/PlayingCard';
 import { useAuth } from '../../features/auth/useAuth';
 import { fetchSelectableGames } from '../../features/game/api';
@@ -19,7 +21,7 @@ import {
   formatRewardNotificationDescription,
   formatRewardNotificationTitle,
 } from '../../features/game/formatRewardNotification';
-import { Check, ChevronDown, Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
+import { Check, ChevronDown, Coins, Gift, GraduationCap, Map, Megaphone, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
@@ -46,6 +48,9 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(
     () => new Set()
   );
+  const [adminNotificationTitle, setAdminNotificationTitle] = useState('');
+  const [adminNotificationDescription, setAdminNotificationDescription] = useState('');
+  const [adminCohortNotifications, setAdminCohortNotifications] = useState<HeaderNotification[]>([]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -133,7 +138,8 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
           : undefined,
       }))
     : [];
-  const activeNotifications = dashboardNotifications.filter(
+  const allNotifications = [...adminCohortNotifications, ...dashboardNotifications];
+  const activeNotifications = allNotifications.filter(
     (notification) => !dismissedNotificationIds.has(notification.id)
   );
 
@@ -142,6 +148,60 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   };
   const showGameSelector = user?.isAdmin ? availableGames.length > 0 : availableGames.length > 1;
   const selectedGame = availableGames.find((game) => game.id === selectedGameId);
+  const addAdminCohortNotification = () => {
+    const title = adminNotificationTitle.trim();
+    const description = adminNotificationDescription.trim();
+    if (!title && !description) return;
+
+    setAdminCohortNotifications((current) => [
+      {
+        id: `admin-cohort-${Date.now()}`,
+        title: title || t('dashboard.notifications.draftTitle'),
+        description: description || undefined,
+        meta: selectedGame?.name || t('dashboard.notifications.cohortWide'),
+        icon: <Megaphone size={18} aria-hidden />,
+        tone: 'info',
+      },
+      ...current,
+    ]);
+    setAdminNotificationTitle('');
+    setAdminNotificationDescription('');
+    setIsNotificationDrawerOpen(true);
+  };
+  const adminNotificationComposer =
+    user?.isAdmin && currentView === 'management' ? (
+      <EditableFieldContext.Provider value={{ showPencil: true }}>
+        <InfoBar
+          tone="info"
+          icon={<Megaphone size={18} aria-hidden />}
+          title={
+            <EditableText
+              value={adminNotificationTitle}
+              onChange={setAdminNotificationTitle}
+              placeholder={t('dashboard.notifications.draftTitle')}
+              className="font-display text-sm font-black text-text-primary"
+              truncate={false}
+            />
+          }
+          description={
+            <EditableText
+              value={adminNotificationDescription}
+              onChange={setAdminNotificationDescription}
+              placeholder={t('dashboard.notifications.draftDescription')}
+              className="text-xs leading-relaxed text-text-secondary"
+              multiline
+              truncate={false}
+            />
+          }
+          meta={selectedGame?.name || t('dashboard.notifications.cohortWide')}
+          action={{
+            label: t('dashboard.notifications.addCohortNotification'),
+            onSelect: addAdminCohortNotification,
+          }}
+          className="border-dashed"
+        />
+      </EditableFieldContext.Provider>
+    ) : undefined;
   const openGameMenu = () => {
     const rect = gameMenuButtonRef.current?.getBoundingClientRect();
     if (rect) {
@@ -383,6 +443,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
         notifications={activeNotifications}
         isOpen={isNotificationDrawerOpen}
         isExpanded
+        composer={adminNotificationComposer}
         onDismiss={dismissNotification}
         onAction={dismissNotification}
         className="sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-[28rem] sm:max-w-full"

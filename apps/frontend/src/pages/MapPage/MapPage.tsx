@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Activity, GameActivityCompletion, GameActivityEdge } from '@eduquest/shared';
+import type { Activity, BossActivityAnswerField, GameActivityCompletion, GameActivityEdge } from '@eduquest/shared';
 import { useGameStore } from '../../features/game/gameStore';
 import {
+  type ActivityCompletionDraft,
   completeMapActivity,
   fetchMapActivities,
   moveCharacterToActivity,
@@ -17,6 +18,23 @@ import { GameMap } from '../../components/organisms/GameMap';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
 import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
 import { formatUserDisplayName } from '../../utils/displayName';
+
+const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
+  {
+    id: 'workUrl',
+    label: 'Project URL',
+    kind: 'url',
+    placeholder: 'https://github.com/your-team/project',
+  },
+  {
+    id: 'attachments',
+    label: 'Project files',
+    kind: 'file',
+    accept: '.pdf,.zip,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.json',
+    maxFiles: 3,
+    maxBytes: 10 * 1024 * 1024,
+  },
+];
 
 export function MapPage() {
   const { t } = useTranslation();
@@ -92,7 +110,7 @@ export function MapPage() {
   };
 
   // Soumission / Résolution d'un nœud
-  const handleCompleteActivity = async (act: Activity) => {
+  const handleCompleteActivity = async (act: Activity, draft?: ActivityCompletionDraft) => {
     if (completedActivityIds.includes(act.id) || completingActivityId) return;
 
     setCompletingActivityId(act.id);
@@ -101,7 +119,7 @@ export function MapPage() {
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      const completion: GameActivityCompletion = await completeMapActivity(token, act.id, selectedGameId);
+      const completion: GameActivityCompletion = await completeMapActivity(token, act.id, selectedGameId, draft);
 
       addActivityCompletion(completion);
       gainXp(getActivityXpReward(act));
@@ -147,6 +165,7 @@ export function MapPage() {
                   : undefined
               }
               canEditLocked={Boolean(user?.isAdmin)}
+              showGuildOccupancyMarkers={Boolean(user?.isAdmin)}
               showCompletionState={!user?.isAdmin}
               onSelectNode={handleSelectActivity}
             />
@@ -165,7 +184,7 @@ export function MapPage() {
               onResolve={
                 user?.isAdmin || selectedActivity.isLocked
                   ? undefined
-                  : () => handleCompleteActivity(selectedActivity)
+                  : (draft) => handleCompleteActivity(selectedActivity, draft)
               }
               className="h-full min-h-0 w-full max-w-none"
             />
@@ -219,6 +238,7 @@ function toActivityCardData(
     mapY: activity.mapY,
     stepRanges: activity.stepRanges || [{ startStep: Math.max(activity.requiredLevel - 1, 0) }],
     adjacentNodes,
+    answerFields: getBossAnswerFields(activity),
   };
 }
 
@@ -275,4 +295,18 @@ function formatActivityType(type: Activity['type']) {
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function getBossAnswerFields(activity: Activity): BossActivityAnswerField[] | undefined {
+  if (activity.type !== 'boss' && activity.type !== 'mini_boss') return undefined;
+  const metadata = (activity.metadata || {}) as Record<string, unknown>;
+  const fields = Array.isArray(metadata.answerFields) ? metadata.answerFields : getNestedObjectArray(metadata, 'boss', 'answerFields');
+  return fields?.length ? (fields as BossActivityAnswerField[]) : DEFAULT_BOSS_ANSWER_FIELDS;
+}
+
+function getNestedObjectArray(metadata: Record<string, unknown>, objectKey: string, key: string) {
+  const value = metadata[objectKey];
+  if (!value || typeof value !== 'object') return undefined;
+  const nestedValue = (value as Record<string, unknown>)[key];
+  return Array.isArray(nestedValue) ? nestedValue : undefined;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
-import { PlayingCard } from '../../components/molecules/PlayingCard';
+import { PlayingCard, type PlayingCardSide } from '../../components/molecules/PlayingCard';
 import { ManagementTable } from '../../components/organisms/ManagementTable';
 import {
   CardSkeleton,
@@ -14,8 +14,10 @@ import { InstitutionalProfileCard } from '../../components/organisms/Institution
 import { useGameStore } from '../../features/game/gameStore';
 import {
   fetchManagementBackup,
+  type ManagementCharacterClassUpdate,
   type ManagementSchoolUpdate,
   type ManagementStudentUpdate,
+  updateManagementCohortCharacterClass,
   updateManagementSchool,
   updateManagementStudent,
 } from '../../features/management/api';
@@ -133,7 +135,7 @@ export function ManagementPage() {
     if (debugBackup) {
       return debugBackup.students
         .filter(({ user: rowUser }) => !rowUser.isAdmin)
-        .map(({ user: rowUser, student: rowStudent }) => {
+        .map(({ user: rowUser, student: rowStudent, character: rowCharacter }) => {
           const latestMembership = getLatestCohortMembership(rowStudent.cohortMemberships);
           const selectedSchool = latestMembership?.cohort?.school || schoolRows[0];
 
@@ -141,6 +143,7 @@ export function ManagementPage() {
             ...rowStudent,
             schoolId: selectedSchool?.id,
             school: selectedSchool,
+            character: rowCharacter,
             user: rowUser,
             displayName: formatUserDisplayName(rowUser),
             email: getSchoolInstitutionalEmail(rowUser, latestMembership?.institutionalEmail),
@@ -161,6 +164,7 @@ export function ManagementPage() {
         ...student,
         schoolId: selectedSchool?.id,
         school: selectedSchool,
+        character,
         user,
         displayName: formatUserDisplayName(user),
         email: getSchoolInstitutionalEmail(user, latestMembership?.institutionalEmail),
@@ -251,6 +255,36 @@ export function ManagementPage() {
       if (shouldThrow) throw error;
     }
   };
+  const updateSelectedCohortCharacterClass = async (
+    characterClassUpdate: ManagementCharacterClassUpdate['baseStats'],
+    characterClass: Parameters<typeof updateManagementCohortCharacterClass>[2]
+  ) => {
+    if (!selectedCohortRow) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setManagementErrorKey('management.errors.missingSession');
+      throw new Error('management.errors.missingSession');
+    }
+
+    setManagementErrorKey(null);
+    try {
+      const backup = await updateManagementCohortCharacterClass(
+        token,
+        selectedCohortRow.id,
+        characterClass,
+        { baseStats: characterClassUpdate }
+      );
+      setDebugBackup(backup);
+    } catch (error) {
+      console.warn('Could not update management character class.', error);
+      setManagementErrorKey('management.errors.updateFailed');
+      throw error;
+    }
+  };
+  const selectedStudentCharacterBack = selectedStudentRow?.character
+    ? buildStudentCharacterBackSide(selectedStudentRow, t, updateSelectedStudent)
+    : undefined;
   const selectedCardContent = selectedSchoolRow ? (
     <SchoolDetailCard
       school={selectedSchoolRow}
@@ -269,12 +303,17 @@ export function ManagementPage() {
       cohort={selectedCohortRow}
       cohortOptions={cohortRows}
       campusOptions={campusOptions}
+      characterClasses={debugBackup?.characterClasses || []}
+      onUpdateCharacterClass={(characterClass, baseStats) =>
+        updateSelectedCohortCharacterClass(baseStats, characterClass)
+      }
       t={t}
     />
   ) : selectedStudentRow ? (
     <div className="h-full min-h-[18rem]">
       <InstitutionalProfileCard
         user={selectedStudentRow.user}
+        variant="management"
         onUpdateProfile={(data) => updateSelectedStudent({ user: data })}
         onUploadAvatar={async (file) => {
           const token = localStorage.getItem('eduquest_token');
@@ -289,8 +328,6 @@ export function ManagementPage() {
             true
           )
         }
-        hideRoleBadge
-        stackPronouns
         schoolLogoUrl={selectedStudentCohort?.school?.logoUrl}
         institutionalEmail={
           selectedStudentMembership?.institutionalEmail
@@ -352,7 +389,6 @@ export function ManagementPage() {
             schoolRows.find((school) => school.id === cohort?.schoolId)?.emailDomain
           );
         }}
-        className="max-w-none border-0 bg-transparent shadow-none rounded-none"
       />
     </div>
   ) : (
@@ -452,15 +488,11 @@ export function ManagementPage() {
         <PlayingCard
           size="full"
           title={t('management.title')}
-          flipLabel={t('management.card.flip')}
+          flipLabel={selectedStudentCharacterBack ? t('management.card.flip') : undefined}
           frontContent={selectedCardContent}
-          back={
-            <div className="flex h-full min-h-[18rem] flex-col items-center justify-center p-5 text-center text-text-muted">
-              <span className="text-xs font-display uppercase tracking-widest">
-                {t('management.card.versoEmpty')}
-              </span>
-            </div>
-          }
+          back={selectedStudentCharacterBack}
+          kind={selectedStudentRow?.character ? 'character' : undefined}
+          characterClass={selectedStudentRow?.character?.characterClass}
           className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
         />
       </section>
@@ -469,3 +501,49 @@ export function ManagementPage() {
 }
 
 export default ManagementPage;
+
+function buildStudentCharacterBackSide(
+  row: StudentRow,
+  t: (key: string) => string,
+  updateSelectedStudent: (update: ManagementStudentUpdate, shouldThrow?: boolean) => Promise<void>
+): PlayingCardSide {
+  const character = row.character;
+  const classLabel = character ? t(`game.classes.${character.characterClass}`) : '';
+
+  return {
+    title: row.displayName,
+    subtitle: classLabel,
+    description: row.user.bio || '',
+    illustrationUrl: row.user.avatarUrl || row.user.githubAvatarUrl,
+    illustrationAlt: row.displayName,
+    ribbonText: classLabel,
+    ribbonEditable: false,
+    editable: true,
+    statsEditable: false,
+    stats: character
+      ? [
+          { id: 'strength', label: 'STR', value: character.stats.strength },
+          { id: 'dexterity', label: 'DEX', value: character.stats.dexterity },
+          { id: 'constitution', label: 'CON', value: character.stats.constitution },
+          { id: 'intelligence', label: 'INT', value: character.stats.intelligence },
+          { id: 'wisdom', label: 'WIS', value: character.stats.wisdom },
+          { id: 'charisma', label: 'CHA', value: character.stats.charisma },
+        ]
+      : undefined,
+    onFieldChange: (field, value) => {
+      if (field === 'title') {
+        void updateSelectedStudent({ user: { displayName: value } });
+        return;
+      }
+
+      if (field === 'description') {
+        void updateSelectedStudent({ user: { bio: value } });
+        return;
+      }
+
+      if (field === 'illustrationUrl') {
+        void updateSelectedStudent({ user: { avatarUrl: value } });
+      }
+    },
+  };
+}

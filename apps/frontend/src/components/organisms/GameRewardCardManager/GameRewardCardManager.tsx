@@ -294,7 +294,7 @@ function TextInput({
 function toPlayingCard(card: Partial<GameRewardCardPayload & GameRewardCard>): PlayingCardData {
   return {
     id: card.id,
-    kind: 'guild',
+    kind: 'reward',
     title: card.title || 'Reward title',
     subtitle: card.subtitle || 'Reward subtitle',
     description: card.description,

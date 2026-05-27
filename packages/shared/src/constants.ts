@@ -11,6 +11,7 @@ export interface GuildConfig {
   name: string;
   color: string; // Code couleur hexadécimal
   description: string;
+  iconKey?: string;
 }
 
 export const GUILDS: GuildConfig[] = [
@@ -19,17 +20,20 @@ export const GUILDS: GuildConfig[] = [
     name: 'Guild des Guerriers du Code',
     color: '#ef4444', // Rouge
     description: 'Spécialisés dans la résolution rapide de défis algorithmiques.',
+    iconKey: 'Swords',
   },
   {
     id: 'mages',
     name: 'Cercle des Mages Frontend',
     color: '#3b82f6', // Bleu
     description: 'Maîtres des interfaces visuelles et des animations magiques.',
+    iconKey: 'Sparkles',
   },
   {
     id: 'scouts',
     name: 'Éclaireurs de la Donnée',
     color: '#10b981', // Vert
     description: "Experts dans l'exploration et la structuration des bases de données.",
+    iconKey: 'Compass',
   },
 ];

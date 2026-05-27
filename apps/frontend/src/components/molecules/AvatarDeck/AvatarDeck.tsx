@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { AvatarBadge } from '../../atoms/AvatarBadge';
 import { cn } from '../../../utils/cn';
 
@@ -6,6 +6,8 @@ export interface AvatarDeckMember {
   id: string;
   name: string;
   avatarUrl?: string;
+  icon?: ReactNode;
+  color?: string;
   subtitle?: string;
   onClick?: () => void;
 }
@@ -112,7 +114,8 @@ export function AvatarDeck({
               <AvatarBadge
                 name={member.name}
                 src={member.avatarUrl}
-                color={color}
+                icon={member.icon}
+                color={member.color || color}
                 size={size}
                 className={avatarClassName}
               />

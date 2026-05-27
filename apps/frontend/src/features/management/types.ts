@@ -3,6 +3,7 @@ import type {
   Campus,
   Cohort,
   GameCharacter,
+  GameCharacterClassDefinition,
   School,
   Student,
   User,
@@ -17,6 +18,7 @@ export type SelectedManagementEntity = {
 
 export type StudentRow = Student & {
   user: User;
+  character?: GameCharacter;
   displayName: string;
   email: string;
   cohort?: CohortRow;
@@ -48,5 +50,6 @@ export type DebugBackup = {
   schools: School[];
   campuses: Campus[];
   cohorts: Cohort[];
+  characterClasses: GameCharacterClassDefinition[];
   students: DebugStudentProfile[];
 };

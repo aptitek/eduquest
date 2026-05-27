@@ -16,16 +16,15 @@ export function ProgressPage() {
   const milestoneRewards = dashboardData?.gauge.milestones.map((milestone) => milestone.reward) || [];
   const fallbackBonusCards = milestoneRewards.length
     ? (milestoneRewards.map((reward) => ({
-        kind: 'guild' as const,
+        kind: 'reward' as const,
+        id: reward.id,
         title: t(reward.titleI18nKey),
         subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
         accentToken: reward.accentToken,
-        ribbonLabel: t('dashboard.dock.newRibbon'),
-        ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
     : ([
         {
-          kind: 'guild' as const,
+          kind: 'reward' as const,
           id: 'empty-progress-reward',
           title: t('dashboard.rewards.empty.title'),
           subtitle: t('dashboard.rewards.empty.subtitle'),
@@ -39,7 +38,7 @@ export function ProgressPage() {
     <GameLayout>
       <GameHeader currentView="progress" />
 
-      <div className="space-y-8 pb-8 pt-4">
+      <div className="space-y-8">
         <h2 className="sr-only">{t('progress.title')}</h2>
 
         {user?.isAdmin ? (
@@ -58,7 +57,7 @@ export function ProgressPage() {
           </>
         ) : null}
 
-        {!user?.isAdmin ? <section aria-labelledby="progress-active-title" className="space-y-4">
+        {!user?.isAdmin ? <section aria-labelledby="progress-active-title" className="relative z-0 space-y-4 pb-8">
           <div className="flex items-center gap-3">
             <Gift className="text-status-campfire" size={22} aria-hidden />
             <h3 id="progress-active-title" className="text-xl font-bold">
@@ -68,22 +67,22 @@ export function ProgressPage() {
           <div id="progress-bonus-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
         </section> : null}
 
-        {!user?.isAdmin ? <div className="flex items-center gap-4" role="separator" aria-hidden>
-          <div className="h-px flex-1 bg-gaming-border" />
-          <span className="font-display text-xs font-bold uppercase tracking-[0.24em] text-text-muted">
-            {t('progress.nextVote')}
-          </span>
-          <div className="h-px flex-1 bg-gaming-border" />
-        </div> : null}
-
-        {!user?.isAdmin ? <section aria-labelledby="progress-next-vote-title" className="space-y-4">
-          <h3 id="progress-next-vote-title" className="sr-only">
-            {t('progress.nextVote')}
-          </h3>
+        {!user?.isAdmin ? <section aria-labelledby="progress-next-vote-title" className="relative z-20 space-y-5">
+          <div className="flex items-center gap-4 rounded-2xl bg-gaming-base/95 px-3 py-2 backdrop-blur">
+            <div className="h-px flex-1 bg-gaming-border" aria-hidden />
+            <h3
+              id="progress-next-vote-title"
+              className="shrink-0 font-display text-xs font-bold uppercase tracking-[0.24em] text-text-muted"
+            >
+              {t('progress.nextVote')}
+            </h3>
+            <div className="h-px flex-1 bg-gaming-border" aria-hidden />
+          </div>
           <ResponsiveCardGrid
             items={nextVoteCards}
             getKey={(card, index) => card.id || `next-vote-${index}`}
             renderItem={(card) => <PlayingCard {...card} size="full" className="w-full" />}
+            className="pt-2"
           />
         </section> : null}
       </div>

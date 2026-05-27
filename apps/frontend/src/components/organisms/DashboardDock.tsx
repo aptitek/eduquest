@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
 import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
@@ -7,7 +7,7 @@ import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { StepSelector } from '../molecules/StepSelector';
 import { useGameStore } from '../../features/game/gameStore';
-import { fetchCohortStep, fetchGuilds, spendGuildVotes, updateCohortStep } from '../../features/game/api';
+import { fetchCohortStep, fetchGuilds, spendGuildVotes, updateCohortStep, updateGuildIcon } from '../../features/game/api';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
@@ -24,6 +24,12 @@ import {
 import type { DockGuild } from './DashboardDock/types';
 import { motion, useReducedMotion } from 'framer-motion';
 
+const LucideIconSelector = lazy(() =>
+  import('../atoms/LucideIconSelector').then((module) => ({
+    default: module.LucideIconSelector,
+  }))
+);
+
 export interface DashboardDockProps {
   className?: string;
 }
@@ -31,6 +37,8 @@ export interface DashboardDockProps {
 type EditableCardSideOverride = Partial<Record<PlayingCardEditableField, string>> & {
   stats?: Record<string, number>;
 };
+
+const PROGRESS_BONUS_SEEN_STORAGE_PREFIX = 'eduquest_progress_seen_bonus_cards';
 
 export function DashboardDock({ className }: DashboardDockProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -47,6 +55,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [adminStep, setAdminStep] = useState(0);
   const [isSavingAdminStep, setIsSavingAdminStep] = useState(false);
   const [isVoteOpen, setIsVoteOpen] = useState(false);
+  const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const { user, student, character, selectedGameId } = useGameStore();
   const dashboardData = useCohortProgressData(Boolean(user), selectedGameId);
   const { t } = useTranslation();
@@ -60,6 +69,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const isGuildPage = route === 'guild';
   const isClassPage = route === 'class';
   const isProgressPage = route === 'progress';
+  const progressBonusSeenStorageKey = getProgressBonusSeenStorageKey(user?.id, selectedGameId);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -98,6 +108,25 @@ export function DashboardDock({ className }: DashboardDockProps) {
       },
     }));
   }, []);
+
+  useEffect(() => {
+    setSeenProgressBonusCardIds(readSeenProgressBonusCardIds(progressBonusSeenStorageKey));
+  }, [progressBonusSeenStorageKey]);
+
+  const markProgressBonusCardSeen = useCallback(
+    (cardId: string | undefined) => {
+      if (!isProgressPage || !cardId) return;
+
+      setSeenProgressBonusCardIds((current) => {
+        if (current.has(cardId)) return current;
+
+        const next = new Set(current).add(cardId);
+        writeSeenProgressBonusCardIds(progressBonusSeenStorageKey, next);
+        return next;
+      });
+    },
+    [isProgressPage, progressBonusSeenStorageKey]
+  );
 
   useEffect(() => {
     if (route !== 'class') {
@@ -189,7 +218,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const milestoneRewards = dashboardData?.gauge.milestones.map((milestone) => milestone.reward) || [];
   const bonusCards = milestoneRewards.length
     ? (milestoneRewards.map((reward) => ({
-        kind: 'guild' as const,
+        kind: 'reward' as const,
+        id: reward.id,
         title: t(reward.titleI18nKey),
         subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
         accentToken: reward.accentToken as PlayingCardData['accentToken'],
@@ -198,7 +228,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       })) as [PlayingCardData, ...PlayingCardData[]])
     : ([
         {
-          kind: 'guild' as const,
+          kind: 'reward' as const,
           id: 'empty-reward',
           title: t('dashboard.rewards.empty.title'),
           subtitle: t('dashboard.rewards.empty.subtitle'),
@@ -206,7 +236,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
           faceDown: true,
         },
       ] as [PlayingCardData, ...PlayingCardData[]]);
-  const progressBonusCards = buildProgressBonusCards(bonusCards, 'progress-active-bonus');
+  const progressBonusCards = withProgressBonusNewRibbonState(
+    buildProgressBonusCards(bonusCards, 'progress-active-bonus'),
+    seenProgressBonusCardIds,
+    markProgressBonusCardSeen,
+    isProgressPage
+  );
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
         id: milestone.id,
@@ -393,6 +428,17 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const activePlayerGuild =
     podiumGuilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name) ||
     playerGuild;
+  const updateActiveGuildIcon = async (iconKey: string) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token || !activePlayerGuild.id) return;
+
+    try {
+      const updatedGuild = await updateGuildIcon(token, activePlayerGuild.id, iconKey);
+      setGuilds((current) => upsertGuild(current, updatedGuild));
+    } catch (error) {
+      console.warn('Could not update guild icon.', error);
+    }
+  };
   const classRemainingCard: PlayingCardData = {
     id: 'class-remaining-guilds-list',
     layoutId: 'class-remaining-guilds-list',
@@ -441,13 +487,29 @@ export function DashboardDock({ className }: DashboardDockProps) {
     ...guildHandBase,
     cards: guildHandBase.cards.map((card) => {
       if (card.id === 'guild') {
-        return makeEditableDashboardCard({
+        const editableGuildCard = makeEditableDashboardCard({
           card,
           cardKey: 'guild',
           sideOverrides: editableCardSides,
           onFieldChange: updateEditableCardField,
           onStatChange: updateEditableCardStat,
         });
+        const back = isEditablePlayingCardSide(editableGuildCard.back)
+          ? {
+              ...editableGuildCard.back,
+              footer: (
+                <GuildIconSelectionPanel
+                  value={activePlayerGuild.iconKey || 'Shield'}
+                  onChange={updateActiveGuildIcon}
+                />
+              ),
+            }
+          : editableGuildCard.back;
+
+        return {
+          ...editableGuildCard,
+          back,
+        };
       }
 
       if (card.id === 'player') {
@@ -675,6 +737,59 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
 export default DashboardDock;
 
+function getProgressBonusSeenStorageKey(userId: string | undefined, gameId: string | null) {
+  return `${PROGRESS_BONUS_SEEN_STORAGE_PREFIX}:${userId || 'anonymous'}:${gameId || 'default'}`;
+}
+
+function readSeenProgressBonusCardIds(storageKey: string) {
+  try {
+    const rawValue = localStorage.getItem(storageKey);
+    if (!rawValue) return new Set<string>();
+
+    const parsedValue = JSON.parse(rawValue);
+    return new Set(
+      Array.isArray(parsedValue)
+        ? parsedValue.filter((value): value is string => typeof value === 'string')
+        : []
+    );
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeSeenProgressBonusCardIds(storageKey: string, seenCardIds: ReadonlySet<string>) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify([...seenCardIds]));
+  } catch {
+    // Local persistence is best-effort; the ribbon will simply return next session.
+  }
+}
+
+function withProgressBonusNewRibbonState(
+  cards: [PlayingCardData, ...PlayingCardData[]],
+  seenCardIds: ReadonlySet<string>,
+  markCardSeen: (cardId: string | undefined) => void,
+  isProgressPage: boolean
+): [PlayingCardData, ...PlayingCardData[]] {
+  return cards.map((card) => {
+    const shouldShowNewRibbon = Boolean(isProgressPage && card.id && !card.faceDown && !seenCardIds.has(card.id));
+    const ribbonText = shouldShowNewRibbon ? card.front?.ribbonText || card.ribbonLabel || card.ribbonText : undefined;
+
+    return {
+      ...card,
+      ribbonLabel: ribbonText,
+      ribbonText,
+      front: card.front
+        ? {
+            ...card.front,
+            ribbonText,
+          }
+        : card.front,
+      onPointerEnter: isProgressPage ? () => markCardSeen(card.id) : undefined,
+    };
+  }) as [PlayingCardData, ...PlayingCardData[]];
+}
+
 function mergeGuilds(primaryGuilds: readonly DockGuild[], secondaryGuilds: readonly DockGuild[]) {
   const guildMap = new Map<string, DockGuild>();
 
@@ -684,6 +799,39 @@ function mergeGuilds(primaryGuilds: readonly DockGuild[], secondaryGuilds: reado
   });
 
   return Array.from(guildMap.values());
+}
+
+function upsertGuild(guilds: readonly DockGuild[], guild: DockGuild) {
+  return [guild, ...guilds.filter((item) => item.id !== guild.id && slugify(item.name) !== slugify(guild.name))];
+}
+
+function GuildIconSelectionPanel({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (iconKey: string) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-gaming-border bg-gaming-base/60 p-3">
+      <h4 className="font-display text-xs font-black uppercase tracking-[0.2em] text-text-secondary">
+        Guild icon
+      </h4>
+      <Suspense
+        fallback={
+          <div className="rounded-xl border border-gaming-border bg-gaming-base px-3 py-4 text-sm text-text-muted">
+            Loading icon selector...
+          </div>
+        }
+      >
+        <LucideIconSelector
+          value={value}
+          onChange={onChange}
+          searchPlaceholder="Search guild icons, e.g. shield, gem, crown..."
+        />
+      </Suspense>
+    </div>
+  );
 }
 
 function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...PlayingCardData[]] {
@@ -717,6 +865,7 @@ function makeEditableDashboardCard({
 }): PlayingCardData {
   const frontSideKey = `${cardKey}:front`;
   const backSideKey = `${cardKey}:back`;
+  const canEditStats = card.kind !== 'guild';
   const front = applyEditableSide({
     side: card.front || {
       title: card.title || 'Card',
@@ -734,6 +883,7 @@ function makeEditableDashboardCard({
     override: sideOverrides[frontSideKey],
     onFieldChange,
     onStatChange,
+    canEditStats,
   });
   const back = isEditablePlayingCardSide(card.back)
     ? applyEditableSide({
@@ -742,6 +892,7 @@ function makeEditableDashboardCard({
         override: sideOverrides[backSideKey],
         onFieldChange,
         onStatChange,
+        canEditStats,
       })
     : card.back;
 
@@ -763,12 +914,14 @@ function applyEditableSide({
   override,
   onFieldChange,
   onStatChange,
+  canEditStats,
 }: {
   side: PlayingCardSide;
   sideKey: string;
   override?: EditableCardSideOverride;
   onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
   onStatChange: (sideKey: string, statId: string, value: number) => void;
+  canEditStats: boolean;
 }): PlayingCardSide {
   return {
     ...side,
@@ -779,11 +932,11 @@ function applyEditableSide({
     ribbonText: override?.ribbonText ?? side.ribbonText,
     stats: side.stats?.map((stat) => ({
       ...stat,
-      value: override?.stats?.[stat.id] ?? stat.value,
+      value: canEditStats ? override?.stats?.[stat.id] ?? stat.value : stat.value,
     })),
     editable: true,
     onFieldChange: (field, value) => onFieldChange(sideKey, field, value),
-    onStatChange: (statId, value) => onStatChange(sideKey, statId, value),
+    onStatChange: canEditStats ? (statId, value) => onStatChange(sideKey, statId, value) : undefined,
   };
 }
 

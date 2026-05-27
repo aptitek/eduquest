@@ -6,6 +6,7 @@ import { cn } from '../../../utils/cn';
 export interface RadarGraphAxis {
   id: string;
   label: string;
+  min?: number;
   max?: number;
 }
 
@@ -14,6 +15,10 @@ export interface RadarGraphDataset {
   label: string;
   values: Record<string, number>;
   color?: string;
+  fillOpacity?: number;
+  strokeOpacity?: number;
+  strokeWidth?: number;
+  strokeDasharray?: string;
 }
 
 export interface RadarGraphProps {
@@ -23,6 +28,10 @@ export interface RadarGraphProps {
   levels?: number;
   showLabels?: boolean;
   editable?: boolean;
+  editableDatasetId?: string;
+  remainingValue?: number;
+  remainingValueLabel?: string;
+  getEditableRange?: (axisId: string, currentValue: number) => { min: number; max: number };
   onValueChange?: (axisId: string, value: number) => void;
   className?: string;
 }
@@ -60,9 +69,11 @@ function clampRatio(value: number, max: number) {
   return Math.min(Math.max(value / max, 0), 1);
 }
 
-function clampValue(value: number, max: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(Math.max(Math.round(value), 0), max);
+function clampValue(value: number, min: number, max: number) {
+  const safeMin = Number.isFinite(min) ? min : 0;
+  const safeMax = Number.isFinite(max) ? Math.max(max, safeMin) : safeMin;
+  if (!Number.isFinite(value)) return safeMin;
+  return Math.min(Math.max(Math.round(value), safeMin), safeMax);
 }
 
 export function RadarGraph({
@@ -72,6 +83,10 @@ export function RadarGraph({
   levels = 4,
   showLabels = true,
   editable = false,
+  editableDatasetId,
+  remainingValue,
+  remainingValueLabel,
+  getEditableRange,
   onValueChange,
   className,
 }: RadarGraphProps) {
@@ -82,7 +97,8 @@ export function RadarGraph({
   const size = useElementSize(containerRef);
   const safeLevels = Math.max(Math.floor(levels), 1);
   const showInlineAxisLabels = size.width >= 180;
-  const canEdit = editable && Boolean(onValueChange) && Boolean(datasets[0]);
+  const editableDataset = datasets.find((dataset) => dataset.id === editableDatasetId) || datasets[0];
+  const canEdit = editable && Boolean(onValueChange) && Boolean(editableDataset);
 
   const chart = useMemo(() => {
     const usableAxes = axes.filter((axis) => axis.id);
@@ -117,18 +133,25 @@ export function RadarGraph({
         id: dataset.id,
         label: dataset.label,
         color,
+        fillOpacity: dataset.fillOpacity ?? 0.22,
+        strokeOpacity: dataset.strokeOpacity ?? 1,
+        strokeWidth: dataset.strokeWidth ?? 1,
+        strokeDasharray: dataset.strokeDasharray,
         points: toPolygonPoints(points),
       };
     });
-    const primaryDataset = datasets[0];
     const axisMarkers = usableAxes.map((axis, axisIndex) => {
       const axisMax = axis.max ?? maxValue ?? 100;
-      const ratio = primaryDataset ? clampRatio(primaryDataset.values[axis.id] ?? 0, axisMax) : 1;
+      const value = editableDataset?.values[axis.id] ?? 0;
+      const ratio = editableDataset ? clampRatio(value, axisMax) : 1;
+      const editableRange = getResolvedEditableRange(axis, value, getEditableRange);
 
       return {
         axis,
         angle: angles[axisIndex],
-        value: primaryDataset?.values[axis.id] ?? 0,
+        value,
+        min: editableRange.min,
+        editableMax: editableRange.max,
         max: axisMax,
         point: polarToCartesian(angles[axisIndex], RADIUS * ratio),
       };
@@ -140,7 +163,7 @@ export function RadarGraph({
       datasetPolygons,
       axisMarkers,
     };
-  }, [axes, datasets, maxValue, safeLevels]);
+  }, [axes, datasets, editableDataset, getEditableRange, maxValue, safeLevels]);
 
   const updateAxisFromPointer = (
     event: PointerEvent<SVGSVGElement | SVGCircleElement>,
@@ -159,14 +182,16 @@ export function RadarGraph({
     const projection =
       ((cursor.x - CENTER) * Math.cos(angle) + (cursor.y - CENTER) * Math.sin(angle)) / RADIUS;
     const axisMax = axis.max ?? maxValue ?? 100;
+    const currentValue = editableDataset?.values[axis.id] ?? axis.min ?? 0;
+    const range = getResolvedEditableRange(axis, currentValue, getEditableRange);
 
-    onValueChange(axis.id, clampValue(projection * axisMax, axisMax));
+    onValueChange(axis.id, clampValue(projection * axisMax, range.min, range.max));
   };
 
   const updateAxisByStep = (axis: RadarGraphAxis, currentValue: number, step: number) => {
     if (!canEdit || !onValueChange) return;
-    const axisMax = axis.max ?? maxValue ?? 100;
-    onValueChange(axis.id, clampValue(currentValue + step, axisMax));
+    const range = getResolvedEditableRange(axis, currentValue, getEditableRange);
+    onValueChange(axis.id, clampValue(currentValue + step, range.min, range.max));
   };
 
   const handleMarkerKeyDown = (
@@ -239,16 +264,50 @@ export function RadarGraph({
             <polygon
               points={polygon.points}
               fill={polygon.color}
-              fillOpacity="0.22"
+              fillOpacity={polygon.fillOpacity}
               stroke={polygon.color}
-              strokeWidth="1"
+              strokeOpacity={polygon.strokeOpacity}
+              strokeWidth={polygon.strokeWidth}
+              strokeDasharray={polygon.strokeDasharray}
               strokeLinejoin="round"
             />
           </g>
         ))}
 
+        {remainingValue !== undefined ? (
+          <g className="pointer-events-none">
+            <circle
+              cx={CENTER}
+              cy={CENTER}
+              r="9.5"
+              className="fill-gaming-card/90 stroke-gaming-border"
+              strokeWidth="0.55"
+            />
+            <text
+              x={CENTER}
+              y={CENTER - 1.4}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-text-primary text-[0.48rem] font-bold"
+            >
+              {remainingValue}
+            </text>
+            {remainingValueLabel ? (
+              <text
+                x={CENTER}
+                y={CENTER + 5.2}
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="fill-text-muted text-[0.18rem] font-bold uppercase tracking-widest"
+              >
+                {remainingValueLabel}
+              </text>
+            ) : null}
+          </g>
+        ) : null}
+
         {showLabels
-          ? chart.axisMarkers.map(({ axis, angle, max, point, value }) => (
+          ? chart.axisMarkers.map(({ axis, angle, editableMax, min, max, point, value }) => (
               <circle
                 key={axis.id}
                 cx={point.x}
@@ -263,9 +322,9 @@ export function RadarGraph({
                 role={canEdit ? 'slider' : undefined}
                 tabIndex={canEdit ? 0 : undefined}
                 aria-label={canEdit ? `${axis.label} value` : undefined}
-                aria-valuemin={canEdit ? 0 : undefined}
-                aria-valuemax={canEdit ? max : undefined}
-                aria-valuenow={canEdit ? clampValue(value, max) : undefined}
+                aria-valuemin={canEdit ? min : undefined}
+                aria-valuemax={canEdit ? editableMax : undefined}
+                aria-valuenow={canEdit ? clampValue(value, min, max) : undefined}
                 onPointerDown={
                   canEdit
                     ? (event) => {
@@ -322,6 +381,23 @@ export function RadarGraph({
         : null}
     </div>
   );
+}
+
+function getResolvedEditableRange(
+  axis: RadarGraphAxis,
+  currentValue: number,
+  getEditableRange?: RadarGraphProps['getEditableRange']
+) {
+  const axisMin = axis.min ?? 0;
+  const axisMax = axis.max ?? 100;
+  const customRange = getEditableRange?.(axis.id, currentValue);
+  const min = Math.max(axisMin, customRange?.min ?? axisMin);
+  const max = Math.min(axisMax, customRange?.max ?? axisMax);
+
+  return {
+    min,
+    max: Math.max(min, max),
+  };
 }
 
 function useElementSize(ref: React.RefObject<HTMLElement>) {

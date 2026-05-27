@@ -218,6 +218,7 @@ export function AccountDropdown() {
             <div className="flex-1 max-h-[70vh] overflow-y-auto">
               <InstitutionalProfileCard
                 user={user}
+                variant="dropdown"
                 onUpdateProfile={handleUpdateProfile}
                 onUploadAvatar={handleUploadAvatar}
                 institutionalEmail={
@@ -229,8 +230,6 @@ export function AccountDropdown() {
                 schoolName={latestSchool?.name}
                 schoolLogoUrl={latestSchool?.logoUrl}
                 cohort={latestCohort}
-                useRoleRibbon
-                className="shadow-none border-none rounded-none border-b border-gaming-border"
               />
             </div>
 

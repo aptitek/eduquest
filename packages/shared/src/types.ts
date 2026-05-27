@@ -100,6 +100,7 @@ export interface Guild {
   name: string;
   description?: string;
   iconUrl?: string;
+  iconKey?: string;
   color?: string; // Design accent token, e.g. quest, danger, specialist
   gold?: number;
   createdAt?: string;
@@ -199,7 +200,27 @@ export type ActivityMetadata = Record<string, unknown> & {
   geniallyUrl?: string;
   resources?: Array<{ title: string; url: string }>;
   rubricUrl?: string;
+  answerFields?: BossActivityAnswerField[];
+  boss?: {
+    projectUrl?: string;
+    gradingUrl?: string;
+    answerFields?: BossActivityAnswerField[];
+  };
 };
+
+export type BossActivityAnswerFieldKind = 'text' | 'url' | 'file';
+
+export interface BossActivityAnswerField {
+  id: string;
+  label: string;
+  kind: BossActivityAnswerFieldKind;
+  required?: boolean;
+  placeholder?: string;
+  helpText?: string;
+  accept?: string;
+  maxFiles?: number;
+  maxBytes?: number;
+}
 
 export interface ActivityStepRange {
   startStep: number;
@@ -280,9 +301,35 @@ export interface GameActivityCompletion {
   completionType: GameActivityCompletionType;
   grade?: number;
   workUrl?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: GameActivityCompletionMetadata;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type GameActivityCompletionMetadata = Record<string, unknown> & {
+  bossSubmission?: BossActivitySubmission;
+};
+
+export interface BossActivitySubmission {
+  submittedAt: string;
+  fields: BossActivitySubmissionField[];
+}
+
+export interface BossActivitySubmissionField {
+  fieldId: string;
+  label: string;
+  kind: BossActivityAnswerFieldKind;
+  value?: string;
+  files?: BossActivitySubmissionFile[];
+}
+
+export interface BossActivitySubmissionFile {
+  id: string;
+  key: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  uploadedAt: string;
 }
 
 export type GameCharacterMoveType = 'enter' | 'move';
@@ -308,6 +355,9 @@ export interface GameMapOccupancyMember {
   characterClass?: GameCharacterClass;
   guildId?: string;
   guildName?: string;
+  guildIconUrl?: string;
+  guildIconKey?: string;
+  guildColor?: string;
   fromActivityId?: string;
   toActivityId?: string;
 }
@@ -318,6 +368,7 @@ export interface GameMapOccupancySegment {
   guildId?: string;
   guildName?: string;
   guildIconUrl?: string;
+  guildIconKey?: string;
   color?: string;
   members?: GameMapOccupancyMember[];
 }

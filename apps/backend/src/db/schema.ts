@@ -93,6 +93,7 @@ export const guilds = pgTable('guilds', {
   name: text('name').notNull(),
   description: text('description'),
   iconUrl: text('icon_url'),
+  iconKey: text('icon_key'),
   color: text('color'), // Code Hexa
   gold: integer('gold').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),

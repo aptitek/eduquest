@@ -41,7 +41,7 @@ export function GuildPage() {
     <GameLayout>
       <GameHeader currentView="guild" />
 
-      <div className="pb-8 pt-4">
+      <div>
         <h2 className="sr-only">{t('guild.title')}</h2>
         <section
           aria-label={t('guild.subtitle').replace('{guildName}', guildName)}

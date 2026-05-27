@@ -153,6 +153,9 @@ function updateNodeOccupanciesForMove(
     characterClass: state.character.characterClass,
     guildId: guild?.id,
     guildName: guild?.name,
+    guildIconUrl: guild?.iconUrl,
+    guildIconKey: guild?.iconKey,
+    guildColor: guild?.color,
     fromActivityId,
     toActivityId: currentActivityId,
   };
@@ -199,6 +202,7 @@ function updateNodeOccupanciesForMove(
           guildId: isGuildSegment ? guild?.id : undefined,
           guildName: isGuildSegment ? guild?.name : undefined,
           guildIconUrl: isGuildSegment ? guild?.iconUrl : undefined,
+          guildIconKey: isGuildSegment ? guild?.iconKey : undefined,
           color: isGuildSegment ? guild?.color : undefined,
           members: [],
         }

@@ -95,6 +95,10 @@ export const fr = {
       regionLabel: 'Notifications de l’en-tête',
       buttonLabel: '{label} : {count} active(s)',
       dismiss: 'Fermer la notification',
+      addCohortNotification: 'Ajouter un avis de cohorte',
+      cohortWide: 'Toute la cohorte',
+      draftTitle: 'Nouvel avis de cohorte',
+      draftDescription: 'Rédigez le message que les étudiant·es verront…',
       cohortQuest: {
         title: 'Fenêtre de quête ouverte',
         description: 'Une nouvelle quête de cohorte est disponible sur la carte.',
@@ -242,6 +246,10 @@ export const fr = {
       revokePermanently: 'Maintenir pour révoquer définitivement',
       major: 'Majeure',
       minor: 'Mineure',
+      classCards: 'Cartes de classe',
+      classCardsHint:
+        'Les stats de base sont plafonnées à 5 ; enregistrer rembourse les allocations de cohorte au-delà du plafond.',
+      saveClassCard: 'Maintenir pour sauver',
     },
     card: {
       flip: 'Retourner la carte',
@@ -268,8 +276,14 @@ export const fr = {
     remaining: 'Toutes les guildes',
     guilds: 'Annuaire des guildes',
     guildCount: 'guildes',
+    studentCount: 'étudiant·e·s',
     currentGuild: 'Vous',
     guildInitials: 'Initiales des guildes',
+    unguildedTitle: 'Sans guilde',
+    unguildedHelp:
+      'Ces étudiant·e·s appartiennent à la cohorte, mais ne sont pas encore rattaché·e·s à une guilde.',
+    unguildedRibbon: 'À assigner',
+    unguildedDescription: 'Carte temporaire de cohorte pour les profils en attente de guilde.',
   },
   progress: {
     nav: 'Progression',
@@ -278,13 +292,13 @@ export const fr = {
     nextVote: 'Disponibles au prochain vote',
   },
   character: {
-    eyebrow: 'Fiche personnage',
-    title: 'Personnage',
+    title: 'Fiche personnage',
     currentClassRibbon: 'Classe active',
     chooseClass: 'Choisir une classe',
     otherClasses: 'Autres classes disponibles',
     activeCardDescription:
       'Votre carte aventurier active. Changez de classe ci-dessous pour mettre à jour son rôle.',
+    pointsRemainingShort: 'pts',
   },
   game: {
     classes: {
@@ -442,8 +456,8 @@ export const fr = {
       chooseCohort: 'Choisir une cohorte',
       institutionalEmail: 'E-mail institutionnel',
       writeBio: 'Écrivez une bio…',
-      adminRole: 'Admin',
-      studentRole: 'Étu',
+      adminRole: 'Administrateur·rice',
+      studentRole: 'Étudiant·e',
       school: 'Aptitek',
       filterRole: 'Choisir un rôle…',
       filterSchool: 'Choisir une école…',

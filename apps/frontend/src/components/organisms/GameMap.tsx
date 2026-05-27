@@ -11,6 +11,7 @@ import { GenericGraph, GraphEdge, GraphNode, type GraphNodeAnnularSegment } from
 import { AvatarDeck, type AvatarDeckMember } from '../molecules/AvatarDeck';
 import { BookOpen, CheckCircle2, CloudFog, Compass, Flame, Hammer, HelpCircle, Lock, Shield, Snowflake, Swords, User, Users } from 'lucide-react';
 import { getActivityVisualVariant } from '../../features/game/activityPresentation';
+import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 
 interface PlayerMapMarker {
   activityId: string | null;
@@ -26,6 +27,7 @@ interface GameMapProps {
   nodeOccupancies?: GameMapNodeOccupancy[];
   playerMarker?: PlayerMapMarker;
   canEditLocked?: boolean;
+  showGuildOccupancyMarkers?: boolean;
   showCompletionState?: boolean;
   onSelectNode: (activity: Activity) => void;
 }
@@ -66,6 +68,7 @@ export function GameMap({
   nodeOccupancies = [],
   playerMarker,
   canEditLocked = false,
+  showGuildOccupancyMarkers = false,
   showCompletionState = true,
   onSelectNode,
 }: GameMapProps) {
@@ -156,6 +159,7 @@ export function GameMap({
       occupancy,
       activity: act,
       activityById,
+      showGuildOccupancyMarkers,
     });
 
     return {
@@ -314,14 +318,27 @@ function buildMapNodeMarker({
   occupancy,
   activity,
   activityById,
+  showGuildOccupancyMarkers,
 }: {
   playerMarker?: PlayerMapMarker;
   occupancy?: GameMapNodeOccupancy;
   activity: Activity;
   activityById: Map<string, Activity>;
+  showGuildOccupancyMarkers?: boolean;
 }) {
-  const guildMarkers =
-    activity.participationMode === 'guild'
+  const adminGuildGroups = showGuildOccupancyMarkers ? buildAdminGuildMarkerGroups(occupancy) : [];
+  const guildMarkers = showGuildOccupancyMarkers
+    ? adminGuildGroups.length
+      ? [
+          <AdminGuildMapMarker
+            key="admin-guilds"
+            groups={adminGuildGroups}
+            currentActivity={activity}
+            activityById={activityById}
+          />,
+        ]
+      : []
+    : activity.participationMode === 'guild'
       ? (occupancy?.segments || []).flatMap((segment) => {
           if (segment.kind !== 'guild' || !segment.members?.length) return [];
           return [
@@ -388,6 +405,122 @@ function GuildMemberMapMarker({
       }}
     />
   );
+}
+
+interface AdminGuildMarkerGroup {
+  id: string;
+  name: string;
+  iconUrl?: string;
+  iconKey?: string;
+  color: string;
+  members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>;
+}
+
+function AdminGuildMapMarker({
+  groups,
+  currentActivity,
+  activityById,
+}: {
+  groups: AdminGuildMarkerGroup[];
+  currentActivity: Activity;
+  activityById: Map<string, Activity>;
+}) {
+  const guildMembers: AvatarDeckMember[] = groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    avatarUrl: group.iconKey ? undefined : group.iconUrl,
+    icon: group.iconKey ? renderLucideIcon(group.iconKey, 18) : undefined,
+    color: group.color,
+    subtitle: `${group.members.length} present`,
+    onClick: () => openClassTarget(group.name),
+  }));
+
+  return (
+    <div className="group/admin-guild-marker relative shrink-0">
+      <AvatarDeck
+        members={guildMembers}
+        color={FALLBACK_GUILD_COLOR}
+        size="sm"
+        className="shrink-0"
+        getAvatarStyle={(member) => {
+          const group = groups.find((candidate) => candidate.id === member.id);
+          const fromActivityId = group?.members.find((occupancyMember) => occupancyMember.fromActivityId)?.fromActivityId;
+          return getTravelStyle(getTravelVector(activityById, fromActivityId, currentActivity));
+        }}
+      />
+      {groups.some((group) => group.members.length > 0) ? (
+        <div className="pointer-events-none absolute left-1/2 top-full z-[80] -translate-x-1/2 pt-2 opacity-0 transition-opacity duration-200 group-hover/admin-guild-marker:pointer-events-auto group-hover/admin-guild-marker:opacity-100 group-focus-within/admin-guild-marker:pointer-events-auto group-focus-within/admin-guild-marker:opacity-100">
+          <div className="flex flex-col gap-2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-2 shadow-2xl backdrop-blur">
+            {groups.map((group) => {
+              const avatarMembers = toAvatarMembers(group.members, group.name);
+              if (!avatarMembers.length) return null;
+
+              return (
+                <AvatarDeck
+                  key={group.id}
+                  members={avatarMembers}
+                  color={group.color}
+                  size="sm"
+                  className="min-w-0"
+                  getAvatarStyle={(member) => {
+                    const occupancyMember = group.members.find((candidate) => candidate.studentId === member.id);
+                    return getTravelStyle(getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity));
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function buildAdminGuildMarkerGroups(
+  occupancy: GameMapNodeOccupancy | undefined
+): AdminGuildMarkerGroup[] {
+  if (!occupancy) return [];
+
+  const groups = new Map<string, AdminGuildMarkerGroup>();
+
+  for (const segment of occupancy.segments) {
+    if (segment.studentCount <= 0) continue;
+
+    if (segment.kind === 'guild') {
+      const id = segment.guildId || `${occupancy.activityId}-${segment.guildName || segment.color || 'guild'}`;
+      groups.set(id, {
+        id,
+        name: segment.guildName || 'Guild',
+        iconUrl: segment.guildIconUrl,
+        iconKey: segment.guildIconKey,
+        color: segment.color || FALLBACK_GUILD_COLOR,
+        members: segment.members || [],
+      });
+      continue;
+    }
+
+    for (const member of segment.members || []) {
+      const id = member.guildId || member.guildName || `${occupancy.activityId}-unguilded`;
+      const group = groups.get(id) || {
+        id,
+        name: member.guildName || 'Unguilded',
+        iconUrl: member.guildIconUrl,
+        iconKey: member.guildIconKey,
+        color: member.guildColor || segment.color || SOLO_OCCUPANCY_COLOR,
+        members: [],
+      };
+
+      groups.set(id, {
+        ...group,
+        iconUrl: group.iconUrl || member.guildIconUrl,
+        iconKey: group.iconKey || member.guildIconKey,
+        color: group.color || member.guildColor || segment.color || SOLO_OCCUPANCY_COLOR,
+        members: [...group.members, member],
+      });
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => b.members.length - a.members.length || a.name.localeCompare(b.name));
 }
 
 function toAvatarMembers(
@@ -486,6 +619,7 @@ function buildAnnularSegments(
       total: occupancy.totalStudents,
       label: segment.guildName || `${segment.studentCount} students`,
       iconUrl: segment.guildIconUrl,
+      iconKey: segment.guildIconKey,
       kind: segment.kind,
       members: (segment.members || []).map((member) => ({
         id: member.studentId,

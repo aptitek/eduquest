@@ -83,8 +83,8 @@ export function PlayingCardArtFrame({
       className={cn(
         'overflow-hidden border border-gaming-border bg-gaming-base',
         size === 'full'
-          ? 'relative mx-1 mt-1 min-h-0 flex-1 rounded-[0.9rem]'
-          : 'absolute inset-x-3 bottom-12 top-3 rounded-[1rem]',
+          ? 'relative mx-1 mt-1 min-h-0 flex-1 rounded-[1.05rem]'
+          : 'absolute inset-x-3 bottom-12 top-3 rounded-[1.05rem]',
         className
       )}
     >
@@ -177,6 +177,7 @@ export interface PlayingCardRibbonProps {
   size: 'sm' | 'md';
   color: string;
   position?: CornerRibbonPosition;
+  className?: string;
   ribbonClassName?: string;
   layoutId?: string;
   onClick?: () => void;
@@ -189,6 +190,7 @@ export function PlayingCardRibbon({
   size,
   color,
   position = 'top-right',
+  className,
   ribbonClassName,
   layoutId,
   onClick,
@@ -201,6 +203,7 @@ export function PlayingCardRibbon({
         position={position}
         size={size}
         color={color}
+        className={className}
         ribbonClassName={ribbonClassName}
         onClick={onClick}
         ariaLabel={ariaLabel}
@@ -216,6 +219,10 @@ export interface PlayingCardStatPanelProps {
   datasets: RadarGraphDataset[];
   layoutId?: string;
   editable?: boolean;
+  editableDatasetId?: string;
+  remainingValue?: number;
+  remainingValueLabel?: string;
+  getEditableRange?: (axisId: string, currentValue: number) => { min: number; max: number };
   onValueChange?: (axisId: string, value: number) => void;
 }
 
@@ -224,6 +231,10 @@ export function PlayingCardStatPanel({
   datasets,
   layoutId,
   editable,
+  editableDatasetId,
+  remainingValue,
+  remainingValueLabel,
+  getEditableRange,
   onValueChange,
 }: PlayingCardStatPanelProps) {
   return (
@@ -236,6 +247,10 @@ export function PlayingCardStatPanel({
         axes={axes}
         datasets={datasets}
         editable={editable}
+        editableDatasetId={editableDatasetId}
+        remainingValue={remainingValue}
+        remainingValueLabel={remainingValueLabel}
+        getEditableRange={getEditableRange}
         onValueChange={onValueChange}
         className="mx-auto"
       />

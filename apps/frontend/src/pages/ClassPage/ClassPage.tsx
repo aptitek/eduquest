@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
-import { Trophy, Users } from 'lucide-react';
+import { Trophy, UserRound, Users } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { CompoundBadge } from '../../components/atoms/CompoundBadge';
-import { PlayingHandPanel } from '../../components/molecules/PlayingCard';
-import { fetchGuilds } from '../../features/game/api';
+import { PlayingCard, PlayingHandPanel, type PlayingCardData } from '../../components/molecules/PlayingCard';
+import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid/ResponsiveCardGrid';
+import { fetchClassRoster, type ClassRosterStudent } from '../../features/game/api';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
@@ -22,6 +23,7 @@ export function ClassPage() {
   const { t } = useTranslation();
   const { student, selectedGameId } = useGameStore();
   const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [unguildedStudents, setUnguildedStudents] = useState<ClassRosterStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const latestMembership =
     (selectedGameId &&
@@ -37,11 +39,17 @@ export function ClassPage() {
       try {
         const token = localStorage.getItem('eduquest_token');
         if (!token) throw new Error('Missing session token.');
-        const apiGuilds = await fetchGuilds(token, selectedGameId);
-        if (isMounted) setGuilds(apiGuilds);
+        const roster = await fetchClassRoster(token, selectedGameId);
+        if (isMounted) {
+          setGuilds(roster.guilds);
+          setUnguildedStudents(roster.unguildedStudents);
+        }
       } catch (error) {
         console.warn('Could not load class guilds.', error);
-        if (isMounted) setGuilds([]);
+        if (isMounted) {
+          setGuilds([]);
+          setUnguildedStudents([]);
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -75,6 +83,13 @@ export function ClassPage() {
       })),
     [groupedGuilds, t]
   );
+  const unguildedCards = useMemo(
+    () =>
+      [...unguildedStudents]
+        .sort((a, b) => a.displayName.localeCompare(b.displayName))
+        .map((rosterStudent) => buildUnguildedStudentCard(t, rosterStudent)),
+    [t, unguildedStudents]
+  );
   const visibleLetters = groupedGuilds.map((group) => group.letter);
   const showAlphabetScrollbar =
     remainingGuilds.length >= ALPHABET_SCROLL_MIN_GUILDS &&
@@ -102,7 +117,7 @@ export function ClassPage() {
     <GameLayout>
       <GameHeader currentView="class" />
 
-      <div className="space-y-8 pb-8 pt-4">
+      <div className="space-y-8">
         <h2 className="sr-only">{t('class.title')}</h2>
 
         <section aria-labelledby="class-podium-title" className="space-y-4">
@@ -164,9 +179,81 @@ export function ClassPage() {
             <AlphabetScrollbar letters={visibleLetters} ariaLabel={t('class.guildInitials')} />
           ) : null}
         </motion.section>
+
+        {unguildedCards.length > 0 ? (
+          <motion.section
+            layoutId="class-unguilded-students-list"
+            transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
+            aria-labelledby="class-unguilded-title"
+            className="rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg"
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <UserRound className="text-status-campfire" size={22} aria-hidden />
+              <h3 id="class-unguilded-title" className="text-xl font-bold">
+                {t('class.unguildedTitle')}
+              </h3>
+              <CompoundBadge parts={[`${unguildedCards.length} ${t('class.studentCount')}`]} />
+            </div>
+            <p className="mb-5 max-w-3xl text-sm text-text-secondary">
+              {t('class.unguildedHelp')}
+            </p>
+            <ResponsiveCardGrid
+              items={unguildedCards}
+              getKey={(card, index) => card.id || `unguilded-${index}`}
+              renderItem={(card) => (
+                <PlayingCard
+                  {...card}
+                  size="mini"
+                  interactive={false}
+                  className="mx-auto w-full max-w-xs"
+                />
+              )}
+              className="md:grid-cols-3 2xl:grid-cols-4"
+            />
+          </motion.section>
+        ) : null}
       </div>
     </GameLayout>
   );
+}
+
+function buildUnguildedStudentCard(
+  t: (path: string) => string,
+  rosterStudent: ClassRosterStudent
+): PlayingCardData {
+  const characterClass = rosterStudent.characterClass || 'scholar';
+  const classLabel = t(`game.classes.${characterClass}`);
+  const stats = rosterStudent.stats;
+
+  return {
+    id: `class-unguilded-${rosterStudent.id}`,
+    layoutId: `class-unguilded-${rosterStudent.id}`,
+    kind: 'character',
+    characterClass,
+    title: rosterStudent.displayName,
+    subtitle: classLabel,
+    illustrationUrl: rosterStudent.avatarUrl,
+    illustrationAlt: rosterStudent.displayName,
+    ribbonText: t('class.unguildedRibbon'),
+    front: {
+      title: rosterStudent.displayName,
+      subtitle: rosterStudent.institutionalEmail || rosterStudent.email || classLabel,
+      description: t('class.unguildedDescription'),
+      illustrationUrl: rosterStudent.avatarUrl,
+      illustrationAlt: rosterStudent.displayName,
+      ribbonText: t('class.unguildedRibbon'),
+      stats: stats
+        ? [
+            { id: 'strength', label: 'STR', value: stats.strength, max: 20 },
+            { id: 'dexterity', label: 'DEX', value: stats.dexterity, max: 20 },
+            { id: 'constitution', label: 'CON', value: stats.constitution, max: 20 },
+            { id: 'intelligence', label: 'INT', value: stats.intelligence, max: 20 },
+            { id: 'wisdom', label: 'WIS', value: stats.wisdom, max: 20 },
+            { id: 'charisma', label: 'CHA', value: stats.charisma, max: 20 },
+          ]
+        : undefined,
+    },
+  };
 }
 
 function ClassHandSection({
@@ -240,6 +327,7 @@ function mergeGuilds(primaryGuilds: readonly Partial<Guild>[], secondaryGuilds: 
       cohortId: guild.cohortId || 'demo',
       description: guild.description,
       iconUrl: guild.iconUrl,
+      iconKey: guild.iconKey,
       color: guild.color,
       gold: guild.gold || 0,
       createdAt: guild.createdAt || new Date().toISOString(),

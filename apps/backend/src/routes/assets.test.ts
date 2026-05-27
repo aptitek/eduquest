@@ -149,6 +149,20 @@ describe('asset routes', () => {
     expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   });
 
+  it('does not serve private boss submission objects through the public asset route', async () => {
+    const object = createR2Object('private', 'application/zip');
+    const bucket = createBucketMock(object);
+
+    const response = await app.request(
+      '/assets/boss-submissions/cohort-1/activity-1/student-1/attachments/file.zip',
+      {},
+      { ASSETS: bucket }
+    );
+
+    expect(response.status).toBe(404);
+    expect(bucket.get).not.toHaveBeenCalled();
+  });
+
   it('rejects data URLs when profile updates try to persist avatars directly', async () => {
     const token = await tokenFor({ id: 'user-1', email: 'user@test.dev', isAdmin: false });
 

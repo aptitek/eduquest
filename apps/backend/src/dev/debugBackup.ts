@@ -6,6 +6,7 @@ import type {
   GameActivityCompletion,
   GameActivityEdge,
   GameCharacter,
+  GameCharacterClassDefinition,
   GameMapRun,
   Guild,
   School,
@@ -125,6 +126,37 @@ export const DEBUG_COHORTS: Cohort[] = [
   },
 ];
 
+export const DEBUG_CHARACTER_CLASSES: GameCharacterClassDefinition[] = [
+  {
+    slug: 'scholar',
+    nameI18nKey: 'game.characterClasses.scholar',
+    baseStats: { strength: 0, dexterity: 0, constitution: 0, intelligence: 3, wisdom: 1, charisma: 0 },
+    sortOrder: 10,
+    createdAt: '2026-01-01',
+  },
+  {
+    slug: 'champion',
+    nameI18nKey: 'game.characterClasses.champion',
+    baseStats: { strength: 3, dexterity: 0, constitution: 2, intelligence: 0, wisdom: 0, charisma: 1 },
+    sortOrder: 20,
+    createdAt: '2026-01-01',
+  },
+  {
+    slug: 'guide',
+    nameI18nKey: 'game.characterClasses.guide',
+    baseStats: { strength: 0, dexterity: 3, constitution: 0, intelligence: 0, wisdom: 2, charisma: 1 },
+    sortOrder: 30,
+    createdAt: '2026-01-01',
+  },
+  {
+    slug: 'specialist',
+    nameI18nKey: 'game.characterClasses.specialist',
+    baseStats: { strength: 1, dexterity: 1, constitution: 0, intelligence: 2, wisdom: 0, charisma: 0 },
+    sortOrder: 40,
+    createdAt: '2026-01-01',
+  },
+];
+
 export const DEBUG_GUILDS: Guild[] = [
   {
     id: 'debug_guild_solarized_sentinels',
@@ -133,6 +165,7 @@ export const DEBUG_GUILDS: Guild[] = [
     name: 'Solarized Sentinels',
     description: 'Guardians of consistent UI systems.',
     color: '#268bd2',
+    iconKey: 'Shield',
     gold: 180,
     createdAt: '2026-01-01',
   },
@@ -143,6 +176,7 @@ export const DEBUG_GUILDS: Guild[] = [
     name: 'Crimson Compilers',
     description: 'Backend raiders who never leave failing checks behind.',
     color: '#dc322f',
+    iconKey: 'Terminal',
     gold: 168,
     createdAt: '2026-01-01',
   },
@@ -153,6 +187,7 @@ export const DEBUG_GUILDS: Guild[] = [
     name: 'Violet Oracles',
     description: 'Data interpreters and probability mages.',
     color: '#6c71c4',
+    iconKey: 'Gem',
     gold: 132,
     createdAt: '2026-01-01',
   },
@@ -232,6 +267,23 @@ export const DEBUG_ACTIVITIES: Activity[] = [
     cardColor: 'var(--color-solarized-red)',
     participationMode: 'solo',
     metadata: {
+      answerFields: [
+        {
+          id: 'workUrl',
+          label: 'Project URL',
+          kind: 'url',
+          placeholder: 'https://github.com/eduquest/debug-release-candidate',
+        },
+        {
+          id: 'attachments',
+          label: 'Project files',
+          kind: 'file',
+          required: false,
+          accept: '.pdf,.zip,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.json',
+          maxFiles: 3,
+          maxBytes: 10485760,
+        },
+      ],
       boss: {
         projectUrl: 'https://github.com/eduquest/debug-release-candidate',
         gradingUrl: 'https://api.eduquest.test/grade/debug-release-candidate',
@@ -543,6 +595,7 @@ export function getDebugBackup() {
     schools: DEBUG_SCHOOLS,
     campuses: DEBUG_CAMPUSES,
     cohorts: DEBUG_COHORTS,
+    characterClasses: DEBUG_CHARACTER_CLASSES,
     guilds: DEBUG_GUILDS,
     activities: DEBUG_ACTIVITIES,
     students: DEBUG_STUDENT_PROFILES,

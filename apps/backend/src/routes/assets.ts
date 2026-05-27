@@ -130,6 +130,9 @@ publicAssetRouter.get('/*', async (c) => {
   if (!key || key.includes('..')) {
     return c.text('Invalid asset key.', 400);
   }
+  if (!isPublicAssetKey(key)) {
+    return c.text('Asset not found.', 404);
+  }
 
   const object = await bucket.get(key);
   if (!object) {
@@ -184,6 +187,10 @@ function buildAssetUrl(requestUrl: string, publicBaseUrl: string | undefined, ke
 
 function encodeAssetKey(key: string) {
   return key.split('/').map(encodeURIComponent).join('/');
+}
+
+function isPublicAssetKey(key: string) {
+  return key.startsWith('users/') || key.startsWith('schools/') || key.startsWith('guilds/');
 }
 
 function sanitizeSvg(source: string) {

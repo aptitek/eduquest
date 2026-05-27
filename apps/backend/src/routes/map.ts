@@ -1,7 +1,10 @@
-import { Hono } from 'hono';
-import { and, desc, eq, inArray, or, sql, sum } from 'drizzle-orm';
+import { Hono, type Context } from 'hono';
+import { and, desc, eq, inArray, isNull, or, sql, sum } from 'drizzle-orm';
 import {
   type Activity,
+  type BossActivityAnswerField,
+  type BossActivitySubmission,
+  type BossActivitySubmissionFile,
   type ActivityStepRange,
   type CohortProgressData,
   type GameActivityCompletion,
@@ -13,6 +16,7 @@ import {
   type GameMapNodeOccupancy,
   type GameMapRun,
   type GameRewardCardPayload,
+  type Guild,
 } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
@@ -37,6 +41,7 @@ import {
   DEBUG_COHORTS,
   DEBUG_GUILDS,
   DEBUG_MAP_RUN,
+  DEBUG_STUDENT_PROFILES,
 } from '../dev/debugBackup';
 import type { UserPayload } from '../middleware/auth';
 import { isMockDataEnabled } from '../config/runtime';
@@ -47,10 +52,12 @@ type Bindings = {
   APP_ENV?: string;
   ENABLE_MOCK_DATA?: string;
   DATABASE_URL?: string;
+  ASSETS?: R2Bucket;
 };
 type Variables = {
   user?: UserPayload;
 };
+type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 const DEBUG_COHORT_PROGRESS: CohortProgressData = {
   gauge: {
@@ -84,8 +91,14 @@ type MapRunRecord = typeof gameMapRuns.$inferSelect;
 type CohortMembershipRecord = typeof cohortMemberships.$inferSelect;
 type StudentRecord = typeof students.$inferSelect;
 type CohortRecord = typeof cohorts.$inferSelect;
+type GuildRecord = typeof guilds.$inferSelect;
 type ProgressMilestoneRecord = typeof progressMilestones.$inferSelect;
 type Database = ReturnType<typeof getDb>;
+
+type CompletionSubmissionPayload = {
+  workUrl?: string;
+  metadata?: Record<string, unknown>;
+};
 
 interface MapOccupancyMember {
   studentId: string;
@@ -99,11 +112,38 @@ interface MapOccupancyMember {
   guildId?: string | null;
   guildName?: string | null;
   guildIconUrl?: string | null;
+  guildIconKey?: string | null;
   guildColor?: string | null;
+}
+
+interface ClassRosterStudentRecord extends MapOccupancyMember {
+  userId: string;
+  institutionalEmail?: string | null;
+  strength?: number | null;
+  dexterity?: number | null;
+  constitution?: number | null;
+  intelligence?: number | null;
+  wisdom?: number | null;
+  charisma?: number | null;
 }
 
 function toIsoString(value?: Date | null) {
   return value?.toISOString?.();
+}
+
+function toGuildPayload(guild: GuildRecord): Guild {
+  return {
+    id: guild.id,
+    cohortId: guild.cohortId,
+    name: guild.name,
+    description: guild.description || undefined,
+    iconUrl: guild.iconUrl || undefined,
+    iconKey: guild.iconKey || undefined,
+    color: guild.color || undefined,
+    gold: guild.gold,
+    createdAt: guild.createdAt?.toISOString?.(),
+    updatedAt: guild.updatedAt?.toISOString?.(),
+  };
 }
 
 function toMapRun(record: MapRunRecord): GameMapRun {
@@ -163,6 +203,299 @@ function getCompletionType(activity: Pick<ActivityRecord, 'type' | 'isGraded'>):
   if (activity.type === 'boss' || activity.type === 'mini_boss') return 'battle';
   if (activity.isGraded) return 'submission';
   return 'read';
+}
+
+const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
+  {
+    id: 'workUrl',
+    label: 'Project URL',
+    kind: 'url',
+    placeholder: 'https://github.com/your-team/project',
+  },
+  {
+    id: 'attachments',
+    label: 'Project files',
+    kind: 'file',
+    required: false,
+    accept: '.pdf,.zip,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.json',
+    maxFiles: 3,
+    maxBytes: 10 * 1024 * 1024,
+  },
+];
+
+const BLOCKED_SUBMISSION_CONTENT_TYPES = new Set([
+  'image/svg+xml',
+  'text/html',
+  'application/javascript',
+  'text/javascript',
+]);
+
+function getBossAnswerFields(activity: Pick<ActivityRecord, 'type' | 'metadata'>): BossActivityAnswerField[] {
+  if (activity.type !== 'boss' && activity.type !== 'mini_boss') return [];
+
+  const metadata = (activity.metadata || {}) as Record<string, unknown>;
+  const nestedBoss = metadata.boss && typeof metadata.boss === 'object'
+    ? (metadata.boss as Record<string, unknown>)
+    : undefined;
+  const configuredFields = Array.isArray(metadata.answerFields)
+    ? (metadata.answerFields as unknown[])
+    : Array.isArray(nestedBoss?.answerFields)
+      ? nestedBoss.answerFields
+      : undefined;
+  const normalized = normalizeBossAnswerFields(configuredFields);
+
+  return normalized.length > 0 ? normalized : DEFAULT_BOSS_ANSWER_FIELDS;
+}
+
+function normalizeBossAnswerFields(value: unknown): BossActivityAnswerField[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item): BossActivityAnswerField[] => {
+    if (!item || typeof item !== 'object') return [];
+    const candidate = item as Record<string, unknown>;
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+    const kind = candidate.kind;
+    if (!id || !/^[a-zA-Z0-9_-]{1,64}$/.test(id) || !label) return [];
+    if (kind !== 'text' && kind !== 'url' && kind !== 'file') return [];
+
+    return [
+      {
+        id,
+        label,
+        kind,
+        required: candidate.required === true,
+        placeholder: typeof candidate.placeholder === 'string' ? candidate.placeholder : undefined,
+        helpText: typeof candidate.helpText === 'string' ? candidate.helpText : undefined,
+        accept: typeof candidate.accept === 'string' ? candidate.accept : undefined,
+        maxFiles:
+          typeof candidate.maxFiles === 'number' && Number.isInteger(candidate.maxFiles) && candidate.maxFiles > 0
+            ? Math.min(candidate.maxFiles, 10)
+            : undefined,
+        maxBytes:
+          typeof candidate.maxBytes === 'number' && Number.isInteger(candidate.maxBytes) && candidate.maxBytes > 0
+            ? Math.min(candidate.maxBytes, 25 * 1024 * 1024)
+            : undefined,
+      },
+    ];
+  });
+}
+
+async function parseCompletionSubmission(
+  c: AppContext,
+  activity: Pick<ActivityRecord, 'id' | 'type' | 'metadata'>,
+  studentRecord: Pick<StudentRecord, 'id'>,
+  membership: Pick<CohortMembershipRecord, 'cohortId'>
+): Promise<CompletionSubmissionPayload | Response> {
+  const answerFields = getBossAnswerFields(activity);
+  if (answerFields.length === 0) return {};
+
+  const contentType = c.req.header('content-type') || '';
+  const textAnswers = new Map<string, string>();
+  const filesByField = new Map<string, File[]>();
+
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await c.req.raw.formData();
+    const answersValue = formData.get('answers');
+    if (typeof answersValue === 'string') {
+      try {
+        parseAnswerJson(answersValue, textAnswers);
+      } catch {
+        return c.json({ success: false, error: 'Invalid answer payload.' }, 400);
+      }
+    }
+
+    formData.forEach((value, key) => {
+      if (key.startsWith('field:') && typeof value === 'string') {
+        textAnswers.set(key.slice('field:'.length), value);
+      }
+      if (key.startsWith('file:') && value instanceof File) {
+        const fieldId = key.slice('file:'.length);
+        filesByField.set(fieldId, [...(filesByField.get(fieldId) || []), value]);
+      }
+    });
+  } else if (contentType.includes('application/json')) {
+    const body = await c.req.json().catch(() => ({}));
+    if (body && typeof body === 'object') {
+      const candidate = body as Record<string, unknown>;
+      try {
+        parseAnswerJson(candidate.answers, textAnswers);
+      } catch {
+        return c.json({ success: false, error: 'Invalid answer payload.' }, 400);
+      }
+    }
+  }
+
+  const uploadedAt = new Date().toISOString();
+  const fields: BossActivitySubmission['fields'] = [];
+  let workUrl: string | undefined;
+
+  for (const field of answerFields) {
+    let value: string | undefined;
+    try {
+      value = field.kind === 'file' ? undefined : normalizeAnswerValue(field, textAnswers.get(field.id));
+    } catch (error) {
+      return c.json(
+        { success: false, error: error instanceof Error ? error.message : 'Invalid answer value.' },
+        400
+      );
+    }
+    const files = filesByField.get(field.id) || [];
+
+    if (field.kind === 'file') {
+      const maxFiles = field.maxFiles || 1;
+      if (files.length > maxFiles) {
+        return c.json({ success: false, error: `${field.label} accepts at most ${maxFiles} file(s).` }, 400);
+      }
+    }
+
+    if (field.required && !value && files.length === 0) {
+      return c.json({ success: false, error: `${field.label} is required.` }, 400);
+    }
+
+    let uploadedFiles: BossActivitySubmissionFile[] | undefined;
+    if (files.length > 0) {
+      const uploadResult = await uploadSubmissionFiles(c, {
+        files,
+        field,
+        cohortId: membership.cohortId,
+        activityId: activity.id,
+        studentId: studentRecord.id,
+        uploadedAt,
+      });
+      if (uploadResult instanceof Response) return uploadResult;
+      uploadedFiles = uploadResult;
+    }
+
+    if (field.kind === 'url' && value && !workUrl) {
+      workUrl = value;
+    }
+
+    fields.push({
+      fieldId: field.id,
+      label: field.label,
+      kind: field.kind,
+      value,
+      files: uploadedFiles,
+    });
+  }
+
+  if (!fields.some((field) => field.value || (field.files && field.files.length > 0))) {
+    return c.json({ success: false, error: 'At least one boss answer is required.' }, 400);
+  }
+
+  return {
+    workUrl,
+    metadata: {
+      bossSubmission: {
+        submittedAt: uploadedAt,
+        fields,
+      },
+    },
+  };
+}
+
+function parseAnswerJson(value: unknown, textAnswers: Map<string, string>) {
+  const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : value;
+  if (!Array.isArray(parsed)) return;
+
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
+    const candidate = item as Record<string, unknown>;
+    const fieldId = typeof candidate.fieldId === 'string' ? candidate.fieldId : undefined;
+    const answerValue = typeof candidate.value === 'string' ? candidate.value : undefined;
+    if (fieldId && answerValue !== undefined) {
+      textAnswers.set(fieldId, answerValue);
+    }
+  }
+}
+
+function normalizeAnswerValue(field: BossActivityAnswerField, rawValue: string | undefined) {
+  const value = rawValue?.trim();
+  if (!value) return undefined;
+  if (value.length > 4000) {
+    throw new Error(`${field.label} is too long.`);
+  }
+  if (field.kind === 'url') {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error(`${field.label} must be an http(s) URL.`);
+    }
+    return url.toString();
+  }
+  return value;
+}
+
+async function uploadSubmissionFiles(
+  c: AppContext,
+  options: {
+    files: File[];
+    field: BossActivityAnswerField;
+    cohortId: string;
+    activityId: string;
+    studentId: string;
+    uploadedAt: string;
+  }
+): Promise<BossActivitySubmissionFile[] | Response> {
+  const bucket = c.env.ASSETS;
+  if (!bucket) {
+    return c.json({ success: false, error: 'Project file storage is not configured.' }, 503);
+  }
+
+  const uploadedFiles: BossActivitySubmissionFile[] = [];
+  const maxBytes = options.field.maxBytes || 10 * 1024 * 1024;
+
+  for (const file of options.files) {
+    const contentType = normalizeSubmissionContentType(file.type);
+    if (file.size <= 0) {
+      return c.json({ success: false, error: `${file.name || options.field.label} is empty.` }, 400);
+    }
+    if (file.size > maxBytes) {
+      return c.json({ success: false, error: `${file.name || options.field.label} is too large.` }, 400);
+    }
+    if (BLOCKED_SUBMISSION_CONTENT_TYPES.has(contentType)) {
+      return c.json({ success: false, error: `${contentType} files are not allowed.` }, 400);
+    }
+
+    const fileId = crypto.randomUUID();
+    const safeName = sanitizeFileName(file.name || 'submission.bin');
+    const key = `boss-submissions/${options.cohortId}/${options.activityId}/${options.studentId}/${options.field.id}/${fileId}-${safeName}`;
+
+    await bucket.put(key, await file.arrayBuffer(), {
+      httpMetadata: {
+        contentType,
+      },
+      customMetadata: {
+        kind: 'boss-submission',
+        fieldId: options.field.id,
+        activityId: options.activityId,
+        studentId: options.studentId,
+      },
+    });
+
+    uploadedFiles.push({
+      id: fileId,
+      key,
+      fileName: safeName,
+      contentType,
+      size: file.size,
+      uploadedAt: options.uploadedAt,
+    });
+  }
+
+  return uploadedFiles;
+}
+
+function normalizeSubmissionContentType(type: string) {
+  return type === 'image/jpg' ? 'image/jpeg' : type || 'application/octet-stream';
+}
+
+function sanitizeFileName(name: string) {
+  return name
+    .normalize('NFKD')
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'submission.bin';
 }
 
 function toActivity(
@@ -227,6 +560,26 @@ function formatOccupancyMemberName(member: MapOccupancyMember) {
   return member.displayName || fullName || member.email || 'Unknown player';
 }
 
+function toClassRosterStudent(student: ClassRosterStudentRecord) {
+  return {
+    id: student.studentId,
+    userId: student.userId,
+    displayName: formatOccupancyMemberName(student),
+    email: student.email || undefined,
+    institutionalEmail: student.institutionalEmail || undefined,
+    avatarUrl: student.avatarUrl || student.githubAvatarUrl || undefined,
+    characterClass: toCharacterClass(student.characterClass),
+    stats: {
+      strength: student.strength || 0,
+      dexterity: student.dexterity || 0,
+      constitution: student.constitution || 0,
+      intelligence: student.intelligence || 0,
+      wisdom: student.wisdom || 0,
+      charisma: student.charisma || 0,
+    },
+  };
+}
+
 function toCharacterClass(value?: string | null): GameCharacterClass | undefined {
   return value === 'scholar' || value === 'champion' || value === 'guide' || value === 'specialist'
     ? value
@@ -268,6 +621,9 @@ function buildNodeOccupancies(
       characterClass: toCharacterClass(member.characterClass),
       guildId: member.guildId || undefined,
       guildName: member.guildName || undefined,
+      guildIconUrl: member.guildIconUrl || undefined,
+      guildIconKey: member.guildIconKey || undefined,
+      guildColor: member.guildColor || undefined,
       fromActivityId: move.fromActivityId || undefined,
       toActivityId: move.toActivityId,
     };
@@ -281,6 +637,7 @@ function buildNodeOccupancies(
         guildId: member.guildId || undefined,
         guildName: member.guildName || undefined,
         guildIconUrl: member.guildIconUrl || undefined,
+        guildIconKey: member.guildIconKey || undefined,
         color: member.guildColor || undefined,
         studentCount: 1,
         members: [segmentMember],
@@ -439,6 +796,7 @@ function buildDebugMapData(includeStepRanges = false): GameMapData {
             guildId: DEBUG_GUILDS[1]?.id,
             guildName: DEBUG_GUILDS[1]?.name,
             guildIconUrl: DEBUG_GUILDS[1]?.iconUrl,
+            guildIconKey: DEBUG_GUILDS[1]?.iconKey,
             color: DEBUG_GUILDS[1]?.color,
             studentCount: 1,
             members: [
@@ -458,6 +816,7 @@ function buildDebugMapData(includeStepRanges = false): GameMapData {
             guildId: DEBUG_GUILDS[2]?.id,
             guildName: DEBUG_GUILDS[2]?.name,
             guildIconUrl: DEBUG_GUILDS[2]?.iconUrl,
+            guildIconKey: DEBUG_GUILDS[2]?.iconKey,
             color: DEBUG_GUILDS[2]?.color,
             studentCount: 1,
             members: [
@@ -732,6 +1091,33 @@ mapRouter.get('/guilds', async (c) => {
       success: true,
       source: 'mock',
       guilds: DEBUG_GUILDS,
+      unguildedStudents: DEBUG_STUDENT_PROFILES.flatMap(({ user, student, character }) => {
+        const membership = student.cohortMemberships?.find(
+          (item) => item.cohortId === (requestedCohortId || DEBUG_COHORTS[0]?.id)
+        );
+        if (!membership || membership.guildId) return [];
+
+        return [
+          toClassRosterStudent({
+            studentId: student.id,
+            userId: user.id,
+            displayName: user.displayName,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+            githubAvatarUrl: user.githubAvatarUrl,
+            institutionalEmail: membership.institutionalEmail,
+            characterClass: character.characterClass,
+            strength: character.stats.strength,
+            dexterity: character.stats.dexterity,
+            constitution: character.stats.constitution,
+            intelligence: character.stats.intelligence,
+            wisdom: character.stats.wisdom,
+            charisma: character.stats.charisma,
+          }),
+        ];
+      }),
     });
   }
 
@@ -750,6 +1136,30 @@ mapRouter.get('/guilds', async (c) => {
       .from(guilds)
       .where(eq(guilds.cohortId, cohortRecord.id))
       .orderBy(desc(guilds.gold));
+    const unguildedStudentRecords = await db
+      .select({
+        studentId: students.id,
+        userId: users.id,
+        displayName: users.displayName,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+        githubAvatarUrl: users.githubAvatarUrl,
+        institutionalEmail: cohortMemberships.institutionalEmail,
+        characterClass: gameCharacters.characterClass,
+        strength: gameCharacters.strength,
+        dexterity: gameCharacters.dexterity,
+        constitution: gameCharacters.constitution,
+        intelligence: gameCharacters.intelligence,
+        wisdom: gameCharacters.wisdom,
+        charisma: gameCharacters.charisma,
+      })
+      .from(cohortMemberships)
+      .innerJoin(students, eq(students.userId, cohortMemberships.userId))
+      .innerJoin(users, eq(users.id, cohortMemberships.userId))
+      .leftJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+      .where(and(eq(cohortMemberships.cohortId, cohortRecord.id), isNull(cohortMemberships.guildId)));
 
     return c.json({
       success: true,
@@ -760,15 +1170,85 @@ mapRouter.get('/guilds', async (c) => {
         name: guild.name,
         description: guild.description || undefined,
         iconUrl: guild.iconUrl || undefined,
+        iconKey: guild.iconKey || undefined,
         color: guild.color || undefined,
         gold: guild.gold,
         createdAt: guild.createdAt?.toISOString?.(),
         updatedAt: guild.updatedAt?.toISOString?.(),
       })),
+      unguildedStudents: unguildedStudentRecords
+        .map(toClassRosterStudent)
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     });
   } catch (error: any) {
     console.error('Guild SQL error:', error.message);
     return c.json({ success: false, error: 'Guilds could not be loaded.' }, 500);
+  }
+});
+
+mapRouter.patch('/guilds/:guildId', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const guildId = c.req.param('guildId');
+  const user = c.get('user');
+
+  let body: Partial<Pick<Guild, 'iconKey'>>;
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  const iconKey = typeof body.iconKey === 'string' ? body.iconKey.trim() : undefined;
+  if (!iconKey || !/^[A-Za-z0-9_-]{1,80}$/.test(iconKey)) {
+    return c.json({ success: false, error: 'iconKey must be a valid icon identifier.' }, 400);
+  }
+
+  if (!databaseUrl) {
+    if (!isMockDataEnabled(c.env)) {
+      return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    }
+
+    const debugGuild = DEBUG_GUILDS.find((guild) => guild.id === guildId);
+    if (!debugGuild) {
+      return c.json({ success: false, error: 'Guild not found.' }, 404);
+    }
+
+    return c.json({
+      success: true,
+      source: 'mock',
+      guild: { ...debugGuild, iconKey, updatedAt: new Date().toISOString() },
+    });
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+
+    if (!guildRecord) {
+      return c.json({ success: false, error: 'Guild not found.' }, 404);
+    }
+
+    if (!user?.isAdmin) {
+      const context = await resolveStudentCohortContext(db, user, guildRecord.cohortId);
+      if (!context || context.membership.guildId !== guildId) {
+        return c.json({ success: false, error: 'Guild update is not allowed.' }, 403);
+      }
+    }
+
+    const [updatedGuild] = await db
+      .update(guilds)
+      .set({ iconKey, updatedAt: new Date() })
+      .where(eq(guilds.id, guildId))
+      .returning();
+
+    return c.json({
+      success: true,
+      source: 'database',
+      guild: toGuildPayload(updatedGuild),
+    });
+  } catch (error: any) {
+    console.error('Guild update SQL error:', error.message);
+    return c.json({ success: false, error: 'Guild could not be updated.' }, 500);
   }
 });
 
@@ -890,6 +1370,9 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       });
     }
 
+    const submission = await parseCompletionSubmission(c, activity, studentRecord, membership);
+    if (submission instanceof Response) return submission;
+
     const [completion] = await db
       .insert(gameActivityCompletions)
       .values({
@@ -898,6 +1381,8 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
         activityId,
         completionType: getCompletionType(activity),
         grade: activity.isGraded ? 1 : null,
+        workUrl: submission.workUrl || null,
+        metadata: submission.metadata || {},
       })
       .returning();
 
@@ -1138,6 +1623,7 @@ mapRouter.get('/map', async (c) => {
           guildId: cohortMemberships.guildId,
           guildName: guilds.name,
           guildIconUrl: guilds.iconUrl,
+          guildIconKey: guilds.iconKey,
           guildColor: guilds.color,
         })
         .from(cohortMemberships)

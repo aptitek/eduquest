@@ -113,6 +113,20 @@
       "when": 1779964200000,
       "tag": "0015_activity_card_attributes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1779965100000,
+      "tag": "0016_guild_icon_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1779966000000,
+      "tag": "0017_boss_answer_fields",
+      "breakpoints": true
     }
   ]
 }

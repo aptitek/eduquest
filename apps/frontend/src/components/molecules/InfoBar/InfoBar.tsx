@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
 import { cn } from '../../../utils/cn';
 
 export type InfoBarTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -123,14 +124,16 @@ export function InfoBar({
           </button>
         ) : null}
         {onDismiss ? (
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-gaming-border/70 bg-gaming-base/60 text-text-muted transition hover:bg-gaming-base hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-            aria-label={dismissLabel}
+          <HoldToConfirmButton
+            onConfirm={onDismiss}
+            holdDuration={700}
+            shape="round"
+            variant=""
+            className="h-8 min-h-0 w-8 border border-gaming-border/70 bg-gaming-base/60 text-text-muted hover:bg-gaming-base hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
+            <span className="sr-only">{dismissLabel}</span>
             <X size={15} aria-hidden />
-          </button>
+          </HoldToConfirmButton>
         ) : null}
       </div>
     </article>

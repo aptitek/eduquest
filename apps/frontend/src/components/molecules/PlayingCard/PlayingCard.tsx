@@ -37,6 +37,7 @@ export interface PlayingCardStat {
   id: string;
   label: string;
   value: number;
+  min?: number;
   max?: number;
 }
 
@@ -60,6 +61,10 @@ export interface PlayingCardSide {
   ribbonPosition?: CornerRibbonPosition;
   stats?: PlayingCardStat[];
   statsLabel?: string;
+  statsEditable?: boolean;
+  statPointsRemaining?: number;
+  statPointsRemainingLabel?: string;
+  getStatEditableRange?: (statId: string, currentValue: number) => { min: number; max: number };
   footer?: ReactNode;
   editable?: boolean;
   ribbonEditable?: boolean;
@@ -75,11 +80,11 @@ export interface PlayingCardData {
   id?: string;
   layoutId?: string;
   disableLayoutAnimation?: boolean;
-  kind?: 'character' | 'guild';
+  kind?: 'character' | 'guild' | 'reward';
   title?: string;
   subtitle?: string;
   description?: string;
-  guild?: Pick<Guild, 'id' | 'name' | 'color' | 'iconUrl' | 'gold'>;
+  guild?: Pick<Guild, 'id' | 'name' | 'color' | 'iconUrl' | 'iconKey' | 'gold'>;
   characterClass?: GameCharacterClass;
   accentToken?: PlayingCardAccent;
   color?: CSSProperties['color'];
@@ -94,6 +99,10 @@ export interface PlayingCardData {
   ribbonClassName?: string;
   stats?: PlayingCardStat[];
   statsLabel?: string;
+  statsEditable?: boolean;
+  statPointsRemaining?: number;
+  statPointsRemainingLabel?: string;
+  getStatEditableRange?: (statId: string, currentValue: number) => { min: number; max: number };
   footer?: ReactNode;
   frontContent?: ReactNode;
   front?: PlayingCardSide;
@@ -108,6 +117,7 @@ export interface PlayingCardData {
   onStatChange?: (statId: string, value: number) => void;
   onRibbonClick?: () => void;
   onClick?: () => void;
+  onPointerEnter?: () => void;
   className?: string;
   innerClassName?: string;
   sideClassName?: string;
@@ -161,6 +171,7 @@ export function PlayingCard({
   sideClassName,
   interactive = true,
   onClick,
+  onPointerEnter,
   ...card
 }: PlayingCardProps) {
   const { t } = useTranslation();
@@ -181,6 +192,7 @@ export function PlayingCard({
       tabIndex={interactive && isActionable ? 0 : undefined}
       aria-label={isActionable ? front.title : undefined}
       onClick={onClick}
+      onPointerEnter={onPointerEnter}
       onKeyDown={(event) => {
         if (!isActionable || (event.key !== 'Enter' && event.key !== ' ')) return;
         event.preventDefault();
@@ -212,7 +224,7 @@ export function PlayingCard({
           innerClassName
         )}
       >
-        <CardFace className="absolute inset-0 [backface-visibility:hidden]">
+        <CardFace className={cn('absolute inset-0 [backface-visibility:hidden]', isFull && 'overflow-visible')}>
           {card.frontContent ? (
             card.frontContent
           ) : (
@@ -229,8 +241,13 @@ export function PlayingCard({
         </CardFace>
 
         {hasBack ? (
-          <CardFace className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-              {resolveBackContent(card, color, sideClassName, t('playingCard.backAlt'))}
+          <CardFace
+            className={cn(
+              'absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]',
+              isFull && 'overflow-visible'
+            )}
+          >
+            {resolveBackContent(card, color, sideClassName, t('playingCard.backAlt'))}
           </CardFace>
         ) : null}
       </motion.div>
@@ -279,6 +296,7 @@ function PlayingCardFront({
   if (size === 'full') {
     return (
       <FullCardSide
+        kind={card.kind}
         side={side}
         color={color}
         ribbonClassName={ribbonClassName}
@@ -297,7 +315,7 @@ function PlayingCardFront({
         )}
       >
         {side.ribbonText ? (
-          <div className="origin-top-right scale-50 opacity-0 transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100">
+          <div className="absolute inset-0 z-30 origin-top-right scale-50 opacity-0 transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100">
             <PlayingCardRibbon
               layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
               position={side.ribbonPosition || 'top-right'}
@@ -316,7 +334,7 @@ function PlayingCardFront({
         <PlayingCardArtFrame
           size="mini"
           layoutId={layoutId ? `${layoutId}-art-frame` : undefined}
-          className="absolute inset-0 rounded-[0.35rem] border-0 bg-transparent transition-all duration-300 group-hover:inset-x-3 group-hover:bottom-12 group-hover:top-3 group-hover:rounded-[1rem] group-hover:border group-hover:border-gaming-border group-hover:bg-gaming-base group-focus-within:inset-x-3 group-focus-within:bottom-12 group-focus-within:top-3 group-focus-within:rounded-[1rem] group-focus-within:border group-focus-within:border-gaming-border group-focus-within:bg-gaming-base"
+          className="absolute inset-0 rounded-[0.45rem] border-0 bg-transparent transition-all duration-300 group-hover:inset-x-3 group-hover:bottom-12 group-hover:top-3 group-hover:rounded-[1.05rem] group-hover:border group-hover:border-gaming-border group-hover:bg-gaming-base group-focus-within:inset-x-3 group-focus-within:bottom-12 group-focus-within:top-3 group-focus-within:rounded-[1.05rem] group-focus-within:border group-focus-within:border-gaming-border group-focus-within:bg-gaming-base"
           gradientClassName="opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <PlayingCardIllustration
@@ -324,7 +342,7 @@ function PlayingCardFront({
             illustrationUrl={side.illustrationUrl}
             illustrationAlt={side.illustrationAlt}
             illustration={side.illustration}
-            iconSize={24}
+            iconSize={getIllustrationIconSize(card.kind, 'nano')}
             layoutId={layoutId ? `${layoutId}-illustration` : undefined}
           />
         </PlayingCardArtFrame>
@@ -363,7 +381,7 @@ function PlayingCardFront({
           illustrationUrl={side.illustrationUrl}
           illustrationAlt={side.illustrationAlt}
           illustration={side.illustration}
-          iconSize={42}
+          iconSize={getIllustrationIconSize(card.kind, 'mini')}
           layoutId={layoutId ? `${layoutId}-illustration` : undefined}
         />
       </PlayingCardArtFrame>
@@ -379,12 +397,14 @@ function PlayingCardFront({
 }
 
 function FullCardSide({
+  kind,
   side,
   color,
   ribbonClassName,
   layoutId,
   className,
 }: {
+  kind?: PlayingCardData['kind'];
   side: PlayingCardSide;
   color: string;
   ribbonClassName?: string;
@@ -394,6 +414,7 @@ function FullCardSide({
   const { t } = useTranslation();
   const radarGraph = buildRadarGraph(side.stats, side.statsLabel || side.title, color);
   const canEdit = Boolean(side.editable);
+  const canEditStats = canEdit && side.statsEditable !== false && Boolean(side.onStatChange);
   const canEditRibbon = canEdit && side.ribbonEditable !== false;
   const updateField = (field: PlayingCardEditableField, value: string) => {
     side.onFieldChange?.(field, value);
@@ -407,7 +428,7 @@ function FullCardSide({
       <div
         aria-label={side.title}
         className={cn(
-          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-[1.1rem] border border-gaming-border bg-gaming-card/95',
+          'relative flex h-full min-h-0 flex-col overflow-visible rounded-[1.1rem] border border-gaming-border bg-gaming-card/95',
           className,
           side.className
         )}
@@ -418,6 +439,7 @@ function FullCardSide({
             position={side.ribbonPosition || 'top-right'}
             size="md"
             color={color}
+            className={getFullCardRibbonOuterEdgeClassName(side.ribbonPosition || 'top-right')}
             icon={resolveRibbonIcon(undefined, side)}
             ribbonClassName={ribbonClassName}
             onClick={side.onRibbonClick}
@@ -438,7 +460,7 @@ function FullCardSide({
         ) : null}
 
         <PlayingCardArtFrame size="full" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
-          {canEdit ? (
+          {canEdit && (!side.illustration || side.illustrationUrl) ? (
             <motion.div
               layoutId={layoutId ? `${layoutId}-illustration` : undefined}
               transition={PLAYING_CARD_TRANSITION}
@@ -464,7 +486,7 @@ function FullCardSide({
               illustrationUrl={side.illustrationUrl}
               illustrationAlt={side.illustrationAlt}
               illustration={side.illustration}
-              iconSize={72}
+              iconSize={getIllustrationIconSize(kind, 'full')}
               layoutId={layoutId ? `${layoutId}-illustration` : undefined}
             />
           )}
@@ -519,7 +541,11 @@ function FullCardSide({
               axes={radarGraph.axes}
               datasets={radarGraph.datasets}
               layoutId={layoutId ? `${layoutId}-stats` : undefined}
-              editable={canEdit && Boolean(side.onStatChange)}
+              editable={canEditStats}
+              editableDatasetId={radarGraph.editableDatasetId}
+              remainingValue={side.statPointsRemaining}
+              remainingValueLabel={side.statPointsRemainingLabel}
+              getEditableRange={side.getStatEditableRange}
               onValueChange={side.onStatChange}
             />
           ) : null}
@@ -544,6 +570,10 @@ function CardFace({ children, className }: { children: ReactNode; className?: st
   return <div className={cn('h-full min-h-0 overflow-hidden rounded-[1.1rem]', className)}>{children}</div>;
 }
 
+function getFullCardRibbonOuterEdgeClassName(position: CornerRibbonPosition) {
+  return position === 'top-left' ? '-left-2 -top-2' : '-right-2 -top-2';
+}
+
 function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
   if (card.front) {
     return {
@@ -552,6 +582,10 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
       ribbonIcon: card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
       editable: card.front.editable ?? card.editable,
       ribbonEditable: card.front.ribbonEditable ?? card.ribbonEditable,
+      statsEditable: card.front.statsEditable ?? card.statsEditable ?? card.kind !== 'guild',
+      statPointsRemaining: card.front.statPointsRemaining ?? card.statPointsRemaining,
+      statPointsRemainingLabel: card.front.statPointsRemainingLabel ?? card.statPointsRemainingLabel,
+      getStatEditableRange: card.front.getStatEditableRange || card.getStatEditableRange,
       onFieldChange: card.front.onFieldChange || card.onFieldChange,
       onStatChange: card.front.onStatChange || card.onStatChange,
       onRibbonClick: card.front.onRibbonClick || card.onRibbonClick,
@@ -573,6 +607,10 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     ribbonPosition: card.ribbonPosition,
     stats: card.stats,
     statsLabel: card.statsLabel,
+    statsEditable: card.statsEditable ?? card.kind !== 'guild',
+    statPointsRemaining: card.statPointsRemaining,
+    statPointsRemainingLabel: card.statPointsRemainingLabel,
+    getStatEditableRange: card.getStatEditableRange,
     footer: card.footer,
       editable: card.editable,
       ribbonEditable: card.ribbonEditable,
@@ -594,6 +632,18 @@ function getCharacterClassIcon(characterClass?: GameCharacterClass) {
   return undefined;
 }
 
+function getIllustrationIconSize(kind: PlayingCardData['kind'] | undefined, size: PlayingCardSize) {
+  if (kind === 'reward') {
+    if (size === 'full') return 132;
+    if (size === 'mini') return 58;
+    return 30;
+  }
+
+  if (size === 'full') return 72;
+  if (size === 'mini') return 42;
+  return 24;
+}
+
 function resolveBackContent(
   card: PlayingCardData,
   color: string,
@@ -601,7 +651,17 @@ function resolveBackContent(
   fallbackAlt: string
 ) {
   if (isPlayingCardSide(card.back)) {
-    return <FullCardSide side={card.back} color={card.back.color || color} className={className} />;
+    return (
+      <FullCardSide
+        kind={card.kind}
+        side={{
+          ...card.back,
+          statsEditable: card.back.statsEditable ?? card.statsEditable ?? card.kind !== 'guild',
+        }}
+        color={card.back.color || color}
+        className={className}
+      />
+    );
   }
 
   if (card.back && isValidElement(card.back)) {
@@ -665,22 +725,60 @@ function buildRadarGraph(stats: PlayingCardStat[] | undefined, label: string, co
   const axes: RadarGraphAxis[] = stats.map((stat) => ({
     id: stat.id,
     label: stat.label,
+    min: stat.min,
     max: stat.max,
   }));
   const values = stats.reduce<Record<string, number>>((accumulator, stat) => {
     accumulator[stat.id] = stat.value;
     return accumulator;
   }, {});
+  const minValues = stats.reduce<Record<string, number>>((accumulator, stat) => {
+    accumulator[stat.id] = stat.min ?? 0;
+    return accumulator;
+  }, {});
+  const maxValues = stats.reduce<Record<string, number>>((accumulator, stat) => {
+    accumulator[stat.id] = stat.max ?? stat.value;
+    return accumulator;
+  }, {});
+  const hasRestrictedRange = stats.some((stat) => stat.min !== undefined || stat.max !== undefined);
   const datasets: RadarGraphDataset[] = [
+    ...(hasRestrictedRange
+      ? [
+          {
+            id: 'stat-maximum',
+            label: `${label} maximum`,
+            values: maxValues,
+            color: 'var(--color-status-danger)',
+            fillOpacity: 0.12,
+            strokeOpacity: 0.85,
+            strokeWidth: 0.85,
+            strokeDasharray: '1.7 1.4',
+          },
+        ]
+      : []),
     {
       id: 'stats',
       label,
       values,
       color,
+      fillOpacity: hasRestrictedRange ? 0.2 : 0.22,
     },
+    ...(hasRestrictedRange
+      ? [
+          {
+            id: 'stat-base',
+            label: `${label} base`,
+            values: minValues,
+            color,
+            fillOpacity: 0.72,
+            strokeOpacity: 1,
+            strokeWidth: 1.15,
+          },
+        ]
+      : []),
   ];
 
-  return { axes, datasets };
+  return { axes, datasets, editableDatasetId: 'stats' };
 }
 
 export default PlayingCard;

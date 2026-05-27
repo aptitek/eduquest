@@ -11,16 +11,16 @@ export function GameLayout({ children, fitToViewport = false }: GameLayoutProps)
     <div
       className={
         fitToViewport
-          ? 'flex h-screen min-h-0 flex-col overflow-hidden bg-gaming-base pb-36 text-text-primary lg:pb-40'
-          : 'flex min-h-screen flex-col bg-gaming-base pb-36 text-text-primary lg:pb-40'
+          ? 'flex h-screen min-h-0 flex-col overflow-hidden bg-gaming-base pb-64 text-text-primary lg:pb-72'
+          : 'flex min-h-screen flex-col bg-gaming-base pb-72 text-text-primary lg:pb-80'
       }
     >
       {/* Main page view */}
       <main
         className={
           fitToViewport
-            ? 'mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-4 overflow-hidden px-3 py-3 lg:px-4 lg:py-4'
-            : 'mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8'
+            ? 'mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 overflow-hidden px-3 pb-3 pt-2 lg:px-4 lg:pb-4 lg:pt-3'
+            : 'mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 pb-4 pt-3'
         }
       >
         {children}

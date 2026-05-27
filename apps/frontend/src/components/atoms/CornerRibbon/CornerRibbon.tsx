@@ -149,7 +149,8 @@ export function CornerRibbon({
         onClick();
       }}
       className={cn(
-        'absolute top-0 z-10 block overflow-hidden',
+        'absolute top-0 z-[60] block overflow-hidden',
+        icon && 'drop-shadow-md',
         interactiveClass,
         position === 'top-left' ? 'left-0' : 'right-0',
         containerClassMap[size],
@@ -183,9 +184,10 @@ export function CornerRibbon({
       ) : null}
       <span
         className={cn(
-          'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-white shadow-md',
+          'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-white',
           ribbonClassMap[size],
           ribbonPositionClassMap[size][position],
+          icon ? 'shadow-none' : 'shadow-md',
           backgroundClassName,
           ribbonClassName
         )}

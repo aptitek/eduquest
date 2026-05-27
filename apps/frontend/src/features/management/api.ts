@@ -1,5 +1,5 @@
 import { BACKEND_BASE_URL } from '../auth/useAuth';
-import type { School, User } from '@eduquest/shared';
+import type { GameCharacterClass, GameStats, School, User } from '@eduquest/shared';
 import type { DebugBackup } from './types';
 
 type ManagementResponse =
@@ -72,6 +72,10 @@ export type ManagementStudentUpdate = {
 
 export type ManagementSchoolUpdate = Partial<Pick<School, 'logoUrl'>>;
 
+export type ManagementCharacterClassUpdate = {
+  baseStats: GameStats;
+};
+
 export type ManagementCohortInvite = {
   id: string;
   cohortId: string;
@@ -125,6 +129,35 @@ export async function updateManagementSchool(
   if (!response.ok || !data.success) {
     throw new Error(
       data.success ? 'Management update failed.' : data.error || 'Management update failed.'
+    );
+  }
+
+  return data.backup;
+}
+
+export async function updateManagementCohortCharacterClass(
+  token: string,
+  cohortId: string,
+  characterClass: GameCharacterClass,
+  update: ManagementCharacterClassUpdate
+): Promise<DebugBackup> {
+  const response = await fetch(
+    `${BACKEND_BASE_URL}/api/auth/management/cohorts/${cohortId}/character-classes/${characterClass}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(update),
+    }
+  );
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Character class update failed.' : data.error || 'Character class update failed.'
     );
   }
 

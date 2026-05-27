@@ -96,6 +96,10 @@ export const en: TranslationKeys = {
       regionLabel: 'Header notifications',
       buttonLabel: '{label}: {count} active',
       dismiss: 'Dismiss notification',
+      addCohortNotification: 'Add cohort notice',
+      cohortWide: 'Cohort-wide',
+      draftTitle: 'New cohort notice',
+      draftDescription: 'Write the message students should see…',
       cohortQuest: {
         title: 'Quest window opened',
         description: 'New cohort quest available on the map.',
@@ -243,6 +247,9 @@ export const en: TranslationKeys = {
       revokePermanently: 'Hold to revoke permanently',
       major: 'Major',
       minor: 'Minor',
+      classCards: 'Class cards',
+      classCardsHint: 'Base stats are capped at 5; saving refunds any cohort allocation above the cap.',
+      saveClassCard: 'Hold to save',
     },
     card: {
       flip: 'Flip card',
@@ -269,8 +276,14 @@ export const en: TranslationKeys = {
     remaining: 'All guilds',
     guilds: 'Guild directory',
     guildCount: 'guilds',
+    studentCount: 'students',
     currentGuild: 'You',
     guildInitials: 'Guild initials',
+    unguildedTitle: 'No guild yet',
+    unguildedHelp:
+      'These students belong to the cohort, but have not been assigned to a guild yet.',
+    unguildedRibbon: 'To assign',
+    unguildedDescription: 'Temporary cohort card for profiles waiting for a guild assignment.',
   },
   progress: {
     nav: 'Progress',
@@ -279,12 +292,12 @@ export const en: TranslationKeys = {
     nextVote: 'Available for next vote',
   },
   character: {
-    eyebrow: 'Character sheet',
-    title: 'Character',
+    title: 'Character sheet',
     currentClassRibbon: 'Active class',
     chooseClass: 'Choose a class',
     otherClasses: 'Other available classes',
     activeCardDescription: 'Your active adventurer card. Change class below to update its role.',
+    pointsRemainingShort: 'pts',
   },
   game: {
     classes: {
@@ -442,7 +455,7 @@ export const en: TranslationKeys = {
       chooseCohort: 'Choose a cohort',
       institutionalEmail: 'Institutional email',
       writeBio: 'Write a bio…',
-      adminRole: 'Admin',
+      adminRole: 'Administrator',
       studentRole: 'Student',
       school: 'Aptitek',
       filterRole: 'Choose a role…',

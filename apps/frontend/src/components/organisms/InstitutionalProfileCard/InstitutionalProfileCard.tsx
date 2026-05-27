@@ -17,6 +17,7 @@ import { formatPronounsForDisplay, PRONOUN_OPTION_IDS } from '../../../utils/pro
 
 export interface InstitutionalProfileCardProps {
   user: User;
+  variant?: InstitutionalProfileCardVariant;
   onUpdateProfile?: (data: Partial<User>) => Promise<void>;
   onUploadAvatar?: (file: File) => Promise<void>;
   onResetAvatar?: () => Promise<void>;
@@ -48,11 +49,19 @@ export interface InstitutionalProfileCardProps {
 }
 
 type NameFields = Pick<User, 'displayName' | 'firstName' | 'lastName'>;
+export type InstitutionalProfileCardVariant = 'default' | 'dropdown' | 'management';
 
 const AVATAR_SIZE = 88;
 
+const variantClassNameMap: Record<InstitutionalProfileCardVariant, string | undefined> = {
+  default: undefined,
+  dropdown: 'shadow-none border-none rounded-none border-b border-gaming-border',
+  management: 'max-w-none border-0 bg-transparent shadow-none rounded-none',
+};
+
 export function InstitutionalProfileCard({
   user,
+  variant = 'default',
   onUpdateProfile,
   onUploadAvatar,
   onResetAvatar,
@@ -84,6 +93,9 @@ export function InstitutionalProfileCard({
   const ic = (key: string) => t(`profile.institutionalCard.${key}`);
   const displayPronouns = (value?: string) =>
     value ? formatPronounsForDisplay(value, t) || ic('emptyValue') : ic('emptyValue');
+  const resolvedUseRoleRibbon = useRoleRibbon ?? variant === 'dropdown';
+  const resolvedHideRoleBadge = hideRoleBadge ?? variant === 'management';
+  const resolvedStackPronouns = stackPronouns ?? variant === 'management';
 
   const [nameDraft, setNameDraft] = useState<Partial<NameFields>>({});
   const [cohortSchoolDraft, setCohortSchoolDraft] = useState<string | null>(null);
@@ -239,8 +251,8 @@ export function InstitutionalProfileCard({
     if (!onCohortsChange) return;
     onCohortsChange(selectedCohortValues.filter((selectedCohortId) => selectedCohortId !== cohortId));
   };
-  const showRoleBadge = !hideRoleBadge;
-  const showRoleHeaderBadge = showRoleBadge && !useRoleRibbon;
+  const showRoleBadge = !resolvedHideRoleBadge;
+  const showRoleHeaderBadge = showRoleBadge && !resolvedUseRoleRibbon;
   const showBadgeHeader = showRoleHeaderBadge || Boolean(primaryCohortId);
 
   return (
@@ -248,19 +260,21 @@ export function InstitutionalProfileCard({
       <div
         className={cn(
           'card bg-gaming-card shadow-xl border border-gaming-border max-w-3xl w-full mx-auto font-body relative overflow-visible',
+          variantClassNameMap[variant],
           className
         )}
       >
-        {showRoleBadge && useRoleRibbon ? (
+        {showRoleBadge && resolvedUseRoleRibbon ? (
           <CornerRibbon
             position="top-left"
-            size="lg"
+            size="md"
             ribbonClassName={user.isAdmin ? 'bg-primary' : 'bg-status-quest'}
+            textClassName="text-[0.55rem] tracking-[0.04em]"
           >
             {roleLabel}
           </CornerRibbon>
         ) : null}
-        {!useRoleRibbon && cohortRibbonLabel ? (
+        {!resolvedUseRoleRibbon && cohortRibbonLabel ? (
           <CornerRibbon position="top-left" size="md" colorSeed={cohortRibbonColorSeed || cohortRibbonLabel}>
             {cohortRibbonLabel}
           </CornerRibbon>
@@ -270,7 +284,7 @@ export function InstitutionalProfileCard({
           <div
             className={cn(
               'flex items-center border-b border-gaming-border bg-gaming-base/40 px-4 py-2 sm:px-5',
-              cohortRibbonLabel && !showRoleHeaderBadge && 'justify-end'
+              (cohortRibbonLabel || resolvedUseRoleRibbon) && !showRoleHeaderBadge && 'justify-end'
             )}
           >
             <div className="badge badge-outline min-h-0 max-w-full gap-0 overflow-visible rounded-xl border-gaming-border bg-gaming-card p-0 text-xs font-semibold text-text-secondary shadow-sm">
@@ -376,7 +390,7 @@ export function InstitutionalProfileCard({
                     />
                   )}
                 </div>
-                {!stackPronouns && (
+                {!resolvedStackPronouns && (
                   <span
                     className={cn(
                       metaMuted,
@@ -408,7 +422,7 @@ export function InstitutionalProfileCard({
                 )}
               </div>
 
-              {stackPronouns && (
+              {resolvedStackPronouns && (
                 <div className={cn(metaMuted, 'flex min-w-0 items-center')}>
                   {readOnly ? (
                     <span>{displayPronouns(currentUser.pronouns)}</span>

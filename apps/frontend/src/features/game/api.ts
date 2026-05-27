@@ -1,7 +1,11 @@
 import type {
   Game,
+  BossActivitySubmissionField,
   CohortProgressData,
   GameActivityCompletion,
+  GameCharacterClass,
+  GameCharacterClassDefinition,
+  GameStats,
   GameCharacterMove,
   GameMapData,
   GameRewardCard,
@@ -9,6 +13,11 @@ import type {
   Guild,
 } from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
+
+export type ActivityCompletionDraft = {
+  answers?: Array<Pick<BossActivitySubmissionField, 'fieldId' | 'value'>>;
+  files?: Record<string, File[]>;
+};
 
 function withGameParam(path: string, gameId?: string | null) {
   const url = new URL(`${BACKEND_BASE_URL}${path}`);
@@ -22,6 +31,16 @@ type GamesResponse =
       games: Game[];
       selectedGameId?: string;
       source?: string;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type CharacterClassesResponse =
+  | {
+      success: true;
+      characterClasses: GameCharacterClassDefinition[];
     }
   | {
       success: false;
@@ -42,12 +61,40 @@ type GuildsResponse =
   | {
       success: true;
       guilds: Guild[];
+      unguildedStudents?: ClassRosterStudent[];
       source?: string;
     }
   | {
       success: false;
       error?: string;
     };
+
+type GuildUpdateResponse =
+  | {
+      success: true;
+      guild: Guild;
+      source?: string;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+export interface ClassRosterStudent {
+  id: string;
+  userId: string;
+  displayName: string;
+  email?: string;
+  institutionalEmail?: string;
+  avatarUrl?: string;
+  characterClass?: GameCharacterClass;
+  stats?: GameStats;
+}
+
+export interface ClassRoster {
+  guilds: Guild[];
+  unguildedStudents: ClassRosterStudent[];
+}
 
 export async function fetchSelectableGames(
   token: string,
@@ -65,6 +112,21 @@ export async function fetchSelectableGames(
   }
 
   return { games: data.games, selectedGameId: data.selectedGameId };
+}
+
+export async function fetchCharacterClasses(): Promise<GameCharacterClassDefinition[]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/character-classes`);
+  const data = (await response.json()) as CharacterClassesResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success
+        ? 'Character classes request failed.'
+        : data.error || 'Character classes request failed.'
+    );
+  }
+
+  return data.characterClasses;
 }
 
 export async function fetchCohortProgressData(
@@ -87,6 +149,10 @@ export async function fetchCohortProgressData(
 }
 
 export async function fetchGuilds(token: string, gameId?: string | null): Promise<Guild[]> {
+  return (await fetchClassRoster(token, gameId)).guilds;
+}
+
+export async function fetchClassRoster(token: string, gameId?: string | null): Promise<ClassRoster> {
   const response = await fetch(withGameParam('/api/guilds', gameId), {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -99,7 +165,33 @@ export async function fetchGuilds(token: string, gameId?: string | null): Promis
     throw new Error(data.success ? 'Guilds request failed.' : data.error || 'Guilds request failed.');
   }
 
-  return data.guilds;
+  return {
+    guilds: data.guilds,
+    unguildedStudents: data.unguildedStudents || [],
+  };
+}
+
+export async function updateGuildIcon(
+  token: string,
+  guildId: string,
+  iconKey: string
+): Promise<Guild> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ iconKey }),
+  });
+
+  const data = (await response.json()) as GuildUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Guild update failed.' : data.error || 'Guild update failed.');
+  }
+
+  return data.guild;
 }
 
 type MapResponse =
@@ -197,13 +289,18 @@ export async function fetchMapActivities(token: string, gameId?: string | null):
 export async function completeMapActivity(
   token: string,
   activityId: string,
-  gameId?: string | null
+  gameId?: string | null,
+  draft?: ActivityCompletionDraft
 ): Promise<GameActivityCompletion> {
+  const body = draft ? buildCompletionBody(draft) : undefined;
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (typeof body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
   const response = await fetch(withGameParam(`/api/map/activities/${activityId}/complete`, gameId), {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
+    body,
   });
   const data = (await response.json()) as CompleteActivityResponse;
 
@@ -214,6 +311,23 @@ export async function completeMapActivity(
   }
 
   return data.completion;
+}
+
+function buildCompletionBody(draft: ActivityCompletionDraft) {
+  const hasFiles = Object.values(draft.files || {}).some((files) => files.length > 0);
+
+  if (!hasFiles) {
+    return JSON.stringify({ answers: draft.answers || [] });
+  }
+
+  const formData = new FormData();
+  formData.set('answers', JSON.stringify(draft.answers || []));
+  for (const [fieldId, files] of Object.entries(draft.files || {})) {
+    for (const file of files) {
+      formData.append(`file:${fieldId}`, file);
+    }
+  }
+  return formData;
 }
 
 export async function moveCharacterToActivity(

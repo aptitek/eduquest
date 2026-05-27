@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { AnimatePresence, motion, type PanInfo } from 'framer-motion';
 import { Bell } from 'lucide-react';
 import { InfoBar, type InfoBarAction, type InfoBarTone } from '../../molecules/InfoBar';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -29,6 +30,7 @@ export interface HeaderNotificationAreaProps {
   visibleLimit?: number;
   dismissLabel?: string;
   emptyLabel?: ReactNode;
+  composer?: ReactNode;
   onDismiss: (id: string) => void;
   onAction?: (id: string) => void;
   className?: string;
@@ -75,6 +77,7 @@ export function HeaderNotificationArea({
   visibleLimit = 2,
   dismissLabel,
   emptyLabel,
+  composer,
   onDismiss,
   onAction,
   className,
@@ -83,7 +86,7 @@ export function HeaderNotificationArea({
   const visibleNotifications = isExpanded ? notifications : notifications.slice(0, visibleLimit);
   const resolvedDismissLabel = dismissLabel || t('dashboard.notifications.dismiss');
 
-  if (notifications.length === 0 && !emptyLabel) return null;
+  if (notifications.length === 0 && !emptyLabel && !composer) return null;
 
   return (
     <section
@@ -98,22 +101,41 @@ export function HeaderNotificationArea({
       )}
     >
       <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
-        {visibleNotifications.map((notification) => (
-          <InfoBar
-            key={notification.id}
-            title={notification.title}
-            description={notification.description}
-            meta={notification.meta}
-            icon={notification.icon}
-            tone={notification.tone}
-            action={notification.action}
-            dismissLabel={resolvedDismissLabel}
-            onDismiss={() => onDismiss(notification.id)}
-            onAction={() => onAction?.(notification.id)}
-          />
-        ))}
+        {composer}
 
-        {notifications.length === 0 ? (
+        <AnimatePresence initial={false}>
+          {visibleNotifications.map((notification) => (
+            <motion.div
+              key={notification.id}
+              layout
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.16}
+              onDragEnd={(_, info) => {
+                if (shouldDismissFromSwipe(info)) onDismiss(notification.id);
+              }}
+              initial={{ opacity: 0, x: 24, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 120, scale: 0.96 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="touch-pan-y"
+            >
+              <InfoBar
+                title={notification.title}
+                description={notification.description}
+                meta={notification.meta}
+                icon={notification.icon}
+                tone={notification.tone}
+                action={notification.action}
+                dismissLabel={resolvedDismissLabel}
+                onDismiss={() => onDismiss(notification.id)}
+                onAction={() => onAction?.(notification.id)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {notifications.length === 0 && emptyLabel ? (
           <div className="rounded-2xl border border-gaming-border bg-gaming-card/70 px-4 py-3 text-xs text-text-muted shadow-sm">
             {emptyLabel}
           </div>
@@ -121,6 +143,10 @@ export function HeaderNotificationArea({
       </div>
     </section>
   );
+}
+
+function shouldDismissFromSwipe(info: PanInfo) {
+  return Math.abs(info.offset.x) > 96 || Math.abs(info.velocity.x) > 650;
 }
 
 export default HeaderNotificationArea;

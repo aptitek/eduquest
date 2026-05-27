@@ -23,6 +23,7 @@ import {
 import { X } from 'lucide-react';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { AvatarDeck, type AvatarDeckMember } from './AvatarDeck';
+import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 import { cn } from '../../utils/cn';
 
 export interface GraphNode<TMetadata = unknown> {
@@ -52,6 +53,7 @@ export interface GraphNodeAnnularSegment {
   total: number;
   label?: string;
   iconUrl?: string;
+  iconKey?: string;
   kind?: 'guild' | 'solo';
   members?: GraphNodeAnnularMember[];
 }
@@ -921,7 +923,9 @@ function RingSectorPopover({ segment }: { segment: GraphNodeAnnularSegment }) {
           className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gaming-border bg-gaming-base text-xs font-black text-text-primary"
           style={{ borderColor: segment.color }}
         >
-          {segment.iconUrl ? (
+          {segment.iconKey ? (
+            renderLucideIcon(segment.iconKey, 20)
+          ) : segment.iconUrl ? (
             <img src={segment.iconUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             getInitials(segment.label || 'Players')

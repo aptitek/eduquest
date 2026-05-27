@@ -39,28 +39,28 @@ This file tracks the remaining project backlog. Completed items are kept only wh
 [x] When clicking on a guild card on the podium, go to the cohort tab and scroll to the respective guild
 [x] On hover on the text of the progress gauge milestones, the labels don't expand unless I hover on the circles on the progress arc
 [x] Boost button needs to be higher and bigger
-[ ] Ribbons sometimes have that weird double border/shaddow on the bottom. It seems to happen only when there's an icon
-[ ] Make the rounded border of the character illustration match the one of the border of the card in most places but especially in the nano card in the header
-[ ] When the nano card is expanded, the ribbon is hidden behind the content of the card
-[ ] in the profile dropdown, the top left ribbon is too big and the text needs to be smaller and more complete especially in French, use inclusive neutral form of the words.
-[ ] Put the current cohort badge of the students profile dropdown in the top right
-[ ] Try to unify the profile dropdown and management page profile card into one generic component.
-[ ] Remove the flip behaviour of the cohort and school cards and keep it in the student card to show the editable playing card of their character.
-[ ] In the admin dashboard, make the notification area editable so the admins can add cohort wide notification using editable texts
-[ ] The cross button of the notifications needs to be hold buttons and animate the exit of the card like swiping it away. Implement a swiping away gesture on the notification on mobile
-[ ] Change the default accent color to magenta all around the app (replace purple)
-[ ] The guild card stats are not editable either by students or admin since they are computed.
-[ ] Implement restricted editable radar graph that will have a minimum and maximum for each stats. The minimum is the base stat of the character class that is shown in full color (not transparent), in the middle add the number of remaining points the player can allocate and show in red the maximum area of the radar. Allow moving the cursors only within the possible values and prevent adding to a stat when there's no points remaining.
+[x] Ribbons sometimes have that weird double border/shaddow on the bottom. It seems to happen only when there's an icon
+[x] Make the rounded border of the character illustration match the one of the border of the card in most places but especially in the nano card in the header
+[x] When the nano card is expanded, the ribbon is hidden behind the content of the card
+[x] in the profile dropdown, the top left ribbon is too big and the text needs to be smaller and more complete especially in French, use inclusive neutral form of the words.
+[x] Put the current cohort badge of the students profile dropdown in the top right
+[x] Try to unify the profile dropdown and management page profile card into one generic component.
+[x] Remove the flip behaviour of the cohort and school cards and keep it in the student card to show the editable playing card of their character.
+[x] In the admin dashboard, make the notification area editable so the admins can add cohort wide notification using editable texts
+[x] The cross button of the notifications needs to be hold buttons and animate the exit of the card like swiping it away. Implement a swiping away gesture on the notification on mobile
+[x] Change the default accent color to magenta all around the app (replace purple)
+[x] The guild card stats are not editable either by students or admin since they are computed.
+[x] Implement restricted editable radar graph that will have a minimum and maximum for each stats. The minimum is the base stat of the character class that is shown in full color (not transparent), in the middle add the number of remaining points the player can allocate and show in red the maximum area of the radar. Allow moving the cursors only within the possible values and prevent adding to a stat when there's no points remaining.
 [ ] For radar graphs, show the stat labels outside the inner graph like STR, DEX, etc, expand on hover or when grabbed and make sure the cursor is not over the labels when displaying when grabbed
-[ ] The ribbons on the playing cards needs to ALWAYS reach the outer border of the card and be above z-index wise of all other elements.
-[ ] In the guild add an icon selection (like in the activity card, make the component generic and atomic) and replace the illustration by that icon in the avatar stack in the map. Also display that icon on the ribbon on top of the guild card
+[x] The ribbons on the playing cards needs to ALWAYS reach the outer border of the card and be above z-index wise of all other elements.
+[x] In the guild add an icon selection (like in the activity card, make the component generic and atomic) and replace the illustration by that icon in the avatar stack in the map. Also display that icon on the ribbon on top of the guild card
 [ ] players card will display class icons and name on full size and only icons on smaller sizes in the ribbon
-[ ] Make the class card editable by the admins. Be careful to recheck the math for all the characters of that cohort and moving the point allocation of the students if necessary. recalculate the stat and remove extra allocation by refunding the points
-[ ] If a student is not yet in a guild it is in a misc section in the cohort/class tab in a grid template
-[ ] Remove the excessive padding/margin on the top of all pages and add padding on the bottom to be able to scroll past the content to have space for the dashboard not covering content when scrolled all the way down
-[ ] Implement the "new" ribbon system to show the ribbon with new on it only for cards not yet hovered over in the progression tab. Keep tab of that in the database or in local if possible, Do not put new ribbon on the available on the next vote cards. Also Make sure the title "available on next vote" is not being hidden by cards.
-[ ] Make the icon bigger in reward cards especially in full mode
-[ ] Fiche personnage, Personnage is redondant in the character page keep only one
+[x] Make the class card editable by the admins. Be careful to recheck the math for all the characters of that cohort and moving the point allocation of the students if necessary. recalculate the stat and remove extra allocation by refunding the points
+[x] If a student is not yet in a guild it is in a misc section in the cohort/class tab in a grid template
+[x] Remove the excessive padding/margin on the top of all pages and add padding on the bottom to be able to scroll past the content to have space for the dashboard not covering content when scrolled all the way down
+[x] Implement the "new" ribbon system to show the ribbon with new on it only for cards not yet hovered over in the progression tab. Keep tab of that in the database or in local if possible, Do not put new ribbon on the available on the next vote cards. Also Make sure the title "available on next vote" is not being hidden by cards.
+[x] Make the icon bigger in reward cards especially in full mode
+[x] Fiche personnage, Personnage is redondant in the character page keep only one
 [ ] In the map for admin user show all guilds icons in the avatar stacks over the nodes, display characters icon only on hover
 [ ] Add a field in boss activities to let students fill various fields with answers to the boss activity of either text (mostly URL) or files to store in the project file storage R2 cloudflare
 [x] Add more fog and redo the avoid area system instead of big visible circles. If needed try to find an existing react component to draw that with a neet effect. Try to keep it light weight 

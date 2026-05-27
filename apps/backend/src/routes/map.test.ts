@@ -72,6 +72,17 @@ describe('map routes', () => {
     expect(payload.map.activities).toContainEqual(
       expect.objectContaining({ id: 'debug_activity_variables', isCurrent: true })
     );
+    expect(payload.map.activities).toContainEqual(
+      expect.objectContaining({
+        id: 'debug_activity_boss_release',
+        metadata: expect.objectContaining({
+          answerFields: expect.arrayContaining([
+            expect.objectContaining({ id: 'workUrl', kind: 'url' }),
+            expect.objectContaining({ id: 'attachments', kind: 'file' }),
+          ]),
+        }),
+      })
+    );
   });
 
   it('returns a unified activity completion when completing a node', async () => {

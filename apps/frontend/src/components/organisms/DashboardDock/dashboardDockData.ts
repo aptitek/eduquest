@@ -1,5 +1,6 @@
 import type { CohortMembership, GameCharacterClass, GameStats } from '@eduquest/shared';
 import type { PlayingCardData, PlayingHandData } from '../../molecules/PlayingCard';
+import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
 import type { DockGuild } from './types';
 
 type Translate = (path: string) => string;
@@ -35,6 +36,7 @@ export function buildPodiumCards(
     guild,
     title: guild.name,
     subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(guild.gold || 0)),
+    ribbonIcon: renderGuildIcon(guild, 18),
   });
 
   const podiumRibbonClassNames = [
@@ -90,8 +92,9 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         description:
           'A tactical guild card that tracks collective momentum, shared gold, and the next reward push.',
         color: guildColor,
-        illustrationUrl: options.guild.iconUrl,
+        illustration: renderGuildIcon(options.guild, 72, 'drop-shadow-lg'),
         ribbonText: t('dashboard.dock.playerGuild'),
+        ribbonIcon: renderGuildIcon(options.guild, 18),
         stats: [
           { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
           { id: 'quests', label: 'Quest', value: 74 },
@@ -105,6 +108,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         description: 'Guild planning notes for the next shared action.',
         color: guildColor,
         ribbonText: 'Plan',
+        ribbonIcon: renderGuildIcon(options.guild, 18),
         stats: [
           { id: 'risk', label: 'Risk', value: 42 },
           { id: 'gain', label: 'Gain', value: 86 },
@@ -221,8 +225,9 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
           description:
             'A class guild card tracking collective progress, ranking momentum, and team contribution.',
           color: guildColor,
-          illustrationUrl: options.guild.iconUrl,
+          illustration: renderGuildIcon(options.guild, 72, 'drop-shadow-lg'),
           ribbonText: t('dashboard.dock.playerGuild'),
+          ribbonIcon: renderGuildIcon(options.guild, 18),
           stats: [
             { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
             { id: 'quests', label: 'Quest', value: 72 },
@@ -309,4 +314,8 @@ function resolveCardColor(value: string | undefined) {
 
 function slugify(value: string | undefined) {
   return (value || 'guild').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function renderGuildIcon(guild: DockGuild, size: number, className?: string) {
+  return renderLucideIcon(guild.iconKey || 'Shield', size, className);
 }

@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DEFAULT_REWARD_SYSTEM_CONFIG,
+  STUDENT_ATTRIBUTES,
+  type GameCharacterClass,
+  type GameCharacterClassDefinition,
+  type GameStats,
+  type StudentAttribute,
+} from '@eduquest/shared';
 import { Clipboard, ExternalLink, Trash2, UserPlus, X } from 'lucide-react';
 import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
@@ -18,6 +26,15 @@ import { keepFocusInContainer } from '../../../utils/focusTrap';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
+const STAT_LABELS: Record<StudentAttribute, string> = {
+  strength: 'STR',
+  dexterity: 'DEX',
+  constitution: 'CON',
+  intelligence: 'INT',
+  wisdom: 'WIS',
+  charisma: 'CHA',
+};
+const STAT_CAP = DEFAULT_REWARD_SYSTEM_CONFIG.attributes.levelOneMaxValue;
 
 function formatTimeRemaining(expiresAt: string, t: (key: string) => string) {
   const remainingMs = new Date(expiresAt).getTime() - Date.now();
@@ -50,11 +67,18 @@ export function CohortDetailCard({
   cohort,
   cohortOptions,
   campusOptions,
+  characterClasses,
+  onUpdateCharacterClass,
   t,
 }: {
   cohort: CohortRow;
   cohortOptions: CohortRow[];
   campusOptions: string[];
+  characterClasses: GameCharacterClassDefinition[];
+  onUpdateCharacterClass: (
+    characterClass: GameCharacterClass,
+    baseStats: GameStats
+  ) => Promise<void>;
   t: (key: string) => string;
 }) {
   const [draft, setDraft] = useState({
@@ -71,6 +95,11 @@ export function CohortDetailCard({
   const [invites, setInvites] = useState<ManagementCohortInvite[]>([]);
   const [selectedInvite, setSelectedInvite] = useState<ManagementCohortInvite | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [classUpdateError, setClassUpdateError] = useState<string | null>(null);
+  const [savingClass, setSavingClass] = useState<GameCharacterClass | null>(null);
+  const [classDrafts, setClassDrafts] = useState<Record<string, GameStats>>(() =>
+    buildClassDrafts(characterClasses)
+  );
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [hasCopiedInvite, setHasCopiedInvite] = useState(false);
   const [isQrFullscreenOpen, setIsQrFullscreenOpen] = useState(false);
@@ -112,9 +141,16 @@ export function CohortDetailCard({
     setInvites([]);
     setSelectedInvite(null);
     setInviteError(null);
+    setClassUpdateError(null);
     setHasCopiedInvite(false);
     setIsQrFullscreenOpen(false);
   }, [cohort]);
+
+  useEffect(() => {
+    setClassDrafts(buildClassDrafts(characterClasses));
+    setClassUpdateError(null);
+    setSavingClass(null);
+  }, [characterClasses]);
 
   useEffect(() => {
     const token = localStorage.getItem('eduquest_token');
@@ -231,6 +267,37 @@ export function CohortDetailCard({
     } catch (error) {
       console.warn('Could not copy cohort invite link.', error);
       setHasCopiedInvite(false);
+    }
+  };
+
+  const updateClassDraft = (
+    characterClass: GameCharacterClass,
+    attribute: StudentAttribute,
+    value: number
+  ) => {
+    const nextValue = Math.max(0, Math.min(STAT_CAP, value));
+    setClassDrafts((current) => ({
+      ...current,
+      [characterClass]: {
+        ...current[characterClass],
+        [attribute]: nextValue,
+      },
+    }));
+  };
+
+  const saveClassDraft = async (characterClass: GameCharacterClass) => {
+    const draftStats = classDrafts[characterClass];
+    if (!draftStats) return;
+
+    setSavingClass(characterClass);
+    setClassUpdateError(null);
+    try {
+      await onUpdateCharacterClass(characterClass, draftStats);
+    } catch (error) {
+      console.warn('Could not update character class base stats.', error);
+      setClassUpdateError(t('management.errors.updateFailed'));
+    } finally {
+      setSavingClass(null);
     }
   };
 
@@ -555,6 +622,83 @@ export function CohortDetailCard({
           </div>
 
           <div className="rounded-2xl border border-gaming-border bg-gaming-base/50 p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
+                  {t('management.cohorts.classCards')}
+                </p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {t('management.cohorts.classCardsHint')}
+                </p>
+              </div>
+              <span className="badge badge-sm border-gaming-border bg-gaming-card text-text-secondary">
+                {characterClasses.length}
+              </span>
+            </div>
+
+            {classUpdateError ? (
+              <div role="alert" className="alert alert-warning mb-3 py-2 text-xs">
+                {classUpdateError}
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              {characterClasses.map((characterClass) => {
+                const draftStats = classDrafts[characterClass.slug] || characterClass.baseStats;
+                return (
+                  <div key={characterClass.slug} className="rounded-xl border border-gaming-border bg-gaming-card p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-sm font-bold text-text-primary">
+                          {t(`game.classes.${characterClass.slug}`)}
+                        </p>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">
+                          {characterClass.slug}
+                        </p>
+                      </div>
+                      <HoldToConfirmButton
+                        onConfirm={() => saveClassDraft(characterClass.slug)}
+                        holdDuration={900}
+                        variant="btn-primary"
+                        className="btn-xs rounded-lg"
+                        disabled={savingClass === characterClass.slug}
+                      >
+                        {savingClass === characterClass.slug
+                          ? t('common.loading')
+                          : t('management.cohorts.saveClassCard')}
+                      </HoldToConfirmButton>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {STUDENT_ATTRIBUTES.map((attribute) => (
+                        <label key={attribute} className="flex flex-col gap-1">
+                          <span className="text-[11px] font-bold text-text-muted">
+                            {STAT_LABELS[attribute]}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={STAT_CAP}
+                            value={draftStats[attribute]}
+                            onChange={(event) =>
+                              updateClassDraft(
+                                characterClass.slug,
+                                attribute,
+                                Number(event.currentTarget.value)
+                              )
+                            }
+                            className="input input-bordered input-xs border-gaming-border bg-gaming-base text-text-primary"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gaming-border bg-gaming-base/50 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
                 {t('management.cohorts.validInvites')}
@@ -616,4 +760,11 @@ export function CohortDetailCard({
       {inviteModal}
     </EditableFieldContext.Provider>
   );
+}
+
+function buildClassDrafts(characterClasses: GameCharacterClassDefinition[]) {
+  return characterClasses.reduce<Record<string, GameStats>>((drafts, characterClass) => {
+    drafts[characterClass.slug] = { ...characterClass.baseStats };
+    return drafts;
+  }, {});
 }

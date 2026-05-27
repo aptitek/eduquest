@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
 
 export interface AvatarBadgeProps {
   name: string;
   src?: string;
+  icon?: ReactNode;
   color?: string;
   size?: 'sm' | 'md';
   className?: string;
@@ -16,6 +18,7 @@ const SIZE_CLASS_NAMES = {
 export function AvatarBadge({
   name,
   src,
+  icon,
   color = 'var(--color-gaming-border)',
   size = 'md',
   className,
@@ -33,7 +36,9 @@ export function AvatarBadge({
       }}
       aria-label={name}
     >
-      {src ? (
+      {icon ? (
+        icon
+      ) : src ? (
         <img src={src} alt={name} className="h-full w-full object-cover" />
       ) : (
         getInitials(name)

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import {
   BookOpen,
   Castle,
@@ -16,7 +16,13 @@ import {
   Trophy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityParticipationMode, ActivityStepRange } from '@eduquest/shared';
+import type {
+  ActivityParticipationMode,
+  ActivityStepRange,
+  BossActivityAnswerField,
+  BossActivitySubmissionField,
+} from '@eduquest/shared';
+import type { ActivityCompletionDraft } from '../../features/game/api';
 import { PlayingCard, type PlayingCardEditableField, type PlayingCardSide } from '../molecules/PlayingCard';
 import { EditableList } from '../molecules/EditableList';
 import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
@@ -24,7 +30,7 @@ import { EditableText } from '../atoms/EditableText';
 import { cn } from '../../utils/cn';
 
 const LucideIconSelector = lazy(() =>
-  import('../molecules/LucideIconSelector').then((module) => ({
+  import('../atoms/LucideIconSelector').then((module) => ({
     default: module.LucideIconSelector,
   }))
 );
@@ -86,6 +92,7 @@ export interface ActivityCardData {
   mapY: number;
   stepRanges: ActivityStepRange[];
   adjacentNodes: string[];
+  answerFields?: BossActivityAnswerField[];
 }
 
 export interface ActivityCardProps {
@@ -95,7 +102,7 @@ export interface ActivityCardProps {
   isCompleted?: boolean;
   isResolving?: boolean;
   resolveError?: string | null;
-  onResolve?: () => void | Promise<void>;
+  onResolve?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
   className?: string;
 }
 
@@ -129,6 +136,7 @@ export function ActivityCard({
   className,
 }: ActivityCardProps) {
   const [draft, setDraft] = useState(activity);
+  const hasBossAnswerFields = Boolean(showCompletionAction && !isCompleted && draft.answerFields?.length);
 
   useEffect(() => {
     setDraft(activity);
@@ -198,7 +206,13 @@ export function ActivityCard({
   });
 
   return (
-    <div className={cn('flex min-h-0 justify-center', showCompletionAction && 'pb-28 pr-24', className)}>
+    <div
+      className={cn(
+        'flex min-h-0 justify-center',
+        hasBossAnswerFields ? 'flex-col items-center gap-4 overflow-y-auto pb-4' : showCompletionAction && 'pb-28 pr-24',
+        className
+      )}
+    >
       <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
         <PlayingCard
           size="full"
@@ -232,7 +246,7 @@ export function ActivityCard({
           className="h-full max-h-full w-auto max-w-full"
           sideClassName="h-full"
         />
-        {showCompletionAction ? (
+        {showCompletionAction && !hasBossAnswerFields ? (
           <div
             className={cn(
               'pointer-events-none absolute z-30 flex',
@@ -253,8 +267,132 @@ export function ActivityCard({
           </div>
         ) : null}
       </div>
+      {hasBossAnswerFields ? (
+        <BossSubmissionForm
+          fields={draft.answerFields || []}
+          isResolving={isResolving}
+          error={resolveError}
+          onSubmit={onResolve}
+        />
+      ) : null}
     </div>
   );
+}
+
+function BossSubmissionForm({
+  fields,
+  isResolving,
+  error,
+  onSubmit,
+}: {
+  fields: BossActivityAnswerField[];
+  isResolving?: boolean;
+  error?: string | null;
+  onSubmit?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
+}) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<Record<string, File[]>>({});
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const answerPayload: Array<Pick<BossActivitySubmissionField, 'fieldId' | 'value'>> = fields
+      .filter((field) => field.kind !== 'file')
+      .map((field) => ({ fieldId: field.id, value: answers[field.id]?.trim() || '' }));
+
+    void onSubmit?.({ answers: answerPayload, files });
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      className="w-full max-w-xl space-y-3 rounded-2xl border border-status-boss/30 bg-gaming-card/95 p-4 shadow-card"
+    >
+      <div>
+        <h3 className="font-display text-sm font-black uppercase tracking-[0.18em] text-status-boss">
+          Boss Submission
+        </h3>
+        <p className="text-xs text-text-muted">Submit your answer links and project files.</p>
+      </div>
+
+      {fields.map((field) => (
+        <BossSubmissionField
+          key={field.id}
+          field={field}
+          value={answers[field.id] || ''}
+          files={files[field.id] || []}
+          onValueChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
+          onFilesChange={(nextFiles) => setFiles((current) => ({ ...current, [field.id]: nextFiles }))}
+        />
+      ))}
+
+      {error ? (
+        <div role="alert" className="rounded-xl border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-xs font-semibold text-status-danger">
+          {error}
+        </div>
+      ) : null}
+
+      <button type="submit" className="btn w-full border-none bg-status-boss text-gaming-base" disabled={isResolving || !onSubmit}>
+        {isResolving ? 'Submitting...' : 'Submit Boss Answer'}
+      </button>
+    </form>
+  );
+}
+
+function BossSubmissionField({
+  field,
+  value,
+  files,
+  onValueChange,
+  onFilesChange,
+}: {
+  field: BossActivityAnswerField;
+  value: string;
+  files: File[];
+  onValueChange: (value: string) => void;
+  onFilesChange: (files: File[]) => void;
+}) {
+  const maxFiles = field.maxFiles || 1;
+  const maxBytes = field.maxBytes || 10 * 1024 * 1024;
+
+  return (
+    <label className="block space-y-1.5 text-sm">
+      <span className="font-bold text-text-secondary">
+        {field.label}
+        {field.required ? <span className="text-status-danger"> *</span> : null}
+      </span>
+      {field.kind === 'file' ? (
+        <>
+          <input
+            type="file"
+            required={field.required}
+            multiple={maxFiles > 1}
+            accept={field.accept}
+            onChange={(event) => onFilesChange(Array.from(event.target.files || []).slice(0, maxFiles))}
+            className="file-input file-input-bordered w-full border-gaming-border bg-gaming-base text-sm"
+          />
+          <p className="text-xs text-text-muted">
+            {files.length > 0 ? `${files.length}/${maxFiles} file(s) selected.` : `Up to ${maxFiles} file(s), ${formatBytes(maxBytes)} each.`}
+          </p>
+        </>
+      ) : (
+        <input
+          type={field.kind === 'url' ? 'url' : 'text'}
+          required={field.required}
+          value={value}
+          placeholder={field.placeholder}
+          onChange={(event) => onValueChange(event.target.value)}
+          className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
+        />
+      )}
+      {field.helpText ? <p className="text-xs text-text-muted">{field.helpText}</p> : null}
+    </label>
+  );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes >= 1024 * 1024) return `${Math.round(bytes / 1024 / 1024)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
 }
 
 function buildActivityFrontSide({
