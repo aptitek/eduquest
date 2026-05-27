@@ -77,6 +77,23 @@ Open the frontend automatically:
 task run-frontend-open
 ```
 
+## Docker Local Stack
+
+Run the full local stack with PostgreSQL, Drizzle migrations, the backend Worker, and the frontend:
+
+```bash
+docker compose up --build
+```
+
+Compose exposes the frontend at `http://localhost:5173`, the backend at `http://localhost:8787`, and PostgreSQL at `localhost:5432`. The database uses `eduquest` as database name, user, and password, and persists data in the `postgres_data` Docker volume.
+
+The `migrate` service runs `npm run db:migrate --workspace backend` before the backend starts. To recreate the local database from scratch:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ## Build And Checks
 
 Build all workspaces that expose a build script:
@@ -108,6 +125,14 @@ Frontend production build uses manual Vite chunks for React, Framer Motion, TanS
 ## Environment
 
 The app has explicit development and production deployment modes. Mock data and debug auth are only available when `APP_ENV`/`VITE_APP_ENV` are not `production`.
+
+Create the backend local env file before starting Wrangler:
+
+```bash
+cp apps/backend/.dev.vars.example apps/backend/.dev.vars
+```
+
+Then edit `apps/backend/.dev.vars` and set `DATABASE_URL` to a PostgreSQL database that has the project migrations applied. Wrangler loads this file when the backend runs from `apps/backend`.
 
 Frontend values:
 
@@ -144,7 +169,7 @@ logos can be uploaded locally without creating a real Cloudflare bucket. Uploade
 objects are served by the Worker at `/assets/<object-key>` unless
 `ASSET_PUBLIC_BASE_URL` is set to a custom public bucket/CDN URL.
 
-`DATABASE_URL` is required for API data, including local development auth. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; debug auth is disabled even if its flag is set.
+`DATABASE_URL` is required for API data, including local development auth. Without it, database-backed API routes return a `503` configuration error and GitHub OAuth redirects back to the frontend with `error=missing_database_url`. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; debug auth is disabled even if its flag is set.
 
 Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local starting points. Do not commit real `.env` or `.dev.vars` files.
 

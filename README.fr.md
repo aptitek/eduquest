@@ -35,7 +35,7 @@ Le dépôt est un monorepo TypeScript basé sur npm workspaces.
 - npm 9+.
 - Task, optionnel mais recommandé : [taskfile.dev](https://taskfile.dev).
 - Wrangler, installé dans les dépendances de développement racine.
-- PostgreSQL pour utiliser une vraie base. Sans `DATABASE_URL`, le backend utilise les données de debug/mock.
+- PostgreSQL pour les données de l'API backend. Sans `DATABASE_URL`, les routes adossées à la base renvoient une erreur de configuration.
 
 ## Installation
 
@@ -77,6 +77,23 @@ Lancer le frontend et ouvrir le navigateur :
 task run-frontend-open
 ```
 
+## Stack Locale Docker
+
+Lancer toute la stack locale avec PostgreSQL, les migrations Drizzle, le Worker backend et le frontend :
+
+```bash
+docker compose up --build
+```
+
+Compose expose le frontend sur `http://localhost:5173`, le backend sur `http://localhost:8787` et PostgreSQL sur `localhost:5432`. La base utilise `eduquest` comme nom de base, utilisateur et mot de passe, et conserve ses données dans le volume Docker `postgres_data`.
+
+Le service `migrate` exécute `npm run db:migrate --workspace backend` avant le démarrage du backend. Pour recréer la base locale depuis zéro :
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ## Compilation Et Vérifications
 
 Compiler tous les workspaces qui exposent un script de build :
@@ -107,9 +124,36 @@ Le build frontend utilise des chunks Vite manuels pour React, Framer Motion, Tan
 
 ## Environnement
 
-Le backend lit les bindings/variables d'environnement du Worker Cloudflare :
+L'application distingue explicitement les modes développement et production. Les données mock et l'authentification de debug sont disponibles uniquement lorsque `APP_ENV`/`VITE_APP_ENV` ne valent pas `production`.
+
+Créez le fichier d'environnement local du backend avant de lancer Wrangler :
 
 ```bash
+cp apps/backend/.dev.vars.example apps/backend/.dev.vars
+```
+
+Modifiez ensuite `apps/backend/.dev.vars` et configurez `DATABASE_URL` avec une base PostgreSQL sur laquelle les migrations du projet ont été appliquées. Wrangler charge ce fichier lorsque le backend est lancé depuis `apps/backend`.
+
+Valeurs frontend :
+
+```bash
+VITE_APP_ENV=development
+VITE_BACKEND_BASE_URL=http://localhost:8787
+VITE_ENABLE_DEV_TOOLS=true
+```
+
+Pour les builds frontend de production :
+
+```bash
+VITE_APP_ENV=production
+VITE_BACKEND_BASE_URL=https://your-api.example.com
+VITE_ENABLE_DEV_TOOLS=false
+```
+
+Valeurs du Worker backend :
+
+```bash
+APP_ENV=development
 DATABASE_URL=postgresql://...
 JWT_SECRET=...
 GITHUB_CLIENT_ID=...
@@ -119,7 +163,11 @@ FRONTEND_URL=http://localhost:5173
 ENABLE_DEBUG_AUTH=true
 ```
 
-`DATABASE_URL` est requis pour les données de l'API, y compris les flux locaux de debug. Les routes utilisent PostgreSQL via Drizzle et ne retombent plus sur des fixtures embarquées.
+Les uploads de fichiers utilisent le binding R2 `ASSETS` déclaré dans `apps/backend/wrangler.toml`. En développement, Wrangler utilise une simulation R2 locale par défaut : les photos de profil et logos d'école peuvent donc être téléversés localement sans bucket Cloudflare réel. Les objets téléversés sont servis par le Worker à l'adresse `/assets/<object-key>`, sauf si `ASSET_PUBLIC_BASE_URL` pointe vers un bucket public ou un CDN.
+
+`DATABASE_URL` est requis pour les données de l'API, y compris l'authentification locale de développement. Sans cette variable, les routes adossées à la base renvoient une erreur de configuration `503` et GitHub OAuth redirige vers le frontend avec `error=missing_database_url`. En production, les routes exigent de vrais bindings comme `DATABASE_URL`, `JWT_SECRET` et `FRONTEND_URL`; l'authentification de debug est désactivée même si son flag est défini.
+
+Utilisez `apps/frontend/.env.example` et `apps/backend/.dev.vars.example` comme points de départ locaux. Ne commitez jamais de vrais fichiers `.env` ou `.dev.vars`.
 
 ## Base De Données
 

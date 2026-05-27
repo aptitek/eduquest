@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+.wrangler
+apps/backend/.wrangler
+apps/frontend/.wrangler
+.git
+.cursor
+.env
+.env.*
+apps/backend/.dev.vars
+npm-debug.log*

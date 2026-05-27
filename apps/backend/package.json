@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "wrangler dev src/index.ts --show-interactive-dev-session=false",
     "deploy": "wrangler deploy --minify src/index.ts",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "hono": "^4.0.0",

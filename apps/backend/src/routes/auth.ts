@@ -651,6 +651,12 @@ authRouter.get('/github/callback', async (c) => {
     return c.redirect(`${frontendUrl}/?error=config_error`);
   }
 
+  const databaseUrl = c.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error('DATABASE_URL is missing; database-backed OAuth sessions cannot be created.');
+    return c.redirect(`${frontendUrl}/?error=missing_database_url`);
+  }
+
   try {
     // A. Échange du code contre un Access Token GitHub
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
@@ -713,17 +719,12 @@ authRouter.get('/github/callback', async (c) => {
       githubUser.avatar_url ||
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
 
-    // D. Gestion de l'utilisateur en Base de Données (si connectée)
-    const databaseUrl = c.env.DATABASE_URL;
+    // D. Gestion de l'utilisateur en Base de Données
     let userId = `user_${githubUser.id}`;
     let authenticatedStudentId: string | undefined;
     const isAptitek = githubUser.login.toLowerCase() === 'aptitek';
     let isAdmin: boolean = isAptitek;
     const cohortInvite = await resolveCohortInvite(inviteToken, jwtSecret);
-
-    if (!databaseUrl) {
-      throw new Error('DATABASE_URL must be configured for production OAuth sessions.');
-    }
 
     if (databaseUrl) {
       try {
@@ -891,6 +892,10 @@ authRouter.get('/management', async (c) => {
       },
       403
     );
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
   }
 
   return c.json({

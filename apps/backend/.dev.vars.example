@@ -3,31 +3,18 @@ ENABLE_DEBUG_AUTH=true
 FRONTEND_URL=http://localhost:5173
 JWT_SECRET=replace-with-a-local-development-secret
 
-# Optional: override generated asset URLs. By default, local uploads are served from
-# http://localhost:8787/assets/<key> through the Worker and local R2 simulation.
-# ASSET_PUBLIC_BASE_URL=http://localhost:8787/assets
-
 # Required for local API data. Development auth is database-backed and no longer
 # falls back to embedded mock fixtures.
 DATABASE_URL=postgresql://user:password@localhost:5432/eduquest
+
+# Optional: override generated asset URLs. By default, local uploads are served from
+# http://localhost:8787/assets/<key> through the Worker and local R2 simulation.
+# ASSET_PUBLIC_BASE_URL=http://localhost:8787/assets
 
 # Required when testing GitHub OAuth locally.
 # GITHUB_CLIENT_ID=
 # GITHUB_CLIENT_SECRET=
 # GITHUB_REDIRECT_URI=http://localhost:8787/api/auth/github/callback
-# Local environment variables for Wrangler development (copy this to .dev.vars)
-
-# JWT Signing Secret (change in production)
-JWT_SECRET="eduquest-secret-key-1337-gaming-token"
-
-# Frontend Vite Dev Server URL
-FRONTEND_URL="http://localhost:5174"
-
-# GitHub OAuth Credentials
-# Retrieve these from: GitHub -> Settings -> Developer Settings -> OAuth Apps
-GITHUB_CLIENT_ID="your_github_client_id_here"
-GITHUB_CLIENT_SECRET="your_github_client_secret_here"
-GITHUB_REDIRECT_URI="http://localhost:8787/api/auth/github/callback"
 
 # Optional: verify GitHub webhook signatures in /api/webhooks/github
 # GITHUB_WEBHOOK_SECRET=
