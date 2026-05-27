@@ -210,7 +210,7 @@ export function ActivityCard({
           illustrationAlt={draft.illustrationAlt}
           ribbonText={String(draft.goldReward)}
           ribbonIcon={<Coins size={18} aria-hidden />}
-          ribbonClassName="bg-status-campfire text-text-primary"
+          ribbonClassName="bg-status-campfire text-solarized-base3"
           ribbonEditable={canEdit}
           front={activityFront}
           back={canEdit ? (
@@ -460,38 +460,7 @@ function ActivityCardBack({
         </section>
 
         <section className="space-y-3">
-          <label className="space-y-1.5 text-sm">
-            <span className="font-bold text-text-secondary">Card Color</span>
-            <div className="grid grid-cols-3 gap-2">
-              {CARD_COLOR_OPTIONS.map((option) => {
-                const isSelected = (activity.cardColor || CARD_COLOR_OPTIONS[5].value) === option.value;
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => onCardColorChange(option.value)}
-                    className={cn(
-                      'flex items-center gap-2 rounded-xl border px-2 py-2 text-left text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-status-quest',
-                      isSelected
-                        ? 'border-status-quest bg-status-quest/10 text-text-primary'
-                        : 'border-gaming-border bg-gaming-base text-text-secondary hover:border-status-quest'
-                    )}
-                    aria-pressed={isSelected}
-                  >
-                    <span
-                      className={cn(
-                        'h-5 w-5 shrink-0 rounded-full border border-gaming-border shadow-sm',
-                        option.className
-                      )}
-                      aria-hidden
-                    />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </label>
+          <ActivityColorSelector value={activity.cardColor} onChange={onCardColorChange} />
           <label className="space-y-1.5 text-sm">
             <span className="font-bold text-text-secondary">Activity Mode</span>
             <select
@@ -564,6 +533,46 @@ function ActivityCardBack({
         </section>
       </div>
     </div>
+  );
+}
+
+function ActivityColorSelector({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (cardColor: string) => void;
+}) {
+  const selectedValue = value || CARD_COLOR_OPTIONS[5].value;
+
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="font-bold text-text-secondary">Card Color</legend>
+      <div className="grid grid-cols-9 gap-1.5">
+        {CARD_COLOR_OPTIONS.map((option) => {
+          const isSelected = selectedValue === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'h-7 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
+                isSelected
+                  ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
+                  : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
+              )}
+              aria-label={`Use ${option.label} card color`}
+              aria-pressed={isSelected}
+              title={option.label}
+            >
+              <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

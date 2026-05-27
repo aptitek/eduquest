@@ -254,9 +254,21 @@ export interface GameActivityEdge {
   mapRunId?: string;
   fromActivityId: string;
   toActivityId: string;
-  metadata?: Record<string, unknown>;
+  metadata?: GameActivityEdgeMetadata;
   createdAt?: string;
 }
+
+export type GameActivityEdgeAnimation = 'none' | 'flow' | 'pulse';
+
+export type GameActivityEdgeMetadata = Record<string, unknown> & {
+  color?: string;
+  edgeColor?: string;
+  animation?: GameActivityEdgeAnimation;
+  edgeAnimation?: GameActivityEdgeAnimation;
+  strokeDasharray?: string;
+  opacity?: number;
+  strokeWidth?: number;
+};
 
 export type GameActivityCompletionType = 'read' | 'submission' | 'battle' | 'system';
 

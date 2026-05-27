@@ -55,8 +55,15 @@ export function LoginPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="w-full max-w-md bg-gaming-card border border-gaming-border p-8 rounded-2xl shadow-2xl relative z-10 flex flex-col items-center gap-6"
+        className="w-full max-w-md overflow-hidden bg-gaming-card border border-gaming-border p-8 rounded-2xl shadow-2xl relative z-10 flex flex-col items-center gap-6"
       >
+        <div
+          className="absolute right-[-3.2rem] top-6 z-20 w-44 rotate-45 border border-solarized-magenta/40 bg-solarized-magenta/90 py-1 text-center font-display text-[0.65rem] font-black uppercase tracking-[0.24em] text-solarized-base3 shadow-lg"
+          aria-label={t('auth.alphaRibbon')}
+        >
+          {t('auth.alphaRibbon')}
+        </div>
+
         {/* Retro Glowing Header */}
         <div className="flex flex-col items-center text-center gap-2">
           <motion.div
@@ -77,9 +84,6 @@ export function LoginPage() {
 
         {/* Separator Line */}
         <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-gaming-border to-transparent" />
-
-        {/* TODO: Make it dynamic to the user's preferred language, using useTranslation hook.  */}
-        {/* TODO: Review that description. and make something more attractive and engaging once we style the website with the new theme.  */}
 
         {/* RPG Lore Description Box */}
         <div className="bg-gaming-base/60 border border-gaming-border p-4 rounded-xl text-xs text-text-secondary leading-relaxed flex flex-col gap-2 relative">

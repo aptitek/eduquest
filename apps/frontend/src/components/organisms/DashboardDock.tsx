@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
-import { PlayingHand } from '../molecules/PlayingCard';
+import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
@@ -220,7 +220,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
   const podiumGuilds = mergeGuilds(playerGuild ? [playerGuild] : [], guilds);
   const podiumCards = buildPodiumCards(t, podiumGuilds);
-  const openClassPage = () => {
+  const openClassPage = (card?: PlayingCardData) => {
+    const guildName = card?.guild?.name || (card?.kind === 'guild' && !card.faceDown ? card.title : undefined);
+    if (guildName) {
+      sessionStorage.setItem('eduquest_class_scroll_target', JSON.stringify({ guildName }));
+    }
+
     window.location.hash = 'class';
   };
   const openProgressPage = () => {
@@ -396,6 +401,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     subtitle: latestMembership?.cohort?.name || t('dashboard.dock.cohortDeck'),
     accentToken: 'neutral',
     ribbonLabel: t('class.guilds'),
+    faceDown: true,
   };
   const podiumDeckCards = toNonEmptyCards([...podiumCards, classRemainingCard]);
   const classPodiumHandsBase = podiumCards.map((card) =>
@@ -492,8 +498,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
       shape="round"
       variant="btn-primary"
       className={cn(
-        'h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-base font-black shadow-glow-primary',
-        isProgressPage && 'h-32 w-32 text-lg sm:h-36 sm:w-36 sm:text-xl'
+        'h-28 w-28 min-h-0 -translate-y-4 border-primary/40 bg-primary text-primary-content font-display text-lg font-black shadow-glow-primary',
+        isProgressPage && 'h-36 w-36 -translate-y-6 text-xl sm:h-40 sm:w-40 sm:text-2xl'
       )}
     >
       {t('dashboard.dock.boost')}
@@ -521,25 +527,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
       {isClassPage ? (
         <div className="space-y-5">
           {classPodiumHands.map((hand, index) => (
-            <section
+            <PlayingHandPanel
               key={hand.id}
-              aria-label={hand.title}
-              className="relative overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-4 shadow-lg"
-            >
-              <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-status-campfire px-2 py-0.5 text-xs font-black text-gaming-base">
-                  #{index + 1}
-                </span>
-                <h4 className="truncate font-display text-lg font-bold">{hand.title}</h4>
-              </div>
-              <PlayingHand
-                hand={hand}
-                mode="full"
-                visibleCardCount={hand.cards.length}
-                expandOnHover={false}
-                className="mx-auto h-[28rem] min-h-0 max-w-7xl md:h-[30rem]"
-              />
-            </section>
+              id={`class-guild-${slugify(hand.title || 'guild')}`}
+              hand={hand}
+              rank={index + 1}
+            />
           ))}
         </div>
       ) : (
@@ -553,7 +546,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           mode="mini"
           variant={usesWideGuildDeck ? 'horizontal' : 'vertical'}
           stackSide="left"
-          visibleCardCount={3}
+          visibleCardCount={podiumDeckCards.length}
           expandOnHover
           onCardSelect={openClassPage}
           className="h-full w-full"
@@ -574,20 +567,25 @@ export function DashboardDock({ className }: DashboardDockProps) {
           : 'relative z-50 h-64 w-32 shrink-0 sm:w-36 lg:h-72 xl:w-40'
       )}
     >
-      <PlayingHand
-        hand={guildHand}
-        mode={isGuildPage ? 'full' : 'mini'}
-        variant={!isGuildPage && !usesWideGuildDeck ? 'vertical' : 'horizontal'}
-        visibleCardCount={guildHand.cards.length}
-        expandOnHover={!isGuildPage}
-        onCardSelect={isGuildPage ? undefined : openGuildPage}
-        className={cn(
-          'h-full w-full',
-          isGuildPage && 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
-        )}
-        cardClassName={cn(!isGuildPage && 'w-32 translate-y-0 sm:w-36 xl:w-40')}
-        stackCardClassName={cn(!isGuildPage && 'w-28 translate-y-0 sm:w-32 xl:w-36')}
-      />
+      {isGuildPage ? (
+        <PlayingHandPanel
+          hand={guildHand}
+          className="border-0 bg-transparent p-0 shadow-none"
+          handClassName="h-[30rem] md:h-[32rem]"
+        />
+      ) : (
+        <PlayingHand
+          hand={guildHand}
+          mode="mini"
+          variant={!usesWideGuildDeck ? 'vertical' : 'horizontal'}
+          visibleCardCount={guildHand.cards.length}
+          expandOnHover
+          onCardSelect={openGuildPage}
+          className="h-full w-full"
+          cardClassName="w-32 translate-y-0 sm:w-36 xl:w-40"
+          stackCardClassName="w-28 translate-y-0 sm:w-32 xl:w-36"
+        />
+      )}
     </motion.div>
   );
   const bonusContent = (

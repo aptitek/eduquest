@@ -266,6 +266,10 @@ export const DEBUG_ACTIVITY_EDGES: GameActivityEdge[] = [
     mapRunId: 'debug_map_run_frontend_mages',
     fromActivityId: 'debug_activity_variables',
     toActivityId: 'debug_activity_api_bridge',
+    metadata: {
+      edgeColor: 'var(--color-solarized-cyan)',
+      edgeAnimation: 'flow',
+    },
     createdAt: '2026-01-10',
   },
   {

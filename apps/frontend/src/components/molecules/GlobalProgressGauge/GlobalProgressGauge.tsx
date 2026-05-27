@@ -232,7 +232,7 @@ export function GlobalProgressGauge({
               expanded={showFullMilestoneBadge}
               className={cn(
                 geometry.showMilestoneLabels
-                  ? 'z-40 max-w-24 rounded-full px-2 py-1 text-[0.65rem] text-text-secondary opacity-90 shadow-sm group-hover:z-50 group-hover:max-w-36 group-hover:rounded-xl group-hover:px-3 group-hover:py-2 group-hover:text-xs group-hover:text-text-primary group-hover:opacity-100'
+                  ? 'pointer-events-auto z-40 max-w-24 rounded-full px-2 py-1 text-[0.65rem] text-text-secondary opacity-90 shadow-sm group-hover:z-50 group-hover:max-w-36 group-hover:rounded-xl group-hover:px-3 group-hover:py-2 group-hover:text-xs group-hover:text-text-primary group-hover:opacity-100'
                   : 'bottom-full left-1/2 z-50 mb-2 max-w-36 -translate-x-1/2 opacity-0 shadow-xl group-hover:opacity-100',
                 showFullMilestoneBadge &&
                   'z-50 max-w-48 rounded-2xl px-3 py-2 text-xs text-text-primary opacity-100 shadow-xl'

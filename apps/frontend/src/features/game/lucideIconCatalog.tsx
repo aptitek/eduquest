@@ -1,20 +1,97 @@
-import { icons, type LucideIcon } from 'lucide-react';
+import {
+  Award,
+  BookOpen,
+  Castle,
+  CheckCircle2,
+  CloudFog,
+  Coins,
+  Compass,
+  Crown,
+  Flame,
+  Gamepad2,
+  Gem,
+  Hammer,
+  Heart,
+  HelpCircle,
+  KeyRound,
+  Lightbulb,
+  Lock,
+  Map,
+  Medal,
+  Rocket,
+  ScrollText,
+  Shield,
+  Snowflake,
+  Sparkles,
+  Star,
+  Swords,
+  Target,
+  Terminal,
+  Trophy,
+  TreePine,
+  User,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ActivityType } from '@eduquest/shared';
 import { ACTIVITY_ICON_KEYS } from '@eduquest/shared';
 
-export const LUCIDE_ICON_IDS = Object.keys(icons).sort((a, b) => a.localeCompare(b));
+const ICON_BY_PASCAL: Record<string, LucideIcon> = {
+  Award,
+  BookOpen,
+  Castle,
+  CheckCircle2,
+  CloudFog,
+  Coins,
+  Compass,
+  Crown,
+  Flame,
+  Gamepad2,
+  Gem,
+  Hammer,
+  Heart,
+  HelpCircle,
+  KeyRound,
+  Lightbulb,
+  Lock,
+  Map,
+  Medal,
+  Rocket,
+  ScrollText,
+  Shield,
+  Snowflake,
+  Sparkles,
+  Star,
+  Swords,
+  Target,
+  Terminal,
+  Trophy,
+  TreePine,
+  User,
+  Users,
+  onboarding: Compass,
+  character_creation: User,
+  tavern: Users,
+  tutorial: BookOpen,
+  ice_breaker: Snowflake,
+  campfire: Flame,
+  quiz: HelpCircle,
+  practical: Hammer,
+  mini_boss: Shield,
+  boss: Swords,
+};
 
-const ICON_BY_PASCAL = icons as Record<string, LucideIcon>;
+export const LUCIDE_ICON_IDS = Object.keys(ICON_BY_PASCAL).sort((a, b) => a.localeCompare(b));
 
 export function pascalCaseFromIconId(iconId: string) {
   const trimmed = iconId.trim();
   if (!trimmed) return '';
-  if (!trimmed.includes('-')) {
+  if (!/[-_]/.test(trimmed)) {
     return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
   }
   return trimmed
-    .split('-')
+    .split(/[-_]/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
@@ -35,7 +112,7 @@ export function resolveLucideIcon(iconId?: string, fallbackType?: ActivityType):
   ].filter(Boolean) as string[];
 
   for (const candidate of candidates) {
-    const pascal = candidate.includes('-') ? pascalCaseFromIconId(candidate) : candidate;
+    const pascal = candidate.includes('-') || candidate.includes('_') ? pascalCaseFromIconId(candidate) : candidate;
     const icon = ICON_BY_PASCAL[pascal];
     if (icon) return icon;
   }

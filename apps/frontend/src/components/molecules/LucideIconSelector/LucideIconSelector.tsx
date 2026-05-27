@@ -57,22 +57,23 @@ export function LucideIconSelector({
         />
       </label>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-6 gap-1.5">
         {visibleIconIds.map((iconId) => (
           <button
             key={iconId}
             type="button"
             onClick={() => onChange(iconId)}
+            aria-label={`Use ${iconId} icon`}
+            aria-pressed={value === iconId}
             title={iconId}
             className={cn(
-              'flex h-14 flex-col items-center justify-center rounded-xl border text-[0.62rem] transition hover:border-status-quest hover:bg-status-quest/10 focus:outline-none focus:ring-2 focus:ring-status-quest',
+              'flex aspect-square min-w-0 items-center justify-center rounded-xl border transition-colors focus:outline-none focus:ring-2 focus:ring-status-quest',
               value === iconId
-                ? 'border-status-quest bg-status-quest/15 text-status-quest'
-                : 'border-gaming-border bg-gaming-base text-text-secondary'
+                ? 'border-status-quest bg-status-quest/15 text-status-quest shadow-glow-primary'
+                : 'border-gaming-border bg-gaming-base text-text-secondary hover:border-status-quest hover:text-status-quest'
             )}
           >
-            {renderLucideIcon(iconId, 18)}
-            <span className="mt-1 max-w-full truncate px-1">{iconId}</span>
+            {renderLucideIcon(iconId, 20)}
           </button>
         ))}
       </div>

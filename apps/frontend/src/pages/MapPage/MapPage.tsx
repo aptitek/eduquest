@@ -12,7 +12,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 // UI Layout and Styling Wrappers (Atomic Design)
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
-import { MapContainer, MapArea, LoadingMap } from '../../components/organisms/MapContainer';
+import { MapContainer, MapArea, MapSidePanel, LoadingMap } from '../../components/organisms/MapContainer';
 import { GameMap } from '../../components/organisms/GameMap';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
 import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
@@ -153,30 +153,32 @@ export function MapPage() {
           )}
         </MapArea>
 
-        {selectedActivity ? (
-          <ActivityCard
-            activity={toActivityCardData(selectedActivity, activities, activityEdges)}
-            canEdit={Boolean(user?.isAdmin)}
-            showCompletionAction={!user?.isAdmin}
-            isCompleted={completedActivityIds.includes(selectedActivity.id)}
-            isResolving={completingActivityId === selectedActivity.id}
-            resolveError={completionError}
-            onResolve={
-              user?.isAdmin || selectedActivity.isLocked
-                ? undefined
-                : () => handleCompleteActivity(selectedActivity)
-            }
-            className="h-full min-h-0 w-full max-w-none"
-          />
-        ) : (
-          <ActivityDetailPanel
-            selectedActivity={null}
-            completedActivityIds={completedActivityIds}
-            onComplete={handleCompleteActivity}
-            completingActivityId={completingActivityId}
-            completionError={completionError}
-          />
-        )}
+        <MapSidePanel>
+          {selectedActivity ? (
+            <ActivityCard
+              activity={toActivityCardData(selectedActivity, activities, activityEdges)}
+              canEdit={Boolean(user?.isAdmin)}
+              showCompletionAction={!user?.isAdmin}
+              isCompleted={completedActivityIds.includes(selectedActivity.id)}
+              isResolving={completingActivityId === selectedActivity.id}
+              resolveError={completionError}
+              onResolve={
+                user?.isAdmin || selectedActivity.isLocked
+                  ? undefined
+                  : () => handleCompleteActivity(selectedActivity)
+              }
+              className="h-full min-h-0 w-full max-w-none"
+            />
+          ) : (
+            <ActivityDetailPanel
+              selectedActivity={null}
+              completedActivityIds={completedActivityIds}
+              onComplete={handleCompleteActivity}
+              completingActivityId={completingActivityId}
+              completionError={completionError}
+            />
+          )}
+        </MapSidePanel>
       </MapContainer>
     </GameLayout>
   );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -9,6 +9,7 @@ import {
   Handle,
   Position,
   ReactFlow,
+  ViewportPortal,
   getBezierPath,
   type Connection,
   type Edge,
@@ -40,6 +41,7 @@ export interface GraphNode<TMetadata = unknown> {
   annularSegments?: GraphNodeAnnularSegment[];
   customClass?: string;
   customStyle?: React.CSSProperties;
+  fogState?: 'fog' | 'clear';
   metadata?: TMetadata;
 }
 
@@ -63,6 +65,11 @@ export interface GraphEdge {
   isCompleted?: boolean;
   isLocked?: boolean;
   isHidden?: boolean;
+  color?: string;
+  opacity?: number;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+  animation?: 'none' | 'flow' | 'pulse';
 }
 
 interface GenericGraphProps<TMetadata = unknown> {
@@ -111,6 +118,76 @@ const ANNULAR_RING_CENTER = ANNULAR_RING_SIZE / 2;
 const ANNULAR_RING_GAP_START = 315;
 const ANNULAR_RING_GAP_END = 585;
 const ANNULAR_SEGMENT_GAP = 1.4;
+const GRAPH_EDGE_ANIMATION_STYLES = `
+@keyframes graph-edge-flow {
+  to {
+    stroke-dashoffset: -56;
+  }
+}
+
+@keyframes graph-edge-pulse {
+  0%, 100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+.graph-edge-flow {
+  animation: graph-edge-flow 1.8s linear infinite;
+  stroke-dasharray: 10 18;
+  stroke-linecap: round;
+}
+
+.graph-edge-pulse {
+  animation: graph-edge-pulse 2.4s ease-in-out infinite;
+  stroke-linecap: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-edge-flow,
+  .graph-edge-pulse,
+  .graph-fog-cloud {
+    animation: none;
+  }
+}
+
+@keyframes graph-fog-drift {
+  0% {
+    transform: translate3d(-28px, 0, 0);
+  }
+  50% {
+    transform: translate3d(34px, -10px, 0);
+  }
+  100% {
+    transform: translate3d(-28px, 0, 0);
+  }
+}
+
+@keyframes graph-fog-drift-reverse {
+  0% {
+    transform: translate3d(34px, 6px, 0);
+  }
+  50% {
+    transform: translate3d(-30px, -8px, 0);
+  }
+  100% {
+    transform: translate3d(34px, 6px, 0);
+  }
+}
+
+.graph-fog-cloud {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: graph-fog-drift 18s ease-in-out infinite;
+}
+
+.graph-fog-cloud-reverse {
+  animation-name: graph-fog-drift-reverse;
+  animation-duration: 24s;
+}
+`;
 
 /**
  * Deterministic layered DAG graph layout resolver (Sugiyama style) (KISS).
@@ -222,8 +299,11 @@ export function GenericGraph<TMetadata = unknown>({
   renderNode,
   className,
 }: GenericGraphProps<TMetadata>) {
+  const fogMaskId = useId();
   const layoutHeight = typeof height === 'number' ? height : 600;
   const layoutedNodes = useMemo(() => calculateGraphLayout(nodes, width, layoutHeight), [layoutHeight, nodes, width]);
+  const fogNodes = useMemo(() => layoutedNodes.filter((node) => node.fogState === 'fog'), [layoutedNodes]);
+  const clearFogNodes = useMemo(() => layoutedNodes.filter((node) => node.fogState === 'clear'), [layoutedNodes]);
   const renderedEdges = useMemo<GraphEdge[]>(
     () =>
       edges ||
@@ -266,13 +346,14 @@ export function GenericGraph<TMetadata = unknown>({
 
       const isCompleted = edge.isCompleted;
       const isLocked = edge.isLocked;
+      const stroke = edge.color || (isCompleted ? 'var(--color-status-completed)' : 'var(--color-status-locked)');
 
       return {
         id: edge.id,
         type: 'graph-edge',
         source: edge.from,
         target: edge.to,
-        animated: Boolean(isCompleted),
+        animated: edge.animation !== 'none' && Boolean(edge.animation || isCompleted),
         reconnectable: connectable,
         data: {
           graphEdge: edge,
@@ -280,10 +361,10 @@ export function GenericGraph<TMetadata = unknown>({
           onDeleteEdge: (deletedEdge) => onDeleteEdges?.([deletedEdge]),
         },
         style: {
-          stroke: isCompleted ? 'var(--color-status-completed)' : 'var(--color-status-locked)',
-          strokeOpacity: isCompleted ? 0.55 : 0.3,
-          strokeWidth: 3,
-          strokeDasharray: isLocked ? '6 6' : undefined,
+          stroke,
+          strokeOpacity: edge.opacity ?? (isCompleted ? 0.55 : 0.3),
+          strokeWidth: edge.strokeWidth ?? 3,
+          strokeDasharray: edge.strokeDasharray ?? (isLocked ? '6 6' : undefined),
         },
       };
     });
@@ -380,6 +461,7 @@ export function GenericGraph<TMetadata = unknown>({
       )}
       style={{ height, minWidth: 0 }}
     >
+      <style>{GRAPH_EDGE_ANIMATION_STYLES}</style>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-bg-card),transparent_70%)]" />
       <ReactFlow
         nodes={flowNodes}
@@ -403,10 +485,267 @@ export function GenericGraph<TMetadata = unknown>({
         className="text-text-primary"
       >
         <Background color="var(--color-gaming-grid)" gap={64} />
+        {fogNodes.length > 0 ? (
+          <ViewportPortal>
+            <GraphFogLayer
+              maskId={fogMaskId}
+              fogNodes={fogNodes}
+              clearNodes={clearFogNodes}
+              width={width}
+              height={layoutHeight}
+            />
+          </ViewportPortal>
+        ) : null}
         {editable ? <Controls className="!border-gaming-border !bg-gaming-card !shadow-lg" /> : null}
       </ReactFlow>
     </div>
   );
+}
+
+function GraphFogLayer<TMetadata>({
+  maskId,
+  fogNodes,
+  clearNodes,
+  width,
+  height,
+}: {
+  maskId: string;
+  fogNodes: LayoutNode<TMetadata>[];
+  clearNodes: LayoutNode<TMetadata>[];
+  width: number;
+  height: number;
+}) {
+  const expandedX = -240;
+  const expandedY = -180;
+  const expandedWidth = width + 480;
+  const expandedHeight = height + 360;
+  const fogBunches = buildFogBunches({
+    fogNodes,
+    clearNodes,
+    expandedX,
+    expandedY,
+    expandedWidth,
+    expandedHeight,
+  });
+
+  return (
+    <svg
+      width={expandedWidth}
+      height={expandedHeight}
+      viewBox={`${expandedX} ${expandedY} ${expandedWidth} ${expandedHeight}`}
+      className="pointer-events-none absolute left-0 top-0 overflow-visible"
+      style={{ zIndex: 0 }}
+      aria-hidden
+    >
+      <defs>
+        <filter id={`${maskId}-blur`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="12" />
+        </filter>
+      </defs>
+
+      <g filter={`url(#${maskId}-blur)`}>
+        {fogBunches.map((bunch) => (
+          <g
+            key={bunch.id}
+            className={cn('graph-fog-cloud', bunch.reverse && 'graph-fog-cloud-reverse')}
+            opacity={bunch.opacity}
+          >
+            {bunch.clouds.map((cloud) => (
+              <ellipse
+                key={cloud.id}
+                cx={cloud.x}
+                cy={cloud.y}
+                rx={cloud.rx}
+                ry={cloud.ry}
+                fill={cloud.fill}
+                opacity={cloud.opacity}
+                transform={`rotate(${cloud.rotation} ${cloud.x} ${cloud.y})`}
+              />
+            ))}
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+interface FogCloud {
+  id: string;
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+  opacity: number;
+  fill: string;
+  rotation: number;
+  reverse?: boolean;
+}
+
+interface FogBunch {
+  id: string;
+  opacity: number;
+  reverse?: boolean;
+  alwaysCover?: boolean;
+  clouds: FogCloud[];
+}
+
+function buildFogBunches<TMetadata>({
+  fogNodes,
+  clearNodes,
+  expandedX,
+  expandedY,
+  expandedWidth,
+  expandedHeight,
+}: {
+  fogNodes: LayoutNode<TMetadata>[];
+  clearNodes: LayoutNode<TMetadata>[];
+  expandedX: number;
+  expandedY: number;
+  expandedWidth: number;
+  expandedHeight: number;
+}) {
+  const clearNodeCenterX =
+    clearNodes.length > 0
+      ? clearNodes.reduce((total, node) => total + node.x, 0) / clearNodes.length
+      : expandedX + expandedWidth / 2;
+  const avoidRightSide = clearNodeCenterX > expandedX + expandedWidth / 2;
+  const ambientBunches = Array.from({ length: 18 }, (_, index): FogBunch | undefined => {
+    const seed = index + 1;
+    const row = Math.floor(index / 6);
+    const column = index % 6;
+    const cellWidth = expandedWidth / 6;
+    const cellHeight = expandedHeight / 3;
+    const biasOffset = avoidRightSide ? -cellWidth * 0.38 : cellWidth * 0.38;
+    const x = expandedX + cellWidth * (column + 0.5) + biasOffset + seededRange(seed, -86, 86);
+    const y = expandedY + cellHeight * (row + 0.5) + seededRange(seed * 3, -64, 64);
+    const isOnAvoidedSide = avoidRightSide ? x > clearNodeCenterX - 80 : x < clearNodeCenterX + 80;
+
+    if (isOnAvoidedSide && seededRange(seed * 19, 0, 1) < 0.58) return undefined;
+
+    return buildFogBunch({
+      id: `ambient-bunch-${index}`,
+      x,
+      y,
+      seed,
+      count: 3 + Math.floor(seededRange(seed * 5, 0, 4)),
+      opacity: 0.46 + seededRange(seed * 13, 0, 0.18),
+      reverse: index % 2 === 1,
+    });
+  });
+  const localBunches = fogNodes.map((node, nodeIndex) =>
+    buildFogBunch({
+      id: `node-bunch-${node.id}`,
+      x: node.x + seededRange((nodeIndex + 1) * 7, -42, 42),
+      y: node.y + seededRange((nodeIndex + 1) * 11, -28, 42),
+      seed: (nodeIndex + 1) * 23,
+      count: 8,
+      opacity: 0.72,
+      reverse: nodeIndex % 2 === 1,
+      local: true,
+      alwaysCover: true,
+    })
+  );
+
+  return [...ambientBunches, ...localBunches].flatMap((bunch) => {
+    if (!bunch) return [];
+    const clouds = bunch.alwaysCover ? bunch.clouds : bunch.clouds.flatMap((cloud) => avoidClearNodes(cloud, clearNodes));
+    return clouds.length > 0 ? [{ ...bunch, clouds }] : [];
+  });
+}
+
+function buildFogBunch({
+  id,
+  x,
+  y,
+  seed,
+  count,
+  opacity,
+  reverse,
+  alwaysCover = false,
+  local = false,
+}: {
+  id: string;
+  x: number;
+  y: number;
+  seed: number;
+  count: number;
+  opacity: number;
+  reverse?: boolean;
+  alwaysCover?: boolean;
+  local?: boolean;
+}): FogBunch {
+  return {
+    id,
+    opacity,
+    reverse,
+    alwaysCover,
+    clouds: [
+      ...(local
+        ? [
+            {
+              id: `${id}-cover`,
+              x,
+              y,
+              rx: 210,
+              ry: 62,
+              opacity: 0.78,
+              fill: 'var(--color-solarized-base1)',
+              rotation: seededRange(seed * 29, -6, 6),
+            } satisfies FogCloud,
+          ]
+        : []),
+      ...Array.from({ length: count }, (_, index): FogCloud => {
+      const cloudSeed = seed * 31 + index * 17;
+      const spread = local ? 112 : 156;
+      const size = seededRange(cloudSeed * 7, 0, 1);
+
+      return {
+        id: `${id}-${index}`,
+        x: x + seededRange(cloudSeed, -spread, spread),
+        y: y + seededRange(cloudSeed * 3, local ? -54 : -72, local ? 54 : 72),
+        rx: (local ? 126 : 108) + size * (local ? 132 : 170),
+        ry: (local ? 28 : 24) + seededRange(cloudSeed * 11, 0, local ? 38 : 34),
+        opacity: 0.54 + seededRange(cloudSeed * 13, 0, 0.36),
+        fill: index % 3 === 0 ? 'var(--color-solarized-base0)' : 'var(--color-solarized-base1)',
+        rotation: seededRange(cloudSeed * 17, -10, 10),
+      };
+    }),
+    ],
+  };
+}
+
+function avoidClearNodes<TMetadata>(cloud: FogCloud, clearNodes: LayoutNode<TMetadata>[]) {
+  if (clearNodes.length === 0) return [cloud];
+
+  const nearestDistance = Math.min(
+    ...clearNodes.map((node) => {
+      const horizontalRadius = 112 + cloud.rx * 0.48;
+      const verticalRadius = 76 + cloud.ry * 0.82;
+      const dx = (cloud.x - node.x) / horizontalRadius;
+      const dy = (cloud.y - node.y) / verticalRadius;
+      return Math.sqrt(dx * dx + dy * dy);
+    })
+  );
+
+  if (nearestDistance < 0.72) return [];
+  if (nearestDistance < 1.02) {
+    const scale = 0.68 + (nearestDistance - 0.72) * 0.74;
+    return [
+      {
+        ...cloud,
+        rx: cloud.rx * scale,
+        ry: cloud.ry * scale,
+        opacity: cloud.opacity * Math.min(1, scale),
+      },
+    ];
+  }
+
+  return [cloud];
+}
+
+function seededRange(seed: number, min: number, max: number) {
+  const x = Math.sin(seed * 999) * 10000;
+  return min + (x - Math.floor(x)) * (max - min);
 }
 
 function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>) {
@@ -480,6 +819,7 @@ function AnnularNodeRing({
 }) {
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const activeSegment = segments.find((segment) => segment.id === activeSegmentId);
+  const isExpanded = Boolean(activeSegment);
   const path = describeArc(
     ANNULAR_RING_CENTER,
     ANNULAR_RING_CENTER,
@@ -491,13 +831,18 @@ function AnnularNodeRing({
 
   return (
     <div
-      className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[4.125rem] w-[4.125rem] -translate-x-1/2 -translate-y-1/2 overflow-visible transition-[height,width] duration-300 group-hover/graph-node:h-[5.4rem] group-hover/graph-node:w-[5.4rem] group-focus-within/graph-node:h-[5.4rem] group-focus-within/graph-node:w-[5.4rem]"
+      className="pointer-events-auto absolute left-1/2 top-1/2 z-0 h-[5.4rem] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 overflow-visible"
       onPointerLeave={() => setActiveSegmentId(null)}
     >
       <svg
         viewBox={`0 0 ${ANNULAR_RING_SIZE} ${ANNULAR_RING_SIZE}`}
         aria-hidden="false"
-        className="h-full w-full overflow-visible"
+        className={cn(
+          'h-full w-full overflow-visible transition-transform duration-300',
+          isExpanded
+            ? 'scale-100'
+            : 'scale-[0.765] group-hover/graph-node:scale-100 group-focus-within/graph-node:scale-100'
+        )}
       >
         {hasAvatarGap ? (
           <path
@@ -654,6 +999,20 @@ function GraphFlowEdgeRenderer({
   return (
     <>
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      {data?.graphEdge.animation && data.graphEdge.animation !== 'none' ? (
+        <path
+          d={edgePath}
+          fill="none"
+          markerEnd={markerEnd}
+          pointerEvents="none"
+          className={data.graphEdge.animation === 'flow' ? 'graph-edge-flow' : 'graph-edge-pulse'}
+          style={{
+            stroke: style?.stroke,
+            strokeOpacity: data.graphEdge.animation === 'flow' ? 0.9 : 0.65,
+            strokeWidth: Number(style?.strokeWidth || 3) + 1,
+          }}
+        />
+      ) : null}
       {data?.deletable ? (
         <EdgeLabelRenderer>
           <div

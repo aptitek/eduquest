@@ -26,19 +26,19 @@ This file tracks the remaining project backlog. Completed items are kept only wh
 
 ---
 
-[ ] The activity card should have a minimum width that will force the map out of the way and responsively stack vertically when needed.
-[ ] Modify the color selector component to ommit color names and be much more compact
-[ ] edges on the map will have animations and colors depending on the step with automatic ones like fog and manual ones set by the admin to encourage students to move to the target node
-[ ] When the cursor hovers on the occupancy rings it can trigger a rapid expansion shrink loop that flickers violently
-[ ] Moving the cursor over the icon selector can cause flickering of the entire activity card layout
-[ ] Review the login page, especially the text. Add a pink alpha ribbon on the login card
-[ ] In the activity card, the gold ribbon uses gray text instead of base3 white text using token design
-[ ] Add the fog on the map moving slowly in flat clouds over and around the foggy codes and all around the map except in a big area around unlocked activities
-[ ] The podium and guild decks are no longer animated like the reward deck ENSURE they all use the SAME generic styla and component
-[ ] The extra flipped down card at the end of the podium disapeared
-[ ] When clicking on a guild card on the podium, go to the cohort tab and scroll to the respective guild
-[ ] On hover on the text of the progress gauge milestones, the labels don't expand unless I hover on the circles on the progress arc
-[ ] Boost button needs to be higher and bigger
+[x] The activity card should have a minimum width that will force the map out of the way and responsively stack vertically when needed.
+[x] Modify the color selector component to ommit color names and be much more compact
+[x] edges on the map will have animations and colors depending on the step with automatic ones like fog and manual ones set by the admin to encourage students to move to the target node
+[x] When the cursor hovers on the occupancy rings it can trigger a rapid expansion shrink loop that flickers violently
+[x] Moving the cursor over the icon selector can cause flickering of the entire activity card layout
+[x] Review the login page, especially the text. Add a pink alpha ribbon on the login card
+[x] In the activity card, the gold ribbon uses gray text instead of base3 white text using token design
+[x] Add the fog on the map moving slowly in flat clouds over and around the foggy codes and all around the map except in a big area around unlocked activities
+[x] The podium and guild decks are no longer animated like the reward deck ENSURE they all use the SAME generic styla and component
+[x] The extra flipped down card at the end of the podium disapeared
+[x] When clicking on a guild card on the podium, go to the cohort tab and scroll to the respective guild
+[x] On hover on the text of the progress gauge milestones, the labels don't expand unless I hover on the circles on the progress arc
+[x] Boost button needs to be higher and bigger
 [ ] Ribbons sometimes have that weird double border/shaddow on the bottom. It seems to happen only when there's an icon
 [ ] Make the rounded border of the character illustration match the one of the border of the card in most places but especially in the nano card in the header
 [ ] When the nano card is expanded, the ribbon is hidden behind the content of the card
@@ -63,7 +63,8 @@ This file tracks the remaining project backlog. Completed items are kept only wh
 [ ] Fiche personnage, Personnage is redondant in the character page keep only one
 [ ] In the map for admin user show all guilds icons in the avatar stacks over the nodes, display characters icon only on hover
 [ ] Add a field in boss activities to let students fill various fields with answers to the boss activity of either text (mostly URL) or files to store in the project file storage R2 cloudflare
- 
+[x] Add more fog and redo the avoid area system instead of big visible circles. If needed try to find an existing react component to draw that with a neet effect. Try to keep it light weight 
+
 AUDIT
 [ ] Remove ALL hard coded mock data and translate everything using i18n except dynamic fields in the database like descriptions and names of guild/characters.
 [ ] Remove all unused translations from the translation files

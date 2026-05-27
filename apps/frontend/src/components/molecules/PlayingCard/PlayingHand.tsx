@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { CardSpread } from '../CardSpread';
 import type { CardSpreadShape, CardSpreadSide } from '../CardSpread';
 import { cn } from '../../../utils/cn';
@@ -32,7 +34,19 @@ export interface PlayingHandProps {
   onCardSelect?: (card: PlayingCardData, index: number) => void;
 }
 
+export interface PlayingHandPanelProps {
+  hand: PlayingHandData;
+  id?: string;
+  rank?: number;
+  badges?: ReactNode;
+  ariaLabel?: string;
+  className?: string;
+  handClassName?: string;
+  cardClassName?: string;
+}
+
 const MAX_DEFAULT_VISIBLE_CARDS = 5;
+const PLAYING_HAND_PANEL_LAYOUT_TRANSITION = { layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } };
 
 export function PlayingHand({
   hand,
@@ -99,6 +113,50 @@ export function PlayingHand({
         />
       )}
     />
+  );
+}
+
+export function PlayingHandPanel({
+  hand,
+  id,
+  rank,
+  badges,
+  ariaLabel = hand.title,
+  className,
+  handClassName,
+  cardClassName,
+}: PlayingHandPanelProps) {
+  return (
+    <motion.section
+      layout
+      layoutId={`${hand.id}-panel`}
+      transition={PLAYING_HAND_PANEL_LAYOUT_TRANSITION}
+      id={id}
+      aria-label={ariaLabel}
+      className={cn(
+        'relative overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-4 shadow-lg',
+        className
+      )}
+    >
+      <div className="mb-3 flex items-center gap-2">
+        {rank ? (
+          <span className="rounded-full bg-status-campfire px-2 py-0.5 text-xs font-black text-gaming-base">
+            #{rank}
+          </span>
+        ) : null}
+        {badges}
+        {hand.title ? <h4 className="truncate font-display text-lg font-bold">{hand.title}</h4> : null}
+      </div>
+
+      <PlayingHand
+        hand={hand}
+        mode="full"
+        visibleCardCount={hand.cards.length}
+        expandOnHover={false}
+        className={cn('mx-auto h-[28rem] min-h-0 max-w-7xl md:h-[30rem]', handClassName)}
+        cardClassName={cn('shadow-glow-primary', cardClassName)}
+      />
+    </motion.section>
   );
 }
 

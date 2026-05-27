@@ -5,7 +5,7 @@ import { Trophy, Users } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { CompoundBadge } from '../../components/atoms/CompoundBadge';
-import { PlayingHand } from '../../components/molecules/PlayingCard';
+import { PlayingHandPanel } from '../../components/molecules/PlayingCard';
 import { fetchGuilds } from '../../features/game/api';
 import { useGameStore } from '../../features/game/gameStore';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -95,13 +95,7 @@ export function ClassPage() {
       target = {};
     }
 
-    const element = target.guildName
-      ? document.getElementById(`class-guild-${slugify(target.guildName)}`)
-      : document.getElementById('class-guilds-title');
-
-    window.setTimeout(() => {
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 80);
+    scrollToClassTarget(target);
   }, [loading, groupedHands]);
 
   return (
@@ -177,47 +171,28 @@ export function ClassPage() {
 
 function ClassHandSection({
   hand,
-  rank,
   isPlayerGuild,
   currentGuildLabel,
 }: {
   hand: ReturnType<typeof buildClassGuildHand>;
-  rank?: number;
   isPlayerGuild?: boolean;
   currentGuildLabel: string;
 }) {
   return (
-    <section
+    <PlayingHandPanel
+      hand={hand}
       id={`class-guild-${slugify(hand.title || 'guild')}`}
-      aria-label={hand.title}
       className={cn(
-        'relative overflow-visible rounded-3xl border border-gaming-border bg-gaming-base/40 p-4 shadow-lg',
         isPlayerGuild && 'border-status-quest shadow-glow-primary'
       )}
-    >
-      <div className="mb-3 flex items-center gap-2">
-        {rank ? (
-          <span className="rounded-full bg-status-campfire px-2 py-0.5 text-xs font-black text-gaming-base">
-            #{rank}
-          </span>
-        ) : null}
-        {isPlayerGuild ? (
+      badges={
+        isPlayerGuild ? (
           <span className="rounded-full border border-status-quest px-2 py-0.5 text-xs font-bold text-status-quest">
             {currentGuildLabel}
           </span>
-        ) : null}
-        <h4 className="truncate font-display text-lg font-bold">{hand.title}</h4>
-      </div>
-
-      <PlayingHand
-        hand={hand}
-        mode="full"
-        visibleCardCount={hand.cards.length}
-        expandOnHover={false}
-        className="mx-auto h-[28rem] min-h-0 max-w-7xl md:h-[30rem]"
-        cardClassName="shadow-glow-primary"
-      />
-    </section>
+        ) : null
+      }
+    />
   );
 }
 
@@ -297,6 +272,20 @@ function getGuildIdentityKey(guild: Partial<Guild>) {
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function scrollToClassTarget(target: { guildName?: string; memberId?: string }, attempts = 8) {
+  const element = target.guildName
+    ? document.getElementById(`class-guild-${slugify(target.guildName)}`)
+    : document.getElementById('class-guilds-title');
+
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  if (attempts <= 0) return;
+  window.setTimeout(() => scrollToClassTarget(target, attempts - 1), 80);
 }
 
 export default ClassPage;
