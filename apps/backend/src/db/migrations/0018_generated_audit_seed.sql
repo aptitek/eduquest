@@ -28,9 +28,10 @@ ON CONFLICT ("id") DO UPDATE SET
   "gold" = EXCLUDED."gold",
   "updated_at" = now();
 --> statement-breakpoint
-INSERT INTO "users" ("id", "email", "github_sso_token", "github_username", "first_name", "last_name", "display_name", "birth_date", "pronouns", "bio", "avatar_url", "github_avatar_url", "user_status", "is_admin", "created_at", "updated_at")
+INSERT INTO "users" ("id", "github_email", "email", "github_sso_token", "github_username", "first_name", "last_name", "display_name", "birth_date", "pronouns", "bio", "avatar_url", "github_avatar_url", "user_status", "is_admin", "created_at", "updated_at")
 SELECT
   ('61000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+  lower(first_name || '.' || last_name || '@github.test'),
   lower(first_name || '.' || last_name || '@github.test'),
   'debug-token-frontend-' || i,
   lower(first_name || '-' || last_name),
@@ -54,9 +55,10 @@ CROSS JOIN LATERAL (
 ) names
 ON CONFLICT ("id") DO NOTHING;
 --> statement-breakpoint
-INSERT INTO "users" ("id", "email", "github_sso_token", "github_username", "first_name", "last_name", "display_name", "birth_date", "pronouns", "bio", "avatar_url", "github_avatar_url", "user_status", "is_admin", "created_at", "updated_at")
+INSERT INTO "users" ("id", "github_email", "email", "github_sso_token", "github_username", "first_name", "last_name", "display_name", "birth_date", "pronouns", "bio", "avatar_url", "github_avatar_url", "user_status", "is_admin", "created_at", "updated_at")
 SELECT
   ('62000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+  'cloud.apprentice.' || lpad(i::text, 2, '0') || '@github.test',
   'cloud.apprentice.' || lpad(i::text, 2, '0') || '@github.test',
   'debug-token-cloud-' || i,
   'cloud-apprentice-' || lpad(i::text, 2, '0'),
@@ -75,9 +77,10 @@ SELECT
 FROM generate_series(1, 12) AS series(i)
 ON CONFLICT ("id") DO NOTHING;
 --> statement-breakpoint
-INSERT INTO "users" ("id", "email", "github_sso_token", "github_username", "first_name", "last_name", "display_name", "birth_date", "pronouns", "bio", "avatar_url", "github_avatar_url", "user_status", "is_admin", "created_at", "updated_at")
+INSERT INTO "users" ("id", "github_email", "email", "github_sso_token", "github_username", "first_name", "last_name", "display_name", "birth_date", "pronouns", "bio", "avatar_url", "github_avatar_url", "user_status", "is_admin", "created_at", "updated_at")
 SELECT
   ('63000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+  lower(first_name || '.' || last_name || '@github.test'),
   lower(first_name || '.' || last_name || '@github.test'),
   'debug-token-data-' || i,
   lower(first_name || '-' || last_name),

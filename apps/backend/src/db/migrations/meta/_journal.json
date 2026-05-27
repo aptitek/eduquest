@@ -134,6 +134,13 @@
       "when": 1779966900000,
       "tag": "0018_generated_audit_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1779967800000,
+      "tag": "0019_runtime_schema_backfill",
+      "breakpoints": true
     }
   ]
 }

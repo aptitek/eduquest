@@ -756,6 +756,7 @@ authRouter.get('/github/callback', async (c) => {
             .update(users)
             .set({
               lastLogin: new Date(),
+              githubEmail: primaryEmail,
               githubSsoToken: accessToken,
               githubUsername: githubUser.login,
               displayName: githubUser.name || githubUser.login,
@@ -795,6 +796,7 @@ authRouter.get('/github/callback', async (c) => {
           const [newUser] = await db
             .insert(users)
             .values({
+              githubEmail: primaryEmail,
               email: primaryEmail,
               githubSsoToken: accessToken,
               githubUsername: githubUser.login,

@@ -105,6 +105,7 @@ export const userStatusEnum = pgEnum('user_status', ['online', 'offline', 'busy'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
+  githubEmail: text('github_email').unique().notNull(),
   email: text('email').unique().notNull(),
   githubSsoToken: text('github_sso_token'),
   githubUsername: text('github_username').unique(),
