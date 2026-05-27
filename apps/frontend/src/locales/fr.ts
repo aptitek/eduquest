@@ -121,6 +121,24 @@ export const fr = {
       },
     },
   },
+  rewards: {
+    notification: {
+      title: '+{amount} or de guilde',
+      description: 'Base {basePoints} → {finalAmount} or pour la guilde.',
+    },
+    modifiers: {
+      base: 'Récompense de base',
+      guildSize: 'Bonus de taille de guilde',
+      strength: 'Bonus de force',
+      intelligence: 'Bonus d’intelligence',
+      wisdom: 'Bonus de sagesse',
+      dexterity: 'Bonus de dextérité',
+      constitution: 'Bonus de constitution',
+      charisma: 'Bonus de charisme',
+      charismaPassive: 'Passif charisme',
+    },
+    breakdownLine: '{label} : {signedEffect}',
+  },
   management: {
     title: 'Gestion',
     subtitle: "Vue d'administration en lecture seule.",

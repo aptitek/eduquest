@@ -420,6 +420,7 @@ export const notifications = pgTable('notifications', {
   tone: text('tone').default('neutral').notNull(),
   actionLabelI18nKey: text('action_label_i18n_key'),
   actionTarget: text('action_target'),
+  context: jsonb('context'),
   sortOrder: integer('sort_order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

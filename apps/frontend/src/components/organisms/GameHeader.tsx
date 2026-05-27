@@ -12,6 +12,10 @@ import {
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
+import {
+  formatRewardNotificationDescription,
+  formatRewardNotificationTitle,
+} from '../../features/game/formatRewardNotification';
 import { Coins, Gift, GraduationCap, Map, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
@@ -46,8 +50,16 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   const dashboardNotifications: HeaderNotification[] = dashboardData?.notifications.length
     ? dashboardData.notifications.map((notification) => ({
         id: notification.id,
-        title: t(notification.titleI18nKey),
-        description: notification.descriptionI18nKey ? t(notification.descriptionI18nKey) : undefined,
+        title:
+          notification.context?.type === 'reward'
+            ? formatRewardNotificationTitle(notification.context, t)
+            : t(notification.titleI18nKey),
+        description:
+          notification.context?.type === 'reward'
+            ? formatRewardNotificationDescription(notification.context, t)
+            : notification.descriptionI18nKey
+              ? t(notification.descriptionI18nKey)
+              : undefined,
         tone: notification.tone,
         icon: getNotificationIcon(notification.icon),
         action: notification.actionLabelI18nKey

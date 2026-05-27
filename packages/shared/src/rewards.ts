@@ -44,6 +44,46 @@ export type RewardSystemConfigOverrides = {
   [Section in keyof RewardSystemConfig]?: Partial<RewardSystemConfig[Section]>;
 };
 
+export type RewardModifierKind =
+  | 'base'
+  | 'guild_size'
+  | 'attribute'
+  | 'charisma_passive'
+  | 'early_bonus'
+  | 'activity_streak'
+  | 'event_bonus';
+
+export interface RewardModifier {
+  id: string;
+  kind: RewardModifierKind;
+  labelI18nKey: string;
+  /** Points added (or net change) by this modifier step. */
+  effect: number;
+  /** Optional multiplier applied at this step (e.g. guild size ×1.5). */
+  multiplier?: number;
+  /** Optional metadata for UI (attribute name, student count, etc.). */
+  detail?: Record<string, string | number>;
+}
+
+export interface RewardComputationBreakdown {
+  basePoints: number;
+  subtotal: number;
+  modifiers: RewardModifier[];
+  finalAmount: number;
+  activityType?: RewardActivityType;
+  guildId: string;
+  studentId?: string;
+  activityId?: string;
+  cohortId?: string;
+  trigger: string;
+  balance?: number;
+}
+
+export interface RewardNotificationContext {
+  type: 'reward';
+  breakdown: RewardComputationBreakdown;
+}
+
 export const DEFAULT_REWARD_SYSTEM_CONFIG: RewardSystemConfig = {
   guild: {
     minStudents: 1,

@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { mapRouter } from './routes/map';
 import { authRouter } from './routes/auth';
 import { assetRouter, publicAssetRouter } from './routes/assets';
+import { webhooksRouter } from './routes/webhooks';
 import { authMiddleware } from './middleware/auth';
 import { getFrontendUrl } from './config/runtime';
 
@@ -15,6 +16,7 @@ type Bindings = {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   GITHUB_REDIRECT_URI?: string;
+  GITHUB_WEBHOOK_SECRET?: string;
   FRONTEND_URL?: string;
   ASSET_PUBLIC_BASE_URL?: string;
   ASSETS?: R2Bucket;
@@ -39,6 +41,7 @@ app.use(
 // Montage des routes publiques d'authentification sous /api/auth
 app.route('/api/auth', authRouter);
 app.route('/assets', publicAssetRouter);
+app.route('/api/webhooks', webhooksRouter);
 
 // Enforcer l'authentification sur les endpoints protégés du jeu
 app.use('/api/map', authMiddleware);

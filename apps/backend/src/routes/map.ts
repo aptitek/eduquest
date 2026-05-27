@@ -19,7 +19,6 @@ import {
   cohortProgress,
   gameActivities,
   gameMapRuns,
-  pointTransactions,
   guilds,
   notifications,
   progressMilestones,
@@ -33,6 +32,7 @@ import {
 } from '../dev/debugBackup';
 import type { UserPayload } from '../middleware/auth';
 import { isMockDataEnabled } from '../config/runtime';
+import { createEventContext, publishEvent } from '../events';
 import { VotingCostService } from '../services/rewards';
 
 type Bindings = {
@@ -432,35 +432,21 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       })
       .returning();
 
-    const earnedPoints = activity.basePoints || 0;
-
-    if (earnedPoints > 0 && latestMembership?.guildId) {
-      await db
-        .update(guilds)
-        .set({
-          gold: sql`${guilds.gold} + ${earnedPoints}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(guilds.id, latestMembership.guildId));
-
-      await db.insert(pointTransactions).values({
-        guildId: latestMembership.guildId,
-        studentId: studentRecord.id,
-        activityId,
-        amount: earnedPoints,
-        transactionType: 'EARNED',
-      });
-    }
-
-    if (earnedPoints > 0 && latestMembership?.cohortId) {
-      await db
-        .update(cohortProgress)
-        .set({
-          currentPoints: sql`${cohortProgress.currentPoints} + ${earnedPoints}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(cohortProgress.cohortId, latestMembership.cohortId));
-    }
+    const eventContext = createEventContext({ db, env: c.env, userId: user?.id });
+    await publishEvent(
+      {
+        type: 'activity.completed',
+        source: 'http.map',
+        payload: {
+          activityId,
+          studentId: studentRecord.id,
+          cohortId: latestMembership.cohortId,
+          guildId: latestMembership.guildId || undefined,
+          completionType: getCompletionType(activity),
+        },
+      },
+      eventContext
+    );
 
     return c.json({
       success: true,
@@ -811,6 +797,7 @@ mapRouter.get('/dashboard', async (c) => {
         tone: notification.tone as CohortProgressData['notifications'][number]['tone'],
         actionLabelI18nKey: notification.actionLabelI18nKey || undefined,
         actionTarget: notification.actionTarget as CohortProgressData['notifications'][number]['actionTarget'],
+        context: (notification.context as CohortProgressData['notifications'][number]['context']) || undefined,
       })),
     };
 

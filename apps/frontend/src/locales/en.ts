@@ -122,6 +122,24 @@ export const en: TranslationKeys = {
       },
     },
   },
+  rewards: {
+    notification: {
+      title: '+{amount} guild gold',
+      description: 'Base {basePoints} → {finalAmount} gold for the guild.',
+    },
+    modifiers: {
+      base: 'Base reward',
+      guildSize: 'Guild size bonus',
+      strength: 'Strength bonus',
+      intelligence: 'Intelligence bonus',
+      wisdom: 'Wisdom bonus',
+      dexterity: 'Dexterity bonus',
+      constitution: 'Constitution bonus',
+      charisma: 'Charisma bonus',
+      charismaPassive: 'Charisma passive',
+    },
+    breakdownLine: '{label}: {signedEffect}',
+  },
   management: {
     title: 'Management',
     subtitle: 'Read-only administration overview.',

@@ -14,6 +14,7 @@ import {
   pointTransactions,
   students,
 } from '../db/schema';
+import { createEventContext, publishEvent } from '../events';
 
 export type {
   RewardActivityType,
@@ -619,12 +620,57 @@ export class VotingCostService {
         transactionType: 'SPENT_VOTE',
       });
 
-      return {
+      const result = {
         guildId: input.guildId,
         votes: input.votes,
         cost,
         balance: updatedGuild.gold,
       };
+
+      const eventContext = createEventContext({ db: tx });
+      await publishEvent(
+        {
+          type: 'guild.votes.spent',
+          source: 'service.rewards',
+          payload: {
+            guildId: result.guildId,
+            studentId: input.studentId,
+            votes: result.votes,
+            cost: result.cost,
+            balance: result.balance,
+          },
+        },
+        eventContext
+      );
+      await publishEvent(
+        {
+          type: 'guild.gold.spent',
+          source: 'service.rewards',
+          payload: {
+            guildId: result.guildId,
+            studentId: input.studentId,
+            amount: result.cost,
+            balance: result.balance,
+            reason: 'votes',
+          },
+        },
+        eventContext
+      );
+      await publishEvent(
+        {
+          type: 'progress.boosted',
+          source: 'service.rewards',
+          payload: {
+            guildId: result.guildId,
+            studentId: input.studentId,
+            votes: result.votes,
+            cost: result.cost,
+          },
+        },
+        eventContext
+      );
+
+      return result;
     });
   }
 }

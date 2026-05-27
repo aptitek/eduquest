@@ -290,6 +290,8 @@ export interface ProgressMilestone {
 
 export type NotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
+import type { RewardNotificationContext } from './rewards';
+
 export interface Notification {
   id: string;
   cohortId?: string;
@@ -300,6 +302,7 @@ export interface Notification {
   tone?: NotificationTone;
   actionLabelI18nKey?: string;
   actionTarget?: 'map' | 'acknowledge' | 'collect' | 'review';
+  context?: RewardNotificationContext;
 }
 
 export interface CohortProgressData {
