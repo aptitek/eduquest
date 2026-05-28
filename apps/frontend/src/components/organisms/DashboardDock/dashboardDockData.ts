@@ -142,9 +142,9 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
   const guildSlug = slugify(guildName);
   const layoutPrefix = options.layoutPrefix || `class-guild-${guildSlug}`;
   const guildColor = resolveCardColor(options.guild.color);
-  const memberCards = (options.guild.members || [])
-    .slice(0, 4)
-    .map((member, index) => buildGuildMemberCard(t, member, layoutPrefix, index));
+  const memberCards = (options.guild.members || []).map((member, index) =>
+    buildGuildMemberCard(t, member, layoutPrefix, index)
+  );
 
   return {
     id: `${layoutPrefix}-hand`,

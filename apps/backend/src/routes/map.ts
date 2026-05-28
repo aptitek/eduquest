@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, inArray, or, sql, sum } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql, sum } from 'drizzle-orm';
 import {
   type Activity,
   type ActivityParticipationMode,
@@ -68,6 +68,13 @@ type Database = ReturnType<typeof getDb>;
 type CompletionSubmissionPayload = {
   workUrl?: string;
   metadata?: Record<string, unknown>;
+};
+
+type CreateGuildPayload = {
+  name?: unknown;
+  description?: unknown;
+  iconKey?: unknown;
+  color?: unknown;
 };
 
 interface MapOccupancyMember {
@@ -1983,6 +1990,135 @@ mapRouter.get('/games', async (c) => {
   } catch (error: any) {
     console.error('Game selector SQL error:', error.message);
     return apiError(c, 'Games could not be loaded.', 500);
+  }
+});
+
+mapRouter.post('/guilds', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const user = c.get('user');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<CreateGuildPayload>(c, {});
+
+  const name = typeof body?.name === 'string' ? body.name.trim() : '';
+  const description = typeof body?.description === 'string' ? body.description.trim() : undefined;
+  const iconKey = typeof body?.iconKey === 'string' ? body.iconKey.trim() : undefined;
+  const color = typeof body?.color === 'string' ? body.color.trim() : undefined;
+
+  if (!name || name.length > 80) {
+    return apiError(c, 'Guild name is required and must be 80 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (description && description.length > 400) {
+    return apiError(c, 'Guild description must be 400 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (iconKey && !/^[A-Za-z0-9_-]{1,80}$/.test(iconKey)) {
+    return apiError(c, 'iconKey must be a valid icon identifier.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (color && color.length > 80) {
+    return apiError(c, 'Guild color must be 80 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (!databaseUrl) {
+    return missingDatabaseUrl(c);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const context = await resolveStudentCohortContext(db, user, requestedCohortId);
+
+    if (!context) {
+      return apiError(c, 'Cohort context not found.', 404);
+    }
+    if (context.membership.guildId) {
+      return apiError(c, 'Student already belongs to a guild for this cohort.', 409);
+    }
+
+    const createdGuild = await db.transaction(async (tx) => {
+      const [guildRecord] = await tx
+        .insert(guilds)
+        .values({
+          cohortId: context.cohortRecord.id,
+          name,
+          description: description || null,
+          iconKey: iconKey || null,
+          color: color || null,
+        })
+        .returning();
+
+      const [updatedMembership] = await tx
+        .update(cohortMemberships)
+        .set({ guildId: guildRecord.id })
+        .where(
+          and(
+            eq(cohortMemberships.userId, context.membership.userId),
+            eq(cohortMemberships.cohortId, context.membership.cohortId),
+            isNull(cohortMemberships.guildId)
+          )
+        )
+        .returning();
+
+      if (!updatedMembership) {
+        throw new Error('Student already belongs to a guild for this cohort.');
+      }
+
+      return guildRecord;
+    });
+
+    const [creatorRecord] = await db
+      .select({
+        studentId: students.id,
+        userId: users.id,
+        displayName: users.displayName,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+        githubAvatarUrl: users.githubAvatarUrl,
+        guildId: cohortMemberships.guildId,
+        institutionalEmail: cohortMemberships.institutionalEmail,
+        characterClass: gameCharacters.characterClass,
+        strength: gameCharacters.strength,
+        dexterity: gameCharacters.dexterity,
+        constitution: gameCharacters.constitution,
+        intelligence: gameCharacters.intelligence,
+        wisdom: gameCharacters.wisdom,
+        charisma: gameCharacters.charisma,
+      })
+      .from(cohortMemberships)
+      .innerJoin(students, eq(students.userId, cohortMemberships.userId))
+      .innerJoin(users, eq(users.id, cohortMemberships.userId))
+      .leftJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+      .where(
+        and(
+          eq(cohortMemberships.userId, context.membership.userId),
+          eq(cohortMemberships.cohortId, context.membership.cohortId)
+        )
+      )
+      .limit(1);
+
+    return c.json(
+      {
+        success: true,
+        source: 'database',
+        guild: {
+          ...toGuildPayload(createdGuild),
+          members: creatorRecord ? [toClassRosterStudent(creatorRecord)] : [],
+        },
+      },
+      201
+    );
+  } catch (error: any) {
+    console.error('Guild creation SQL error:', error.message);
+    if (error?.message === 'Student already belongs to a guild for this cohort.') {
+      return apiError(c, error.message, 409);
+    }
+    return apiError(c, 'Guild could not be created.', 500);
   }
 });
 

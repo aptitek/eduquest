@@ -25,7 +25,7 @@ The repository is a TypeScript monorepo using npm workspaces.
 - The management UI can load and update school, cohort, student, profile, invite, and logo data through backend routes.
 - The map loads activities through `/api/map`, and activity completion is persisted through `/api/map/activities/:activityId/complete`.
 - The dashboard dock and header notifications load through `/api/dashboard`, with database-backed gauge milestones, reward cards, and notification records.
-- Drizzle migrations include demo seed data for schools, campuses, cohorts, guilds, users, students, memberships, characters, activities, battles, gauges, rewards, and notifications.
+- Drizzle database initialization includes demo seed data for schools, campuses, cohorts, guilds, users, students, memberships, characters, activities, gauges, rewards, and notifications.
 - English and French locales cover the dashboard dock, milestones, rewards, buttons, notifications, management UI, auth UI, profile UI, and map/detail panel strings.
 - Frontend design-token and Atomic Design boundaries are enforced by `apps/frontend/scripts/audit-design-system.mjs`.
 
@@ -79,7 +79,7 @@ task run-frontend-open
 
 ## Docker Local Stack
 
-Run the full local stack with PostgreSQL, Drizzle migrations, the backend Worker, and the frontend:
+Run the full local stack with PostgreSQL, the Drizzle database initialization, the backend Worker, and the frontend:
 
 ```bash
 docker compose up --build
@@ -87,7 +87,7 @@ docker compose up --build
 
 Compose exposes the frontend at `http://localhost:5173`, the backend at `http://localhost:8787`, and PostgreSQL at `localhost:5432`. The database uses `eduquest` as database name, user, and password, and persists data in the `postgres_data` Docker volume.
 
-The `migrate` service runs `npm run db:migrate --workspace backend` before the backend starts. To recreate the local database from scratch:
+The `migrate` service runs `npm run db:migrate --workspace backend` before the backend starts. This applies the current schema initialization and deterministic mock data seed. To recreate the local database from scratch:
 
 ```bash
 docker compose down -v
@@ -177,7 +177,7 @@ Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local s
 
 The backend schema lives in `apps/backend/src/db/schema.ts`.
 
-Migrations live in `apps/backend/src/db/migrations`. They currently reconcile the project schema and seed deterministic demo data for local/dev environments.
+Database initialization lives in `apps/backend/src/db/migrations`. Because the app is not in production yet, this folder keeps a single current-schema initialization that also seeds deterministic mock data for local/dev environments.
 
 Generate new migrations after schema changes:
 

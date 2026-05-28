@@ -41,6 +41,9 @@ export function useAuth() {
           throwApiResponseError(response, data, 'Your session expired. Please sign in again.');
         }
         if (data.success && data.user && (data.user.isAdmin || (data.student && data.character))) {
+          if (typeof data.token === 'string' && data.token) {
+            localStorage.setItem('eduquest_token', data.token);
+          }
           setUserSession(data.user, data.student || null, data.character || null, data.activityCompletions || []);
         } else {
           throw new Error('Malformed server session payload');

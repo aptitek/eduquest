@@ -1505,6 +1505,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
   if (!databaseUrl) {
     return missingDatabaseUrl(c);
   }
+  const jwtSecret = requireJwtSecret(c.env);
 
   let loadedDbProfile = false;
 
@@ -1560,8 +1561,10 @@ authRouter.get('/me', authMiddleware, async (c) => {
       }
 
       if (userObj.isAdmin) {
+        const refreshedToken = await signAuthToken(toAuthPayload(userObj), jwtSecret);
         return c.json({
           success: true,
+          token: refreshedToken,
           user: userObj,
           student: null,
           character: null,
@@ -1692,8 +1695,10 @@ authRouter.get('/me', authMiddleware, async (c) => {
     return apiError(c, 'Student profile not found.', 404);
   }
 
+  const refreshedToken = await signAuthToken(toAuthPayload(userObj), jwtSecret);
   return c.json({
     success: true,
+    token: refreshedToken,
     user: userObj,
     student: studentObj,
     character: characterObj,

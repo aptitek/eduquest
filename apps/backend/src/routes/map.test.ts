@@ -122,6 +122,48 @@ describe('map routes', () => {
     expect(response.status).toBe(403);
   });
 
+  it('rejects guild creation without a name before using the database', async () => {
+    const response = await app.request(
+      '/api/guilds',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(false)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: '   ' }),
+      },
+      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(400);
+    expect(payload.success).toBe(false);
+    expect(payload.errorCode).toBe('validation_failed');
+    expect(payload.error).toContain('Guild name');
+  });
+
+  it('requires database-backed guild creation', async () => {
+    const response = await app.request(
+      '/api/guilds',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(false)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'Solarized Sentinels' }),
+      },
+      { JWT_SECRET, APP_ENV: 'development' }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(503);
+    expect(payload.success).toBe(false);
+    expect(payload.errorCode).toBe('server_configuration');
+    expect(payload.error).toBe('Database access is not configured.');
+  });
+
   it('rejects invalid activity icons before updating', async () => {
     const response = await app.request(
       '/api/map/activities/debug_activity_api_bridge/icon',

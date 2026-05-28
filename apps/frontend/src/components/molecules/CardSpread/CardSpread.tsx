@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
 
@@ -25,6 +25,7 @@ export interface CardSpreadProps<TItem> {
   visibleSpreadCount?: number;
   expanded?: boolean;
   expandOnHover?: boolean;
+  deferHoverForeground?: boolean;
   ariaLabel?: string;
   className?: string;
   emphasisClassName?: string;
@@ -47,6 +48,7 @@ type CardSpreadStyle = CSSProperties & {
 };
 
 const DEFAULT_VISIBLE_SPREAD_COUNT = 3;
+const HOVER_FOREGROUND_DELAY_MS = 90;
 
 export function CardSpread<TItem>({
   items,
@@ -59,6 +61,7 @@ export function CardSpread<TItem>({
   visibleSpreadCount = DEFAULT_VISIBLE_SPREAD_COUNT,
   expanded = false,
   expandOnHover = false,
+  deferHoverForeground = false,
   ariaLabel,
   className,
   emphasisClassName,
@@ -68,6 +71,8 @@ export function CardSpread<TItem>({
   const containerRef = useRef<HTMLDivElement>(null);
   const emphasisCardRef = useRef<HTMLDivElement>(null);
   const [dynamicHorizontalStep, setDynamicHorizontalStep] = useState<number | undefined>();
+  const [hoveredCardIndex, setHoveredCardIndex] = useState<number | undefined>();
+  const [foregroundCardIndex, setForegroundCardIndex] = useState<number | undefined>();
   const resolvedEmphasisIndex = resolveIndex(emphasisIndex, items.length);
   const resolvedActiveIndex = activeIndex === undefined ? undefined : resolveIndex(activeIndex, items.length);
   const emphasisItem = items[resolvedEmphasisIndex];
@@ -108,6 +113,24 @@ export function CardSpread<TItem>({
     return () => resizeObserver.disconnect();
   }, [shape, spacing, spreadItems.length]);
 
+  useEffect(() => {
+    if (!deferHoverForeground) {
+      setForegroundCardIndex(undefined);
+      return undefined;
+    }
+
+    if (hoveredCardIndex === undefined) {
+      setForegroundCardIndex(undefined);
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setForegroundCardIndex(hoveredCardIndex);
+    }, HOVER_FOREGROUND_DELAY_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [deferHoverForeground, hoveredCardIndex]);
+
   return (
     <div
       ref={containerRef}
@@ -122,7 +145,7 @@ export function CardSpread<TItem>({
       <div
         ref={emphasisCardRef}
         className={cn(
-          'absolute bottom-0 z-30 origin-bottom translate-y-0 transition-[transform,filter] duration-300',
+          'absolute bottom-0 z-30 origin-bottom translate-y-0 transition-[transform,filter] duration-300 ease-out',
           getEmphasisPositionClassName(shape, side),
           expandOnHover &&
             'group-hover:-translate-y-2 group-hover:scale-110 group-focus-within:-translate-y-2 group-focus-within:scale-110',
@@ -151,19 +174,45 @@ export function CardSpread<TItem>({
           dynamicHorizontalStep,
           isActive: resolvedActiveIndex === index,
         });
+        const resolvedStyle =
+          deferHoverForeground && foregroundCardIndex === index
+            ? { ...style, zIndex: 50 }
+            : style;
 
         return (
           <div
             key={getStableKey(item, index)}
-            ref={(element) => applySpreadCardStyle(element, style)}
+            ref={(element) => applySpreadCardStyle(element, resolvedStyle)}
+            onPointerEnter={deferHoverForeground ? () => setHoveredCardIndex(index) : undefined}
+            onPointerLeave={
+              deferHoverForeground
+                ? () => {
+                    setHoveredCardIndex((currentIndex) =>
+                      currentIndex === index ? undefined : currentIndex
+                    );
+                  }
+                : undefined
+            }
+            onFocus={deferHoverForeground ? () => setHoveredCardIndex(index) : undefined}
+            onBlur={
+              deferHoverForeground
+                ? (event) => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    setHoveredCardIndex((currentIndex) =>
+                      currentIndex === index ? undefined : currentIndex
+                    );
+                  }
+                : undefined
+            }
             className={cn(
-              'absolute bottom-0 origin-bottom shadow-xl transition-[transform,filter] duration-300 [--card-x:var(--card-rest-x)] [--card-y:var(--card-rest-y)] [--card-rotation:var(--card-rest-rotation)] [--card-scale:var(--card-rest-scale)] [transform:translateX(var(--card-x))_translateY(var(--card-y))_rotate(var(--card-rotation))_scale(var(--card-scale))]',
+              'absolute bottom-0 origin-bottom shadow-xl transition-[transform,filter] duration-300 ease-out [--card-x:var(--card-rest-x)] [--card-y:var(--card-rest-y)] [--card-rotation:var(--card-rest-rotation)] [--card-scale:var(--card-rest-scale)] [transform:translateX(var(--card-x))_translateY(var(--card-y))_rotate(var(--card-rotation))_scale(var(--card-scale))]',
               getSpreadPositionClassName(shape, side),
-              'hover:!z-50 hover:[--card-x:var(--card-hover-x)] hover:[--card-y:var(--card-hover-y)] hover:[--card-rotation:var(--card-hover-rotation)] hover:[--card-scale:1.05] hover:drop-shadow-2xl',
-              'focus-within:!z-50 focus-within:[--card-x:var(--card-hover-x)] focus-within:[--card-y:var(--card-hover-y)] focus-within:[--card-rotation:var(--card-hover-rotation)] focus-within:[--card-scale:1.05] focus-within:drop-shadow-2xl',
               expanded && '[--card-x:var(--card-open-x)] [--card-y:var(--card-open-y)] [--card-rotation:var(--card-open-rotation)] [--card-scale:var(--card-open-scale)]',
               expandOnHover &&
                 'group-hover:[--card-x:var(--card-open-x)] group-hover:[--card-y:var(--card-open-y)] group-hover:[--card-rotation:var(--card-open-rotation)] group-hover:[--card-scale:var(--card-open-scale)] group-focus:[--card-x:var(--card-open-x)] group-focus:[--card-y:var(--card-open-y)] group-focus:[--card-rotation:var(--card-open-rotation)] group-focus:[--card-scale:var(--card-open-scale)] group-focus-within:[--card-x:var(--card-open-x)] group-focus-within:[--card-y:var(--card-open-y)] group-focus-within:[--card-rotation:var(--card-open-rotation)] group-focus-within:[--card-scale:var(--card-open-scale)]',
+              !deferHoverForeground && 'hover:!z-50 focus-within:!z-50',
+              'hover:[--card-x:var(--card-hover-x)] hover:[--card-y:var(--card-hover-y)] hover:[--card-rotation:var(--card-hover-rotation)] hover:[--card-scale:1.05] hover:drop-shadow-2xl',
+              'focus-within:[--card-x:var(--card-hover-x)] focus-within:[--card-y:var(--card-hover-y)] focus-within:[--card-rotation:var(--card-hover-rotation)] focus-within:[--card-scale:1.05] focus-within:drop-shadow-2xl',
               resolvedActiveIndex === index && activeCardClassName,
               spreadCardClassName
             )}

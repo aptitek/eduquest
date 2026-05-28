@@ -80,6 +80,7 @@ export function PlayingHand({
       visibleSpreadCount={visibleCards.length}
       expanded={expanded}
       expandOnHover={expandOnHover}
+      deferHoverForeground={mode === 'mini'}
       ariaLabel={ariaLabel}
       className={cn(
         mode === 'full'
@@ -90,11 +91,11 @@ export function PlayingHand({
       emphasisClassName={cn(
         mode === 'full'
           ? 'z-40 w-72 rounded-[1.4rem] duration-500 md:w-80 hover:!z-50 hover:-translate-y-5 hover:scale-[1.03] hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-5 focus-within:scale-[1.03] focus-within:drop-shadow-2xl'
-          : 'duration-300',
+          : 'duration-500 hover:!z-50 hover:-translate-y-2 hover:scale-110 hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-2 focus-within:scale-110 focus-within:drop-shadow-2xl',
         mainCardClassName || cardClassName
       )}
       spreadCardClassName={cn(
-        mode === 'full' ? 'w-72 rounded-[1.4rem] duration-500 md:w-80' : 'duration-300',
+        mode === 'full' ? 'w-72 rounded-[1.4rem] duration-500 md:w-80' : 'duration-500',
         hand.mainCardIndex !== undefined && spreadShape === 'arc' && mode === 'full' && 'left-[62%]',
         stackCardClassName || cardClassName
       )}

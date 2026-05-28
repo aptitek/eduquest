@@ -74,6 +74,16 @@ export function ClassPage() {
     () => [...classGuilds].sort(sortByPointsThenName).slice(0, 3),
     [classGuilds]
   );
+  const podiumHands = useMemo(
+    () =>
+      podiumGuilds.map((guild, index) =>
+        buildClassGuildHand(t, {
+          guild,
+          layoutPrefix: `class-podium-${index + 1}-${slugify(guild.name)}`,
+        })
+      ),
+    [podiumGuilds, t]
+  );
   const podiumKeys = new Set(podiumGuilds.map(getGuildIdentityKey));
   const remainingGuilds = useMemo(
     () => classGuilds.filter((guild) => !podiumKeys.has(getGuildIdentityKey(guild))).sort(sortByName),
@@ -133,7 +143,17 @@ export function ClassPage() {
             </h3>
           </div>
 
-          <div id="class-podium-hands-target" className="relative z-0 min-h-[94rem] overflow-visible" />
+          <div id="class-podium-hands-target" className="relative z-0 space-y-5 overflow-visible">
+            {podiumHands.map((hand, index) => (
+              <ClassHandSection
+                key={hand.id}
+                hand={hand}
+                rank={index + 1}
+                isPlayerGuild={hand.title === playerGuild?.name}
+                currentGuildLabel={t('class.currentGuild')}
+              />
+            ))}
+          </div>
         </section>
 
         <div className="flex items-center gap-4" role="separator" aria-hidden>
@@ -263,10 +283,12 @@ function buildUnguildedStudentCard(
 
 function ClassHandSection({
   hand,
+  rank,
   isPlayerGuild,
   currentGuildLabel,
 }: {
   hand: ReturnType<typeof buildClassGuildHand>;
+  rank?: number;
   isPlayerGuild?: boolean;
   currentGuildLabel: string;
 }) {
@@ -274,6 +296,7 @@ function ClassHandSection({
     <PlayingHandPanel
       hand={hand}
       id={`class-guild-${slugify(hand.title || 'guild')}`}
+      rank={rank}
       className={cn(
         isPlayerGuild && 'border-status-quest shadow-glow-primary'
       )}
