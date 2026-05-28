@@ -79,7 +79,7 @@ task run-frontend-open
 
 ## Docker Local Stack
 
-Run the full local stack with PostgreSQL, the Drizzle database initialization, the backend Worker, and the frontend:
+Run the full local stack with PostgreSQL, automatic Drizzle migrations, the backend Worker, and the frontend:
 
 ```bash
 docker compose up --build
@@ -87,7 +87,7 @@ docker compose up --build
 
 Compose exposes the frontend at `http://localhost:5173`, the backend at `http://localhost:8787`, and PostgreSQL at `localhost:5432`. The database uses `eduquest` as database name, user, and password, and persists data in the `postgres_data` Docker volume.
 
-The `migrate` service runs `npm run db:migrate --workspace backend` before the backend starts. This applies the current schema initialization and deterministic mock data seed. To recreate the local database from scratch:
+The backend dev process applies pending Drizzle migrations before Wrangler starts, then watches `apps/backend/src/db/migrations` and applies new migration files automatically while Docker hot reload is running. To recreate the local database from scratch:
 
 ```bash
 docker compose down -v
@@ -187,7 +187,9 @@ Generate new migrations after schema changes:
 npm run db:generate --workspace backend
 ```
 
-Apply migrations using your deployment/local database workflow. Keep `schema.ts`, migrations, and shared types in sync.
+In development, `npm run dev --workspace backend` applies pending migrations on startup and watches `apps/backend/src/db/migrations` for newly generated migrations. The Drizzle config reads `DATABASE_URL` from the environment first, then from `apps/backend/.dev.vars`.
+
+Backend production deploys run `npm run db:migrate` before `wrangler deploy` through `npm run deploy --workspace backend`. Make sure the deployment environment exposes the production `DATABASE_URL`; Cloudflare Worker secrets are still needed for the deployed Worker runtime. Keep `schema.ts`, migrations, and shared types in sync.
 
 ## Code Guidelines
 

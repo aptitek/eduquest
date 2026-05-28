@@ -79,7 +79,7 @@ task run-frontend-open
 
 ## Stack Locale Docker
 
-Lancer toute la stack locale avec PostgreSQL, les migrations Drizzle, le Worker backend et le frontend :
+Lancer toute la stack locale avec PostgreSQL, les migrations Drizzle automatiques, le Worker backend et le frontend :
 
 ```bash
 docker compose up --build
@@ -87,7 +87,7 @@ docker compose up --build
 
 Compose expose le frontend sur `http://localhost:5173`, le backend sur `http://localhost:8787` et PostgreSQL sur `localhost:5432`. La base utilise `eduquest` comme nom de base, utilisateur et mot de passe, et conserve ses données dans le volume Docker `postgres_data`.
 
-Le service `migrate` exécute `npm run db:migrate --workspace backend` avant le démarrage du backend. Pour recréer la base locale depuis zéro :
+Le processus de développement backend applique les migrations Drizzle en attente avant de démarrer Wrangler, puis surveille `apps/backend/src/db/migrations` et applique automatiquement les nouveaux fichiers de migration pendant le hot reload Docker. Pour recréer la base locale depuis zéro :
 
 ```bash
 docker compose down -v
@@ -181,7 +181,9 @@ Générer de nouvelles migrations après une modification du schéma :
 npm run db:generate --workspace backend
 ```
 
-Appliquez les migrations avec votre workflow local ou de déploiement. Gardez `schema.ts`, les migrations et les types partagés synchronisés.
+En développement, `npm run dev --workspace backend` applique les migrations en attente au démarrage et surveille `apps/backend/src/db/migrations` pour les nouvelles migrations générées. La configuration Drizzle lit `DATABASE_URL` depuis l'environnement en priorité, puis depuis `apps/backend/.dev.vars`.
+
+En production, `npm run deploy --workspace backend` exécute `npm run db:migrate` avant `wrangler deploy`. Vérifiez que l'environnement de déploiement expose le `DATABASE_URL` de production ; les secrets Cloudflare Worker restent nécessaires pour le Worker déployé. Gardez `schema.ts`, les migrations et les types partagés synchronisés.
 
 ## Règles De Code
 

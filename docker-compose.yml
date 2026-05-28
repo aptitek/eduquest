@@ -34,21 +34,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  migrate:
+  backend:
     <<: *app-service
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://eduquest:eduquest@postgres:5432/eduquest
-    command: npm run db:migrate --workspace backend
-    restart: "no"
-
-  backend:
-    <<: *app-service
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     environment:
       APP_ENV: development
       ENABLE_DEBUG_AUTH: "true"

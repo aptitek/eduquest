@@ -4,8 +4,10 @@
   "private": true,
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev src/index.ts --show-interactive-dev-session=false",
-    "deploy": "wrangler deploy --minify src/index.ts",
+    "dev": "node scripts/dev-with-migrations.mjs",
+    "dev:worker": "wrangler dev src/index.ts --show-interactive-dev-session=false",
+    "deploy": "npm run db:migrate && npm run deploy:worker",
+    "deploy:worker": "wrangler deploy --minify src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
