@@ -10,6 +10,7 @@ import {
   doublePrecision,
   pgEnum,
   primaryKey,
+  index,
   uniqueIndex,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -312,6 +313,9 @@ export const gameActivityEdges = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({
+    globalEdgeIdx: uniqueIndex('game_activity_edges_global_idx')
+      .on(table.fromActivityId, table.toActivityId)
+      .where(sql`${table.cohortId} IS NULL AND ${table.mapRunId} IS NULL`),
     edgeScopeIdx: uniqueIndex('game_activity_edges_scope_idx').on(
       table.fromActivityId,
       table.toActivityId,
@@ -351,35 +355,36 @@ export const gameActivityCompletions = pgTable(
   })
 );
 
-export const gameCharacterMoves = pgTable('game_character_moves', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  studentId: uuid('student_id')
-    .notNull()
-    .references(() => students.id, { onDelete: 'cascade' }),
-  cohortId: uuid('cohort_id')
-    .notNull()
-    .references(() => cohorts.id, { onDelete: 'cascade' }),
-  mapRunId: uuid('map_run_id')
-    .notNull()
-    .references(() => gameMapRuns.id, { onDelete: 'cascade' }),
-  fromActivityId: uuid('from_activity_id').references(() => gameActivities.id, { onDelete: 'set null' }),
-  toActivityId: uuid('to_activity_id')
-    .notNull()
-    .references(() => gameActivities.id, { onDelete: 'cascade' }),
-  moveType: gameCharacterMoveTypeEnum('move_type').default('move').notNull(),
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
-
-// Ancienne table conservée uniquement pour les migrations historiques.
-export const gameBattles = pgTable('game_battles', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  studentId: uuid('student_id').references(() => students.id),
-  activityId: uuid('activity_id').references(() => gameActivities.id),
-  grade: doublePrecision('grade'), // note normalisée entre 0 et 1 (1 = 20/20)
-  workUrl: text('work_url'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+export const gameCharacterMoves = pgTable(
+  'game_character_moves',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => cohorts.id, { onDelete: 'cascade' }),
+    mapRunId: uuid('map_run_id')
+      .notNull()
+      .references(() => gameMapRuns.id, { onDelete: 'cascade' }),
+    fromActivityId: uuid('from_activity_id').references(() => gameActivities.id, { onDelete: 'set null' }),
+    toActivityId: uuid('to_activity_id')
+      .notNull()
+      .references(() => gameActivities.id, { onDelete: 'cascade' }),
+    moveType: gameCharacterMoveTypeEnum('move_type').default('move').notNull(),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    studentScopeCreatedIdx: index('game_character_moves_student_scope_created_idx').on(
+      table.studentId,
+      table.cohortId,
+      table.mapRunId,
+      table.createdAt
+    ),
+  })
+);
 
 // Table d'audit déterministe des gains et dépenses de points.
 export const pointTransactions = pgTable('point_transactions', {
@@ -437,16 +442,24 @@ export const notifications = pgTable('notifications', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-export const rewardBalanceConfigs = pgTable('reward_balance_configs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  version: integer('version').notNull(),
-  label: text('label'),
-  config: jsonb('config').notNull(),
-  isActive: boolean('is_active').default(false).notNull(),
-  effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
-  createdBy: uuid('created_by').references(() => users.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const rewardBalanceConfigs = pgTable(
+  'reward_balance_configs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull(),
+    label: text('label'),
+    config: jsonb('config').notNull(),
+    isActive: boolean('is_active').default(false).notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    activeIdx: uniqueIndex('reward_balance_configs_active_idx')
+      .on(table.isActive)
+      .where(sql`${table.isActive} = true`),
+  })
+);
 
 // ==========================================
 // 3. LOGS D'AUDIT

@@ -179,6 +179,8 @@ The backend schema lives in `apps/backend/src/db/schema.ts`.
 
 Database initialization lives in `apps/backend/src/db/migrations`. Because the app is not in production yet, this folder keeps a single current-schema initialization that also seeds deterministic mock data for local/dev environments.
 
+The current schema cleanup and pre-production architecture notes are documented in `docs/database-architecture-audit.md`.
+
 Generate new migrations after schema changes:
 
 ```bash

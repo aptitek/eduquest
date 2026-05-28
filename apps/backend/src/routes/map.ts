@@ -30,7 +30,6 @@ import {
   cohortProgress,
   cohorts,
   gameActivities,
-  gameBattles,
   gameMapRuns,
   guilds,
   notifications,
@@ -1194,7 +1193,6 @@ mapRouter.delete('/map/activities/:activityId', async (c) => {
       .update(gameActivities)
       .set({ templateActivityId: null })
       .where(eq(gameActivities.templateActivityId, activityId));
-    await db.delete(gameBattles).where(eq(gameBattles.activityId, activityId));
 
     const [deletedActivity] = await db
       .delete(gameActivities)

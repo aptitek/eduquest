@@ -128,15 +128,6 @@ CREATE TABLE "game_activity_edges" (
 	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "game_battles" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"student_id" uuid,
-	"activity_id" uuid,
-	"grade" double precision,
-	"work_url" text,
-	"created_at" timestamp with time zone DEFAULT now()
-);
---> statement-breakpoint
 CREATE TABLE "game_character_classes" (
 	"slug" text PRIMARY KEY NOT NULL,
 	"name_i18n_key" text NOT NULL,
@@ -317,8 +308,6 @@ ALTER TABLE "game_activity_edges" ADD CONSTRAINT "game_activity_edges_cohort_id_
 ALTER TABLE "game_activity_edges" ADD CONSTRAINT "game_activity_edges_map_run_id_game_map_runs_id_fk" FOREIGN KEY ("map_run_id") REFERENCES "public"."game_map_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "game_activity_edges" ADD CONSTRAINT "game_activity_edges_from_activity_id_game_activities_id_fk" FOREIGN KEY ("from_activity_id") REFERENCES "public"."game_activities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "game_activity_edges" ADD CONSTRAINT "game_activity_edges_to_activity_id_game_activities_id_fk" FOREIGN KEY ("to_activity_id") REFERENCES "public"."game_activities"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "game_battles" ADD CONSTRAINT "game_battles_student_id_students_id_fk" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "game_battles" ADD CONSTRAINT "game_battles_activity_id_game_activities_id_fk" FOREIGN KEY ("activity_id") REFERENCES "public"."game_activities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "game_character_moves" ADD CONSTRAINT "game_character_moves_student_id_students_id_fk" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "game_character_moves" ADD CONSTRAINT "game_character_moves_cohort_id_cohorts_id_fk" FOREIGN KEY ("cohort_id") REFERENCES "public"."cohorts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "game_character_moves" ADD CONSTRAINT "game_character_moves_map_run_id_game_map_runs_id_fk" FOREIGN KEY ("map_run_id") REFERENCES "public"."game_map_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -339,8 +328,11 @@ ALTER TABLE "student_skills_history" ADD CONSTRAINT "student_skills_history_stud
 ALTER TABLE "student_skills_history" ADD CONSTRAINT "student_skills_history_evaluated_by_users_id_fk" FOREIGN KEY ("evaluated_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "students" ADD CONSTRAINT "students_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "game_activity_completions_student_cohort_activity_idx" ON "game_activity_completions" USING btree ("student_id","cohort_id","activity_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "game_activity_edges_global_idx" ON "game_activity_edges" USING btree ("from_activity_id","to_activity_id") WHERE "game_activity_edges"."cohort_id" IS NULL AND "game_activity_edges"."map_run_id" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "game_activity_edges_scope_idx" ON "game_activity_edges" USING btree ("from_activity_id","to_activity_id","cohort_id","map_run_id");--> statement-breakpoint
+CREATE INDEX "game_character_moves_student_scope_created_idx" ON "game_character_moves" USING btree ("student_id","cohort_id","map_run_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "game_map_runs_active_cohort_idx" ON "game_map_runs" USING btree ("cohort_id") WHERE "game_map_runs"."status" = 'active';--> statement-breakpoint
+CREATE UNIQUE INDEX "reward_balance_configs_active_idx" ON "reward_balance_configs" USING btree ("is_active") WHERE "reward_balance_configs"."is_active" = true;--> statement-breakpoint
 CREATE OR REPLACE FUNCTION uppercase_user_last_name()
 RETURNS trigger AS $$
 BEGIN
