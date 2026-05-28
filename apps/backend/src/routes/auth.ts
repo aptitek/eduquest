@@ -107,7 +107,23 @@ type ManagementStudentUpdateBody = {
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
 };
-type ManagementSchoolUpdateBody = Partial<Pick<School, 'logoUrl'>>;
+type ManagementStudentCreateBody = {
+  displayName?: string;
+  email?: string;
+  cohortIds?: string[];
+};
+type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
+type ManagementSchoolCreateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
+type ManagementCohortUpdateBody = Partial<
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+> & {
+  campusName?: string;
+};
+type ManagementCohortCreateBody = Partial<
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+> & {
+  campusName?: string;
+};
 type ManagementCharacterClassUpdateBody = {
   baseStats?: Partial<GameStats>;
 };
@@ -131,6 +147,13 @@ function normalizeGameCharacterClass(value?: string | null): GameCharacterClass 
     ? (value as GameCharacterClass)
     : DEFAULT_CHARACTER_CLASS;
 }
+const COHORT_GRADE_SET = new Set<CohortGrade>([
+  'licence',
+  'bachelor',
+  'engineer',
+  'master',
+  'doctorate',
+]);
 type CohortInviteRecord = typeof cohortInvites.$inferSelect;
 
 function toIsoString(value?: Date | null) {
@@ -893,6 +916,152 @@ authRouter.get('/management', async (c) => {
   });
 });
 
+authRouter.post('/management/schools', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  let body: ManagementSchoolCreateBody = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  await getDb(c.env.DATABASE_URL).insert(schools).values({
+    name: body.name?.trim() || 'Nouvelle école',
+    website: body.website?.trim() || null,
+    emailDomain: body.emailDomain?.trim() || null,
+  });
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.post('/management/cohorts', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  let body: ManagementCohortCreateBody = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  if (body.grade && !COHORT_GRADE_SET.has(body.grade)) {
+    return apiError(c, 'Invalid cohort grade', 400, { errorCode: 'validation_failed' });
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const schoolId = body.schoolId || (await db.select().from(schools).limit(1))[0]?.id;
+  if (!schoolId) {
+    return apiError(c, 'Create a school before creating a cohort.', 400, { errorCode: 'validation_failed' });
+  }
+
+  const campusId =
+    (await db.select().from(campuses).where(eq(campuses.schoolId, schoolId)).limit(1))[0]?.id ||
+    null;
+
+  await db.insert(cohorts).values({
+    schoolId,
+    campusId,
+    startYear: body.startYear || new Date().getFullYear(),
+    grade: body.grade || 'bachelor',
+    level: body.level || 1,
+    name: body.name?.trim() || 'Nouvelle cohorte',
+    majorSpeciality: body.majorSpeciality?.trim() || null,
+    minorSpeciality: body.minorSpeciality?.trim() || null,
+    description: body.description?.trim() || null,
+  });
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.post('/management/students', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  let body: ManagementStudentCreateBody = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  const db = getDb(c.env.DATABASE_URL);
+  const cohortIds = Array.from(new Set((body.cohortIds || []).filter(Boolean)));
+  if (cohortIds.length > 0) {
+    const validCohorts = await db.select().from(cohorts).where(inArray(cohorts.id, cohortIds));
+    if (validCohorts.length !== cohortIds.length) {
+      return apiError(c, 'One or more cohorts do not exist', 400, { errorCode: 'validation_failed' });
+    }
+  }
+
+  const fallbackEmail = `student-${crypto.randomUUID()}@eduquest.local`;
+  const email = body.email?.trim() || fallbackEmail;
+  const displayName = body.displayName?.trim() || 'Nouvel·le étudiant·e';
+
+  await db.transaction(async (tx) => {
+    const [newUser] = await tx
+      .insert(users)
+      .values({
+        githubEmail: email,
+        email,
+        displayName,
+        isAdmin: false,
+      })
+      .returning();
+
+    const [newStudent] = await tx
+      .insert(students)
+      .values({
+        userId: newUser.id,
+      })
+      .returning();
+
+    await tx
+      .insert(gameCharacters)
+      .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
+
+    if (cohortIds.length > 0) {
+      await tx.insert(cohortMemberships).values(
+        cohortIds.map((cohortId) => ({
+          userId: newUser.id,
+          cohortId,
+        }))
+      );
+    }
+  });
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
 authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
@@ -1305,6 +1474,138 @@ authRouter.put('/management/students/:studentId', async (c) => {
   });
 });
 
+authRouter.delete('/management/students/:studentId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  const studentId = c.req.param('studentId');
+  const db = getDb(c.env.DATABASE_URL);
+  const [studentRecord] = await db
+    .select()
+    .from(students)
+    .where(eq(students.id, studentId))
+    .limit(1);
+
+  if (!studentRecord) {
+    return apiError(c, 'Student not found', 404);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(gameCharacters).where(eq(gameCharacters.studentId, studentId));
+    await tx.delete(users).where(eq(users.id, studentRecord.userId));
+  });
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.put('/management/cohorts/:cohortId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  let body: ManagementCohortUpdateBody;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid JSON body',
+      },
+      400
+    );
+  }
+
+  if (body.grade && !COHORT_GRADE_SET.has(body.grade)) {
+    return apiError(c, 'Invalid cohort grade', 400, { errorCode: 'validation_failed' });
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  const cohortId = c.req.param('cohortId');
+  const db = getDb(c.env.DATABASE_URL);
+  const [cohortRecord] = await db
+    .select()
+    .from(cohorts)
+    .where(eq(cohorts.id, cohortId))
+    .limit(1);
+
+  if (!cohortRecord) {
+    return apiError(c, 'Cohort not found', 404);
+  }
+
+  const cohortUpdate: Partial<typeof cohorts.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if (body.schoolId !== undefined) cohortUpdate.schoolId = body.schoolId;
+  if (body.startYear !== undefined) cohortUpdate.startYear = body.startYear;
+  if (body.grade !== undefined) cohortUpdate.grade = body.grade;
+  if (body.level !== undefined) cohortUpdate.level = body.level;
+  if (body.name !== undefined) cohortUpdate.name = body.name.trim() || cohortRecord.name;
+  if (body.majorSpeciality !== undefined) cohortUpdate.majorSpeciality = body.majorSpeciality.trim() || null;
+  if (body.minorSpeciality !== undefined) cohortUpdate.minorSpeciality = body.minorSpeciality.trim() || null;
+  if (body.description !== undefined) cohortUpdate.description = body.description.trim() || null;
+
+  await db.transaction(async (tx) => {
+    if (body.campusName !== undefined) {
+      const campusName = body.campusName.trim();
+      if (cohortRecord.campusId) {
+        await tx
+          .update(campuses)
+          .set({ name: campusName || 'Campus principal', updatedAt: new Date() })
+          .where(eq(campuses.id, cohortRecord.campusId));
+      } else if (campusName) {
+        const [newCampus] = await tx
+          .insert(campuses)
+          .values({
+            schoolId: cohortUpdate.schoolId || cohortRecord.schoolId,
+            name: campusName,
+          })
+          .returning();
+        cohortUpdate.campusId = newCampus.id;
+      }
+    }
+
+    await tx.update(cohorts).set(cohortUpdate).where(eq(cohorts.id, cohortId));
+  });
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.delete('/management/cohorts/:cohortId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  const cohortId = c.req.param('cohortId');
+  await getDb(c.env.DATABASE_URL).delete(cohorts).where(eq(cohorts.id, cohortId));
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
 authRouter.put('/management/schools/:schoolId', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
@@ -1352,9 +1653,31 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
   const schoolUpdate: Partial<typeof schools.$inferInsert> = {
     updatedAt: new Date(),
   };
+  if (body.name !== undefined) schoolUpdate.name = body.name.trim() || schoolRecord.name;
+  if (body.website !== undefined) schoolUpdate.website = body.website.trim() || null;
+  if (body.emailDomain !== undefined) schoolUpdate.emailDomain = body.emailDomain.trim() || null;
   if (body.logoUrl !== undefined) schoolUpdate.logoUrl = body.logoUrl || null;
 
   await db.update(schools).set(schoolUpdate).where(eq(schools.id, schoolId));
+
+  return c.json({
+    success: true,
+    backup: await getManagementBackup(c.env.DATABASE_URL),
+  });
+});
+
+authRouter.delete('/management/schools/:schoolId', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  if (!c.env.DATABASE_URL) {
+    return missingDatabaseUrl(c);
+  }
+
+  const schoolId = c.req.param('schoolId');
+  await getDb(c.env.DATABASE_URL).delete(schools).where(eq(schools.id, schoolId));
 
   return c.json({
     success: true,

@@ -13,11 +13,17 @@ import { SchoolLogoBadge } from '../../components/molecules/SchoolLogoBadge';
 import { InstitutionalProfileCard } from '../../components/organisms/InstitutionalProfileCard/InstitutionalProfileCard';
 import { useGameStore } from '../../features/game/gameStore';
 import {
+  createManagementCohort,
+  createManagementSchool,
+  createManagementStudent,
+  deleteManagementCohort,
+  deleteManagementSchool,
+  deleteManagementStudent,
   fetchManagementBackup,
-  type ManagementCharacterClassUpdate,
+  type ManagementCohortUpdate,
   type ManagementSchoolUpdate,
   type ManagementStudentUpdate,
-  updateManagementCohortCharacterClass,
+  updateManagementCohort,
   updateManagementSchool,
   updateManagementStudent,
 } from '../../features/management/api';
@@ -226,6 +232,8 @@ export function ManagementPage() {
     (selectedStudentMembership?.cohortId
       ? cohortRows.find((cohort) => cohort.id === selectedStudentMembership.cohortId)
       : undefined);
+  const activeCardSkeletonVariant =
+    activeTab === 'schools' ? 'school' : activeTab === 'cohorts' ? 'cohort' : 'student';
   const updateSelectedSchool = async (update: ManagementSchoolUpdate, shouldThrow = false) => {
     if (!selectedSchoolRow) return;
 
@@ -284,10 +292,7 @@ export function ManagementPage() {
       if (shouldThrow) throw error;
     }
   };
-  const updateSelectedCohortCharacterClass = async (
-    characterClassUpdate: ManagementCharacterClassUpdate['baseStats'],
-    characterClass: Parameters<typeof updateManagementCohortCharacterClass>[2]
-  ) => {
+  const updateSelectedCohort = async (update: ManagementCohortUpdate, shouldThrow = false) => {
     if (!selectedCohortRow) return;
 
     const token = localStorage.getItem('eduquest_token');
@@ -298,27 +303,117 @@ export function ManagementPage() {
         includeDetail: false,
       });
       setManagementErrorKey('management.errors.missingSession');
-      throw new Error('management.errors.missingSession');
+      if (shouldThrow) throw new Error('management.errors.missingSession');
+      return;
     }
 
     setManagementErrorKey(null);
     try {
-      const backup = await updateManagementCohortCharacterClass(
-        token,
-        selectedCohortRow.id,
-        characterClass,
-        { baseStats: characterClassUpdate }
-      );
+      const backup = await updateManagementCohort(token, selectedCohortRow.id, update);
       setManagementBackup(backup);
     } catch (error) {
       reportError(error, {
-        messageKey: 'management.errors.updateClassStatsFailed',
-        id: 'management.errors.updateClassStatsFailed',
-        logMessage: 'Could not update management character class.',
+        messageKey: 'management.errors.updateCohortFailed',
+        id: 'management.errors.updateCohortFailed',
+        logMessage: 'Could not update management cohort.',
       });
-      setManagementErrorKey('management.errors.updateClassStatsFailed');
-      throw error;
+      setManagementErrorKey('management.errors.updateCohortFailed');
+      if (shouldThrow) throw error;
     }
+  };
+  const mutateManagementRows = async (
+    operation: (token: string) => Promise<ManagementBackup>,
+    errorKey: string,
+    logMessage: string,
+    selectEntity?: (backup: ManagementBackup) => SelectedManagementEntity | null
+  ) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
+      setManagementErrorKey('management.errors.missingSession');
+      return;
+    }
+
+    setManagementErrorKey(null);
+    try {
+      const backup = await operation(token);
+      setManagementBackup(backup);
+      const nextSelection = selectEntity?.(backup);
+      if (nextSelection !== undefined) {
+        setSelectedEntity(nextSelection);
+      }
+    } catch (error) {
+      reportError(error, {
+        messageKey: errorKey,
+        id: errorKey,
+        logMessage,
+      });
+      setManagementErrorKey(errorKey);
+    }
+  };
+  const createManagementRow = () => {
+    if (activeTab === 'schools') {
+      const previousIds = new Set(schoolRows.map((row) => row.id));
+      void mutateManagementRows(
+        (token) => createManagementSchool(token, { name: t('management.schools.newSchool') }),
+        'management.errors.createRowFailed',
+        'Could not create management school.',
+        (backup) => {
+          const created = backup.schools.find((school) => !previousIds.has(school.id));
+          return created ? { tab: 'schools', id: created.id } : null;
+        }
+      );
+      return;
+    }
+
+    if (activeTab === 'cohorts') {
+      const previousIds = new Set(cohortRows.map((row) => row.id));
+      void mutateManagementRows(
+        (token) =>
+          createManagementCohort(token, {
+            schoolId: schoolRows[0]?.id,
+            name: t('management.cohorts.newCohort'),
+          }),
+        'management.errors.createRowFailed',
+        'Could not create management cohort.',
+        (backup) => {
+          const created = backup.cohorts.find((cohort) => !previousIds.has(cohort.id));
+          return created ? { tab: 'cohorts', id: created.id } : null;
+        }
+      );
+      return;
+    }
+
+    const previousIds = new Set(studentRows.map((row) => row.id));
+    void mutateManagementRows(
+      (token) =>
+        createManagementStudent(token, {
+          displayName: t('management.students.newStudent'),
+          cohortIds: cohortRows[0]?.id ? [cohortRows[0].id] : [],
+        }),
+      'management.errors.createRowFailed',
+      'Could not create management student.',
+      (backup) => {
+        const created = backup.students.find((profile) => !previousIds.has(profile.student.id));
+        return created ? { tab: 'students', id: created.student.id } : null;
+      }
+    );
+  };
+  const deleteManagementRow = (tab: ManagementTab, rowId: string) => {
+    void mutateManagementRows(
+      (token) => {
+        if (tab === 'schools') return deleteManagementSchool(token, rowId);
+        if (tab === 'cohorts') return deleteManagementCohort(token, rowId);
+        return deleteManagementStudent(token, rowId);
+      },
+      'management.errors.deleteRowFailed',
+      'Could not delete management row.',
+      () => (selectedEntity?.tab === tab && selectedEntity.id === rowId ? null : selectedEntity)
+    );
   };
   const selectedStudentCharacterBack = selectedStudentRow?.character
     ? buildStudentCharacterBackSide(selectedStudentRow, t, updateSelectedStudent)
@@ -327,6 +422,7 @@ export function ManagementPage() {
     <SchoolDetailCard
       school={selectedSchoolRow}
       t={t}
+      onUpdate={(update) => updateSelectedSchool(update)}
       onUploadLogo={async (file) => {
         const token = localStorage.getItem('eduquest_token');
         if (!token) throw new Error('management.errors.missingSession');
@@ -341,10 +437,7 @@ export function ManagementPage() {
       cohort={selectedCohortRow}
       cohortOptions={cohortRows}
       campusOptions={campusOptions}
-      characterClasses={managementBackup?.characterClasses || []}
-      onUpdateCharacterClass={(characterClass, baseStats) =>
-        updateSelectedCohortCharacterClass(baseStats, characterClass)
-      }
+      onUpdate={(update) => updateSelectedCohort(update)}
       t={t}
     />
   ) : selectedStudentRow ? (
@@ -430,7 +523,7 @@ export function ManagementPage() {
       />
     </div>
   ) : (
-    <CardSkeleton label={t('management.card.rectoEmpty')} />
+    <CardSkeleton label={t('management.card.rectoEmpty')} variant={activeCardSkeletonVariant} />
   );
 
   if (!user?.isAdmin) {
@@ -493,6 +586,10 @@ export function ManagementPage() {
                 schoolFilterOptions={schoolFilterOptions}
                 selectedRowId={selectedEntity?.tab === 'students' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'students', id: row.id })}
+                addRowLabel={t('management.table.addStudent')}
+                deleteRowLabel={(row) => t('management.table.deleteStudent').replace('{name}', row.displayName)}
+                onCreateRow={createManagementRow}
+                onDeleteRow={(row) => deleteManagementRow('students', row.id)}
                 flushTop
               />
             ) : activeTab === 'cohorts' ? (
@@ -505,6 +602,10 @@ export function ManagementPage() {
                 searchLabel={t('management.filters.search')}
                 selectedRowId={selectedEntity?.tab === 'cohorts' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'cohorts', id: row.id })}
+                addRowLabel={t('management.table.addCohort')}
+                deleteRowLabel={(row) => t('management.table.deleteCohort').replace('{name}', row.name)}
+                onCreateRow={createManagementRow}
+                onDeleteRow={(row) => deleteManagementRow('cohorts', row.id)}
                 flushTop
               />
             ) : (
@@ -517,6 +618,10 @@ export function ManagementPage() {
                 searchLabel={t('management.filters.search')}
                 selectedRowId={selectedEntity?.tab === 'schools' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'schools', id: row.id })}
+                addRowLabel={t('management.table.addSchool')}
+                deleteRowLabel={(row) => t('management.table.deleteSchool').replace('{name}', row.name)}
+                onCreateRow={createManagementRow}
+                onDeleteRow={(row) => deleteManagementRow('schools', row.id)}
                 flushTop
               />
             )}

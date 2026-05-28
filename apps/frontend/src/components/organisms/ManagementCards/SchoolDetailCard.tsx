@@ -2,17 +2,20 @@ import { useEffect, useState } from 'react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import { EditableSchoolLogo } from '../../molecules/EditableSchoolLogo';
 import type { SchoolRow } from '../../../features/management/types';
+import type { ManagementSchoolUpdate } from '../../../features/management/api';
 import { formatAddress } from '../../../features/management/utils';
 import aptitekLogoUrl from '../../../assets/logo.svg';
 
 export function SchoolDetailCard({
   school,
   t,
+  onUpdate,
   onUploadLogo,
   onResetLogo,
 }: {
   school: SchoolRow;
   t: (key: string) => string;
+  onUpdate?: (update: ManagementSchoolUpdate) => void | Promise<void>;
   onUploadLogo?: (file: File) => Promise<void>;
   onResetLogo?: () => Promise<void>;
 }) {
@@ -71,7 +74,10 @@ export function SchoolDetailCard({
           <div>
             <EditableText
               value={draft.name}
-              onChange={(value) => setDraft((current) => ({ ...current, name: value }))}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, name: value }));
+                void onUpdate?.({ name: value });
+              }}
               placeholder={t('management.schools.name')}
               className="text-2xl font-display font-bold text-text-primary"
             />
@@ -80,7 +86,10 @@ export function SchoolDetailCard({
           <div className="grid gap-3">
             <EditableText
               value={draft.website}
-              onChange={(value) => setDraft((current) => ({ ...current, website: value }))}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, website: value }));
+                void onUpdate?.({ website: value });
+              }}
               placeholder={t('management.schools.website')}
               className="text-sm text-solarized-blue"
             />
@@ -92,7 +101,10 @@ export function SchoolDetailCard({
             />
             <EditableText
               value={draft.emailDomain}
-              onChange={(value) => setDraft((current) => ({ ...current, emailDomain: value }))}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, emailDomain: value }));
+                void onUpdate?.({ emailDomain: value });
+              }}
               placeholder={t('management.schools.emailDomain')}
               className="text-sm text-text-secondary"
             />

@@ -91,6 +91,7 @@ export const en: TranslationKeys = {
       step: 'Step',
       hiddenMember: 'Hidden member',
       goldSpent: '{amount} gold spent',
+      boostPointsSpent: '{amount} boost points spent',
       newRibbon: 'New',
       cardHandModalSubtitle: 'Preview the full-size guild hand with database-backed game data.',
       guildCardDescription:
@@ -194,7 +195,7 @@ export const en: TranslationKeys = {
   },
   management: {
     title: 'Management',
-    subtitle: 'Read-only administration overview.',
+    subtitle: 'Administration view for managing schools, cohorts, and students.',
     loading: 'Loading management data...',
     nav: 'Management',
     tabs: {
@@ -210,6 +211,7 @@ export const en: TranslationKeys = {
       school: 'School',
       cohort: 'Cohort',
       age: 'Age',
+      newStudent: 'New student',
     },
     filters: {
       search: 'Search',
@@ -230,6 +232,18 @@ export const en: TranslationKeys = {
       createInviteFailed: 'A new cohort invite could not be created. No invite link was added.',
       revokeInviteFailed: 'The cohort invite could not be revoked. The invite may still be usable.',
       copyInviteFailed: 'The cohort invite link could not be copied to the clipboard. Detail: {detail}',
+      createRowFailed: 'The row could not be created. Check the available data and try again.',
+      deleteRowFailed: 'The row could not be deleted. It may still be linked to other data.',
+      updateCohortFailed: 'Cohort settings could not be saved. The cohort card was restored to the previous data.',
+    },
+    table: {
+      actions: 'Actions',
+      addSchool: 'Add a school',
+      addCohort: 'Add a cohort',
+      addStudent: 'Add a student',
+      deleteSchool: 'Hold to delete {name}',
+      deleteCohort: 'Hold to delete {name}',
+      deleteStudent: 'Hold to delete {name}',
     },
     schools: {
       logo: 'Logo',
@@ -241,6 +255,7 @@ export const en: TranslationKeys = {
       emailDomain: 'Email domain',
       resetLogo: 'Reset school logo',
       changeLogo: 'Change school logo',
+      newSchool: 'New school',
     },
     cohorts: {
       name: 'Cohort',
@@ -285,6 +300,7 @@ export const en: TranslationKeys = {
       classCards: 'Class cards',
       classCardsHint: 'Base stats are capped at 5; saving refunds any cohort allocation above the cap.',
       saveClassCard: 'Hold to save',
+      newCohort: 'New cohort',
     },
     card: {
       flip: 'Flip card',
@@ -350,7 +366,7 @@ export const en: TranslationKeys = {
       loadGuilds: 'Class guilds could not be loaded. The class page was cleared to avoid stale guild data. Detail: {detail}',
     },
   },
-  progress: {
+  bonus: {
     nav: 'Reward',
     title: 'Progress bonuses',
     activeBonuses: 'Active bonus cards',
@@ -367,9 +383,15 @@ export const en: TranslationKeys = {
     editReward: 'Edit reward',
     createReward: 'Create reward',
     saveReward: 'Save reward',
+    flipEditor: 'Toggle bonus editor details',
     previewTitle: 'Reward title',
     previewSubtitle: 'Reward subtitle',
     previewDescription: 'Describe the reward unlocked by this card.',
+    backTitle: 'Bonus settings',
+    backSubtitle: 'Visual identity',
+    backDescription: 'Edit the points directly on the ribbon, choose an icon below, and pick the card color from the same swatches used by activity cards.',
+    iconSearchPlaceholder: 'Search bonus icons, e.g. gift, star, trophy...',
+    useCardColor: 'Use {color} card color',
     pointsShort: 'pts',
     fields: {
       title: 'Title',
@@ -377,6 +399,8 @@ export const en: TranslationKeys = {
       description: 'Description',
       cost: 'Cost',
       accent: 'Accent',
+      icon: 'Bonus icon',
+      color: 'Bonus color',
     },
     accents: {
       quest: 'Quest',

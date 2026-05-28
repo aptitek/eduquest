@@ -1,13 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  DEFAULT_REWARD_SYSTEM_CONFIG,
-  STUDENT_ATTRIBUTES,
-  type GameCharacterClass,
-  type GameCharacterClassDefinition,
-  type GameStats,
-  type StudentAttribute,
-} from '@eduquest/shared';
+import { type CohortGrade } from '@eduquest/shared';
 import { Clipboard, ExternalLink, Trash2, UserPlus, X } from 'lucide-react';
 import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
@@ -16,6 +9,7 @@ import {
   createManagementCohortInvite,
   fetchManagementCohortInvites,
   revokeManagementCohortInvite,
+  type ManagementCohortUpdate,
   type ManagementCohortInvite,
 } from '../../../features/management/api';
 import type { CohortRow } from '../../../features/management/types';
@@ -27,15 +21,7 @@ import { useErrorReporter } from '../../../features/errors/notifications';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
-const STAT_LABELS: Record<StudentAttribute, string> = {
-  strength: 'STR',
-  dexterity: 'DEX',
-  constitution: 'CON',
-  intelligence: 'INT',
-  wisdom: 'WIS',
-  charisma: 'CHA',
-};
-const STAT_CAP = DEFAULT_REWARD_SYSTEM_CONFIG.attributes.levelOneMaxValue;
+const COHORT_GRADES: CohortGrade[] = ['licence', 'bachelor', 'engineer', 'master', 'doctorate'];
 
 function formatTimeRemaining(expiresAt: string, t: (key: string) => string) {
   const remainingMs = new Date(expiresAt).getTime() - Date.now();
@@ -68,18 +54,13 @@ export function CohortDetailCard({
   cohort,
   cohortOptions,
   campusOptions,
-  characterClasses,
-  onUpdateCharacterClass,
+  onUpdate,
   t,
 }: {
   cohort: CohortRow;
   cohortOptions: CohortRow[];
   campusOptions: string[];
-  characterClasses: GameCharacterClassDefinition[];
-  onUpdateCharacterClass: (
-    characterClass: GameCharacterClass,
-    baseStats: GameStats
-  ) => Promise<void>;
+  onUpdate?: (update: ManagementCohortUpdate) => void | Promise<void>;
   t: (key: string) => string;
 }) {
   const reportError = useErrorReporter();
@@ -97,11 +78,6 @@ export function CohortDetailCard({
   const [invites, setInvites] = useState<ManagementCohortInvite[]>([]);
   const [selectedInvite, setSelectedInvite] = useState<ManagementCohortInvite | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const [classUpdateError, setClassUpdateError] = useState<string | null>(null);
-  const [savingClass, setSavingClass] = useState<GameCharacterClass | null>(null);
-  const [classDrafts, setClassDrafts] = useState<Record<string, GameStats>>(() =>
-    buildClassDrafts(characterClasses)
-  );
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [hasCopiedInvite, setHasCopiedInvite] = useState(false);
   const [isQrFullscreenOpen, setIsQrFullscreenOpen] = useState(false);
@@ -143,16 +119,9 @@ export function CohortDetailCard({
     setInvites([]);
     setSelectedInvite(null);
     setInviteError(null);
-    setClassUpdateError(null);
     setHasCopiedInvite(false);
     setIsQrFullscreenOpen(false);
   }, [cohort]);
-
-  useEffect(() => {
-    setClassDrafts(buildClassDrafts(characterClasses));
-    setClassUpdateError(null);
-    setSavingClass(null);
-  }, [characterClasses]);
 
   useEffect(() => {
     const token = localStorage.getItem('eduquest_token');
@@ -295,41 +264,6 @@ export function CohortDetailCard({
         logMessage: 'Could not copy cohort invite link.',
       });
       setHasCopiedInvite(false);
-    }
-  };
-
-  const updateClassDraft = (
-    characterClass: GameCharacterClass,
-    attribute: StudentAttribute,
-    value: number
-  ) => {
-    const nextValue = Math.max(0, Math.min(STAT_CAP, value));
-    setClassDrafts((current) => ({
-      ...current,
-      [characterClass]: {
-        ...current[characterClass],
-        [attribute]: nextValue,
-      },
-    }));
-  };
-
-  const saveClassDraft = async (characterClass: GameCharacterClass) => {
-    const draftStats = classDrafts[characterClass];
-    if (!draftStats) return;
-
-    setSavingClass(characterClass);
-    setClassUpdateError(null);
-    try {
-      await onUpdateCharacterClass(characterClass, draftStats);
-    } catch (error) {
-      reportError(error, {
-        messageKey: 'management.errors.updateClassStatsFailed',
-        id: 'management.errors.updateClassStatsFailed',
-        logMessage: 'Could not update character class base stats.',
-      });
-      setClassUpdateError(t('management.errors.updateClassStatsFailed'));
-    } finally {
-      setSavingClass(null);
     }
   };
 
@@ -544,9 +478,11 @@ export function CohortDetailCard({
               <BadgeDropdown
                 options={campusOptions}
                 value={[draft.campusName]}
-                onChange={(next) =>
-                  setDraft((current) => ({ ...current, campusName: next[0] || current.campusName }))
-                }
+                onChange={(next) => {
+                  const campusName = next[0] || draft.campusName;
+                  setDraft((current) => ({ ...current, campusName }));
+                  void onUpdate?.({ campusName });
+                }}
                 multiple={false}
                 placeholder={t('management.cohorts.campus')}
                 searchPlaceholder={t('management.cohorts.campus')}
@@ -563,14 +499,20 @@ export function CohortDetailCard({
           <div>
             <EditableText
               value={draft.name}
-              onChange={(value) => setDraft((current) => ({ ...current, name: value }))}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, name: value }));
+                void onUpdate?.({ name: value });
+              }}
               placeholder={t('management.cohorts.name')}
               className="text-2xl font-display font-bold text-text-primary"
             />
             <EditableText
               multiline
               value={draft.description}
-              onChange={(value) => setDraft((current) => ({ ...current, description: value }))}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, description: value }));
+                void onUpdate?.({ description: value });
+              }}
               placeholder={t('management.cohorts.description')}
               truncate={false}
               className="mt-2 text-sm leading-relaxed text-text-secondary"
@@ -581,9 +523,11 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={schoolYearOptions}
               value={[draft.startYear]}
-              onChange={(next) =>
-                setDraft((current) => ({ ...current, startYear: next[0] || current.startYear }))
-              }
+              onChange={(next) => {
+                const startYear = next[0] || draft.startYear;
+                setDraft((current) => ({ ...current, startYear }));
+                void onUpdate?.({ startYear: Number(startYear) || cohort.startYear });
+              }}
               multiple={false}
               placeholder={t('management.cohorts.schoolYear')}
               searchPlaceholder={t('management.cohorts.schoolYear')}
@@ -595,9 +539,13 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={gradeOptions}
               value={[draft.grade]}
-              onChange={(next) =>
-                setDraft((current) => ({ ...current, grade: next[0] || current.grade }))
-              }
+              onChange={(next) => {
+                const gradeLabel = next[0] || draft.grade;
+                const grade =
+                  COHORT_GRADES.find((item) => formatGrade(item) === gradeLabel) || cohort.grade;
+                setDraft((current) => ({ ...current, grade: gradeLabel }));
+                void onUpdate?.({ grade });
+              }}
               multiple={false}
               placeholder={t('management.cohorts.grade')}
               searchPlaceholder={t('management.cohorts.grade')}
@@ -609,9 +557,11 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={levelOptions}
               value={[draft.level]}
-              onChange={(next) =>
-                setDraft((current) => ({ ...current, level: next[0] || current.level }))
-              }
+              onChange={(next) => {
+                const level = next[0] || draft.level;
+                setDraft((current) => ({ ...current, level }));
+                void onUpdate?.({ level: Number(level) || cohort.level });
+              }}
               multiple={false}
               placeholder={t('management.cohorts.level')}
               searchPlaceholder={t('management.cohorts.level')}
@@ -626,9 +576,11 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={majorOptions}
               value={draft.majorSpeciality ? [draft.majorSpeciality] : []}
-              onChange={(next) =>
-                setDraft((current) => ({ ...current, majorSpeciality: next[0] || '' }))
-              }
+              onChange={(next) => {
+                const majorSpeciality = next[0] || '';
+                setDraft((current) => ({ ...current, majorSpeciality }));
+                void onUpdate?.({ majorSpeciality });
+              }}
               multiple={false}
               placeholder={t('management.cohorts.major')}
               searchPlaceholder={t('management.cohorts.major')}
@@ -640,9 +592,11 @@ export function CohortDetailCard({
             <BadgeDropdown
               options={minorOptions}
               value={draft.minorSpeciality ? [draft.minorSpeciality] : []}
-              onChange={(next) =>
-                setDraft((current) => ({ ...current, minorSpeciality: next[0] || '' }))
-              }
+              onChange={(next) => {
+                const minorSpeciality = next[0] || '';
+                setDraft((current) => ({ ...current, minorSpeciality }));
+                void onUpdate?.({ minorSpeciality });
+              }}
               multiple={false}
               placeholder={t('management.cohorts.minor')}
               searchPlaceholder={t('management.cohorts.minor')}
@@ -651,83 +605,6 @@ export function CohortDetailCard({
               selectedMaxWidth="max-w-[10rem]"
               showArrow
             />
-          </div>
-
-          <div className="rounded-2xl border border-gaming-border bg-gaming-base/50 p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
-                  {t('management.cohorts.classCards')}
-                </p>
-                <p className="mt-1 text-xs text-text-muted">
-                  {t('management.cohorts.classCardsHint')}
-                </p>
-              </div>
-              <span className="badge badge-sm border-gaming-border bg-gaming-card text-text-secondary">
-                {characterClasses.length}
-              </span>
-            </div>
-
-            {classUpdateError ? (
-              <div role="alert" className="alert alert-warning mb-3 py-2 text-xs">
-                {classUpdateError}
-              </div>
-            ) : null}
-
-            <div className="space-y-3">
-              {characterClasses.map((characterClass) => {
-                const draftStats = classDrafts[characterClass.slug] || characterClass.baseStats;
-                return (
-                  <div key={characterClass.slug} className="rounded-xl border border-gaming-border bg-gaming-card p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-display text-sm font-bold text-text-primary">
-                          {t(`game.classes.${characterClass.slug}`)}
-                        </p>
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-text-muted">
-                          {characterClass.slug}
-                        </p>
-                      </div>
-                      <HoldToConfirmButton
-                        onConfirm={() => saveClassDraft(characterClass.slug)}
-                        holdDuration={900}
-                        variant="btn-primary"
-                        className="btn-xs rounded-lg"
-                        disabled={savingClass === characterClass.slug}
-                      >
-                        {savingClass === characterClass.slug
-                          ? t('common.loading')
-                          : t('management.cohorts.saveClassCard')}
-                      </HoldToConfirmButton>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      {STUDENT_ATTRIBUTES.map((attribute) => (
-                        <label key={attribute} className="flex flex-col gap-1">
-                          <span className="text-[11px] font-bold text-text-muted">
-                            {STAT_LABELS[attribute]}
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={STAT_CAP}
-                            value={draftStats[attribute]}
-                            onChange={(event) =>
-                              updateClassDraft(
-                                characterClass.slug,
-                                attribute,
-                                Number(event.currentTarget.value)
-                              )
-                            }
-                            className="input input-bordered input-xs border-gaming-border bg-gaming-base text-text-primary"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
           <div className="rounded-2xl border border-gaming-border bg-gaming-base/50 p-3">
@@ -792,11 +669,4 @@ export function CohortDetailCard({
       {inviteModal}
     </EditableFieldContext.Provider>
   );
-}
-
-function buildClassDrafts(characterClasses: GameCharacterClassDefinition[]) {
-  return characterClasses.reduce<Record<string, GameStats>>((drafts, characterClass) => {
-    drafts[characterClass.slug] = { ...characterClass.baseStats };
-    return drafts;
-  }, {});
 }

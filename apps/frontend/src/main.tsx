@@ -25,7 +25,8 @@ document.documentElement.dataset.theme =
       : 'dark';
 
 function getHashRoute() {
-  return window.location.hash.replace(/^#\/?/, '');
+  const route = window.location.hash.replace(/^#\/?/, '');
+  return route === 'progress' ? 'bonus' : route;
 }
 
 function App() {
@@ -106,7 +107,7 @@ function App() {
     return <ClassPage />;
   }
 
-  if (route === 'progress') {
+  if (route === 'bonus') {
     return <ProgressPage />;
   }
 

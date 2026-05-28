@@ -33,6 +33,7 @@ import {
   gameMapRuns,
   guilds,
   notifications,
+  pointTransactions,
   progressMilestones,
   students,
   users,
@@ -969,6 +970,8 @@ function toRewardCard(record: ProgressMilestoneRecord, gameId: string) {
     description: record.descriptionI18nKey || undefined,
     cost: record.cost,
     accentToken: record.rewardAccentToken,
+    iconKey: record.rewardIconKey,
+    color: record.rewardColor || undefined,
     sortOrder: record.sortOrder,
     createdAt: toIsoString(record.createdAt),
   };
@@ -990,6 +993,10 @@ function normalizeRewardCardPayload(value: unknown): GameRewardCardPayload | und
     cost,
     accentToken:
       typeof candidate.accentToken === 'string' ? candidate.accentToken.trim() || 'quest' : 'quest',
+    iconKey:
+      typeof candidate.iconKey === 'string' ? candidate.iconKey.trim() || 'Gift' : 'Gift',
+    color:
+      typeof candidate.color === 'string' ? candidate.color.trim() || undefined : undefined,
     sortOrder:
       typeof candidate.sortOrder === 'number' && Number.isInteger(candidate.sortOrder)
         ? candidate.sortOrder
@@ -2144,6 +2151,25 @@ mapRouter.get('/guilds', async (c) => {
       .from(guilds)
       .where(eq(guilds.cohortId, cohortRecord.id))
       .orderBy(desc(guilds.gold));
+    const guildSpendRows =
+      guildRecords.length > 0
+        ? await db
+            .select({
+              guildId: pointTransactions.guildId,
+              boostPointsSpent: sql<number>`coalesce(sum(-${pointTransactions.amount}), 0)`,
+            })
+            .from(pointTransactions)
+            .where(
+              and(
+                inArray(pointTransactions.guildId, guildRecords.map((guild) => guild.id)),
+                eq(pointTransactions.transactionType, 'SPENT_VOTE')
+              )
+            )
+            .groupBy(pointTransactions.guildId)
+        : [];
+    const boostPointsSpentByGuildId = new Map(
+      guildSpendRows.map((row) => [row.guildId, Number(row.boostPointsSpent || 0)])
+    );
     const rosterStudentRecords = await db
       .select({
         studentId: students.id,
@@ -2196,6 +2222,7 @@ mapRouter.get('/guilds', async (c) => {
         iconKey: guild.iconKey || undefined,
         color: guild.color || undefined,
         gold: guild.gold,
+        boostPointsSpent: boostPointsSpentByGuildId.get(guild.id) || 0,
         createdAt: guild.createdAt?.toISOString?.(),
         updatedAt: guild.updatedAt?.toISOString?.(),
         members: (membersByGuildId.get(guild.id) || []).sort((a, b) =>
@@ -2789,10 +2816,12 @@ mapRouter.get('/dashboard', async (c) => {
           descriptionI18nKey: milestone.descriptionI18nKey || undefined,
           cost: milestone.cost,
           reward: {
-            id: `${milestone.id}-reward`,
+            id: milestone.id,
             titleI18nKey: milestone.rewardTitleI18nKey,
             subtitleI18nKey: milestone.rewardSubtitleI18nKey || undefined,
             accentToken: milestone.rewardAccentToken,
+            iconKey: milestone.rewardIconKey,
+            color: milestone.rewardColor || undefined,
           },
         })),
       },
@@ -2910,6 +2939,8 @@ mapRouter.post('/games/:gameId/reward-cards', async (c) => {
         rewardTitleI18nKey: body.title,
         rewardSubtitleI18nKey: body.subtitle || null,
         rewardAccentToken: body.accentToken || 'quest',
+        rewardIconKey: body.iconKey || 'Gift',
+        rewardColor: body.color || null,
         sortOrder: body.sortOrder ?? Number(maxSortOrder?.value ?? -1) + 1,
       })
       .returning();
@@ -2959,6 +2990,8 @@ mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
         rewardTitleI18nKey: body.title,
         rewardSubtitleI18nKey: body.subtitle || null,
         rewardAccentToken: body.accentToken || 'quest',
+        rewardIconKey: body.iconKey || 'Gift',
+        rewardColor: body.color || null,
         sortOrder: body.sortOrder ?? 0,
       })
       .where(

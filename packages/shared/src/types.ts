@@ -103,6 +103,7 @@ export interface Guild {
   iconKey?: string;
   color?: string; // Design accent token, e.g. quest, danger, specialist
   gold?: number;
+  boostPointsSpent?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -449,6 +450,8 @@ export interface ProgressReward {
   titleI18nKey: string;
   subtitleI18nKey?: string;
   accentToken?: string;
+  iconKey?: string;
+  color?: string;
 }
 
 export interface ProgressMilestone {
@@ -467,6 +470,8 @@ export interface GameRewardCard {
   description?: string;
   cost: number;
   accentToken?: string;
+  iconKey?: string;
+  color?: string;
   sortOrder: number;
   createdAt?: string;
 }
@@ -477,6 +482,8 @@ export interface GameRewardCardPayload {
   description?: string;
   cost: number;
   accentToken?: string;
+  iconKey?: string;
+  color?: string;
   sortOrder?: number;
 }
 

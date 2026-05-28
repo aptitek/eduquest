@@ -89,6 +89,7 @@ export const fr = {
       step: 'Étape',
       hiddenMember: 'Membre masqué',
       goldSpent: '{amount} or dépensé',
+      boostPointsSpent: '{amount} points de boost dépensés',
       newRibbon: 'Nouveau',
       cardHandModalSubtitle:
         'Prévisualisez la main de guilde en cartes pleine taille avec les données de jeu de la base.',
@@ -193,7 +194,7 @@ export const fr = {
   },
   management: {
     title: 'Gestion',
-    subtitle: "Vue d'administration en lecture seule.",
+    subtitle: "Vue d'administration pour gérer écoles, cohortes et étudiant·e·s.",
     loading: 'Chargement des données de gestion...',
     nav: 'Gestion',
     tabs: {
@@ -209,6 +210,7 @@ export const fr = {
       school: 'École',
       cohort: 'Cohorte',
       age: 'Âge',
+      newStudent: 'Nouvel·le étudiant·e',
     },
     filters: {
       search: 'Recherche',
@@ -229,6 +231,18 @@ export const fr = {
       createInviteFailed: 'Une nouvelle invitation de cohorte n’a pas pu être créée. Aucun lien d’invitation n’a été ajouté.',
       revokeInviteFailed: 'L’invitation de cohorte n’a pas pu être révoquée. Le lien peut encore être utilisable.',
       copyInviteFailed: 'Le lien d’invitation de cohorte n’a pas pu être copié dans le presse-papiers. Détail : {detail}',
+      createRowFailed: 'La ligne n’a pas pu être créée. Vérifiez les données disponibles puis réessayez.',
+      deleteRowFailed: 'La ligne n’a pas pu être supprimée. Elle est peut-être encore liée à d’autres données.',
+      updateCohortFailed: 'Les paramètres de la cohorte n’ont pas pu être enregistrés. La carte cohorte a été restaurée avec les données précédentes.',
+    },
+    table: {
+      actions: 'Actions',
+      addSchool: 'Ajouter une école',
+      addCohort: 'Ajouter une cohorte',
+      addStudent: 'Ajouter un·e étudiant·e',
+      deleteSchool: 'Maintenir pour supprimer {name}',
+      deleteCohort: 'Maintenir pour supprimer {name}',
+      deleteStudent: 'Maintenir pour supprimer {name}',
     },
     schools: {
       logo: 'Logo',
@@ -240,6 +254,7 @@ export const fr = {
       emailDomain: 'Domaine e-mail',
       resetLogo: "Réinitialiser le logo de l'école",
       changeLogo: "Modifier le logo de l'école",
+      newSchool: 'Nouvelle école',
     },
     cohorts: {
       name: 'Cohorte',
@@ -285,6 +300,7 @@ export const fr = {
       classCardsHint:
         'Les stats de base sont plafonnées à 5 ; enregistrer rembourse les allocations de cohorte au-delà du plafond.',
       saveClassCard: 'Maintenir pour sauver',
+      newCohort: 'Nouvelle cohorte',
     },
     card: {
       flip: 'Retourner la carte',
@@ -350,7 +366,7 @@ export const fr = {
       loadGuilds: 'Les guildes de classe n’ont pas pu être chargées. La page classe a été vidée pour éviter des données obsolètes. Détail : {detail}',
     },
   },
-  progress: {
+  bonus: {
     nav: 'Récompense',
     title: 'Cartes bonus de progression',
     activeBonuses: 'Cartes bonus actives',
@@ -367,9 +383,15 @@ export const fr = {
     editReward: 'Modifier la récompense',
     createReward: 'Créer une récompense',
     saveReward: 'Enregistrer la récompense',
+    flipEditor: 'Afficher les détails d’édition du bonus',
     previewTitle: 'Titre de récompense',
     previewSubtitle: 'Sous-titre de récompense',
     previewDescription: 'Décrivez la récompense débloquée par cette carte.',
+    backTitle: 'Réglages du bonus',
+    backSubtitle: 'Identité visuelle',
+    backDescription: 'Modifiez les points directement sur le ruban, choisissez une icône ci-dessous et sélectionnez la couleur avec les mêmes pastilles que les cartes d’activité.',
+    iconSearchPlaceholder: 'Chercher une icône bonus, ex. cadeau, étoile, trophée...',
+    useCardColor: 'Utiliser la couleur de carte {color}',
     pointsShort: 'pts',
     fields: {
       title: 'Titre',
@@ -377,6 +399,8 @@ export const fr = {
       description: 'Description',
       cost: 'Coût',
       accent: 'Accent',
+      icon: 'Icône du bonus',
+      color: 'Couleur du bonus',
     },
     accents: {
       quest: 'Quête',

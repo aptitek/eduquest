@@ -422,6 +422,8 @@ export const progressMilestones = pgTable('progress_milestones', {
   rewardTitleI18nKey: text('reward_title_i18n_key').notNull(),
   rewardSubtitleI18nKey: text('reward_subtitle_i18n_key'),
   rewardAccentToken: text('reward_accent_token').default('quest').notNull(),
+  rewardIconKey: text('reward_icon_key').default('Gift').notNull(),
+  rewardColor: text('reward_color'),
   sortOrder: integer('sort_order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

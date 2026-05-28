@@ -1,5 +1,5 @@
 import { BACKEND_BASE_URL } from '../auth/useAuth';
-import type { GameCharacterClass, GameStats, School, User } from '@eduquest/shared';
+import type { Cohort, GameCharacterClass, GameStats, School, User } from '@eduquest/shared';
 import type { ManagementBackup } from './types';
 
 import { throwApiResponseError } from '../errors/api';
@@ -69,7 +69,27 @@ export type ManagementStudentUpdate = {
   institutionalSchoolId?: string;
 };
 
-export type ManagementSchoolUpdate = Partial<Pick<School, 'logoUrl'>>;
+export type ManagementStudentCreate = {
+  displayName?: string;
+  email?: string;
+  cohortIds?: string[];
+};
+
+export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
+
+export type ManagementSchoolCreate = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
+
+export type ManagementCohortUpdate = Partial<
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+> & {
+  campusName?: string;
+};
+
+export type ManagementCohortCreate = Partial<
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+> & {
+  campusName?: string;
+};
 
 export type ManagementCharacterClassUpdate = {
   baseStats: GameStats;
@@ -107,6 +127,70 @@ export async function updateManagementStudent(
   return data.backup;
 }
 
+export async function createManagementStudent(
+  token: string,
+  create: ManagementStudentCreate = {}
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/students`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(create),
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management create failed.');
+  }
+
+  return data.backup;
+}
+
+export async function deleteManagementStudent(
+  token: string,
+  studentId: string
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/students/${studentId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management delete failed.');
+  }
+
+  return data.backup;
+}
+
+export async function createManagementSchool(
+  token: string,
+  create: ManagementSchoolCreate = {}
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/schools`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(create),
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management create failed.');
+  }
+
+  return data.backup;
+}
+
 export async function updateManagementSchool(
   token: string,
   schoolId: string,
@@ -125,6 +209,91 @@ export async function updateManagementSchool(
 
   if (!response.ok || !data.success) {
     throwApiResponseError(response, data, 'Management update failed.');
+  }
+
+  return data.backup;
+}
+
+export async function deleteManagementSchool(
+  token: string,
+  schoolId: string
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/schools/${schoolId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management delete failed.');
+  }
+
+  return data.backup;
+}
+
+export async function createManagementCohort(
+  token: string,
+  create: ManagementCohortCreate = {}
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/cohorts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(create),
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management create failed.');
+  }
+
+  return data.backup;
+}
+
+export async function updateManagementCohort(
+  token: string,
+  cohortId: string,
+  update: ManagementCohortUpdate
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/cohorts/${cohortId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(update),
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management update failed.');
+  }
+
+  return data.backup;
+}
+
+export async function deleteManagementCohort(
+  token: string,
+  cohortId: string
+): Promise<ManagementBackup> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/cohorts/${cohortId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Management delete failed.');
   }
 
   return data.backup;

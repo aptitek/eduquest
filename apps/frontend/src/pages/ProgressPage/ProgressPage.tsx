@@ -8,19 +8,25 @@ import { buildProgressBonusCards } from '../../components/organisms/DashboardDoc
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useGameStore } from '../../features/game/gameStore';
 import { GameRewardCardManager } from '../../components/organisms/GameRewardCardManager';
+import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 
 export function ProgressPage() {
   const { t } = useTranslation();
   const { user, selectedGameId } = useGameStore();
   const dashboardData = useCohortProgressData(true, selectedGameId);
-  const milestoneRewards = dashboardData?.gauge.milestones.map((milestone) => milestone.reward) || [];
-  const fallbackBonusCards = milestoneRewards.length
-    ? (milestoneRewards.map((reward) => ({
+  const milestones = dashboardData?.gauge.milestones || [];
+  const fallbackBonusCards = milestones.length
+    ? (milestones.map((milestone) => ({
         kind: 'reward' as const,
-        id: reward.id,
-        title: t(reward.titleI18nKey),
-        subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
-        accentToken: reward.accentToken,
+        id: milestone.reward.id,
+        title: t(milestone.reward.titleI18nKey),
+        subtitle: milestone.reward.subtitleI18nKey ? t(milestone.reward.subtitleI18nKey) : undefined,
+        description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
+        color: milestone.reward.color,
+        accentToken: milestone.reward.accentToken,
+        illustration: renderLucideIcon(milestone.reward.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+        ribbonIcon: renderLucideIcon(milestone.reward.iconKey || 'Gift', 18),
+        ribbonLabel: `${milestone.cost} ${t('rewardCards.pointsShort')}`,
       })) as [PlayingCardData, ...PlayingCardData[]])
     : ([
         {
@@ -36,10 +42,10 @@ export function ProgressPage() {
 
   return (
     <GameLayout>
-      <GameHeader currentView="progress" />
+      <GameHeader currentView="bonus" />
 
       <div className="space-y-8">
-        <h2 className="sr-only">{t('progress.title')}</h2>
+        <h2 className="sr-only">{t('bonus.title')}</h2>
 
         {user?.isAdmin ? (
           <>
@@ -47,10 +53,10 @@ export function ProgressPage() {
               <div className="flex items-center gap-3">
                 <Gift className="text-status-campfire" size={22} aria-hidden />
                 <h3 id="progress-active-title" className="text-xl font-bold">
-                  {t('progress.activeBonuses')}
+                  {t('bonus.activeBonuses')}
                 </h3>
               </div>
-              <div id="progress-bonus-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
+              <div id="bonus-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
             </section>
 
             <GameRewardCardManager gameId={selectedGameId} />
@@ -61,10 +67,10 @@ export function ProgressPage() {
           <div className="flex items-center gap-3">
             <Gift className="text-status-campfire" size={22} aria-hidden />
             <h3 id="progress-active-title" className="text-xl font-bold">
-              {t('progress.activeBonuses')}
+              {t('bonus.activeBonuses')}
             </h3>
           </div>
-          <div id="progress-bonus-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
+          <div id="bonus-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
         </section> : null}
 
         {!user?.isAdmin ? <section aria-labelledby="progress-next-vote-title" className="relative z-20 space-y-5">
@@ -74,7 +80,7 @@ export function ProgressPage() {
               id="progress-next-vote-title"
               className="shrink-0 font-display text-xs font-bold uppercase tracking-[0.24em] text-text-muted"
             >
-              {t('progress.nextVote')}
+              {t('bonus.nextVote')}
             </h3>
             <div className="h-px flex-1 bg-gaming-border" aria-hidden />
           </div>

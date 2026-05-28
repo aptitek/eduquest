@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from 'react';
 import type { GameRewardCard, GameRewardCardPayload } from '@eduquest/shared';
 import { Plus, Save, Trash2, X } from 'lucide-react';
-import { PlayingCard, type PlayingCardAccent, type PlayingCardData } from '../../molecules/PlayingCard';
+import { PlayingCard, type PlayingCardData, type PlayingCardEditableField } from '../../molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../molecules/ResponsiveCardGrid';
 import {
   createGameRewardCard,
@@ -13,19 +13,11 @@ import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 import { getUserErrorMessage } from '../../../features/errors/api';
 import { useErrorReporter } from '../../../features/errors/notifications';
+import { SOLARIZED_SWATCH_OPTIONS, resolveUiColorTokenName } from '../../../styles/colorTokens';
+import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
+import { EditableIcon } from '../../atoms/EditableIcon';
 
-const ACCENT_OPTIONS: PlayingCardAccent[] = [
-  'quest',
-  'campfire',
-  'completed',
-  'boss',
-  'danger',
-  'neutral',
-  'scholar',
-  'champion',
-  'guide',
-  'specialist',
-];
+const DEFAULT_BONUS_COLOR = SOLARIZED_SWATCH_OPTIONS[5].value;
 
 const EMPTY_DRAFT: GameRewardCardPayload = {
   title: '',
@@ -33,6 +25,8 @@ const EMPTY_DRAFT: GameRewardCardPayload = {
   description: '',
   cost: 0,
   accentToken: 'quest',
+  iconKey: 'Gift',
+  color: DEFAULT_BONUS_COLOR,
 };
 
 export interface GameRewardCardManagerProps {
@@ -85,7 +79,14 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     };
   }, [gameId]);
 
-  const previewCard = useMemo(() => toPlayingCard(t, editingCard ? { ...editingCard, ...draft } : draft), [draft, editingCard, t]);
+  const previewCard = useMemo(
+    () =>
+      toPlayingCard(t, editingCard ? { ...editingCard, ...draft } : draft, {
+        editable: true,
+        onFieldChange: (field, value) => updateDraftFromCardField(field, value, setDraft),
+      }),
+    [draft, editingCard, t]
+  );
 
   const startEditing = (card: GameRewardCard) => {
     setEditingId(card.id);
@@ -95,6 +96,8 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       description: card.description || '',
       cost: card.cost,
       accentToken: card.accentToken || 'quest',
+      iconKey: card.iconKey || 'Gift',
+      color: card.color || DEFAULT_BONUS_COLOR,
       sortOrder: card.sortOrder,
     });
   };
@@ -120,6 +123,9 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
         subtitle: draft.subtitle?.trim() || undefined,
         description: draft.description?.trim() || undefined,
         cost: Number(draft.cost),
+        accentToken: resolveUiColorTokenName(draft.color || draft.accentToken || DEFAULT_BONUS_COLOR),
+        iconKey: draft.iconKey || 'Gift',
+        color: draft.color || DEFAULT_BONUS_COLOR,
       };
       const saved = editingId
         ? await updateGameRewardCard(token, gameId, editingId, payload)
@@ -227,21 +233,15 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
           </div>
 
           <div className="mb-5 flex justify-center">
-            <PlayingCard {...previewCard} size="full" className="w-full max-w-[15rem]" />
+            <PlayingCard
+              {...previewCard}
+              size="full"
+              flipLabel={t('rewardCards.flipEditor')}
+              className="w-full max-w-[15rem]"
+            />
           </div>
 
           <div className="space-y-3">
-            <TextInput label={t('rewardCards.fields.title')} value={draft.title} onChange={(title) => setDraft((current) => ({ ...current, title }))} />
-            <TextInput
-              label={t('rewardCards.fields.subtitle')}
-              value={draft.subtitle || ''}
-              onChange={(subtitle) => setDraft((current) => ({ ...current, subtitle }))}
-            />
-            <TextInput
-              label={t('rewardCards.fields.description')}
-              value={draft.description || ''}
-              onChange={(description) => setDraft((current) => ({ ...current, description }))}
-            />
             <label className="block space-y-1.5 text-sm">
               <span className="font-bold text-text-secondary">{t('rewardCards.fields.cost')}</span>
               <input
@@ -254,22 +254,22 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
                 className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
               />
             </label>
-            <label className="block space-y-1.5 text-sm">
-              <span className="font-bold text-text-secondary">{t('rewardCards.fields.accent')}</span>
-              <select
-                value={draft.accentToken || 'quest'}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, accentToken: event.target.value }))
-                }
-                className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
-              >
-                {ACCENT_OPTIONS.map((accent) => (
-                  <option key={accent} value={accent}>
-                    {getAccentLabel(t, accent)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <BonusIconSelector
+              value={draft.iconKey || 'Gift'}
+              onChange={(iconKey) => setDraft((current) => ({ ...current, iconKey }))}
+              t={t}
+            />
+            <BonusColorSelector
+              value={draft.color || DEFAULT_BONUS_COLOR}
+              onChange={(color) =>
+                setDraft((current) => ({
+                  ...current,
+                  color,
+                  accentToken: resolveUiColorTokenName(color),
+                }))
+              }
+              t={t}
+            />
           </div>
 
           {error ? <p className="mt-3 text-sm font-semibold text-status-danger">{error}</p> : null}
@@ -289,50 +289,141 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   );
 }
 
+function toPlayingCard(
+  t: (path: string) => string,
+  card: Partial<GameRewardCardPayload & GameRewardCard>,
+  options?: {
+    editable?: boolean;
+    onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
+  }
+): PlayingCardData {
+  const color = card.color || DEFAULT_BONUS_COLOR;
+  const iconKey = card.iconKey || 'Gift';
+  const costText = String(card.cost ?? 0);
 
-function TextInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block space-y-1.5 text-sm">
-      <span className="font-bold text-text-secondary">{label}</span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
-      />
-    </label>
-  );
-}
-
-function toPlayingCard(t: (path: string) => string, card: Partial<GameRewardCardPayload & GameRewardCard>): PlayingCardData {
   return {
     id: card.id,
     kind: 'reward',
     title: card.title || t('rewardCards.previewTitle'),
     subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
     description: card.description,
-    accentToken: (card.accentToken || 'quest') as PlayingCardAccent,
-    ribbonLabel: `${card.cost ?? 0} ${t('rewardCards.pointsShort')}`,
+    color,
+    accentToken: resolveUiColorTokenName(card.accentToken || color),
+    illustration: renderLucideIcon(iconKey, 132, 'drop-shadow-lg'),
+    ribbonIconKey: iconKey,
+    ribbonIcon: renderLucideIcon(iconKey, 18),
+    ribbonLabel: costText,
     ribbonClassName: 'bg-status-quest',
     front: {
       title: card.title || t('rewardCards.previewTitle'),
       subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
       description: card.description || t('rewardCards.previewDescription'),
-      ribbonText: `${card.cost ?? 0} ${t('rewardCards.pointsShort')}`,
+      color,
+      illustration: renderLucideIcon(iconKey, 132, 'drop-shadow-lg'),
+      ribbonText: costText,
+      ribbonIconKey: iconKey,
+      ribbonIcon: renderLucideIcon(iconKey, 18),
+      editable: options?.editable,
+      ribbonEditable: options?.editable,
+      onFieldChange: options?.onFieldChange,
     },
+    back: options?.editable
+      ? {
+          title: t('rewardCards.backTitle'),
+          subtitle: t('rewardCards.backSubtitle'),
+          description: t('rewardCards.backDescription'),
+          color,
+          illustration: renderLucideIcon(iconKey, 112, 'drop-shadow-lg'),
+        }
+      : undefined,
   };
 }
 
-function getAccentLabel(t: (path: string) => string, accent: PlayingCardAccent) {
-  const translated = t(`rewardCards.accents.${accent}`);
-  return translated === `rewardCards.accents.${accent}` ? accent : translated;
+function updateDraftFromCardField(
+  field: PlayingCardEditableField,
+  value: string,
+  setDraft: Dispatch<SetStateAction<GameRewardCardPayload>>
+) {
+  setDraft((current) => {
+    if (field === 'ribbonText') {
+      return { ...current, cost: Number(value) || 0 };
+    }
+    if (field === 'ribbonIcon') {
+      return { ...current, iconKey: value };
+    }
+    if (field === 'title' || field === 'subtitle' || field === 'description') {
+      return { ...current, [field]: value };
+    }
+    return current;
+  });
+}
+
+function BonusIconSelector({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (iconKey: string) => void;
+  t: (path: string) => string;
+}) {
+  return (
+    <label className="block space-y-1.5 text-sm">
+      <span className="font-bold text-text-secondary">{t('rewardCards.fields.icon')}</span>
+      <div className="flex items-center gap-3 rounded-xl border border-gaming-border bg-gaming-base px-3 py-2">
+        <EditableIcon
+          value={value}
+          onChange={onChange}
+          size={24}
+          label={t('rewardCards.fields.icon')}
+          searchPlaceholder={t('rewardCards.iconSearchPlaceholder')}
+          buttonClassName="h-10 w-10 bg-gaming-card"
+        />
+        <span className="text-sm font-semibold text-text-secondary">{value}</span>
+      </div>
+    </label>
+  );
+}
+
+function BonusColorSelector({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  t: (path: string) => string;
+}) {
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="font-bold text-text-secondary">{t('rewardCards.fields.color')}</legend>
+      <div className="grid grid-cols-9 gap-1.5">
+        {SOLARIZED_SWATCH_OPTIONS.map((option) => {
+          const isSelected = value === option.value;
+          const label = t(option.labelKey);
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'h-7 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
+                isSelected
+                  ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
+                  : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
+              )}
+              aria-label={t('rewardCards.useCardColor').replace('{color}', label)}
+              aria-pressed={isSelected}
+              title={label}
+            >
+              <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 }
 
 export default GameRewardCardManager;

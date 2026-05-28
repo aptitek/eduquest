@@ -9,6 +9,8 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { Plus, Trash2 } from 'lucide-react';
+import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
 import { SchoolLogoBadge } from '../../molecules/SchoolLogoBadge';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -27,6 +29,10 @@ export function ManagementTable<TData extends { id: string }>({
   schoolFilterOptions = [],
   selectedRowId,
   onRowSelect,
+  addRowLabel,
+  deleteRowLabel,
+  onCreateRow,
+  onDeleteRow,
   flushTop,
 }: {
   data: TData[];
@@ -37,6 +43,10 @@ export function ManagementTable<TData extends { id: string }>({
   schoolFilterOptions?: string[];
   selectedRowId?: string;
   onRowSelect?: (row: TData) => void;
+  addRowLabel?: string;
+  deleteRowLabel?: (row: TData) => string;
+  onCreateRow?: () => void;
+  onDeleteRow?: (row: TData) => void;
   flushTop?: boolean;
 }) {
   const { t } = useTranslation();
@@ -63,6 +73,8 @@ export function ManagementTable<TData extends { id: string }>({
   const visibleColumns = table.getVisibleLeafColumns();
   const [zoomedColumnId, setZoomedColumnId] = useState<string | null>(null);
   const zoomWeight = visibleColumns.length > 4 ? 2.4 : 1.8;
+  const hasActions = Boolean(onDeleteRow);
+  const actionColumnWidth = hasActions ? '4.5rem' : undefined;
   const totalColumnWeight = visibleColumns.reduce(
     (total, column) =>
       total +
@@ -138,6 +150,7 @@ export function ManagementTable<TData extends { id: string }>({
                 }}
               />
             ))}
+            {hasActions && <col style={{ width: actionColumnWidth }} />}
           </colgroup>
           <thead className="bg-gaming-base/60 text-text-muted">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -174,6 +187,11 @@ export function ManagementTable<TData extends { id: string }>({
                     )}
                   </th>
                 ))}
+                {hasActions && (
+                  <th className="w-16 text-right font-display text-xs uppercase tracking-wider">
+                    <span className="sr-only">{t('management.table.actions')}</span>
+                  </th>
+                )}
               </tr>
             ))}
           </thead>
@@ -207,8 +225,42 @@ export function ManagementTable<TData extends { id: string }>({
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
+                {hasActions && (
+                  <td className="text-right">
+                    <HoldToConfirmButton
+                      onConfirm={() => onDeleteRow?.(row.original)}
+                      holdDuration={1000}
+                      shape="round"
+                      variant="btn-error"
+                      className="btn-xs h-8 w-8 text-text-primary"
+                      aria-label={deleteRowLabel?.(row.original)}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Trash2 size={14} />
+                    </HoldToConfirmButton>
+                  </td>
+                )}
               </tr>
             ))}
+            {onCreateRow && (
+              <tr
+                onClick={onCreateRow}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  onCreateRow();
+                }}
+                tabIndex={0}
+                className="cursor-pointer border-gaming-border bg-gaming-base/20 text-text-muted transition hover:bg-gaming-base/40 hover:text-text-primary focus-visible:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60"
+              >
+                <td colSpan={visibleColumns.length + (hasActions ? 1 : 0)}>
+                  <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-gaming-border/80 px-3 py-2 font-display text-sm font-semibold uppercase tracking-wider">
+                    <Plus size={16} />
+                    {addRowLabel}
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

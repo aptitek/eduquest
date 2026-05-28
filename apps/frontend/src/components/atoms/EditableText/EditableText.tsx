@@ -10,6 +10,7 @@ export interface EditableTextProps {
   suffix?: React.ReactNode;
   placeholder?: string;
   className?: string;
+  inputClassName?: string;
   variant?: 'inline' | 'field';
   multiline?: boolean;
   inputType?: 'text' | 'email' | 'date';
@@ -38,6 +39,7 @@ export function EditableText({
   suffix,
   placeholder,
   className,
+  inputClassName,
   variant = 'inline',
   multiline = false,
   inputType = 'text',
@@ -165,7 +167,7 @@ export function EditableText({
         onBlur={handleConfirm}
         onKeyDown={handleTextareaKeyDown}
         rows={4}
-        className={variant === 'inline' ? inlineTextareaClass : cn(fieldInputClass, 'textarea')}
+        className={cn(variant === 'inline' ? inlineTextareaClass : cn(fieldInputClass, 'textarea'), inputClassName)}
       />
     ) : (
       <input
@@ -180,7 +182,8 @@ export function EditableText({
           variant === 'inline' ? inlineInputClass : fieldInputClass,
           variant === 'inline' && inputType === 'date' && 'min-w-[10.5rem]',
           variant === 'inline' && inputType === 'email' && 'min-w-48 max-w-full',
-          variant === 'inline' && inputType === 'text' && 'w-auto min-w-[3ch]'
+          variant === 'inline' && inputType === 'text' && 'w-auto min-w-[3ch]',
+          inputClassName
         )}
       />
     );

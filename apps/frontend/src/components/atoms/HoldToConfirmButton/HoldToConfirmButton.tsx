@@ -4,7 +4,21 @@ import { cn } from '../../../utils/cn';
 
 export type HoldToConfirmButtonShape = 'default' | 'round';
 
-export interface HoldToConfirmButtonProps {
+export interface HoldToConfirmButtonProps
+  extends Omit<
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
+    | 'children'
+    | 'className'
+    | 'disabled'
+    | 'onConfirm'
+    | 'onPointerDown'
+    | 'onPointerUp'
+    | 'onPointerLeave'
+    | 'onPointerCancel'
+    | 'onKeyDown'
+    | 'onKeyUp'
+    | 'onBlur'
+  > {
   onConfirm: () => void;
   holdDuration?: number;
   children: React.ReactNode;
@@ -22,39 +36,52 @@ export function HoldToConfirmButton({
   variant = 'btn-error',
   shape = 'default',
   disabled = false,
+  ...buttonProps
 }: HoldToConfirmButtonProps) {
   const controls = useAnimation();
   const [isSuccess, setIsSuccess] = useState(false);
   const isHeld = useRef(false);
+  const isMounted = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const isRound = shape === 'round';
   const idleProgressState = isRound ? { pathLength: 0, opacity: 0 } : { scaleX: 0, opacity: 0.2 };
 
-  // Cleanup timeout on unmount
   useEffect(() => {
-    return () => clearTimeout(timeoutRef.current);
+    isMounted.current = true;
+
+    return () => {
+      isMounted.current = false;
+      isHeld.current = false;
+      clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   const startHold = () => {
-    if (disabled) return;
+    if (disabled || !isMounted.current) return;
     clearTimeout(timeoutRef.current);
 
     isHeld.current = true;
     setIsSuccess(false);
 
-    controls.start({
+    void controls.start({
       ...(isRound ? { pathLength: 1, opacity: 0.85 } : { scaleX: 1 }),
       transition: { duration: holdDuration / 1000, ease: 'linear' },
     });
 
     timeoutRef.current = setTimeout(() => {
-      if (isHeld.current) {
+      if (isHeld.current && isMounted.current) {
         setIsSuccess(true);
         onConfirm();
-        controls.start({ opacity: 0, transition: { duration: 0.2 } }).then(() => {
-          controls.set(idleProgressState);
-          setIsSuccess(false);
-        });
+        void controls
+          .start({ opacity: 0, transition: { duration: 0.2 } })
+          .then(() => {
+            if (!isMounted.current) return;
+            controls.set(idleProgressState);
+            setIsSuccess(false);
+          })
+          .catch(() => {
+            // The row can unmount immediately after confirmation, for example after deletion.
+          });
       }
     }, holdDuration);
   };
@@ -74,8 +101,8 @@ export function HoldToConfirmButton({
   const cancelHold = () => {
     isHeld.current = false;
     clearTimeout(timeoutRef.current);
-    if (!isSuccess) {
-      controls.start({
+    if (!isSuccess && isMounted.current) {
+      void controls.start({
         ...idleProgressState,
         transition: { duration: 0.3, ease: 'easeOut' },
       });
@@ -94,6 +121,7 @@ export function HoldToConfirmButton({
         className
       )}
       disabled={disabled}
+      {...buttonProps}
       onPointerDown={handlePointerDown}
       onPointerUp={cancelHold}
       onPointerLeave={cancelHold}

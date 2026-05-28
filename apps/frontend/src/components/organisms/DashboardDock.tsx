@@ -24,6 +24,7 @@ import {
 import type { DockGuild } from './DashboardDock/types';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 
 const LucideIconSelector = lazy(() =>
   import('../atoms/LucideIconSelector').then((module) => ({
@@ -81,7 +82,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
   const isGuildPage = route === 'guild';
   const isClassPage = route === 'class';
-  const isProgressPage = route === 'progress';
+  const isProgressPage = route === 'bonus';
   const progressBonusSeenStorageKey = getProgressBonusSeenStorageKey(user?.id, selectedGameId);
 
   useEffect(() => {
@@ -168,12 +169,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
   }, [route]);
 
   useEffect(() => {
-    if (route !== 'progress') {
+    if (route !== 'bonus') {
       setProgressBonusTarget(null);
       return undefined;
     }
 
-    const updateTarget = () => setProgressBonusTarget(document.getElementById('progress-bonus-hand-target'));
+    const updateTarget = () => setProgressBonusTarget(document.getElementById('bonus-hand-target'));
     updateTarget();
 
     const animationFrame = window.requestAnimationFrame(updateTarget);
@@ -230,15 +231,19 @@ export function DashboardDock({ className }: DashboardDockProps) {
     };
   }, [user?.isAdmin, selectedGameId]);
 
-  const milestoneRewards = dashboardData?.gauge.milestones.map((milestone) => milestone.reward) || [];
-  const bonusCards = milestoneRewards.length
-    ? (milestoneRewards.map((reward) => ({
+  const milestones = dashboardData?.gauge.milestones || [];
+  const bonusCards = milestones.length
+    ? (milestones.map((milestone) => ({
         kind: 'reward' as const,
-        id: reward.id,
-        title: t(reward.titleI18nKey),
-        subtitle: reward.subtitleI18nKey ? t(reward.subtitleI18nKey) : undefined,
-        accentToken: reward.accentToken as PlayingCardData['accentToken'],
-        ribbonLabel: t('dashboard.dock.newRibbon'),
+        id: milestone.reward.id,
+        title: t(milestone.reward.titleI18nKey),
+        subtitle: milestone.reward.subtitleI18nKey ? t(milestone.reward.subtitleI18nKey) : undefined,
+        description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
+        color: milestone.reward.color,
+        accentToken: milestone.reward.accentToken as PlayingCardData['accentToken'],
+        illustration: renderLucideIcon(milestone.reward.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+        ribbonIcon: renderLucideIcon(milestone.reward.iconKey || 'Gift', 18),
+        ribbonLabel: `${milestone.cost} ${t('rewardCards.pointsShort')}`,
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
     : ([
@@ -279,7 +284,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     window.location.hash = 'class';
   };
   const openProgressPage = () => {
-    window.location.hash = 'progress';
+    window.location.hash = 'bonus';
   };
   const adminBonusContent = (
     <motion.div
@@ -295,7 +300,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       <PlayingHand
         hand={{
           id: 'admin-progress-active-bonus-hand',
-          title: t('progress.activeBonuses'),
+          title: t('bonus.activeBonuses'),
           cards: progressBonusCards,
           mainCardIndex: 0,
           variant: 'horizontal',
@@ -331,6 +336,17 @@ export function DashboardDock({ className }: DashboardDockProps) {
             },
           ]
     );
+    const adminPodiumHands = podiumCards.map((card) =>
+      buildClassGuildHand(t, {
+        guild: card.guild || {
+          id: card.id || 'guild',
+          name: card.title || t('dashboard.dock.playerGuild'),
+          gold: 0,
+          boostPointsSpent: 0,
+        },
+        guildName: card.title,
+      })
+    );
     const adminPodiumContent = (
       <motion.div
         layout
@@ -342,26 +358,36 @@ export function DashboardDock({ className }: DashboardDockProps) {
             : 'relative z-50 h-56 w-28 shrink-0 sm:w-32 lg:h-60 xl:w-32 2xl:w-36'
         )}
       >
-        <PlayingHand
-          hand={{
-            id: 'admin-class-podium-deck',
-            cards: adminPodiumCards,
-            mainCardIndex: 0,
-            variant: usesWideGuildDeck ? 'horizontal' : 'vertical',
-          }}
-          mode={isClassPage ? 'full' : 'mini'}
-          variant={isClassPage || usesWideGuildDeck ? 'horizontal' : 'vertical'}
-          stackSide="left"
-          visibleCardCount={adminPodiumCards.length}
-          expandOnHover={!isClassPage}
-          onCardSelect={isClassPage ? undefined : openClassPage}
-          className={cn(
-            'h-full w-full',
-            isClassPage && 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
-          )}
-          cardClassName={cn(!isClassPage && 'w-28 translate-y-0 sm:w-32 2xl:w-36')}
-          stackCardClassName={cn(!isClassPage && 'w-24 translate-y-0 sm:w-28 2xl:w-32')}
-        />
+        {isClassPage && adminPodiumHands.length > 0 ? (
+          <div className="space-y-5">
+            {adminPodiumHands.map((hand, index) => (
+              <PlayingHandPanel
+                key={hand.id}
+                id={`class-guild-${slugify(hand.title || 'guild')}`}
+                hand={hand}
+                rank={index + 1}
+              />
+            ))}
+          </div>
+        ) : (
+          <PlayingHand
+            hand={{
+              id: 'admin-class-podium-deck',
+              cards: adminPodiumCards,
+              mainCardIndex: 0,
+              variant: usesWideGuildDeck ? 'horizontal' : 'vertical',
+            }}
+            mode="mini"
+            variant={usesWideGuildDeck ? 'horizontal' : 'vertical'}
+            stackSide="left"
+            visibleCardCount={adminPodiumCards.length}
+            expandOnHover
+            onCardSelect={openClassPage}
+            className="h-full w-full"
+            cardClassName="w-28 translate-y-0 sm:w-32 2xl:w-36"
+            stackCardClassName="w-24 translate-y-0 sm:w-28 2xl:w-32"
+          />
+        )}
       </motion.div>
     );
     const voteButton = (
@@ -467,26 +493,27 @@ export function DashboardDock({ className }: DashboardDockProps) {
     faceDown: true,
   };
   const podiumDeckCards = toNonEmptyCards([...podiumCards, classRemainingCard]);
-  const classPodiumHandsBase = podiumCards.map((card) =>
-    buildClassGuildHand(t, {
+  const classPodiumHands = podiumCards.map((card) => {
+    const hand = buildClassGuildHand(t, {
       guild: card.guild || activePlayerGuild,
       guildName: card.title,
-    })
-  );
-  const classPodiumHands = classPodiumHandsBase.map((hand) => ({
-    ...hand,
-    cards: hand.cards.map((card) =>
-      card.kind === 'guild' && card.guild?.name === activePlayerGuild.name
-        ? makeEditableDashboardCard({
-            card,
-            cardKey: 'guild',
-            sideOverrides: editableCardSides,
-            onFieldChange: updateEditableCardField,
-            onStatChange: updateEditableCardStat,
-          })
-        : card
-    ) as [PlayingCardData, ...PlayingCardData[]],
-  }));
+    });
+
+    return {
+      ...hand,
+      cards: hand.cards.map((handCard) =>
+        handCard.kind === 'guild' && handCard.guild?.name === activePlayerGuild.name
+          ? makeEditableDashboardCard({
+              card: handCard,
+              cardKey: 'guild',
+              sideOverrides: editableCardSides,
+              onFieldChange: updateEditableCardField,
+              onStatChange: updateEditableCardStat,
+            })
+          : handCard
+      ) as [PlayingCardData, ...PlayingCardData[]],
+    };
+  });
   const openCharacterPage = () => {
     window.location.hash = 'character';
   };
@@ -563,7 +590,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
     try {
       const voteSpend = await spendGuildVotes(token, activePlayerGuild.id, 1);
       setGuilds((current) => {
-        const updatedGuild = { ...activePlayerGuild, gold: voteSpend.balance };
+        const updatedGuild = {
+          ...activePlayerGuild,
+          gold: voteSpend.balance,
+          boostPointsSpent: (activePlayerGuild.boostPointsSpent || 0) + voteSpend.cost,
+        };
         return [updatedGuild, ...current.filter((guild) => guild?.id !== activePlayerGuild.id)];
       });
     } catch (error) {
@@ -682,7 +713,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       <PlayingHand
         hand={{
           id: 'progress-active-bonus-hand',
-          title: t('progress.activeBonuses'),
+          title: t('bonus.activeBonuses'),
           cards: progressBonusCards,
           mainCardIndex: 0,
           variant: 'horizontal',
@@ -691,7 +722,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         visibleCardCount={progressBonusCards.length}
         expandOnHover={!isProgressPage}
         onCardSelect={isProgressPage ? undefined : () => {
-          window.location.hash = 'progress';
+          window.location.hash = 'bonus';
         }}
         stackSide="left"
         className={cn(
@@ -790,8 +821,8 @@ function withProgressBonusNewRibbonState(
   isProgressPage: boolean
 ): [PlayingCardData, ...PlayingCardData[]] {
   return cards.map((card) => {
-    const shouldShowNewRibbon = Boolean(isProgressPage && card.id && !card.faceDown && !seenCardIds.has(card.id));
-    const ribbonText = shouldShowNewRibbon ? card.front?.ribbonText || card.ribbonLabel || card.ribbonText : undefined;
+    const shouldMarkSeen = Boolean(isProgressPage && card.id && !card.faceDown && !seenCardIds.has(card.id));
+    const ribbonText = card.front?.ribbonText || card.ribbonLabel || card.ribbonText;
 
     return {
       ...card,
@@ -803,7 +834,7 @@ function withProgressBonusNewRibbonState(
             ribbonText,
           }
         : card.front,
-      onPointerEnter: isProgressPage ? () => markCardSeen(card.id) : undefined,
+      onPointerEnter: shouldMarkSeen ? () => markCardSeen(card.id) : undefined,
     };
   }) as [PlayingCardData, ...PlayingCardData[]];
 }
@@ -861,7 +892,8 @@ function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...Playing
 }
 
 function getHashRoute() {
-  return window.location.hash.replace(/^#\/?/, '');
+  const route = window.location.hash.replace(/^#\/?/, '');
+  return route === 'progress' ? 'bonus' : route;
 }
 
 function slugify(value: string) {

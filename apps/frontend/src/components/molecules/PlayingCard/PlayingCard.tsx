@@ -18,6 +18,7 @@ import {
   resolveUiColorTokenValue,
   type UiColorTokenName,
 } from '../../../styles/colorTokens';
+import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
 import {
   PLAYING_CARD_TRANSITION,
   PlayingCardArtFrame,
@@ -44,7 +45,8 @@ export type PlayingCardEditableField =
   | 'subtitle'
   | 'description'
   | 'illustrationUrl'
-  | 'ribbonText';
+  | 'ribbonText'
+  | 'ribbonIcon';
 
 export interface PlayingCardSide {
   title: string;
@@ -56,6 +58,7 @@ export interface PlayingCardSide {
   illustration?: ReactNode;
   ribbonText?: string;
   ribbonIcon?: ReactNode;
+  ribbonIconKey?: string;
   ribbonPosition?: CornerRibbonPosition;
   stats?: PlayingCardStat[];
   statsLabel?: string;
@@ -93,6 +96,7 @@ export interface PlayingCardData {
   ribbonText?: string;
   ribbonLabel?: string;
   ribbonIcon?: ReactNode;
+  ribbonIconKey?: string;
   ribbonPosition?: CornerRibbonPosition;
   ribbonClassName?: string;
   stats?: PlayingCardStat[];
@@ -414,23 +418,30 @@ function FullCardSide({
             size="md"
             color={color}
             icon={resolveRibbonIcon(undefined, side)}
+            editableText={
+              canEditRibbon
+                ? {
+                    value: side.ribbonText || '',
+                    onChange: (value) => updateField('ribbonText', value),
+                    placeholder: t('playingCard.placeholders.ribbon'),
+                    className: 'text-inherit',
+                  }
+                : undefined
+            }
+            editableIcon={
+              canEditRibbon && side.ribbonIconKey
+                ? {
+                    value: side.ribbonIconKey,
+                    onChange: (value) => updateField('ribbonIcon', value),
+                  }
+                : undefined
+            }
             ribbonClassName={ribbonClassName}
             contentInteractive={canEditRibbon}
             onClick={side.onRibbonClick}
             ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
           >
-            {canEditRibbon ? (
-              <EditableText
-                value={side.ribbonText || ''}
-                onChange={(value) => updateField('ribbonText', value)}
-                placeholder={t('playingCard.placeholders.ribbon')}
-                className="text-inherit"
-                showPencil={false}
-                truncate={false}
-              />
-            ) : (
-              side.ribbonText
-            )}
+            {canEditRibbon ? null : side.ribbonText}
           </PlayingCardRibbon>
         ) : null}
 
@@ -564,6 +575,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     return {
       ...card.front,
       ribbonText: card.front.ribbonText || card.ribbonText || card.ribbonLabel,
+      ribbonIconKey: card.front.ribbonIconKey || card.ribbonIconKey,
       ribbonIcon:
         card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
       editable: card.front.editable ?? card.editable,
@@ -593,6 +605,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     illustrationAlt: card.illustrationAlt || title,
     illustration: card.illustration,
     ribbonText: card.ribbonText || card.ribbonLabel,
+    ribbonIconKey: card.ribbonIconKey,
     ribbonIcon: card.ribbonIcon || getCharacterClassIcon(card.characterClass),
     ribbonPosition: card.ribbonPosition,
     stats: card.stats,
@@ -611,6 +624,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
 }
 
 function resolveRibbonIcon(card: PlayingCardData | undefined, side: PlayingCardSide) {
+  if (side.ribbonIconKey) return renderLucideIcon(side.ribbonIconKey, 18);
   return side.ribbonIcon || getCharacterClassIcon(card?.characterClass);
 }
 

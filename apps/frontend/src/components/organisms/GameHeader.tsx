@@ -26,7 +26,7 @@ import { Check, ChevronDown, Coins, Gift, GraduationCap, Map, Megaphone, Setting
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
-  currentView?: 'map' | 'management' | 'guild' | 'class' | 'progress' | 'character';
+  currentView?: 'map' | 'management' | 'guild' | 'class' | 'bonus' | 'character';
 }
 
 export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
@@ -354,17 +354,17 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
 
                 <button
                   type="button"
-                  aria-current={currentView === 'progress' ? 'page' : undefined}
+                  aria-current={currentView === 'bonus' ? 'page' : undefined}
                   onClick={() => {
-                    window.location.hash = 'progress';
+                    window.location.hash = 'bonus';
                   }}
                   className={cn(
                     'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    currentView === 'progress' && 'bg-gaming-base text-status-quest'
+                    currentView === 'bonus' && 'bg-gaming-base text-status-quest'
                   )}
                 >
                   <Gift size={16} aria-hidden />
-                  {t('progress.nav')}
+                  {t('bonus.nav')}
                 </button>
               </>
             ) : (
@@ -389,17 +389,17 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
 
                 <button
                   type="button"
-                  aria-current={currentView === 'progress' ? 'page' : undefined}
+                  aria-current={currentView === 'bonus' ? 'page' : undefined}
                   onClick={() => {
-                    window.location.hash = 'progress';
+                    window.location.hash = 'bonus';
                   }}
                   className={cn(
                     'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    currentView === 'progress' && 'bg-gaming-base text-status-quest'
+                    currentView === 'bonus' && 'bg-gaming-base text-status-quest'
                   )}
                 >
                   <Gift size={16} aria-hidden />
-                  {t('progress.nav')}
+                  {t('bonus.nav')}
                 </button>
               </>
             )}

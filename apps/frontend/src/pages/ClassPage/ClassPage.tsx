@@ -74,16 +74,6 @@ export function ClassPage() {
     () => [...classGuilds].sort(sortByPointsThenName).slice(0, 3),
     [classGuilds]
   );
-  const podiumHands = useMemo(
-    () =>
-      podiumGuilds.map((guild, index) =>
-        buildClassGuildHand(t, {
-          guild,
-          layoutPrefix: `class-podium-${index + 1}-${slugify(guild.name)}`,
-        })
-      ),
-    [podiumGuilds, t]
-  );
   const podiumKeys = new Set(podiumGuilds.map(getGuildIdentityKey));
   const remainingGuilds = useMemo(
     () => classGuilds.filter((guild) => !podiumKeys.has(getGuildIdentityKey(guild))).sort(sortByName),
@@ -143,17 +133,7 @@ export function ClassPage() {
             </h3>
           </div>
 
-          <div id="class-podium-hands-target" className="relative z-0 space-y-5 overflow-visible">
-            {podiumHands.map((hand, index) => (
-              <ClassHandSection
-                key={hand.id}
-                hand={hand}
-                rank={index + 1}
-                isPlayerGuild={hand.title === playerGuild?.name}
-                currentGuildLabel={t('class.currentGuild')}
-              />
-            ))}
-          </div>
+          <div id="class-podium-hands-target" className="relative z-0 overflow-visible" />
         </section>
 
         <div className="flex items-center gap-4" role="separator" aria-hidden>
@@ -361,6 +341,7 @@ function mergeGuilds(
       iconKey: guild.iconKey,
       color: guild.color,
       gold: guild.gold || 0,
+      boostPointsSpent: guild.boostPointsSpent || 0,
       members: guild.members,
       createdAt: guild.createdAt || new Date().toISOString(),
       updatedAt: guild.updatedAt || new Date().toISOString(),
@@ -371,7 +352,7 @@ function mergeGuilds(
 }
 
 function sortByPointsThenName(a: ClassRosterGuild, b: ClassRosterGuild) {
-  return (b.gold || 0) - (a.gold || 0) || sortByName(a, b);
+  return (b.boostPointsSpent || 0) - (a.boostPointsSpent || 0) || sortByName(a, b);
 }
 
 function sortByName(a: ClassRosterGuild, b: ClassRosterGuild) {

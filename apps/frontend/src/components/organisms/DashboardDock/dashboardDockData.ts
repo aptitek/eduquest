@@ -25,7 +25,7 @@ interface ClassGuildHandOptions {
 }
 
 export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): PlayingCardData[] {
-  const podiumGuilds = [...guilds].sort((a, b) => (b.gold || 0) - (a.gold || 0));
+  const podiumGuilds = [...guilds].sort(sortByBoostPointsSpentThenName);
 
   const toCard = (guild: DockGuild): PlayingCardData => ({
     kind: 'guild',
@@ -33,7 +33,10 @@ export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): Pl
     layoutId: `class-guild-${slugify(guild.name)}-guild`,
     guild,
     title: guild.name,
-    subtitle: t('dashboard.dock.goldSpent').replace('{amount}', String(guild.gold || 0)),
+    subtitle: t('dashboard.dock.boostPointsSpent').replace(
+      '{amount}',
+      String(guild.boostPointsSpent || 0)
+    ),
     ribbonIcon: renderGuildIcon(guild, 18),
   });
 
@@ -64,10 +67,12 @@ export function buildProgressBonusCards(
         subtitle: card.subtitle,
         description:
           card.description || card.subtitle || t('dashboard.rewards.fallbackDescription'),
-        color: resolveCardColor(card.accentToken),
+        color: resolveCardColor(card.color || card.accentToken),
         illustrationUrl: card.illustrationUrl,
         illustrationAlt: card.illustrationAlt || card.title,
+        illustration: card.illustration,
         ribbonText: card.ribbonLabel,
+        ribbonIcon: card.ribbonIcon,
         ribbonPosition: card.ribbonPosition,
       },
     };
@@ -198,6 +203,10 @@ export function getLatestCohortMembership(memberships?: CohortMembership[]) {
 
 function resolveCardColor(value: string | undefined) {
   return resolveUiColorTokenValue(value);
+}
+
+function sortByBoostPointsSpentThenName(a: DockGuild, b: DockGuild) {
+  return (b.boostPointsSpent || 0) - (a.boostPointsSpent || 0) || a.name.localeCompare(b.name);
 }
 
 function slugify(value: string | undefined) {

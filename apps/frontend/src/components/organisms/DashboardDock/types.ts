@@ -10,6 +10,9 @@ export type DockGuildMember = {
   stats?: GameStats;
 };
 
-export type DockGuild = Pick<Guild, 'id' | 'name' | 'description' | 'color' | 'iconUrl' | 'iconKey' | 'gold'> & {
+export type DockGuild = Pick<
+  Guild,
+  'id' | 'name' | 'description' | 'color' | 'iconUrl' | 'iconKey' | 'gold' | 'boostPointsSpent'
+> & {
   members?: DockGuildMember[];
 };

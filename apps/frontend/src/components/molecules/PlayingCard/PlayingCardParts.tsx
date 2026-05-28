@@ -3,7 +3,11 @@ import { motion } from 'framer-motion';
 import { Shield } from 'lucide-react';
 import { EditableText } from '../../atoms/EditableText';
 import { CornerRibbon } from '../../atoms/CornerRibbon';
-import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
+import type {
+  CornerRibbonEditableIconProps,
+  CornerRibbonEditableTextProps,
+  CornerRibbonPosition,
+} from '../../atoms/CornerRibbon';
 import { RadarGraph } from '../RadarGraph';
 import type { RadarGraphAxis, RadarGraphDataset } from '../RadarGraph';
 import { cn } from '../../../utils/cn';
@@ -174,6 +178,8 @@ export function PlayingCardTitleBlock({
 export interface PlayingCardRibbonProps {
   children?: ReactNode;
   icon?: ReactNode;
+  editableText?: CornerRibbonEditableTextProps;
+  editableIcon?: CornerRibbonEditableIconProps;
   size: 'sm' | 'md';
   color: string;
   position?: CornerRibbonPosition;
@@ -188,6 +194,8 @@ export interface PlayingCardRibbonProps {
 export function PlayingCardRibbon({
   children,
   icon,
+  editableText,
+  editableIcon,
   size,
   color,
   position = 'top-right',
@@ -202,6 +210,8 @@ export function PlayingCardRibbon({
     <motion.div layoutId={layoutId} transition={PLAYING_CARD_TRANSITION} className="contents">
       <CornerRibbon
         icon={icon}
+        editableText={editableText}
+        editableIcon={editableIcon}
         position={position}
         size={size}
         color={color}

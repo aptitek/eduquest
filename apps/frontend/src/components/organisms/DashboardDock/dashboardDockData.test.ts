@@ -6,13 +6,18 @@ const t = (key: string) => key;
 describe('dashboard dock data builders', () => {
   it('builds podium cards from provided guild data only', () => {
     const cards = buildPodiumCards(t, [
-      { id: 'guild-low', name: 'Low Guild', gold: 10 },
-      { id: 'guild-high', name: 'High Guild', gold: 50 },
-      { id: 'guild-mid', name: 'Mid Guild', gold: 25 },
+      { id: 'guild-low', name: 'Low Guild', gold: 200, boostPointsSpent: 10 },
+      { id: 'guild-high', name: 'High Guild', gold: 5, boostPointsSpent: 50 },
+      { id: 'guild-mid', name: 'Mid Guild', gold: 100, boostPointsSpent: 25 },
     ]);
 
     expect(cards.map((card) => card.title)).toEqual(['High Guild', 'Mid Guild', 'Low Guild']);
     expect(cards.map((card) => card.guild?.id)).toEqual(['guild-high', 'guild-mid', 'guild-low']);
+    expect(cards.map((card) => card.subtitle)).toEqual([
+      'dashboard.dock.boostPointsSpent',
+      'dashboard.dock.boostPointsSpent',
+      'dashboard.dock.boostPointsSpent',
+    ]);
   });
 
   it('builds a partial podium while guild data is still loading', () => {
