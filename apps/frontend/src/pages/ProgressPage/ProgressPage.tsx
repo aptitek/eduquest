@@ -20,6 +20,7 @@ export function ProgressPage() {
   const { user, selectedGameId } = useGameStore();
   const [voteState, setVoteState] = useState<GameBonusVoteState | null>(null);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(null);
+  const [selectedBonusCardId, setSelectedBonusCardId] = useState<string | null>(null);
   const [isVoting, setIsVoting] = useState(false);
 
   const loadVoteState = () => {
@@ -53,8 +54,12 @@ export function ProgressPage() {
     [t, voteState?.bonusCards]
   );
 
+  useEffect(() => {
+    setSelectedBonusCardId(selectedVoteState?.guildVote?.bonusCardId ?? null);
+  }, [selectedVoteState?.guildVote?.bonusCardId, selectedVoteState?.milestone.id]);
+
   const castVote = async (bonusCardId: string) => {
-    if (!selectedGameId || !selectedVoteState || isVoting) return;
+    if (!selectedGameId || !selectedVoteState?.isVoteOpen || isVoting) return;
     const token = localStorage.getItem('eduquest_token');
     if (!token) return;
 
@@ -62,6 +67,7 @@ export function ProgressPage() {
     try {
       await castMilestoneBonusVote(token, selectedGameId, selectedVoteState.milestone.id, bonusCardId);
       await fetchGameBonusVoteState(token, selectedGameId).then(setVoteState);
+      window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (error) {
       console.warn('Could not cast bonus vote.', error);
     } finally {
@@ -70,7 +76,7 @@ export function ProgressPage() {
   };
 
   const boostVote = async () => {
-    if (!selectedGameId || !selectedVoteState || isVoting) return;
+    if (!selectedGameId || !selectedVoteState?.isVoteClosed || isVoting) return;
     const token = localStorage.getItem('eduquest_token');
     if (!token) return;
 
@@ -78,6 +84,7 @@ export function ProgressPage() {
     try {
       await boostMilestoneBonusVote(token, selectedGameId, selectedVoteState.milestone.id, 1);
       await fetchGameBonusVoteState(token, selectedGameId).then(setVoteState);
+      window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (error) {
       console.warn('Could not boost bonus vote.', error);
     } finally {
@@ -125,8 +132,10 @@ export function ProgressPage() {
             voteState={voteState}
             selectedVoteState={selectedVoteState}
             voteCards={voteCards}
+            selectedBonusCardId={selectedBonusCardId}
             isVoting={isVoting}
             onSelectMilestone={setSelectedMilestoneId}
+            onSelectCard={setSelectedBonusCardId}
             onVote={castVote}
             onBoost={boostVote}
           />
@@ -144,8 +153,10 @@ function BonusVotePanel({
   voteState,
   selectedVoteState,
   voteCards,
+  selectedBonusCardId,
   isVoting,
   onSelectMilestone,
+  onSelectCard,
   onVote,
   onBoost,
 }: {
@@ -154,13 +165,19 @@ function BonusVotePanel({
   voteState: GameBonusVoteState | null;
   selectedVoteState?: GameBonusVoteState['voteStates'][number];
   voteCards: PlayingCardData[];
+  selectedBonusCardId: string | null;
   isVoting: boolean;
   onSelectMilestone: (milestoneId: string) => void;
+  onSelectCard: (bonusCardId: string | null) => void;
   onVote: (bonusCardId: string) => void;
   onBoost: () => void;
 }) {
   const guildVote = selectedVoteState?.guildVote;
   const boostCost = voteState?.boostCostPreview?.finalCost ?? 0;
+  const isVoteOpen = selectedVoteState?.isVoteOpen ?? false;
+  const isVoteClosed = selectedVoteState?.isVoteClosed ?? false;
+  const canCastVote = isVoteOpen && Boolean(selectedBonusCardId) && !isVoting;
+  const canBoostVote = isVoteClosed && Boolean(guildVote) && !isVoting;
 
   return (
     <section aria-labelledby="progress-next-vote-title" className="relative z-20 space-y-5">
@@ -171,6 +188,11 @@ function BonusVotePanel({
         >
           {t('bonus.nextVote')}
         </h3>
+        <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.14em] ${
+          isVoteOpen ? 'bg-status-completed/15 text-status-completed' : 'bg-status-warning/15 text-status-warning'
+        }`}>
+          {isVoteOpen ? 'Vote ouvert' : 'Vote fermé'}
+        </span>
         <div className="flex flex-wrap gap-2">
           {(voteState?.milestones || []).map((milestone) => (
             <button
@@ -187,15 +209,32 @@ function BonusVotePanel({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={onBoost}
-          disabled={!guildVote || isVoting}
-          className="btn btn-primary btn-sm ml-auto font-display text-xs font-black uppercase tracking-[0.14em]"
-        >
-          Booster +1 vote{boostCost ? ` (${boostCost} or)` : ''}
-        </button>
+        {isVoteOpen ? (
+          <button
+            type="button"
+            onClick={() => selectedBonusCardId && onVote(selectedBonusCardId)}
+            disabled={!canCastVote}
+            className="btn btn-primary btn-sm ml-auto font-display text-xs font-black uppercase tracking-[0.14em]"
+          >
+            Voter pour cette carte
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onBoost}
+            disabled={!canBoostVote}
+            className="btn btn-primary btn-sm ml-auto font-display text-xs font-black uppercase tracking-[0.14em]"
+          >
+            Booster +1 vote{boostCost ? ` (${boostCost} or)` : ''}
+          </button>
+        )}
       </div>
+
+      {isVoteOpen ? (
+        <p className="rounded-xl border border-status-quest/40 bg-status-quest/10 px-4 py-2 text-sm font-semibold text-status-quest">
+          Sélectionnez une carte, puis validez le vote de guilde avec le bouton.
+        </p>
+      ) : null}
 
       {selectedVoteState?.hasTie ? (
         <p className="rounded-xl border border-status-warning/50 bg-status-warning/10 px-4 py-2 text-sm font-semibold text-status-warning">
@@ -208,12 +247,13 @@ function BonusVotePanel({
         getKey={(card, index) => card.id || `next-vote-${index}`}
         renderItem={(card) => {
           const result = selectedVoteState?.results.find((item) => item.bonusCardId === card.id);
-          const isSelected = guildVote?.bonusCardId === card.id;
+          const isSelected = selectedBonusCardId === card.id;
+          const isGuildVote = guildVote?.bonusCardId === card.id;
           return (
             <button
               type="button"
-              onClick={() => card.id && onVote(card.id)}
-              disabled={isVoting || !card.id || card.faceDown}
+              onClick={() => card.id && isVoteOpen && onSelectCard(card.id)}
+              disabled={isVoting || !card.id || card.faceDown || !isVoteOpen}
               className={`group relative w-full text-left transition ${
                 isSelected ? 'rounded-[1.4rem] ring-4 ring-status-quest ring-offset-4 ring-offset-gaming-base' : ''
               }`}
@@ -225,6 +265,11 @@ function BonusVotePanel({
               {result?.isLeader ? (
                 <span className="absolute left-4 top-4 z-50 rounded-full bg-status-completed px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-gaming-base shadow-card">
                   Leader
+                </span>
+              ) : null}
+              {isGuildVote ? (
+                <span className="absolute bottom-4 left-4 z-50 rounded-full border border-status-quest/60 bg-gaming-base/95 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-status-quest shadow-card">
+                  Vote de guilde
                 </span>
               ) : null}
             </button>

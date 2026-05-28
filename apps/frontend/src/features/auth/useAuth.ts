@@ -40,7 +40,7 @@ export function useAuth() {
         if (!response.ok) {
           throwApiResponseError(response, data, 'Your session expired. Please sign in again.');
         }
-        if (data.success && data.user && (data.user.isAdmin || (data.student && data.character))) {
+        if (data.success && data.user && (data.user.isAdmin || data.student)) {
           if (typeof data.token === 'string' && data.token) {
             localStorage.setItem('eduquest_token', data.token);
           }
@@ -123,6 +123,15 @@ export function useAuth() {
     window.location.href = url.toString();
   }, []);
 
+  const createMockGithubAccount = useCallback(() => {
+    if (!ENABLE_DEV_TOOLS) return;
+
+    const url = new URL(`${BACKEND_BASE_URL}/api/auth/dev/mock-github`);
+    const cohortInvite = getCohortInviteToken();
+    if (cohortInvite) url.searchParams.set('invite', cohortInvite);
+    window.location.href = url.toString();
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('eduquest_token');
     clearStoreSession();
@@ -136,6 +145,7 @@ export function useAuth() {
     error,
     loginWithGithub,
     loginWithDevUser,
+    createMockGithubAccount,
     logout,
   };
 }

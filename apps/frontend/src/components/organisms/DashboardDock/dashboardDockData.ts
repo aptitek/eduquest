@@ -1,6 +1,5 @@
 import type { CohortMembership, GameCharacterClass, GameStats } from '@eduquest/shared';
 import type { PlayingCardData, PlayingHandData } from '../../molecules/PlayingCard';
-import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
 import { resolveUiColorTokenValue } from '../../../styles/colorTokens';
 import type { DockGuild, DockGuildMember } from './types';
 
@@ -25,7 +24,9 @@ interface ClassGuildHandOptions {
 }
 
 export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): PlayingCardData[] {
-  const podiumGuilds = [...guilds].sort(sortByBoostPointsSpentThenName);
+  const podiumGuilds = guilds
+    .filter((guild) => guild.boostPointsSpent === undefined || guild.boostPointsSpent > 0)
+    .sort(sortByBoostPointsSpentThenName);
 
   const toCard = (guild: DockGuild): PlayingCardData => ({
     kind: 'guild',
@@ -37,7 +38,8 @@ export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): Pl
       '{amount}',
       String(guild.boostPointsSpent || 0)
     ),
-    ribbonIcon: renderGuildIcon(guild, 18),
+    illustrationHidden: true,
+    ribbonIconKey: guild.iconKey || 'Shield',
   });
 
   const podiumRibbonClassNames = ['bg-status-campfire', 'bg-accent-neutral', 'bg-solarized-orange'];
@@ -93,9 +95,8 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         title: options.guildName,
         description: options.guild.description || t('dashboard.dock.guildCardDescription'),
         color: guildColor,
-        illustration: renderGuildIcon(options.guild, 72, 'drop-shadow-lg'),
-        ribbonText: t('dashboard.dock.playerGuild'),
-        ribbonIcon: renderGuildIcon(options.guild, 18),
+        illustrationHidden: true,
+        ribbonIconKey: options.guild.iconKey || 'Shield',
         stats: [
           { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
         ],
@@ -173,9 +174,8 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
           title: guildName,
           description: options.guild.description || t('dashboard.dock.classGuildCardDescription'),
           color: guildColor,
-          illustration: renderGuildIcon(options.guild, 72, 'drop-shadow-lg'),
-          ribbonText: t('dashboard.dock.playerGuild'),
-          ribbonIcon: renderGuildIcon(options.guild, 18),
+          illustrationHidden: true,
+          ribbonIconKey: options.guild.iconKey || 'Shield',
           stats: [
             {
               id: 'gold',
@@ -214,10 +214,6 @@ function slugify(value: string | undefined) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
-}
-
-function renderGuildIcon(guild: DockGuild, size: number, className?: string) {
-  return renderLucideIcon(guild.iconKey || 'Shield', size, className);
 }
 
 function buildGuildMemberCard(

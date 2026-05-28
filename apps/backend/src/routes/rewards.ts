@@ -54,7 +54,7 @@ rewardsRouter.get('/rewards/preview', async (c) => {
       .limit(1);
 
     if (!membership?.guildId) {
-      return apiError(c, 'Guild membership not found.', 404);
+      return apiError(c, 'Reward preview is not available until the student belongs to a guild.', 403);
     }
 
     const breakdown = await new RewardPreviewService(db).preview({
@@ -72,6 +72,9 @@ rewardsRouter.get('/rewards/preview', async (c) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Reward preview failed.';
     console.error('Reward preview error:', message);
+    if (message.includes('eligible RPG members')) {
+      return apiError(c, message, 409);
+    }
     return apiError(c, message, 500);
   }
 });

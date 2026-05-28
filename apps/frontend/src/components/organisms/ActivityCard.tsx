@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
 import {
+  Anvil,
   BookOpen,
   Castle,
   Coins,
@@ -14,6 +15,7 @@ import {
   Swords,
   TreePine,
   Trophy,
+  UserCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type {
@@ -37,6 +39,7 @@ import { SOLARIZED_SWATCH_OPTIONS, resolveColorTextClassName } from '../../style
 import { cn } from '../../utils/cn';
 
 const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
+  Anvil,
   TreePine,
   ScrollText,
   Swords,
@@ -47,6 +50,9 @@ const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
   Hammer,
   Sparkles,
   Trophy,
+  UserCheck,
+  'user-check': UserCheck,
+  anvil: Anvil,
   Castle,
   Map,
   onboarding: Compass,
@@ -105,6 +111,8 @@ export interface ActivityCardProps {
   onCardColorChange?: (cardColor: string) => void | Promise<void>;
   onIllustrationUrlChange?: (illustrationUrl: string) => void | Promise<void>;
   onStepRangesChange?: (stepRanges: ActivityStepRange[]) => void | Promise<void>;
+  emptyCardLabel?: string;
+  onEmptyCardClick?: () => void;
   className?: string;
 }
 
@@ -127,6 +135,8 @@ export function ActivityCard({
   onCardColorChange,
   onIllustrationUrlChange,
   onStepRangesChange,
+  emptyCardLabel,
+  onEmptyCardClick,
   className,
 }: ActivityCardProps) {
   const { t } = useTranslation();
@@ -143,11 +153,24 @@ export function ActivityCard({
     return (
       <div
         className={cn(
-          'flex min-h-0 items-center justify-center rounded-2xl border border-dashed border-gaming-border bg-gaming-card/60 p-6 text-center text-sm text-text-muted',
+          'flex min-h-0 justify-center',
           className
         )}
       >
-        {t('activityCard.emptyState')}
+        <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
+          <PlayingCard
+            size="full"
+            kind="activity"
+            accentToken="quest"
+            title={emptyCardLabel || t('activityCard.emptyState')}
+            faceDown
+            editable={Boolean(onEmptyCardClick)}
+            interactive={Boolean(onEmptyCardClick)}
+            onClick={onEmptyCardClick}
+            className="h-full max-h-full w-auto max-w-full"
+            sideClassName="h-full"
+          />
+        </div>
       </div>
     );
   }
@@ -586,6 +609,20 @@ function ResourceUrlRow({
 }) {
   const { t } = useTranslation();
   const faviconUrl = getFaviconUrl(resource.url);
+  const isInternalResource = resource.url === '#profile' || resource.url === '#character';
+  const resourceLabel = resource.title || resource.url;
+
+  const handleResourceClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isInternalResource) return;
+
+    event.preventDefault();
+    if (resource.url === '#profile') {
+      window.dispatchEvent(new CustomEvent('eduquest:open-profile-dropdown'));
+      return;
+    }
+
+    window.location.hash = 'character';
+  };
 
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -608,11 +645,12 @@ function ResourceUrlRow({
       ) : resource.url ? (
         <a
           href={resource.url}
-          target="_blank"
-          rel="noreferrer"
+          target={isInternalResource ? undefined : '_blank'}
+          rel={isInternalResource ? undefined : 'noreferrer'}
+          onClick={handleResourceClick}
           className="min-w-0 truncate text-sm font-semibold text-status-quest hover:underline"
         >
-          {resource.url}
+          {resourceLabel}
         </a>
       ) : (
         <span className="text-sm text-text-muted">{t('activityCard.emptyResource')}</span>

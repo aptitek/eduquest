@@ -88,6 +88,24 @@ const iconSizeClassMap: Record<CornerRibbonSize, string> = {
   lg: '[&>svg]:h-6 [&>svg]:w-6',
 };
 
+const iconOnlySizeClassMap: Record<CornerRibbonSize, string> = {
+  sm: '[&>svg]:h-6 [&>svg]:w-6',
+  md: '[&>svg]:h-8 [&>svg]:w-8',
+  lg: '[&>svg]:h-10 [&>svg]:w-10',
+};
+
+const iconOnlyButtonClassMap: Record<CornerRibbonSize, string> = {
+  sm: 'h-9 w-9',
+  md: 'h-11 w-11',
+  lg: 'h-14 w-14',
+};
+
+const iconOnlyPixelSizeMap: Record<CornerRibbonSize, number> = {
+  sm: 24,
+  md: 32,
+  lg: 40,
+};
+
 const textSlotClassMap: Record<CornerRibbonSize, { withIcon: string; withoutIcon: string }> = {
   sm: {
     withIcon: 'w-24',
@@ -129,6 +147,7 @@ export function CornerRibbon({
   const hasContent =
     Boolean(editableText) || (children !== undefined && children !== null && children !== '');
   const hasIcon = Boolean(editableIcon || icon);
+  const isIconOnly = hasIcon && !hasContent;
   const isInteractive = Boolean(onClick || contentInteractive || editableText || editableIcon);
 
   if (!hasContent && !hasIcon) return null;
@@ -165,8 +184,9 @@ export function CornerRibbon({
       {editableIcon ? (
         <span
           className={cn(
-            'flex h-6 shrink-0 items-center justify-center overflow-visible text-current drop-shadow-sm',
-            iconSizeClassMap[size]
+            'flex shrink-0 items-center justify-center overflow-visible text-current drop-shadow-sm',
+            isIconOnly ? iconOnlyButtonClassMap[size] : 'h-6',
+            isIconOnly ? iconOnlySizeClassMap[size] : iconSizeClassMap[size]
           )}
         >
           <EditableIcon
@@ -176,10 +196,11 @@ export function CornerRibbon({
             searchPlaceholder={editableIcon.searchPlaceholder}
             defaultIconIds={editableIcon.defaultIconIds}
             limit={editableIcon.limit}
-            size={size === 'lg' ? 20 : size === 'md' ? 18 : 16}
+            size={isIconOnly ? iconOnlyPixelSizeMap[size] : size === 'lg' ? 20 : size === 'md' ? 18 : 16}
             className={cn('shrink-0 text-current', editableIcon.className)}
             buttonClassName={cn(
-              'h-6 w-6 rounded-md text-current hover:bg-solarized-base3/15 focus-visible:ring-solarized-base3/50',
+              'rounded-md text-current hover:bg-solarized-base3/15 focus-visible:ring-solarized-base3/50',
+              isIconOnly ? iconOnlyButtonClassMap[size] : 'h-6 w-6',
               editableIcon.buttonClassName
             )}
             iconClassName={cn('text-current', editableIcon.iconClassName)}
@@ -188,8 +209,9 @@ export function CornerRibbon({
       ) : icon ? (
         <span
           className={cn(
-            'flex h-6 shrink-0 items-center justify-center overflow-visible text-current drop-shadow-sm',
-            iconSizeClassMap[size]
+            'flex shrink-0 items-center justify-center overflow-visible text-current drop-shadow-sm',
+            isIconOnly ? iconOnlyButtonClassMap[size] : 'h-6',
+            isIconOnly ? iconOnlySizeClassMap[size] : iconSizeClassMap[size]
           )}
           aria-hidden
         >

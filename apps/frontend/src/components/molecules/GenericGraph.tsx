@@ -43,6 +43,7 @@ export interface GraphNode<TMetadata = unknown> {
   customClass?: string;
   customStyle?: React.CSSProperties;
   fogState?: 'fog' | 'clear';
+  deletable?: boolean;
   metadata?: TMetadata;
 }
 
@@ -81,6 +82,7 @@ interface GenericGraphProps<TMetadata = unknown> {
   height?: number | string;
   onSelectNode?: (node: GraphNode<TMetadata>) => void;
   onSelectEdge?: (edge: GraphEdge) => void;
+  onPaneClick?: () => void;
   onNodeMove?: (node: GraphNode<TMetadata>, position: { x: number; y: number }) => void;
   onConnectNodes?: (edge: GraphEdge) => void;
   onDeleteNodes?: (nodes: GraphNode<TMetadata>[]) => void;
@@ -299,6 +301,7 @@ export function GenericGraph<TMetadata = unknown>({
   height = 600,
   onSelectNode,
   onSelectEdge,
+  onPaneClick,
   onNodeMove,
   onConnectNodes,
   onDeleteNodes,
@@ -339,10 +342,11 @@ export function GenericGraph<TMetadata = unknown>({
           draggable: editable && !node.isLocked,
           selectable: allowLockedSelection || !node.isLocked,
           connectable: connectable && !node.isLocked,
+          deletable: deletable && node.deletable !== false,
           data: {
             graphNode: node,
             allowLockedSelection,
-            deletable,
+            deletable: deletable && node.deletable !== false,
             onSelectNode,
             onDeleteNode: (deletedNode) => onDeleteNodes?.([deletedNode]),
             renderNode,
@@ -506,6 +510,7 @@ export function GenericGraph<TMetadata = unknown>({
         onNodeDragStop={editable ? handleNodeDragStop : undefined}
         onNodeClick={onSelectNode ? handleNodeClick : undefined}
         onEdgeClick={onSelectEdge ? handleEdgeClick : undefined}
+        onPaneClick={onPaneClick}
         nodesDraggable={editable}
         nodesConnectable={connectable}
         edgesFocusable={deletable}

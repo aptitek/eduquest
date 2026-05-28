@@ -33,6 +33,10 @@ export interface ResolvedRewardContext {
   hoursEarly?: number;
 }
 
+export interface GuildProfileLoadOptions {
+  enforceConfiguredMemberCount?: boolean;
+}
+
 export class RewardContextResolver {
   constructor(
     private readonly db: RewardDb,
@@ -77,7 +81,10 @@ export class RewardContextResolver {
       return null;
     }
 
-    const guildProfile = await this.loadGuildProfile(payload.guildId);
+    const guildProfile = await this.loadGuildProfileOrNull(payload.guildId);
+    if (!guildProfile) {
+      return null;
+    }
     const metadata = (activity.metadata || {}) as Record<string, unknown>;
     const difficultyRaw = metadata.difficulty;
     const difficulty =
@@ -155,7 +162,10 @@ export class RewardContextResolver {
       return null;
     }
 
-    const guildProfile = await this.loadGuildProfile(membership.guildId);
+    const guildProfile = await this.loadGuildProfileOrNull(membership.guildId);
+    if (!guildProfile) {
+      return null;
+    }
     const basePoints = policy.fixedBasePoints || 0;
 
     return {
@@ -169,7 +179,10 @@ export class RewardContextResolver {
     };
   }
 
-  async loadGuildProfile(guildId: string): Promise<GuildStatProfile> {
+  async loadGuildProfile(
+    guildId: string,
+    options: GuildProfileLoadOptions = {}
+  ): Promise<GuildStatProfile> {
     const memberRows = await this.db
       .select({
         studentId: students.id,
@@ -192,7 +205,10 @@ export class RewardContextResolver {
       .innerJoin(gameCharacterClasses, eq(gameCharacterClasses.slug, gameCharacters.characterClass))
       .where(eq(cohortMemberships.guildId, guildId));
 
-    if (memberRows.length < 1 || memberRows.length > 3) {
+    if (
+      options.enforceConfiguredMemberCount !== false &&
+      (memberRows.length < 1 || memberRows.length > 3)
+    ) {
       throw new Error('A guild must have between 1 and 3 students with RPG characters.');
     }
 
@@ -224,5 +240,16 @@ export class RewardContextResolver {
     }
 
     return GuildStatCalculator.compute(guildId, members, this.balanceConfig.rewardSystem);
+  }
+
+  private async loadGuildProfileOrNull(guildId: string): Promise<GuildStatProfile | null> {
+    try {
+      return await this.loadGuildProfile(guildId);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('A guild must have between')) {
+        return null;
+      }
+      throw error;
+    }
   }
 }

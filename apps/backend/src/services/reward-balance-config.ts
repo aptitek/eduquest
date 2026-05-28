@@ -5,7 +5,7 @@ import {
   type RewardPolicyId,
   type RewardSystemConfig,
 } from '@eduquest/shared';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { auditLogs, rewardBalanceConfigs } from '../db/schema';
 import { RewardSystemConfigService } from './rewards';
 
@@ -14,14 +14,12 @@ type RewardDb = ReturnType<typeof import('../db').getDb>;
 export interface ResolvedRewardBalanceConfig {
   version: number;
   label?: string;
+  cohortId?: string;
   rewardSystem: RewardSystemConfig;
   policies: Record<RewardPolicyId, RewardPolicy>;
 }
 
-let cachedConfig: { loadedAt: number; value: ResolvedRewardBalanceConfig | null } = {
-  loadedAt: 0,
-  value: null,
-};
+const cachedConfigs = new Map<string, { loadedAt: number; value: ResolvedRewardBalanceConfig }>();
 
 const CACHE_TTL_MS = 30_000;
 
@@ -57,15 +55,18 @@ function resolveFromRow(
   return {
     version: row.version,
     label: row.label || undefined,
+    cohortId: row.cohortId || undefined,
     rewardSystem,
     policies: mergePolicies(payload),
   };
 }
 
 export class RewardBalanceConfigService {
-  static async getActiveConfig(db?: RewardDb): Promise<ResolvedRewardBalanceConfig> {
+  static async getActiveConfig(db?: RewardDb, cohortId?: string): Promise<ResolvedRewardBalanceConfig> {
     const now = Date.now();
-    if (cachedConfig.value && now - cachedConfig.loadedAt < CACHE_TTL_MS) {
+    const cacheKey = cohortId || '__global__';
+    const cachedConfig = cachedConfigs.get(cacheKey);
+    if (cachedConfig && now - cachedConfig.loadedAt < CACHE_TTL_MS) {
       return cachedConfig.value;
     }
 
@@ -75,47 +76,62 @@ export class RewardBalanceConfigService {
         rewardSystem: RewardSystemConfigService.resolve(),
         policies: { ...DEFAULT_REWARD_POLICIES },
       };
-      cachedConfig = { loadedAt: now, value: fallback };
+      cachedConfigs.set(cacheKey, { loadedAt: now, value: fallback });
       return fallback;
     }
 
-    const [activeRow] = await db
-      .select()
-      .from(rewardBalanceConfigs)
-      .where(eq(rewardBalanceConfigs.isActive, true))
-      .limit(1);
+    const [cohortActiveRow] = cohortId
+      ? await db
+          .select()
+          .from(rewardBalanceConfigs)
+          .where(and(eq(rewardBalanceConfigs.isActive, true), eq(rewardBalanceConfigs.cohortId, cohortId)))
+          .limit(1)
+      : [];
 
+    const [globalActiveRow] = cohortActiveRow
+      ? []
+      : await db
+          .select()
+          .from(rewardBalanceConfigs)
+          .where(and(eq(rewardBalanceConfigs.isActive, true), isNull(rewardBalanceConfigs.cohortId)))
+          .limit(1);
+
+    const activeRow = cohortActiveRow || globalActiveRow;
     const resolved = activeRow
       ? resolveFromRow(activeRow)
       : {
           version: 0,
+          cohortId,
           rewardSystem: RewardSystemConfigService.resolve(),
           policies: { ...DEFAULT_REWARD_POLICIES },
         };
 
-    cachedConfig = { loadedAt: now, value: resolved };
+    cachedConfigs.set(cacheKey, { loadedAt: now, value: resolved });
     return resolved;
   }
 
   static clearCache(): void {
-    cachedConfig = { loadedAt: 0, value: null };
+    cachedConfigs.clear();
   }
 
-  static async listVersions(db: RewardDb) {
+  static async listVersions(db: RewardDb, cohortId?: string) {
     return db
       .select()
       .from(rewardBalanceConfigs)
+      .where(cohortId ? eq(rewardBalanceConfigs.cohortId, cohortId) : isNull(rewardBalanceConfigs.cohortId))
       .orderBy(desc(rewardBalanceConfigs.version));
   }
 
   static async publish(
     db: RewardDb,
     payload: RewardBalanceConfigPayload,
-    adminUserId: string
+    adminUserId: string,
+    cohortId?: string
   ) {
     const [latest] = await db
       .select({ version: rewardBalanceConfigs.version })
       .from(rewardBalanceConfigs)
+      .where(cohortId ? eq(rewardBalanceConfigs.cohortId, cohortId) : isNull(rewardBalanceConfigs.cohortId))
       .orderBy(desc(rewardBalanceConfigs.version))
       .limit(1);
 
@@ -125,7 +141,12 @@ export class RewardBalanceConfigService {
       const [previousActive] = await tx
         .select()
         .from(rewardBalanceConfigs)
-        .where(eq(rewardBalanceConfigs.isActive, true))
+        .where(
+          and(
+            eq(rewardBalanceConfigs.isActive, true),
+            cohortId ? eq(rewardBalanceConfigs.cohortId, cohortId) : isNull(rewardBalanceConfigs.cohortId)
+          )
+        )
         .limit(1);
 
       if (previousActive) {
@@ -138,6 +159,7 @@ export class RewardBalanceConfigService {
       const [created] = await tx
         .insert(rewardBalanceConfigs)
         .values({
+          cohortId,
           version: nextVersion,
           label: payload.label || `Version ${nextVersion}`,
           config: payload,

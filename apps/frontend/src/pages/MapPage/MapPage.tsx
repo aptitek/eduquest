@@ -37,10 +37,8 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 import { MapContainer, MapArea, MapSidePanel, LoadingMap } from '../../components/organisms/MapContainer';
 import { GameMap } from '../../components/organisms/GameMap';
 import type { GraphEdge } from '../../components/molecules/GenericGraph';
-import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
 import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
 import { MapEdgeCard } from '../../components/organisms/MapEdgeCard';
-import { AddButton } from '../../components/atoms/AddButton';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { cn } from '../../utils/cn';
 import { useErrorReporter } from '../../features/errors/notifications';
@@ -223,6 +221,7 @@ export function MapPage() {
     setSelectedActivity(activity);
     setSelectedEdge(null);
     if (user?.isAdmin) return;
+    if (!character) return;
     if (activity.isCurrent || activity.isLocked) return;
     if (
       currentActivityId &&
@@ -243,9 +242,33 @@ export function MapPage() {
     }
   };
 
+  const handleClearMapSelection = () => {
+    setSelectedActivity(null);
+    setSelectedEdge(null);
+  };
+
   // Soumission / Résolution d'un nœud
   const handleCompleteActivity = async (act: Activity, draft?: ActivityCompletionDraft) => {
     if (completedActivityIds.includes(act.id) || completingActivityId) return;
+    const onboardingTask = getStringMetadata((act.metadata || {}) as Record<string, unknown>, 'onboardingTask');
+
+    if (onboardingTask === 'character_card' && !character) {
+      window.location.hash = 'character';
+      return;
+    }
+
+    if (onboardingTask === 'institutional_profile') {
+      const hasInstitutionalProfile = Boolean(
+        user?.firstName ||
+          user?.lastName ||
+          user?.birthDate ||
+          student?.cohortMemberships?.some((membership) => membership.institutionalEmail)
+      );
+      if (!hasInstitutionalProfile) {
+        setCompletionError(t('map.onboarding.institutionalProfileRequired'));
+        return;
+      }
+    }
 
     setCompletingActivityId(act.id);
     setCompletionError(null);
@@ -660,6 +683,7 @@ export function MapPage() {
     if (!user?.isAdmin) return;
 
     const activityIds = deletedActivities
+      .filter((activity) => !isSystemOnboardingActivity(activity))
       .map((activity) => activity.id)
       .filter((activityId) => activityId && !deletingActivityIdsRef.current.has(activityId));
     if (activityIds.length === 0) return;
@@ -742,17 +766,17 @@ export function MapPage() {
     }
   };
 
-  if (!user?.isAdmin && (!character || !student)) {
+  if (!user?.isAdmin && (!user || !student)) {
     return (
       <div className="flex items-center justify-center min-h-screen text-text-muted font-display">
-        {t('layout.loadingSession')}
+        {!user ? t('layout.loadingSession') : t('map.empty.profileIncomplete')}
       </div>
     );
   }
 
   return (
-    <GameLayout fitToViewport>
-      <GameHeader />
+    <GameLayout fitToViewport hideDashboard={Boolean(!user?.isAdmin && !character)}>
+      <GameHeader navigationMode={!user?.isAdmin && !character ? 'mapOnly' : 'full'} />
 
       <MapContainer>
         <MapArea>
@@ -765,11 +789,11 @@ export function MapPage() {
                 edges={activityEdges}
                 nodeOccupancies={nodeOccupancies}
                 playerMarker={
-                  !user?.isAdmin && user && character
+                  !user?.isAdmin && user
                     ? {
                         activityId: currentActivityId,
                         previousActivityId: currentMove?.fromActivityId,
-                        characterClass: character.characterClass,
+                        characterClass: character?.characterClass,
                         illustrationUrl: user.avatarUrl || user.githubAvatarUrl,
                         label: formatUserDisplayName(user),
                       }
@@ -781,11 +805,24 @@ export function MapPage() {
                 currentStep={previewStep}
                 onSelectNode={handleSelectActivity}
                 onSelectEdge={user?.isAdmin ? handleSelectEdge : undefined}
+                onClearSelection={handleClearMapSelection}
                 onNodeMove={handleMoveActivityNode}
                 onConnectEdges={handleConnectActivityEdge}
                 onDeleteNodes={handleDeleteActivityNodes}
                 onDeleteEdges={handleDeleteActivityEdges}
               />
+              {activities.length === 0 ? (
+                <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6">
+                  <div className="max-w-md rounded-3xl border border-gaming-border bg-gaming-card/90 p-6 text-center shadow-card backdrop-blur-xl">
+                    <p className="font-display text-lg font-black text-text-primary">
+                      {user?.isAdmin ? t('map.empty.adminTitle') : t('map.empty.studentTitle')}
+                    </p>
+                    <p className="mt-2 text-sm text-text-muted">
+                      {user?.isAdmin ? t('map.empty.adminDescription') : t('map.empty.studentDescription')}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               {user?.isAdmin ? (
                 <>
                   <MapStepPreviewControl
@@ -798,14 +835,6 @@ export function MapPage() {
                     onPrevious={() => changePreviewStepByOffset(-1)}
                     onNext={() => changePreviewStepByOffset(1)}
                     t={t}
-                  />
-                  <AddButton
-                    onClick={handleCreateActivity}
-                    disabled={isCreatingActivity}
-                    aria-label={t('map.addActivity')}
-                    title={t('map.addActivity')}
-                    iconSize={28}
-                    className="absolute bottom-5 right-5 z-40 h-14 w-14 shadow-glow-primary hover:scale-105 disabled:cursor-wait"
                   />
                 </>
               ) : null}
@@ -882,12 +911,13 @@ export function MapPage() {
               className="h-full min-h-0 w-full max-w-none"
             />
           ) : (
-            <ActivityDetailPanel
-              selectedActivity={null}
-              completedActivityIds={completedActivityIds}
-              onComplete={handleCompleteActivity}
-              completingActivityId={completingActivityId}
-              completionError={completionError}
+            <ActivityCard
+              emptyCardLabel={user?.isAdmin ? t('map.addActivity') : undefined}
+              onEmptyCardClick={user?.isAdmin && !isCreatingActivity ? handleCreateActivity : undefined}
+              className={cn(
+                'h-full min-h-0 w-full max-w-none',
+                isCreatingActivity && 'cursor-wait opacity-70'
+              )}
             />
           )}
         </MapSidePanel>
@@ -1032,6 +1062,11 @@ function toActivityCardData(
 function getStringMetadata(metadata: Record<string, unknown>, key: string) {
   const value = metadata[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+function isSystemOnboardingActivity(activity: Activity) {
+  const onboardingTask = getStringMetadata((activity.metadata || {}) as Record<string, unknown>, 'onboardingTask');
+  return onboardingTask === 'institutional_profile' || onboardingTask === 'character_card';
 }
 
 function resolveActivityWithStepRanges(

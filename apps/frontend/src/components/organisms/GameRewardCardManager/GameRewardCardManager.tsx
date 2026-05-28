@@ -487,7 +487,9 @@ function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
   if (!voteState) return new Set<string>();
 
   return new Set(
-    voteState.voteStates.flatMap((state) => (state.hasTie ? [] : state.leadingBonusCardIds))
+    voteState.voteStates.flatMap((state) =>
+      state.isVoteClosed && !state.hasTie ? state.leadingBonusCardIds : []
+    )
   );
 }
 

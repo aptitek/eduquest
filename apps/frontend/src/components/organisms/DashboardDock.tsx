@@ -1,7 +1,12 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import type { DragEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { DragEvent, KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import type { CohortProgressData, GameBonusVoteState, GameMilestonePayload } from '@eduquest/shared';
+import type {
+  CohortProgressData,
+  GameBonusVoteState,
+  GameMilestonePayload,
+  RewardSystemConfig,
+} from '@eduquest/shared';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
 import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
@@ -12,16 +17,20 @@ import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { StepSelector } from '../molecules/StepSelector';
 import { useGameStore } from '../../features/game/gameStore';
 import {
+  boostMilestoneBonusVote,
   createGameMilestone,
   deleteGameMilestone,
   fetchCohortStep,
   fetchGameBonusVoteState,
   fetchGameRewardCards,
   fetchGuilds,
-  spendGuildVotes,
+  fetchRewardBalanceConfig,
   updateCohortStep,
   updateGameMilestone,
-  updateGuildIcon,
+  updateGuild,
+  updateRewardBalanceConfig,
+  type GuildFieldsPayload,
+  type RewardBalanceConfigState,
 } from '../../features/game/api';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -41,12 +50,6 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { useErrorReporter } from '../../features/errors/notifications';
 import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 
-const LucideIconSelector = lazy(() =>
-  import('../atoms/LucideIconSelector').then((module) => ({
-    default: module.LucideIconSelector,
-  }))
-);
-
 export interface DashboardDockProps {
   className?: string;
 }
@@ -55,8 +58,17 @@ type EditableCardSideOverride = Partial<Record<PlayingCardEditableField, string>
   stats?: Record<string, number>;
 };
 type ProgressMilestone = CohortProgressData['gauge']['milestones'][number];
+type VoteCostConfig = Pick<
+  RewardSystemConfig['voting'],
+  'baseVoteCost' | 'quadraticExponent' | 'baseVotesPerGuild'
+>;
 
 const PROGRESS_BONUS_SEEN_STORAGE_PREFIX = 'eduquest_progress_seen_bonus_cards';
+const DEFAULT_VOTE_COST_CONFIG: VoteCostConfig = {
+  baseVoteCost: 1,
+  quadraticExponent: 2,
+  baseVotesPerGuild: 1,
+};
 
 export function DashboardDock({ className }: DashboardDockProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -71,12 +83,15 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const [guilds, setGuilds] = useState<DockGuild[]>([]);
   const [rewardCards, setRewardCards] = useState<PlayingCardData[]>([]);
+  const [bonusVoteState, setBonusVoteState] = useState<GameBonusVoteState | null>(null);
   const [activeRewardCardIds, setActiveRewardCardIds] = useState<Set<string>>(() => new Set());
   const [adminStep, setAdminStep] = useState(0);
   const [isSavingAdminStep, setIsSavingAdminStep] = useState(false);
   const [savingMilestoneId, setSavingMilestoneId] = useState<string | null>(null);
   const [draggedMilestoneId, setDraggedMilestoneId] = useState<string | null>(null);
   const [isVoteOpen, setIsVoteOpen] = useState(false);
+  const [rewardBalanceConfig, setRewardBalanceConfig] = useState<RewardBalanceConfigState | null>(null);
+  const [isSavingVoteCost, setIsSavingVoteCost] = useState(false);
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const { user, student, character, selectedGameId } = useGameStore();
   const { t, tMaybe } = useTranslation();
@@ -89,7 +104,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     [showDockError]
   );
   const dashboardData = useCohortProgressData(
-    Boolean(user),
+    Boolean(user?.isAdmin || character),
     selectedGameId,
     handleProgressError
   );
@@ -126,8 +141,25 @@ export function DashboardDock({ className }: DashboardDockProps) {
           [field]: value,
         },
       }));
+
+      if (!sideKey.startsWith('guild:') || !playerGuild?.id) return;
+
+      const payload = getGuildFieldPayload(field, value);
+      if (!payload) return;
+
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) return;
+
+      updateGuild(token, playerGuild.id, payload)
+        .then((updatedGuild) => {
+          setGuilds((current) => upsertGuild(current, updatedGuild));
+        })
+        .catch((error) => {
+          console.warn('Could not update guild.', error);
+          showDockError('dashboard.dock.errors.updateGuildIcon', error);
+        });
     },
-    []
+    [playerGuild?.id, showDockError]
   );
 
   const updateEditableCardStat = useCallback((sideKey: string, statId: string, value: number) => {
@@ -234,6 +266,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     const token = localStorage.getItem('eduquest_token');
     if (!token || !selectedGameId) {
       setRewardCards([]);
+      setBonusVoteState(null);
       setActiveRewardCardIds(new Set());
       return undefined;
     }
@@ -261,6 +294,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
                 : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
             }))
           );
+          setBonusVoteState(voteState);
           setActiveRewardCardIds(getActiveRewardCardIds(voteState));
         })
         .catch((error) => {
@@ -298,25 +332,43 @@ export function DashboardDock({ className }: DashboardDockProps) {
     };
   }, [user?.isAdmin, selectedGameId]);
 
+  useEffect(() => {
+    if (!user?.isAdmin) {
+      setRewardBalanceConfig(null);
+      return undefined;
+    }
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return undefined;
+
+    let isMounted = true;
+    fetchRewardBalanceConfig(token, selectedGameId)
+      .then((config) => {
+        if (isMounted) setRewardBalanceConfig(config);
+      })
+      .catch((error) => {
+        console.warn('Could not load reward balance config.', error);
+        showDockError('dashboard.dock.errors.loadProgress', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGameId, user?.isAdmin, showDockError]);
+
   const activeRewardCards = rewardCards.filter((card) => card.id && activeRewardCardIds.has(card.id));
-  const bonusCards = activeRewardCards.length
-    ? (activeRewardCards as [PlayingCardData, ...PlayingCardData[]])
-    : ([
-        {
-          kind: 'reward' as const,
-          id: 'empty-reward',
-          title: t('dashboard.rewards.empty.title'),
-          subtitle: t('dashboard.rewards.empty.subtitle'),
-          accentToken: 'neutral' as const,
-          faceDown: true,
-        },
-      ] as [PlayingCardData, ...PlayingCardData[]]);
-  const progressBonusCards = withProgressBonusNewRibbonState(
-    buildProgressBonusCards(t, bonusCards, 'progress-active-bonus'),
-    seenProgressBonusCardIds,
-    markProgressBonusCardSeen,
-    isProgressPage
-  );
+  const progressBonusCards = activeRewardCards.length
+    ? withProgressBonusNewRibbonState(
+        buildProgressBonusCards(
+          t,
+          activeRewardCards as [PlayingCardData, ...PlayingCardData[]],
+          'progress-active-bonus'
+        ),
+        seenProgressBonusCardIds,
+        markProgressBonusCardSeen,
+        isProgressPage
+      )
+    : null;
   const notifyMilestonesUpdated = () => {
     window.dispatchEvent(new CustomEvent('eduquest:milestones-updated'));
   };
@@ -453,6 +505,20 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
   const podiumGuilds = mergeGuilds(playerGuild ? [playerGuild] : [], guilds);
   const podiumCards = buildPodiumCards(t, podiumGuilds);
+  const podiumSentinelCard: PlayingCardData = {
+    id: 'class-remaining-guilds-list',
+    layoutId: 'class-remaining-guilds-list',
+    kind: 'guild',
+    title: t('class.remaining'),
+    subtitle: latestMembership?.cohort?.name || t('dashboard.dock.cohortDeck'),
+    accentToken: 'neutral',
+    ribbonLabel: t('class.guilds'),
+    faceDown: true,
+  };
+  const podiumDeckCards = buildPodiumDeckCards(podiumCards, podiumGuilds.length, podiumSentinelCard);
+  const podiumSentinelCards = podiumDeckCards.length > podiumCards.length
+    ? toNonEmptyCards([podiumDeckCards[podiumCards.length]])
+    : null;
   const openClassPage = (card?: PlayingCardData) => {
     const guildName = card?.guild?.name || (card?.kind === 'guild' && !card.faceDown ? card.title : undefined);
     if (guildName) {
@@ -464,7 +530,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const openProgressPage = () => {
     window.location.hash = 'bonus';
   };
-  const adminBonusContent = (
+  const adminBonusContent = progressBonusCards ? (
     <motion.div
       layout
       transition={layoutTransition}
@@ -497,23 +563,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
         stackCardClassName={cn(!isProgressPage && 'w-24 translate-y-0 2xl:w-28')}
       />
     </motion.div>
-  );
+  ) : null;
 
   if (user?.isAdmin) {
-    const adminPodiumCards = toNonEmptyCards(
-      podiumCards.length
-        ? podiumCards
-        : [
-            {
-              id: 'admin-empty-podium',
-              kind: 'guild',
-              title: t('class.podium'),
-              subtitle: t('dashboard.rewards.empty.subtitle'),
-              accentToken: 'neutral',
-              faceDown: true,
-            },
-          ]
-    );
+    const adminPodiumCards = podiumDeckCards;
     const adminPodiumHands = podiumCards.map((card) =>
       buildClassGuildHand(t, {
         guild: card.guild || {
@@ -546,6 +599,22 @@ export function DashboardDock({ className }: DashboardDockProps) {
                 rank={index + 1}
               />
             ))}
+            {podiumSentinelCards ? (
+              <PlayingHand
+                hand={{
+                  id: 'admin-class-podium-sentinel-deck',
+                  cards: podiumSentinelCards,
+                  mainCardIndex: 0,
+                  variant: 'horizontal',
+                }}
+                mode="mini"
+                variant="horizontal"
+                visibleCardCount={1}
+                expandOnHover={false}
+                className="mx-auto h-64 w-32 sm:w-36"
+                cardClassName="w-28 translate-y-0 sm:w-32 2xl:w-36"
+              />
+            ) : null}
           </div>
         ) : (
           <PlayingHand
@@ -561,7 +630,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
             visibleCardCount={adminPodiumCards.length}
             expandOnHover
             onCardSelect={openClassPage}
-            className="h-full w-full"
+            className={cn(isClassPage ? 'mx-auto h-64 w-32 sm:w-36' : 'h-full w-full')}
             cardClassName="w-28 translate-y-0 sm:w-32 2xl:w-36"
             stackCardClassName="w-24 translate-y-0 sm:w-28 2xl:w-32"
           />
@@ -584,9 +653,50 @@ export function DashboardDock({ className }: DashboardDockProps) {
         {isVoteOpen ? 'Close vote' : 'Open vote'}
       </HoldToConfirmButton>
     );
+    const voteCostConfig = rewardBalanceConfig?.rewardSystem.voting
+      ? {
+          baseVoteCost: rewardBalanceConfig.rewardSystem.voting.baseVoteCost,
+          quadraticExponent: rewardBalanceConfig.rewardSystem.voting.quadraticExponent,
+          baseVotesPerGuild: rewardBalanceConfig.rewardSystem.voting.baseVotesPerGuild,
+        }
+      : DEFAULT_VOTE_COST_CONFIG;
+    const updateVoteCostConfig = async (patch: Partial<VoteCostConfig>) => {
+      if (!rewardBalanceConfig || isSavingVoteCost) return;
+
+      const nextVoting = {
+        ...rewardBalanceConfig.rewardSystem.voting,
+        ...patch,
+      };
+      setIsSavingVoteCost(true);
+      try {
+        const token = localStorage.getItem('eduquest_token');
+        if (!token) throw new Error('Missing session token.');
+        const nextConfig = await updateRewardBalanceConfig(
+          token,
+          {
+            label: `Vote cost update ${new Date().toISOString()}`,
+            rewardSystem: {
+              ...rewardBalanceConfig.rewardSystem,
+              voting: nextVoting,
+            },
+          },
+          selectedGameId
+        );
+        setRewardBalanceConfig(nextConfig);
+        window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
+      } catch (error) {
+        console.warn('Could not update vote cost config.', error);
+        showDockError('dashboard.dock.errors.loadProgress', error);
+      } finally {
+        setIsSavingVoteCost(false);
+      }
+    };
     const voteControls = (
-      <div className="flex items-center justify-center gap-2">
-        {voteButton}
+      <div className="grid grid-cols-[2.5rem_auto_2.5rem] items-center gap-2">
+        <span aria-hidden className="h-10 w-10" />
+        <div className="flex justify-center">
+          {voteButton}
+        </div>
         <AddButton
           onClick={createMilestone}
           disabled={!selectedGameId || Boolean(savingMilestoneId)}
@@ -646,13 +756,21 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
             {adminGaugeContent('h-36 w-36 shrink sm:h-40 sm:w-40 lg:h-44 lg:w-auto lg:min-w-[20rem] lg:max-w-[42rem] lg:flex-1 xl:min-w-[22rem] 2xl:min-w-[24rem]')}
 
-            <StepSelector
-              value={adminStep}
-              label={t('dashboard.dock.step')}
-              disabled={!selectedGameId || isSavingAdminStep}
-              onChange={updateAdminStep}
-              className="h-48 w-20 gap-1.5 sm:w-24 lg:h-52 xl:w-28"
-            />
+            <div className="flex items-end gap-2 sm:gap-3">
+              <VoteCostEditor
+                value={voteCostConfig}
+                disabled={!rewardBalanceConfig || isSavingVoteCost}
+                isSaving={isSavingVoteCost}
+                onUpdate={updateVoteCostConfig}
+              />
+              <StepSelector
+                value={adminStep}
+                label={t('dashboard.dock.step')}
+                disabled={!selectedGameId || isSavingAdminStep}
+                onChange={updateAdminStep}
+                className="h-48 w-20 gap-1.5 sm:w-24 lg:h-52 xl:w-28"
+              />
+            </div>
           </div>
         </aside>
 
@@ -662,34 +780,21 @@ export function DashboardDock({ className }: DashboardDockProps) {
     );
   }
 
-  if (!student || !character || !playerGuild) return null;
+  if (!student || !character) return null;
 
+  const hasPlayerGuild = Boolean(playerGuild?.id);
   const activePlayerGuild =
-    podiumGuilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name) ||
-    playerGuild;
-  const updateActiveGuildIcon = async (iconKey: string) => {
-    const token = localStorage.getItem('eduquest_token');
-    if (!token || !activePlayerGuild.id) return;
-
-    try {
-      const updatedGuild = await updateGuildIcon(token, activePlayerGuild.id, iconKey);
-      setGuilds((current) => upsertGuild(current, updatedGuild));
-    } catch (error) {
-      console.warn('Could not update guild icon.', error);
-      showDockError('dashboard.dock.errors.updateGuildIcon', error);
-    }
-  };
-  const classRemainingCard: PlayingCardData = {
-    id: 'class-remaining-guilds-list',
-    layoutId: 'class-remaining-guilds-list',
-    kind: 'guild',
-    title: t('class.remaining'),
-    subtitle: latestMembership?.cohort?.name || t('dashboard.dock.cohortDeck'),
-    accentToken: 'neutral',
-    ribbonLabel: t('class.guilds'),
-    faceDown: true,
-  };
-  const podiumDeckCards = toNonEmptyCards([...podiumCards, classRemainingCard]);
+    (playerGuild
+      ? guilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name) ||
+        podiumGuilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name) ||
+        playerGuild
+      : undefined) || {
+        id: '',
+        name: t('dashboard.dock.noGuildTitle'),
+        description: t('dashboard.dock.noGuildDescription'),
+        gold: 0,
+        boostPointsSpent: 0,
+      };
   const classPodiumHands = podiumCards.map((card) => {
     const hand = buildClassGuildHand(t, {
       guild: card.guild || activePlayerGuild,
@@ -724,33 +829,20 @@ export function DashboardDock({ className }: DashboardDockProps) {
     characterStats: character.stats,
     activeCardIndex: 0,
   })[0];
+  const visibleGuildHandCards = hasPlayerGuild
+    ? guildHandBase.cards
+    : toNonEmptyCards(guildHandBase.cards.filter((card) => card.id !== 'guild'));
   const guildHand = {
     ...guildHandBase,
-    cards: guildHandBase.cards.map((card) => {
+    cards: visibleGuildHandCards.map((card) => {
       if (card.id === 'guild') {
-        const editableGuildCard = makeEditableDashboardCard({
+        return makeEditableDashboardCard({
           card,
           cardKey: 'guild',
           sideOverrides: editableCardSides,
           onFieldChange: updateEditableCardField,
           onStatChange: updateEditableCardStat,
         });
-        const back = isEditablePlayingCardSide(editableGuildCard.back)
-          ? {
-              ...editableGuildCard.back,
-              footer: (
-                <GuildIconSelectionPanel
-                  value={activePlayerGuild.iconKey || 'Shield'}
-                  onChange={updateActiveGuildIcon}
-                />
-              ),
-            }
-          : editableGuildCard.back;
-
-        return {
-          ...editableGuildCard,
-          back,
-        };
       }
 
       if (card.id === 'player') {
@@ -782,15 +874,27 @@ export function DashboardDock({ className }: DashboardDockProps) {
   };
   const boostGuild = async () => {
     const token = localStorage.getItem('eduquest_token');
-    if (!token || !activePlayerGuild.id) return;
+    if (!token || !selectedGameId || !activePlayerGuild.id) return;
 
     try {
-      const voteSpend = await spendGuildVotes(token, activePlayerGuild.id, 1);
+      const latestVoteState = bonusVoteState || await fetchGameBonusVoteState(token, selectedGameId);
+      const boostableVoteState = getBoostableGuildVoteState(latestVoteState);
+      if (!boostableVoteState) {
+        throw new Error('No closed guild vote is available to boost.');
+      }
+
+      const boosted = await boostMilestoneBonusVote(token, selectedGameId, boostableVoteState.milestone.id, 1);
+      const nextVoteState = await fetchGameBonusVoteState(token, selectedGameId);
+      setBonusVoteState(nextVoteState);
+      setActiveRewardCardIds(getActiveRewardCardIds(nextVoteState));
+      window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
+
+      const voteSpend = boosted.voteSpend;
       setGuilds((current) => {
         const updatedGuild = {
           ...activePlayerGuild,
-          gold: voteSpend.balance,
-          boostPointsSpent: (activePlayerGuild.boostPointsSpent || 0) + voteSpend.cost,
+          gold: voteSpend?.balance ?? activePlayerGuild.gold,
+          boostPointsSpent: (activePlayerGuild.boostPointsSpent || 0) + (voteSpend?.cost || 0),
         };
         return [updatedGuild, ...current.filter((guild) => guild?.id !== activePlayerGuild.id)];
       });
@@ -805,12 +909,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
       holdDuration={1200}
       shape="round"
       variant="btn-primary"
+      disabled={!selectedGameId || !hasPlayerGuild}
       className={cn(
         'h-28 w-28 min-h-0 -translate-y-4 border-primary/40 bg-primary text-primary-content font-display text-lg font-black shadow-glow-primary',
+        !hasPlayerGuild && 'cursor-not-allowed opacity-50',
         isProgressPage && 'h-36 w-36 -translate-y-6 text-xl sm:h-40 sm:w-40 sm:text-2xl'
       )}
     >
-      {t('dashboard.dock.boost')}
+      {hasPlayerGuild ? t('dashboard.dock.boost') : t('dashboard.dock.noGuildBoost')}
     </HoldToConfirmButton>
   );
   const goldIndicator = (
@@ -834,14 +940,49 @@ export function DashboardDock({ className }: DashboardDockProps) {
     >
       {isClassPage ? (
         <div className="space-y-5">
-          {classPodiumHands.map((hand, index) => (
-            <PlayingHandPanel
-              key={hand.id}
-              id={`class-guild-${slugify(hand.title || 'guild')}`}
-              hand={hand}
-              rank={index + 1}
+          {classPodiumHands.length > 0 ? (
+            classPodiumHands.map((hand, index) => (
+              <PlayingHandPanel
+                key={hand.id}
+                id={`class-guild-${slugify(hand.title || 'guild')}`}
+                hand={hand}
+                rank={index + 1}
+              />
+            ))
+          ) : (
+            podiumSentinelCards ? (
+              <PlayingHand
+                hand={{
+                  id: 'class-podium-sentinel-deck',
+                  cards: podiumSentinelCards,
+                  mainCardIndex: 0,
+                  variant: 'horizontal',
+                }}
+                mode="mini"
+                variant="horizontal"
+                visibleCardCount={1}
+                expandOnHover={false}
+                className="mx-auto h-64 w-32 sm:w-36"
+                cardClassName="w-32 translate-y-0 sm:w-36"
+              />
+            ) : null
+          )}
+          {classPodiumHands.length > 0 && podiumSentinelCards ? (
+            <PlayingHand
+              hand={{
+                id: 'class-podium-sentinel-deck',
+                cards: podiumSentinelCards,
+                mainCardIndex: 0,
+                variant: 'horizontal',
+              }}
+              mode="mini"
+              variant="horizontal"
+              visibleCardCount={1}
+              expandOnHover={false}
+              className="mx-auto h-64 w-32 sm:w-36"
+              cardClassName="w-32 translate-y-0 sm:w-36"
             />
-          ))}
+          ) : null}
         </div>
       ) : (
         <PlayingHand
@@ -888,7 +1029,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           variant={!usesWideGuildDeck ? 'vertical' : 'horizontal'}
           visibleCardCount={guildHand.cards.length}
           expandOnHover
-          onCardSelect={openGuildPage}
+          onCardSelect={hasPlayerGuild ? openGuildPage : openCharacterPage}
           className="h-full w-full"
           cardClassName="w-32 translate-y-0 sm:w-36 xl:w-40"
           stackCardClassName="w-28 translate-y-0 sm:w-32 xl:w-36"
@@ -896,7 +1037,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       )}
     </motion.div>
   );
-  const bonusContent = (
+  const bonusContent = progressBonusCards ? (
     <motion.div
       layout
       transition={layoutTransition}
@@ -931,7 +1072,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         stackCardClassName={cn(!isProgressPage && 'w-28 translate-y-0')}
       />
     </motion.div>
-  );
+  ) : null;
 
   return (
     <>
@@ -952,21 +1093,23 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
           {!isClassPage ? podiumContent : null}
 
-          <GlobalProgressGauge
-            currentPoints={gaugeCurrentPoints}
-            targetPoints={gaugeTargetPoints}
-            milestones={gaugeMilestones}
-            label={gaugeLabel}
-            centerContent={boostButton}
-            goldIndicator={goldIndicator}
-            rightIndicatorCompactValue={(activePlayerGuild.gold || 0).toLocaleString()}
-            boostLabel={t('dashboard.dock.boost')}
-            milestoneBadgesExpanded={isProgressPage}
-            className={cn(
-              'h-40 w-40 shrink-0 rounded-none border-0 bg-transparent shadow-none lg:h-52 lg:w-auto lg:min-w-[26rem] lg:max-w-[50rem] lg:flex-1 lg:shrink xl:min-w-[30rem] 2xl:min-w-[34rem]',
-              isProgressPage && 'h-56 w-56 sm:h-64 sm:w-64 lg:h-72 lg:min-w-[34rem] 2xl:min-w-[40rem]'
-            )}
-          />
+          {hasPlayerGuild ? (
+            <GlobalProgressGauge
+              currentPoints={gaugeCurrentPoints}
+              targetPoints={gaugeTargetPoints}
+              milestones={gaugeMilestones}
+              label={gaugeLabel}
+              centerContent={boostButton}
+              goldIndicator={goldIndicator}
+              rightIndicatorCompactValue={(activePlayerGuild.gold || 0).toLocaleString()}
+              boostLabel={t('dashboard.dock.boost')}
+              milestoneBadgesExpanded={isProgressPage}
+              className={cn(
+                'h-40 w-40 shrink-0 rounded-none border-0 bg-transparent shadow-none lg:h-52 lg:w-auto lg:min-w-[26rem] lg:max-w-[50rem] lg:flex-1 lg:shrink xl:min-w-[30rem] 2xl:min-w-[34rem]',
+                isProgressPage && 'h-56 w-56 sm:h-64 sm:w-64 lg:h-72 lg:min-w-[34rem] 2xl:min-w-[40rem]'
+              )}
+            />
+          ) : null}
 
           {!isGuildPage ? guildContent : null}
         </div>
@@ -1043,51 +1186,60 @@ function mergeGuilds(primaryGuilds: readonly DockGuild[], secondaryGuilds: reado
 
   [...primaryGuilds, ...secondaryGuilds].forEach((guild) => {
     if (!guild?.name) return;
-    guildMap.set(slugify(guild.name), guild);
+    guildMap.set(guild.id || slugify(guild.name), guild);
   });
 
   return Array.from(guildMap.values());
 }
 
 function upsertGuild(guilds: readonly DockGuild[], guild: DockGuild) {
-  return [guild, ...guilds.filter((item) => item.id !== guild.id && slugify(item.name) !== slugify(guild.name))];
+  const previousGuild = guilds.find((item) => item.id === guild.id || slugify(item.name) === slugify(guild.name));
+  const nextGuild = previousGuild
+    ? {
+        ...previousGuild,
+        ...guild,
+        members: guild.members ?? previousGuild.members,
+        boostPointsSpent: guild.boostPointsSpent ?? previousGuild.boostPointsSpent,
+      }
+    : guild;
+
+  return [
+    nextGuild,
+    ...guilds.filter((item) => item.id !== nextGuild.id && slugify(item.name) !== slugify(nextGuild.name)),
+  ];
+}
+
+function getGuildFieldPayload(field: PlayingCardEditableField, value: string): GuildFieldsPayload | null {
+  if (field === 'title') return { name: value };
+  if (field === 'description') return { description: value };
+  if (field === 'ribbonIcon') return { iconKey: value };
+  return null;
 }
 
 function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
   if (!voteState) return new Set<string>();
 
   return new Set(
-    voteState.voteStates.flatMap((state) => (state.hasTie ? [] : state.leadingBonusCardIds))
+    voteState.voteStates.flatMap((state) =>
+      state.isVoteClosed && !state.hasTie ? state.leadingBonusCardIds : []
+    )
   );
 }
 
-function GuildIconSelectionPanel({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (iconKey: string) => void;
-}) {
-  return (
-    <div className="space-y-3 rounded-xl border border-gaming-border bg-gaming-base/60 p-3">
-      <h4 className="font-display text-xs font-black uppercase tracking-[0.2em] text-text-secondary">
-        Guild icon
-      </h4>
-      <Suspense
-        fallback={
-          <div className="rounded-xl border border-gaming-border bg-gaming-base px-3 py-4 text-sm text-text-muted">
-            Loading icon selector...
-          </div>
-        }
-      >
-        <LucideIconSelector
-          value={value}
-          onChange={onChange}
-          searchPlaceholder="Search guild icons, e.g. shield, gem, crown..."
-        />
-      </Suspense>
-    </div>
-  );
+function getBoostableGuildVoteState(voteState: GameBonusVoteState | null) {
+  return voteState?.voteStates.find((state) => state.isVoteClosed && state.guildVote);
+}
+
+function buildPodiumDeckCards(
+  podiumCards: PlayingCardData[],
+  guildCount: number,
+  sentinelCard: PlayingCardData
+) {
+  const topPodiumCards = podiumCards.slice(0, 3);
+  const shouldShowSentinel =
+    topPodiumCards.length < 3 || (topPodiumCards.length === 3 && guildCount > topPodiumCards.length);
+
+  return toNonEmptyCards(shouldShowSentinel ? [...topPodiumCards, sentinelCard] : topPodiumCards);
 }
 
 function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...PlayingCardData[]] {
@@ -1105,6 +1257,117 @@ function getHashRoute() {
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function VoteCostEditor({
+  value,
+  disabled,
+  isSaving,
+  onUpdate,
+}: {
+  value: VoteCostConfig;
+  disabled: boolean;
+  isSaving: boolean;
+  onUpdate: (patch: Partial<VoteCostConfig>) => void;
+}) {
+  const [draft, setDraft] = useState({
+    baseVoteCost: String(value.baseVoteCost),
+    quadraticExponent: String(value.quadraticExponent),
+    baseVotesPerGuild: String(value.baseVotesPerGuild),
+  });
+
+  useEffect(() => {
+    setDraft({
+      baseVoteCost: String(value.baseVoteCost),
+      quadraticExponent: String(value.quadraticExponent),
+      baseVotesPerGuild: String(value.baseVotesPerGuild),
+    });
+  }, [value.baseVoteCost, value.baseVotesPerGuild, value.quadraticExponent]);
+
+  const commitNumber = (field: keyof VoteCostConfig, options: { min: number; integer?: boolean }) => {
+    const rawValue = Number(draft[field] || 0);
+    if (!Number.isFinite(rawValue)) {
+      setDraft((current) => ({ ...current, [field]: String(value[field]) }));
+      return;
+    }
+
+    const nextValue = Math.max(options.min, options.integer ? Math.round(rawValue) : rawValue);
+    setDraft((current) => ({ ...current, [field]: String(nextValue) }));
+    if (nextValue !== value[field]) {
+      onUpdate({ [field]: nextValue });
+    }
+  };
+
+  const handleEnterBlur = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') event.currentTarget.blur();
+  };
+
+  return (
+    <div className="hidden w-36 rounded-xl border border-gaming-border bg-gaming-card/95 p-1.5 text-left shadow-xl backdrop-blur-md sm:block">
+      <p className="mb-1 px-1 font-display text-[0.58rem] font-black uppercase tracking-[0.14em] text-text-muted">
+        Vote cost
+      </p>
+      <div className="grid gap-1">
+        <label className="flex items-center gap-1 rounded-lg border border-gaming-border bg-gaming-base/80 px-1.5 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.08em] text-text-secondary">
+          <span className="w-11 truncate">Base</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={draft.baseVoteCost}
+            disabled={disabled}
+            onChange={(event) => {
+              const nextValue = event.currentTarget.value;
+              setDraft((current) => ({ ...current, baseVoteCost: nextValue }));
+            }}
+            onBlur={() => commitNumber('baseVoteCost', { min: 0, integer: true })}
+            onKeyDown={handleEnterBlur}
+            title="Base vote cost"
+            className="w-full min-w-0 bg-transparent text-right text-[0.68rem] text-text-primary outline-none"
+          />
+        </label>
+        <label className="flex items-center gap-1 rounded-lg border border-gaming-border bg-gaming-base/80 px-1.5 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.08em] text-text-secondary">
+          <span className="w-11 truncate">Power</span>
+          <input
+            type="number"
+            min={1}
+            step={0.1}
+            value={draft.quadraticExponent}
+            disabled={disabled}
+            onChange={(event) => {
+              const nextValue = event.currentTarget.value;
+              setDraft((current) => ({ ...current, quadraticExponent: nextValue }));
+            }}
+            onBlur={() => commitNumber('quadraticExponent', { min: 1 })}
+            onKeyDown={handleEnterBlur}
+            title="Quadratic exponent"
+            className="w-full min-w-0 bg-transparent text-right text-[0.68rem] text-text-primary outline-none"
+          />
+        </label>
+        <label className="flex items-center gap-1 rounded-lg border border-gaming-border bg-gaming-base/80 px-1.5 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.08em] text-text-secondary">
+          <span className="w-11 truncate">Free</span>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={draft.baseVotesPerGuild}
+            disabled={disabled}
+            onChange={(event) => {
+              const nextValue = event.currentTarget.value;
+              setDraft((current) => ({ ...current, baseVotesPerGuild: nextValue }));
+            }}
+            onBlur={() => commitNumber('baseVotesPerGuild', { min: 1, integer: true })}
+            onKeyDown={handleEnterBlur}
+            title="Free base votes per guild"
+            className="w-full min-w-0 bg-transparent text-right text-[0.68rem] text-text-primary outline-none"
+          />
+        </label>
+      </div>
+      {isSaving ? (
+        <p className="mt-0.5 px-1 text-[0.55rem] font-semibold text-status-quest">Saving...</p>
+      ) : null}
+    </div>
+  );
 }
 
 function InlineMilestoneEditor({

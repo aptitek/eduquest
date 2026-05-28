@@ -28,7 +28,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 interface PlayerMapMarker {
   activityId: string | null;
   previousActivityId?: string;
-  characterClass: GameCharacterClass;
+  characterClass?: GameCharacterClass;
   illustrationUrl?: string;
   label: string;
 }
@@ -44,6 +44,7 @@ interface GameMapProps {
   currentStep?: number;
   onSelectNode: (activity: Activity) => void;
   onSelectEdge?: (edge: GameActivityEdge) => void;
+  onClearSelection?: () => void;
   onNodeMove?: (activity: Activity, position: { x: number; y: number }) => void;
   onConnectEdges?: (edge: GraphEdge) => void;
   onDeleteNodes?: (activities: Activity[]) => void;
@@ -95,6 +96,7 @@ export function GameMap({
   currentStep = 0,
   onSelectNode,
   onSelectEdge,
+  onClearSelection,
   onNodeMove,
   onConnectEdges,
   onDeleteNodes,
@@ -205,6 +207,7 @@ export function GameMap({
       customClass: getColors(act, displayStatus),
       customStyle: getColorStyle(act, displayStatus),
       fogState: canEditLocked ? undefined : isFogged ? 'fog' : locked ? undefined : 'clear',
+      deletable: !isSystemOnboardingActivity(act),
       metadata: isFogged ? undefined : act,
     };
   });
@@ -250,13 +253,16 @@ export function GameMap({
         onDeleteEdges={onDeleteEdges}
         onConnectNodes={onConnectEdges}
         onDeleteNodes={(nodes) => {
-          const deletedActivities = nodes.flatMap((node) => (node.metadata ? [node.metadata] : []));
+          const deletedActivities = nodes.flatMap((node) =>
+            node.metadata && !isSystemOnboardingActivity(node.metadata) ? [node.metadata] : []
+          );
           if (deletedActivities.length > 0) onDeleteNodes?.(deletedActivities);
         }}
         onSelectEdge={(edge) => {
           const selectedEdge = edges.find((candidate) => candidate.id === edge.id);
           if (selectedEdge) onSelectEdge?.(selectedEdge);
         }}
+        onPaneClick={onClearSelection}
         onSelectNode={(node) => {
           if (node.metadata) onSelectNode(node.metadata);
         }}
@@ -494,7 +500,7 @@ function buildMapNodeMarker({
               onClick: () => openClassTarget(),
             },
           ]}
-          color={CHARACTER_CLASS_COLORS[playerMarker.characterClass]}
+          color={playerMarker.characterClass ? CHARACTER_CLASS_COLORS[playerMarker.characterClass] : SOLO_OCCUPANCY_COLOR}
           size="md"
           align="center"
           getAvatarMotion={() =>
@@ -505,6 +511,11 @@ function buildMapNodeMarker({
       {guildMarkers}
     </div>
   );
+}
+
+function isSystemOnboardingActivity(activity: Activity) {
+  const metadata = (activity.metadata || {}) as Record<string, unknown>;
+  return metadata.onboardingTask === 'institutional_profile' || metadata.onboardingTask === 'character_card';
 }
 
 function GuildMemberMapMarker({

@@ -19,6 +19,19 @@ describe('map routes', () => {
     expect(payload.error).toBe('Database access is not configured.');
   });
 
+  it('allows students past authorization when reading reward cards', async () => {
+    const response = await app.request(
+      '/api/games/40000000-0000-4000-8000-000000000002/reward-cards',
+      { headers: { Authorization: `Bearer ${await tokenFor(false)}` } },
+      { JWT_SECRET, APP_ENV: 'development' }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(503);
+    expect(payload.success).toBe(false);
+    expect(payload.errorCode).toBe('server_configuration');
+  });
+
   it('does not complete activities without a database', async () => {
     const response = await app.request(
       '/api/map/activities/debug_activity_variables/complete',
@@ -162,6 +175,26 @@ describe('map routes', () => {
     expect(payload.success).toBe(false);
     expect(payload.errorCode).toBe('server_configuration');
     expect(payload.error).toBe('Database access is not configured.');
+  });
+
+  it('allows guild profile fields before database-backed updates', async () => {
+    const response = await app.request(
+      '/api/guilds/guild-1',
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(false)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'Solarized Sentinels', description: 'Updated profile' }),
+      },
+      { JWT_SECRET, APP_ENV: 'development' }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(503);
+    expect(payload.success).toBe(false);
+    expect(payload.errorCode).toBe('server_configuration');
   });
 
   it('rejects invalid activity icons before updating', async () => {

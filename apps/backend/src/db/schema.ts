@@ -487,6 +487,7 @@ export const rewardBalanceConfigs = pgTable(
   'reward_balance_configs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    cohortId: uuid('cohort_id').references(() => cohorts.id, { onDelete: 'cascade' }),
     version: integer('version').notNull(),
     label: text('label'),
     config: jsonb('config').notNull(),
@@ -496,9 +497,12 @@ export const rewardBalanceConfigs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    activeIdx: uniqueIndex('reward_balance_configs_active_idx')
+    activeGlobalIdx: uniqueIndex('reward_balance_configs_active_global_idx')
       .on(table.isActive)
-      .where(sql`${table.isActive} = true`),
+      .where(sql`${table.isActive} = true AND ${table.cohortId} IS NULL`),
+    activeCohortIdx: uniqueIndex('reward_balance_configs_active_cohort_idx')
+      .on(table.cohortId, table.isActive)
+      .where(sql`${table.isActive} = true AND ${table.cohortId} IS NOT NULL`),
   })
 );
 

@@ -69,12 +69,6 @@ export type ManagementStudentUpdate = {
   institutionalSchoolId?: string;
 };
 
-export type ManagementStudentCreate = {
-  displayName?: string;
-  email?: string;
-  cohortIds?: string[];
-};
-
 export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
 
 export type ManagementSchoolCreate = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
@@ -122,28 +116,6 @@ export async function updateManagementStudent(
 
   if (!response.ok || !data.success) {
     throwApiResponseError(response, data, 'Management update failed.');
-  }
-
-  return data.backup;
-}
-
-export async function createManagementStudent(
-  token: string,
-  create: ManagementStudentCreate = {}
-): Promise<ManagementBackup> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/students`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(create),
-  });
-
-  const data = (await response.json()) as ManagementResponse;
-
-  if (!response.ok || !data.success) {
-    throwApiResponseError(response, data, 'Management create failed.');
   }
 
   return data.backup;

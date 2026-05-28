@@ -17,6 +17,8 @@ import {
 } from '../../components/molecules/PlayingCard';
 import { useGameStore } from '../../features/game/gameStore';
 import { fetchCharacterClasses } from '../../features/game/api';
+import { BACKEND_BASE_URL } from '../../config/deployment';
+import { throwApiResponseError } from '../../features/errors/api';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { useErrorReporter } from '../../features/errors/notifications';
@@ -74,9 +76,11 @@ const CHARACTER_CLASS_BASE_STATS: Record<GameCharacterClass, GameStats> = {
 export function CharacterPage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
-  const { user, character, setCharacterClass } = useGameStore();
+  const { user, student, character, activityCompletions, setUserSession } = useGameStore();
   const [playerCardOverride, setPlayerCardOverride] = useState<EditablePlayerCardOverride>({});
   const [classDefinitions, setClassDefinitions] = useState<GameCharacterClassDefinition[]>([]);
+  const [isSavingCharacterClass, setIsSavingCharacterClass] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -97,7 +101,7 @@ export function CharacterPage() {
     };
   }, []);
 
-  if (!user || !character) {
+  if (!user) {
     return (
       <div className="flex min-h-screen items-center justify-center font-display text-text-muted">
         {t('layout.loadingSession')}
@@ -107,11 +111,48 @@ export function CharacterPage() {
 
   const playerName = formatUserDisplayName(user);
   const avatarUrl = user.avatarUrl || user.githubAvatarUrl;
-  const currentClassLabel = t(`game.classes.${character.characterClass}`);
-  const baseStats = getCharacterClassBaseStats(character.characterClass, classDefinitions);
-  const statBudget = getStatAllocationBudget(character.stats);
-  const statAllocations = getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget);
-  const remainingStatPoints = getRemainingStatPoints(statBudget, statAllocations);
+  const saveCharacterClass = async (characterClass: GameCharacterClass) => {
+    if (isSavingCharacterClass) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setSaveError(t('profile.errors.unauthorized'));
+      return;
+    }
+
+    setIsSavingCharacterClass(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ characterClass }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success || !data.user || !data.character) {
+        throwApiResponseError(response, data, 'Character class could not be saved.');
+      }
+
+      if (typeof data.token === 'string' && data.token) {
+        localStorage.setItem('eduquest_token', data.token);
+      }
+      setUserSession(data.user, data.student || student || null, data.character, activityCompletions);
+      setPlayerCardOverride({});
+    } catch (error) {
+      reportError(error, {
+        messageKey: 'character.errors.saveClass',
+        id: 'character.errors.saveClass',
+        logMessage: 'Could not save character class.',
+      });
+      setSaveError(t('character.errors.saveClass'));
+    } finally {
+      setIsSavingCharacterClass(false);
+    }
+  };
   const updatePlayerCardField = (field: PlayingCardEditableField, value: string) => {
     if (field === 'ribbonText') return;
     setPlayerCardOverride((current) => ({
@@ -120,6 +161,7 @@ export function CharacterPage() {
     }));
   };
   const updatePlayerCardStat = (statId: string, value: number) => {
+    if (!character) return;
     const statKey = getGameStatKey(statId);
     if (!statKey) return;
 
@@ -142,6 +184,7 @@ export function CharacterPage() {
     });
   };
   const getPlayerCardStatRange = (statId: string, currentValue: number) => {
+    if (!character) return { min: 0, max: currentValue };
     const statKey = getGameStatKey(statId);
     if (!statKey) return { min: 0, max: currentValue };
 
@@ -153,27 +196,36 @@ export function CharacterPage() {
       max: baseValue + currentAllocation + remainingStatPoints,
     };
   };
-  const playerCard = applyPlayerCardOverrides(
-    buildPlayerCharacterCard({
-      name: playerName,
-      avatarUrl,
-      characterClass: character.characterClass,
-      classLabel: currentClassLabel,
-      statAllocations,
-      baseStats,
-      statBudget,
-      remainingStatPoints,
-      remainingStatPointsLabel: t('character.pointsRemainingShort'),
-      getStatEditableRange: getPlayerCardStatRange,
-      bio: user.bio,
-      fallbackDescription: t('character.activeCardDescription'),
-    }),
-    playerCardOverride,
-    updatePlayerCardField,
-    updatePlayerCardStat
-  );
+  const currentClassLabel = character ? t(`game.classes.${character.characterClass}`) : '';
+  const baseStats = character ? getCharacterClassBaseStats(character.characterClass, classDefinitions) : createEmptyStats();
+  const statBudget = character ? getStatAllocationBudget(character.stats) : 0;
+  const statAllocations = character
+    ? getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget)
+    : createEmptyStats();
+  const remainingStatPoints = getRemainingStatPoints(statBudget, statAllocations);
+  const playerCard = character
+    ? applyPlayerCardOverrides(
+        buildPlayerCharacterCard({
+          name: playerName,
+          avatarUrl,
+          characterClass: character.characterClass,
+          classLabel: currentClassLabel,
+          statAllocations,
+          baseStats,
+          statBudget,
+          remainingStatPoints,
+          remainingStatPointsLabel: t('character.pointsRemainingShort'),
+          getStatEditableRange: getPlayerCardStatRange,
+          bio: user.bio,
+          fallbackDescription: t('character.activeCardDescription'),
+        }),
+        playerCardOverride,
+        updatePlayerCardField,
+        updatePlayerCardStat
+      )
+    : null;
   const currentClassIndex = Math.max(
-    GAME_CHARACTER_CLASSES.findIndex((characterClass) => characterClass === character.characterClass),
+    GAME_CHARACTER_CLASSES.findIndex((characterClass) => characterClass === character?.characterClass),
     0
   );
   const classCards = GAME_CHARACTER_CLASSES.map((characterClass) => {
@@ -194,6 +246,53 @@ export function CharacterPage() {
     mainCardIndex: currentClassIndex,
     variant: 'fan',
   };
+
+  if (!character) {
+    return (
+      <GameLayout hideDashboard>
+        <GameHeader currentView="character" navigationMode="mapOnly" />
+
+        <section aria-labelledby="character-onboarding-title" className="space-y-5">
+          <div className="flex items-center gap-3">
+            <UserRound className="text-status-quest" size={22} aria-hidden />
+            <div>
+              <h2 id="character-onboarding-title" className="text-2xl font-display font-bold">
+                {t('character.onboardingTitle')}
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                {t('character.onboardingDescription')}
+              </p>
+            </div>
+          </div>
+
+          {saveError ? (
+            <div role="alert" className="alert alert-warning text-sm">
+              {saveError}
+            </div>
+          ) : null}
+
+          <div className="min-w-0 overflow-visible rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="text-xl font-bold">{t('character.chooseClass')}</h3>
+              <span className="font-display text-xs font-bold uppercase tracking-[0.24em] text-text-muted">
+                {isSavingCharacterClass ? t('character.creatingCharacter') : t('character.onboardingRibbon')}
+              </span>
+            </div>
+            <PlayingHand
+              hand={classHand}
+              mode="full"
+              visibleCardCount={classCards.length}
+              expandOnHover={false}
+              onCardSelect={(card) => {
+                if (card.characterClass) void saveCharacterClass(card.characterClass);
+              }}
+              className="mx-auto h-[30rem] min-h-0 max-w-5xl"
+            />
+          </div>
+        </section>
+      </GameLayout>
+    );
+  }
 
   return (
     <GameLayout>
@@ -227,7 +326,7 @@ export function CharacterPage() {
                 visibleCardCount={classCards.length}
                 expandOnHover={false}
                 onCardSelect={(card) => {
-                  if (card.characterClass) setCharacterClass(card.characterClass);
+                  if (card.characterClass) void saveCharacterClass(card.characterClass);
                 }}
                 className="mx-auto h-[30rem] min-h-0 max-w-5xl"
               />

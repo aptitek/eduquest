@@ -90,4 +90,48 @@ describe('SpendBreakdownBuilder', () => {
     expect(breakdown.baseCost).toBe(5);
     expect(breakdown.finalCost).toBe(5);
   });
+
+  it('charges the base cost when no RPG character stats are available', () => {
+    const guildProfile = GuildStatCalculator.compute('guild-1', {}, config);
+    const breakdown = SpendBreakdownBuilder.build({
+      votes: 3,
+      guildProfile,
+      config,
+      guildId: 'guild-1',
+    });
+
+    expect(breakdown.baseCost).toBe(9);
+    expect(breakdown.finalCost).toBe(9);
+    expect(breakdown.modifiers.map((modifier) => modifier.kind)).toEqual(['base']);
+  });
+
+  it('does not penalize oversized guild profiles when computing vote discounts', () => {
+    const members = Object.fromEntries(
+      Array.from({ length: 4 }, (_, index) => [
+        `student-${index + 1}`,
+        CharacterStatCalculator.compute(
+          {
+            strength: 1,
+            dexterity: 1,
+            constitution: 1,
+            intelligence: 1,
+            wisdom: 1,
+            charisma: 1,
+          },
+          {
+            strength: 0,
+            dexterity: 0,
+            constitution: 0,
+            intelligence: 0,
+            wisdom: 0,
+            charisma: 0,
+          },
+          config
+        ),
+      ])
+    );
+    const guildProfile = GuildStatCalculator.compute('guild-1', members, config);
+
+    expect(guildProfile.sizeModifier).toBe(1);
+  });
 });

@@ -20,6 +20,7 @@ import {
   type GameRewardCardPayload,
   type GameMilestonePayload,
   type Guild,
+  type VoteSpendBreakdown,
 } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
@@ -82,6 +83,8 @@ type CreateGuildPayload = {
   iconKey?: unknown;
   color?: unknown;
 };
+
+type UpdateGuildPayload = Partial<CreateGuildPayload>;
 
 interface MapOccupancyMember {
   studentId: string;
@@ -815,10 +818,11 @@ function buildMapData(
   currentMove?: GameCharacterMove,
   cohortProgression?: Pick<CohortRecord, 'currentStep'>,
   includeStepRanges = false,
-  nodeOccupancies: GameMapNodeOccupancy[] = []
+  nodeOccupancies: GameMapNodeOccupancy[] = [],
+  defaultCurrentActivityId?: string
 ): GameMapData {
   const completedActivityIds = new Set(completions.map((completion) => completion.activityId));
-  const currentActivityId = currentMove?.toActivityId;
+  const currentActivityId = currentMove?.toActivityId || defaultCurrentActivityId;
   const currentStep = cohortProgression?.currentStep ?? run.currentSectorDepth;
   const activityIds = new Set(activityRecords.map((activity) => activity.id));
   const incomingByActivity = new Map<string, string[]>();
@@ -1145,6 +1149,17 @@ async function getOrCreateActiveRun(db: Database, cohortId: string) {
   return activeRun;
 }
 
+async function getActiveRun(db: Database, cohortId: string) {
+  const [activeRun] = await db
+    .select()
+    .from(gameMapRuns)
+    .where(and(eq(gameMapRuns.cohortId, cohortId), eq(gameMapRuns.status, 'active')))
+    .orderBy(desc(gameMapRuns.createdAt))
+    .limit(1);
+
+  return activeRun;
+}
+
 async function getOrCreateCohortProgress(db: Database, cohortId: string) {
   let [progress] = await db
     .select()
@@ -1163,6 +1178,212 @@ async function getOrCreateCohortProgress(db: Database, cohortId: string) {
   }
 
   return progress;
+}
+
+async function getCohortProgress(db: Database, cohortId: string) {
+  const [progress] = await db
+    .select()
+    .from(cohortProgress)
+    .where(eq(cohortProgress.cohortId, cohortId))
+    .limit(1);
+
+  return progress;
+}
+
+function getOnboardingTask(activity: Pick<ActivityRecord, 'metadata'>) {
+  const metadata = activity.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const task = (metadata as Record<string, unknown>).onboardingTask;
+  return typeof task === 'string' ? task : undefined;
+}
+
+function isSystemOnboardingActivity(activity: Pick<ActivityRecord, 'metadata'>) {
+  const task = getOnboardingTask(activity);
+  return task === 'institutional_profile' || task === 'character_card';
+}
+
+function withDefaultOnboardingResource(
+  metadata: Record<string, unknown>,
+  resource: { title: string; url: string }
+): Record<string, unknown> {
+  const currentResources = Array.isArray(metadata.resources) ? metadata.resources : [];
+  const hasResource = currentResources.some((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    return (item as Record<string, unknown>).url === resource.url;
+  });
+
+  return {
+    ...metadata,
+    resources: hasResource ? currentResources : [resource, ...currentResources],
+  };
+}
+
+function getDefaultOnboardingResource(task: string | undefined) {
+  if (task === 'institutional_profile') {
+    return { title: 'Compléter le profil institutionnel', url: '#profile' };
+  }
+  if (task === 'character_card') {
+    return { title: 'Créer la carte personnage', url: '#character' };
+  }
+
+  return undefined;
+}
+
+function getDefaultOnboardingIconKey(task: string | undefined) {
+  if (task === 'institutional_profile') return 'user-check';
+  if (task === 'character_card') return 'anvil';
+  return undefined;
+}
+
+async function ensureOnboardingActivities(db: Database, cohortId: string, mapRunId: string) {
+  const existingActivities = await db
+    .select()
+    .from(gameActivities)
+    .where(or(eq(gameActivities.cohortId, cohortId), eq(gameActivities.mapRunId, mapRunId)));
+
+  const existingProfileActivity = existingActivities.find(
+    (activity) => getOnboardingTask(activity) === 'institutional_profile'
+  );
+  const existingCharacterActivity = existingActivities.find(
+    (activity) => getOnboardingTask(activity) === 'character_card'
+  );
+  const values: Array<typeof gameActivities.$inferInsert> = [];
+
+  if (!existingProfileActivity) {
+    values.push({
+      cohortId,
+      mapRunId,
+      type: 'onboarding',
+      title: 'Profil institutionnel',
+      isGraded: false,
+      mapX: 180,
+      mapY: 320,
+      sectorDepth: 0,
+      requiredLevel: 1,
+      stepRanges: [{ startStep: 0 }],
+      participationMode: 'solo',
+      basePoints: 0,
+      metadata: {
+        onboardingTask: 'institutional_profile',
+        subtitle: 'Onboarding · Identité école',
+        description:
+          'Complétez votre profil institutionnel avant de créer votre carte joueur.',
+        iconKey: 'user-check',
+        resources: [{ title: 'Compléter le profil institutionnel', url: '#profile' }],
+      },
+    });
+  }
+
+  if (!existingCharacterActivity) {
+    values.push({
+      cohortId,
+      mapRunId,
+      type: 'character_creation',
+      title: 'Carte joueur',
+      isGraded: false,
+      mapX: 460,
+      mapY: 320,
+      sectorDepth: 0,
+      requiredLevel: 1,
+      stepRanges: [{ startStep: 0 }],
+      participationMode: 'solo',
+      basePoints: 0,
+      metadata: {
+        onboardingTask: 'character_card',
+        subtitle: 'Onboarding · Classe et personnage',
+        description:
+          'Choisissez une classe pour créer votre carte personnage et entrer dans la partie.',
+        iconKey: 'anvil',
+        resources: [{ title: 'Créer la carte personnage', url: '#character' }],
+      },
+    });
+  }
+
+  const createdActivities = values.length > 0
+    ? await db.insert(gameActivities).values(values).returning()
+    : [];
+  const allActivities = [...existingActivities, ...createdActivities];
+  const profileActivity =
+    existingProfileActivity ||
+    createdActivities.find((activity) => getOnboardingTask(activity) === 'institutional_profile');
+  const characterActivity =
+    existingCharacterActivity ||
+    createdActivities.find((activity) => getOnboardingTask(activity) === 'character_card');
+  if (profileActivity && characterActivity) {
+    const [existingEdge] = await db
+      .select()
+      .from(gameActivityEdges)
+      .where(
+        and(
+          eq(gameActivityEdges.fromActivityId, profileActivity.id),
+          eq(gameActivityEdges.toActivityId, characterActivity.id)
+        )
+      )
+      .limit(1);
+
+    if (!existingEdge) {
+      await db.insert(gameActivityEdges).values({
+        cohortId,
+        mapRunId,
+        fromActivityId: profileActivity.id,
+        toActivityId: characterActivity.id,
+        metadata: { systemEdge: 'onboarding' },
+      });
+    }
+  }
+
+  for (const activity of allActivities) {
+    const task = getOnboardingTask(activity);
+    const defaultResource = getDefaultOnboardingResource(task);
+    const defaultIconKey = getDefaultOnboardingIconKey(task);
+    if (!defaultResource && !defaultIconKey) continue;
+
+    const metadata = normalizeMetadata(activity.metadata);
+    let nextMetadata = defaultResource
+      ? withDefaultOnboardingResource(metadata, defaultResource)
+      : metadata;
+
+    const currentIconKey = typeof nextMetadata.iconKey === 'string' ? nextMetadata.iconKey : undefined;
+    const shouldUseDefaultIcon =
+      defaultIconKey &&
+      (!currentIconKey ||
+        (task === 'institutional_profile' && currentIconKey === 'onboarding') ||
+        (task === 'character_card' && currentIconKey === 'character_creation'));
+    if (shouldUseDefaultIcon) {
+      nextMetadata = { ...nextMetadata, iconKey: defaultIconKey };
+    }
+    if (nextMetadata.resources === metadata.resources && nextMetadata.iconKey === metadata.iconKey) continue;
+
+    await db
+      .update(gameActivities)
+      .set({ metadata: nextMetadata })
+      .where(eq(gameActivities.id, activity.id));
+    activity.metadata = nextMetadata;
+  }
+
+  return allActivities;
+}
+
+function buildEmptyMapData(): GameMapData {
+  return {
+    activities: [],
+    edges: [],
+    completions: [],
+    nodeOccupancies: [],
+    currentStep: 0,
+  };
+}
+
+function buildEmptyProgressData(): CohortProgressData {
+  return {
+    gauge: {
+      currentPoints: 0,
+      targetPoints: 0,
+      labelI18nKey: 'dashboard.dock.milestone',
+      milestones: [],
+    },
+    notifications: [],
+  };
 }
 
 export const mapRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -1256,6 +1477,12 @@ mapRouter.delete('/map/activities/:activityId', async (c) => {
 
     if (!activity) {
       return apiError(c, 'Activity not found.', 404);
+    }
+
+    if (isSystemOnboardingActivity(activity)) {
+      return apiError(c, 'Onboarding activities are required and cannot be deleted.', 409, {
+        errorCode: 'conflict',
+      });
     }
 
     await db
@@ -2214,7 +2441,12 @@ mapRouter.get('/guilds', async (c) => {
       : (await resolveStudentCohortContext(db, user, requestedCohortId))?.cohortRecord;
 
     if (!cohortRecord) {
-      return apiError(c, 'Guild cohort context not found.', 404);
+      return c.json({
+        success: true,
+        source: 'database',
+        guilds: [],
+        unguildedStudents: [],
+      });
     }
 
     const guildRecords = await db
@@ -2316,16 +2548,45 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   const guildId = c.req.param('guildId');
   const user = c.get('user');
 
-  let body: Partial<Pick<Guild, 'iconKey'>>;
+  let body: UpdateGuildPayload;
   try {
     body = await c.req.json();
   } catch {
     body = {};
   }
 
-  const iconKey = typeof body.iconKey === 'string' ? body.iconKey.trim() : undefined;
-  if (!iconKey || !/^[A-Za-z0-9_-]{1,80}$/.test(iconKey)) {
+  const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
+  const hasDescription = Object.prototype.hasOwnProperty.call(body, 'description');
+  const hasIconKey = Object.prototype.hasOwnProperty.call(body, 'iconKey');
+  const hasColor = Object.prototype.hasOwnProperty.call(body, 'color');
+  const name = hasName && typeof body.name === 'string' ? body.name.trim() : undefined;
+  const description =
+    hasDescription && typeof body.description === 'string' ? body.description.trim() : undefined;
+  const iconKey = hasIconKey && typeof body.iconKey === 'string' ? body.iconKey.trim() : undefined;
+  const color = hasColor && typeof body.color === 'string' ? body.color.trim() : undefined;
+
+  if (!hasName && !hasDescription && !hasIconKey && !hasColor) {
+    return apiError(c, 'At least one guild field is required.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (hasName && (!name || name.length > 80)) {
+    return apiError(c, 'Guild name is required and must be 80 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (hasDescription && description && description.length > 400) {
+    return apiError(c, 'Guild description must be 400 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (hasIconKey && (!iconKey || !/^[A-Za-z0-9_-]{1,80}$/.test(iconKey))) {
     return apiError(c, 'iconKey must be a valid icon identifier.', 400);
+  }
+  if (hasColor && color && color.length > 80) {
+    return apiError(c, 'Guild color must be 80 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
   }
 
   if (!databaseUrl) {
@@ -2349,7 +2610,13 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
 
     const [updatedGuild] = await db
       .update(guilds)
-      .set({ iconKey, updatedAt: new Date() })
+      .set({
+        ...(hasName ? { name } : {}),
+        ...(hasDescription ? { description: description || null } : {}),
+        ...(hasIconKey ? { iconKey } : {}),
+        ...(hasColor ? { color: color || null } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(guilds.id, guildId))
       .returning();
 
@@ -2396,7 +2663,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
     }
 
     const [studentMembership] = await db
-      .select({ guildId: cohortMemberships.guildId })
+      .select({ cohortId: cohortMemberships.cohortId, guildId: cohortMemberships.guildId })
       .from(cohortMemberships)
       .where(and(eq(cohortMemberships.userId, user!.id), eq(cohortMemberships.guildId, guildId)))
       .limit(1);
@@ -2407,6 +2674,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
 
     const result = await new VotingCostService(db).spendGuildVotes({
       guildId,
+      cohortId: studentMembership.cohortId,
       studentId: studentRecord.id,
       votes,
     });
@@ -2688,14 +2956,15 @@ mapRouter.get('/map', async (c) => {
       : studentContext?.cohortRecord;
 
     if (!cohortRecord) {
-      return apiError(c, 'Map cohort not found.', 404);
-    }
-
-    if (!user?.isAdmin && !studentContext) {
-      return apiError(c, 'Student cohort context not found.', 404);
+      return c.json({
+        success: true,
+        source: 'database',
+        map: buildEmptyMapData(),
+      });
     }
 
     const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    await ensureOnboardingActivities(db, cohortRecord.id, activeRun.id);
 
     const activitiesFromDb = await db
       .select()
@@ -2779,6 +3048,10 @@ mapRouter.get('/map', async (c) => {
         ),
     ]);
     const nodeOccupancies = buildNodeOccupancies(activitiesFromDb, occupancyMembers, occupancyMoves);
+    const defaultCurrentActivityId =
+      studentContext && !latestMove
+        ? activitiesFromDb.find((activity) => getOnboardingTask(activity) === 'institutional_profile')?.id
+        : undefined;
 
     if (activitiesFromDb.length === 0) {
       return c.json({
@@ -2792,7 +3065,8 @@ mapRouter.get('/map', async (c) => {
           latestMove ? toCharacterMove(latestMove) : undefined,
           cohortRecord,
           Boolean(user?.isAdmin),
-          nodeOccupancies
+          nodeOccupancies,
+          defaultCurrentActivityId
         ),
       });
     }
@@ -2805,7 +3079,8 @@ mapRouter.get('/map', async (c) => {
       latestMove ? toCharacterMove(latestMove) : undefined,
       cohortRecord,
       Boolean(user?.isAdmin),
-      nodeOccupancies
+      nodeOccupancies,
+      defaultCurrentActivityId
     );
 
     return c.json({
@@ -2838,17 +3113,20 @@ mapRouter.get('/dashboard', async (c) => {
       : studentContext?.cohortRecord;
 
     if (!cohortRecord) {
-      return apiError(c, 'Progress cohort context not found.', 404);
+      return c.json({
+        success: true,
+        source: 'database',
+        progress: buildEmptyProgressData(),
+      });
     }
 
-    const [progress] = await db
-      .select()
-      .from(cohortProgress)
-      .where(eq(cohortProgress.cohortId, cohortRecord.id))
-      .limit(1);
-
+    const progress = await getCohortProgress(db, cohortRecord.id);
     if (!progress) {
-      return apiError(c, 'Cohort progress not found.', 404);
+      return c.json({
+        success: true,
+        source: 'database',
+        progress: buildEmptyProgressData(),
+      });
     }
 
     const guildId = studentContext?.membership.guildId;
@@ -2917,7 +3195,14 @@ mapRouter.get('/games/:gameId/milestones', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const progress = await getCohortProgress(db, cohortRecord.id);
+    if (!progress) {
+      return c.json({
+        success: true,
+        source: 'database',
+        milestones: [],
+      });
+    }
     const milestones = await db
       .select()
       .from(progressMilestones)
@@ -2997,7 +3282,11 @@ mapRouter.patch('/games/:gameId/milestones/:milestoneId', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const progress = await getCohortProgress(db, cohortRecord.id);
+    if (!progress) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
+
     const [updated] = await db
       .update(progressMilestones)
       .set({
@@ -3040,7 +3329,11 @@ mapRouter.delete('/games/:gameId/milestones/:milestoneId', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const progress = await getCohortProgress(db, cohortRecord.id);
+    if (!progress) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
+
     const [deleted] = await db
       .delete(progressMilestones)
       .where(
@@ -3063,17 +3356,15 @@ mapRouter.delete('/games/:gameId/milestones/:milestoneId', async (c) => {
 });
 
 mapRouter.get('/games/:gameId/reward-cards', async (c) => {
-  const adminUser = requireAdminUser(c);
-  if (adminUser instanceof Response) return adminUser;
-
-  const databaseUrl = c.env?.DATABASE_URL;
-  if (!databaseUrl) {
-    return missingDatabaseUrl(c);
-  }
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
     const db = getDb(databaseUrl);
-    const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
+    const user = c.get('user');
+    const requestedGameId = c.req.param('gameId');
+    const studentContext = user?.isAdmin ? undefined : await resolveStudentCohortContext(db, user, requestedGameId);
+    const cohortRecord = user?.isAdmin ? await resolveAdminCohort(db, requestedGameId) : studentContext?.cohortRecord;
     if (!cohortRecord) {
       return apiError(c, 'Game not found.', 404);
     }
@@ -3248,7 +3539,21 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const progress = await getCohortProgress(db, cohortRecord.id);
+    if (!progress) {
+      return c.json({
+        success: true,
+        source: 'database',
+        voteState: {
+          milestones: [],
+          bonusCards: [],
+          voteStates: [],
+          selectedMilestoneId: undefined,
+          guildId: context?.membership.guildId || undefined,
+        },
+      });
+    }
+
     const [milestones, bonusCards, votes, balanceConfig] = await Promise.all([
       db
         .select()
@@ -3265,7 +3570,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         .from(milestoneBonusVotes)
         .innerJoin(progressMilestones, eq(progressMilestones.id, milestoneBonusVotes.milestoneId))
         .where(eq(progressMilestones.progressId, progress.id)),
-      RewardBalanceConfigService.getActiveConfig(db),
+      RewardBalanceConfigService.getActiveConfig(db, cohortRecord.id),
     ]);
 
     const bonusCardIds = new Set(bonusCards.map((card) => card.id));
@@ -3289,6 +3594,8 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         .filter(([, voteCount]) => voteCount === maxVotes && maxVotes > 0)
         .map(([bonusCardId]) => bonusCardId);
 
+      const isVoteClosed = progress.currentPoints >= milestone.cost;
+
       return {
         milestone: toMilestone(milestone),
         results: bonusCards.map((card) => ({
@@ -3303,6 +3610,8 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
           : undefined,
         leadingBonusCardIds,
         hasTie: leadingBonusCardIds.length > 1,
+        isVoteOpen: !isVoteClosed,
+        isVoteClosed,
       };
     });
 
@@ -3310,14 +3619,23 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
     const [guildRecord] = guildId
       ? await db.select({ gold: guilds.gold }).from(guilds).where(eq(guilds.id, guildId)).limit(1)
       : [];
-    const boostCostPreview =
-      guildId && context?.studentRecord
-        ? await new VotingCostService(db).previewGuildVotes({
-            guildId,
-            studentId: context.studentRecord.id,
-            votes: 1,
-          })
-        : undefined;
+    let boostCostPreview: VoteSpendBreakdown | undefined;
+    if (guildId && context?.studentRecord) {
+      try {
+        boostCostPreview = await new VotingCostService(db).previewGuildVotes({
+          guildId,
+          cohortId: cohortRecord.id,
+          studentId: context.studentRecord.id,
+          votes: 1,
+        });
+      } catch (error: any) {
+        console.warn('Bonus vote boost preview could not be loaded:', error.message);
+      }
+    }
+
+    const selectedMilestoneId =
+      milestones.find((milestone) => progress.currentPoints < milestone.cost)?.id ||
+      milestones[0]?.id;
 
     return c.json({
       success: true,
@@ -3326,7 +3644,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         milestones: milestones.map(toMilestone),
         bonusCards: bonusCards.map((card) => toRewardCard(card, cohortRecord.id)),
         voteStates,
-        selectedMilestoneId: milestones[0]?.id,
+        selectedMilestoneId,
         guildId,
         guildGold: guildRecord?.gold,
         boostCostPreview,
@@ -3356,7 +3674,10 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
       return apiError(c, 'Guild vote is not allowed without a guild.', 403);
     }
 
-    const progress = await getOrCreateCohortProgress(db, context.cohortRecord.id);
+    const progress = await getCohortProgress(db, context.cohortRecord.id);
+    if (!progress) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
     const [milestone] = await db
       .select()
       .from(progressMilestones)
@@ -3377,7 +3698,11 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
       return apiError(c, 'Milestone or bonus card not found.', 404);
     }
 
-    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
+    if (progress.currentPoints >= milestone.cost) {
+      return apiError(c, 'Bonus vote is closed.', 409);
+    }
+
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, context.cohortRecord.id);
     const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
     const [existing] = await db
       .select()
@@ -3434,7 +3759,10 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) =
       return apiError(c, 'Guild vote boost is not allowed without a guild.', 403);
     }
 
-    const progress = await getOrCreateCohortProgress(db, context.cohortRecord.id);
+    const progress = await getCohortProgress(db, context.cohortRecord.id);
+    if (!progress) {
+      return apiError(c, 'Cast a bonus vote before boosting it.', 409);
+    }
     const [existing] = await db
       .select()
       .from(milestoneBonusVotes)
@@ -3452,11 +3780,16 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) =
       return apiError(c, 'Cast a bonus vote before boosting it.', 409);
     }
 
-    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
+    if (progress.currentPoints < existing.progress_milestones.cost) {
+      return apiError(c, 'Bonus vote boost is only available after the vote is closed.', 409);
+    }
+
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, context.cohortRecord.id);
     const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
     const alreadyPurchasedVotes = Math.max(0, existing.milestone_bonus_votes.voteCount - baseVotes);
     const voteSpend = await new VotingCostService(db).spendGuildVotes({
       guildId: context.membership.guildId,
+      cohortId: context.cohortRecord.id,
       studentId: context.studentRecord.id,
       votes,
       alreadyPurchasedVotes,

@@ -20,7 +20,11 @@ export class RewardComputationService {
       return false;
     }
 
-    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db);
+    const eventCohortId =
+      event.payload && typeof event.payload === 'object' && 'cohortId' in event.payload
+        ? String(event.payload.cohortId || '')
+        : undefined;
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db, eventCohortId);
     const policyRegistry = RewardPolicyRegistry.fromBalanceConfig(balanceConfig);
     const policy = policyRegistry.resolveForEvent(event);
 
@@ -89,6 +93,19 @@ export class RewardComputationService {
       });
 
       if (context.cohortId) {
+        const [existingProgress] = await tx
+          .select({ id: cohortProgress.id })
+          .from(cohortProgress)
+          .where(eq(cohortProgress.cohortId, context.cohortId))
+          .limit(1);
+
+        if (!existingProgress) {
+          await tx.insert(cohortProgress).values({
+            cohortId: context.cohortId,
+            labelI18nKey: 'dashboard.dock.milestone',
+          });
+        }
+
         await tx
           .update(cohortProgress)
           .set({

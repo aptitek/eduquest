@@ -1,5 +1,6 @@
 import {
   Award,
+  Anvil,
   BookOpen,
   Castle,
   CheckCircle2,
@@ -30,6 +31,7 @@ import {
   Trophy,
   TreePine,
   User,
+  UserCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -39,6 +41,7 @@ import type { ActivityType } from '@eduquest/shared';
 import { ACTIVITY_ICON_KEYS } from '@eduquest/shared';
 
 const ICON_BY_PASCAL: Record<string, LucideIcon> = {
+  Anvil,
   Award,
   BookOpen,
   Castle,
@@ -70,6 +73,7 @@ const ICON_BY_PASCAL: Record<string, LucideIcon> = {
   Trophy,
   TreePine,
   User,
+  UserCheck,
   Users,
   onboarding: Compass,
   character_creation: User,

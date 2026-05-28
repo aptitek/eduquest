@@ -27,10 +27,16 @@ import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
   currentView?: 'map' | 'management' | 'guild' | 'class' | 'bonus' | 'character';
+  hideNavigation?: boolean;
+  navigationMode?: 'full' | 'mapOnly';
 }
 
-export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
-  const { user, character } = useAuth();
+export function GameHeader({
+  currentView = 'map',
+  hideNavigation = false,
+  navigationMode = 'full',
+}: GameHeaderProps) {
+  const { user, student, character } = useAuth();
   const {
     availableGames,
     selectedGameId,
@@ -47,7 +53,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     [showHeaderError]
   );
   const dashboardData = useCohortProgressData(
-    !user?.isAdmin,
+    Boolean(!hideNavigation && !user?.isAdmin && character),
     selectedGameId,
     handleDashboardError
   );
@@ -162,6 +168,11 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
   };
   const showGameSelector = user?.isAdmin ? availableGames.length > 0 : availableGames.length > 1;
   const selectedGame = availableGames.find((game) => game.id === selectedGameId);
+  const selectedMembership =
+    (selectedGameId && student?.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
+    student?.cohortMemberships?.[0];
+  const hasPlayerGuild = Boolean(selectedMembership?.guildId || selectedMembership?.guild?.id);
+  const canShowProgress = Boolean(user?.isAdmin || character);
   const addAdminCohortNotification = () => {
     const title = adminNotificationTitle.trim();
     const description = adminNotificationDescription.trim();
@@ -301,6 +312,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
             </h1>
           </div>
 
+          {hideNavigation ? null : (
           <nav className="flex min-w-max border-l border-gaming-border" aria-label={t('layout.primaryNav')}>
             <button
               type="button"
@@ -317,22 +329,24 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
               {t('map.nav')}
             </button>
 
-            {!user?.isAdmin ? (
+            {navigationMode === 'mapOnly' ? null : !user?.isAdmin ? (
               <>
-                <button
-                  type="button"
-                  aria-current={currentView === 'guild' ? 'page' : undefined}
-                  onClick={() => {
-                    window.location.hash = 'guild';
-                  }}
-                  className={cn(
-                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    currentView === 'guild' && 'bg-gaming-base text-status-quest'
-                  )}
-                >
-                  <Users size={16} aria-hidden />
-                  {t('guild.nav')}
-                </button>
+                {hasPlayerGuild ? (
+                  <button
+                    type="button"
+                    aria-current={currentView === 'guild' ? 'page' : undefined}
+                    onClick={() => {
+                      window.location.hash = 'guild';
+                    }}
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                      currentView === 'guild' && 'bg-gaming-base text-status-quest'
+                    )}
+                  >
+                    <Users size={16} aria-hidden />
+                    {t('guild.nav')}
+                  </button>
+                ) : null}
 
                 <button
                   type="button"
@@ -352,20 +366,22 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
 
                 {gameSelector}
 
-                <button
-                  type="button"
-                  aria-current={currentView === 'bonus' ? 'page' : undefined}
-                  onClick={() => {
-                    window.location.hash = 'bonus';
-                  }}
-                  className={cn(
-                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    currentView === 'bonus' && 'bg-gaming-base text-status-quest'
-                  )}
-                >
-                  <Gift size={16} aria-hidden />
-                  {t('bonus.nav')}
-                </button>
+                {canShowProgress ? (
+                  <button
+                    type="button"
+                    aria-current={currentView === 'bonus' ? 'page' : undefined}
+                    onClick={() => {
+                      window.location.hash = 'bonus';
+                    }}
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                      currentView === 'bonus' && 'bg-gaming-base text-status-quest'
+                    )}
+                  >
+                    <Gift size={16} aria-hidden />
+                    {t('bonus.nav')}
+                  </button>
+                ) : null}
               </>
             ) : (
               <>
@@ -421,6 +437,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
               </button>
             )}
           </nav>
+          )}
         </div>
 
         {/* Partie Droite : Character, Account & Notifications */}

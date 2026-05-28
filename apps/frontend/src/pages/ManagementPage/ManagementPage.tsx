@@ -15,7 +15,6 @@ import { useGameStore } from '../../features/game/gameStore';
 import {
   createManagementCohort,
   createManagementSchool,
-  createManagementStudent,
   deleteManagementCohort,
   deleteManagementSchool,
   deleteManagementStudent,
@@ -154,7 +153,7 @@ export function ManagementPage() {
         .filter(({ user: rowUser }) => !rowUser.isAdmin)
         .map(({ user: rowUser, student: rowStudent, character: rowCharacter }) => {
           const latestMembership = getLatestCohortMembership(rowStudent.cohortMemberships);
-          const selectedSchool = latestMembership?.cohort?.school || schoolRows[0];
+          const selectedSchool = latestMembership?.cohort?.school;
 
           return {
             ...rowStudent,
@@ -174,7 +173,7 @@ export function ManagementPage() {
 
     if (!user || !student || !character || user.isAdmin) return [];
     const latestMembership = getLatestCohortMembership(student.cohortMemberships);
-    const selectedSchool = latestMembership?.cohort?.school || schoolRows[0];
+    const selectedSchool = latestMembership?.cohort?.school;
 
     return [
       {
@@ -193,8 +192,8 @@ export function ManagementPage() {
     ];
   }, [character, cohortRows, managementBackup, schoolRows, student, user]);
   const schoolFilterOptions = useMemo(
-    () => Array.from(new Set(studentRows.map((row) => row.school?.name || 'Aptitek'))),
-    [studentRows]
+    () => Array.from(new Set(studentRows.map((row) => row.school?.name || t('management.schools.unassigned')))),
+    [studentRows, t]
   );
   const campusOptions = useMemo(
     () => Array.from(new Set(cohortRows.map((row) => row.campusName).filter(Boolean))),
@@ -217,15 +216,15 @@ export function ManagementPage() {
   const selectedStudentMembership = getLatestCohortMembership(
     selectedStudentRow?.cohortMemberships
   );
-  const selectedStudentInitialCohortIds = selectedStudentMembership?.cohortId
-    ? [selectedStudentMembership.cohortId]
-    : [];
   const selectedStudentCohortIds =
-    selectedStudentInitialCohortIds.length > 0
-      ? selectedStudentInitialCohortIds
-      : selectedStudentMembership?.cohortId
-        ? [selectedStudentMembership.cohortId]
-        : [];
+    selectedStudentRow?.cohortMemberships
+      ?.filter((membership) => membership.cohortId)
+      .sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      })
+      .map((membership) => membership.cohortId) || [];
   const selectedStudentCohort =
     cohortRows.find((cohort) => cohort.id === selectedStudentCohortIds[0]) ||
     selectedStudentMembership?.cohort ||
@@ -234,6 +233,21 @@ export function ManagementPage() {
       : undefined);
   const activeCardSkeletonVariant =
     activeTab === 'schools' ? 'school' : activeTab === 'cohorts' ? 'cohort' : 'student';
+  const activeCardCreateLabel =
+    activeTab === 'schools'
+      ? t('management.table.addSchool')
+      : activeTab === 'cohorts'
+        ? t('management.table.addCohort')
+        : t('management.table.inviteStudents');
+  const canCreateManagementRow =
+    activeTab === 'schools' ||
+    (activeTab === 'cohorts' && schoolRows.length > 0);
+  const activeCardCreateHint =
+    activeTab === 'cohorts' && schoolRows.length === 0
+      ? t('management.empty.createSchoolFirst')
+      : activeTab === 'students'
+        ? t('management.empty.createStudentsWithInvite')
+      : undefined;
   const updateSelectedSchool = async (update: ManagementSchoolUpdate, shouldThrow = false) => {
     if (!selectedSchoolRow) return;
 
@@ -371,6 +385,11 @@ export function ManagementPage() {
     }
 
     if (activeTab === 'cohorts') {
+      if (schoolRows.length === 0) {
+        setManagementErrorKey('management.empty.createSchoolFirst');
+        return;
+      }
+
       const previousIds = new Set(cohortRows.map((row) => row.id));
       void mutateManagementRows(
         (token) =>
@@ -388,20 +407,7 @@ export function ManagementPage() {
       return;
     }
 
-    const previousIds = new Set(studentRows.map((row) => row.id));
-    void mutateManagementRows(
-      (token) =>
-        createManagementStudent(token, {
-          displayName: t('management.students.newStudent'),
-          cohortIds: cohortRows[0]?.id ? [cohortRows[0].id] : [],
-        }),
-      'management.errors.createRowFailed',
-      'Could not create management student.',
-      (backup) => {
-        const created = backup.students.find((profile) => !previousIds.has(profile.student.id));
-        return created ? { tab: 'students', id: created.student.id } : null;
-      }
-    );
+    setManagementErrorKey('management.empty.createStudentsWithInvite');
   };
   const deleteManagementRow = (tab: ManagementTab, rowId: string) => {
     void mutateManagementRows(
@@ -418,6 +424,7 @@ export function ManagementPage() {
   const selectedStudentCharacterBack = selectedStudentRow?.character
     ? buildStudentCharacterBackSide(selectedStudentRow, t, updateSelectedStudent)
     : undefined;
+  const hasSelectedCard = Boolean(selectedSchoolRow || selectedCohortRow || selectedStudentRow);
   const selectedCardContent = selectedSchoolRow ? (
     <SchoolDetailCard
       school={selectedSchoolRow}
@@ -441,7 +448,7 @@ export function ManagementPage() {
       t={t}
     />
   ) : selectedStudentRow ? (
-    <div className="h-full min-h-[18rem]">
+    <div className="h-full min-h-0 overflow-y-auto">
       <InstitutionalProfileCard
         user={selectedStudentRow.user}
         variant="management"
@@ -586,10 +593,9 @@ export function ManagementPage() {
                 schoolFilterOptions={schoolFilterOptions}
                 selectedRowId={selectedEntity?.tab === 'students' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'students', id: row.id })}
-                addRowLabel={t('management.table.addStudent')}
                 deleteRowLabel={(row) => t('management.table.deleteStudent').replace('{name}', row.displayName)}
-                onCreateRow={createManagementRow}
                 onDeleteRow={(row) => deleteManagementRow('students', row.id)}
+                emptyMessage={t('management.empty.students')}
                 flushTop
               />
             ) : activeTab === 'cohorts' ? (
@@ -602,10 +608,13 @@ export function ManagementPage() {
                 searchLabel={t('management.filters.search')}
                 selectedRowId={selectedEntity?.tab === 'cohorts' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'cohorts', id: row.id })}
-                addRowLabel={t('management.table.addCohort')}
                 deleteRowLabel={(row) => t('management.table.deleteCohort').replace('{name}', row.name)}
-                onCreateRow={createManagementRow}
                 onDeleteRow={(row) => deleteManagementRow('cohorts', row.id)}
+                emptyMessage={
+                  schoolRows.length === 0
+                    ? t('management.empty.createSchoolFirst')
+                    : t('management.empty.cohorts')
+                }
                 flushTop
               />
             ) : (
@@ -618,26 +627,45 @@ export function ManagementPage() {
                 searchLabel={t('management.filters.search')}
                 selectedRowId={selectedEntity?.tab === 'schools' ? selectedEntity.id : undefined}
                 onRowSelect={(row) => setSelectedEntity({ tab: 'schools', id: row.id })}
-                addRowLabel={t('management.table.addSchool')}
                 deleteRowLabel={(row) => t('management.table.deleteSchool').replace('{name}', row.name)}
-                onCreateRow={createManagementRow}
                 onDeleteRow={(row) => deleteManagementRow('schools', row.id)}
+                emptyMessage={t('management.empty.schools')}
                 flushTop
               />
             )}
           </div>
         </div>
 
-        <PlayingCard
-          size="full"
-          title={t('management.title')}
-          flipLabel={selectedStudentCharacterBack ? t('management.card.flip') : undefined}
-          frontContent={selectedCardContent}
-          back={selectedStudentCharacterBack}
-          kind={selectedStudentRow?.character ? 'character' : undefined}
-          characterClass={selectedStudentRow?.character?.characterClass}
-          className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
-        />
+        {hasSelectedCard ? (
+          <PlayingCard
+            size="full"
+            title={t('management.title')}
+            flipLabel={selectedStudentCharacterBack ? t('management.card.flip') : undefined}
+            frontContent={selectedCardContent}
+            back={selectedStudentCharacterBack}
+            kind={selectedStudentRow?.character ? 'character' : undefined}
+            characterClass={selectedStudentRow?.character?.characterClass}
+            className={cn(
+              'max-h-[calc(100vh-8rem)] xl:sticky xl:top-8',
+              selectedStudentRow
+                ? 'h-auto max-w-[min(24rem,calc((100vh-8rem)*5/7))] self-start'
+                : 'h-full'
+            )}
+          />
+        ) : (
+          <PlayingCard
+            size="full"
+            kind={activeCardSkeletonVariant}
+            accentToken="neutral"
+            title={activeCardCreateLabel}
+            subtitle={activeCardCreateHint}
+            faceDown
+            editable
+            onClick={canCreateManagementRow ? createManagementRow : undefined}
+            interactive={canCreateManagementRow}
+            className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
+          />
+        )}
       </section>
     </GameLayout>
   );

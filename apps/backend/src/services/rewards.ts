@@ -194,6 +194,7 @@ export interface RewardCalculationResult {
 export interface VoteSpendInput {
   guildId: string;
   votes: number;
+  cohortId?: string;
   studentId?: string;
   alreadyPurchasedVotes?: number;
 }
@@ -612,8 +613,10 @@ export class VotingCostService {
       throw new Error('A database client is required to preview guild votes.');
     }
 
-    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db);
-    const guildProfile = await loadGuildStatProfile(this.db, input.guildId, balanceConfig);
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db, input.cohortId);
+    const guildProfile = await loadGuildStatProfile(this.db, input.guildId, balanceConfig, {
+      enforceConfiguredMemberCount: false,
+    });
     return SpendBreakdownBuilder.build({
       votes: input.votes,
       guildProfile,
@@ -630,9 +633,11 @@ export class VotingCostService {
     }
 
     return this.db.transaction(async (tx: RewardDb) => {
-      const balanceConfig = await RewardBalanceConfigService.getActiveConfig(tx);
+      const balanceConfig = await RewardBalanceConfigService.getActiveConfig(tx, input.cohortId);
       const config = balanceConfig.rewardSystem;
-      const guildProfile = await loadGuildStatProfile(tx, input.guildId, balanceConfig);
+      const guildProfile = await loadGuildStatProfile(tx, input.guildId, balanceConfig, {
+        enforceConfiguredMemberCount: false,
+      });
       const breakdown = SpendBreakdownBuilder.build({
         votes: input.votes,
         guildProfile,

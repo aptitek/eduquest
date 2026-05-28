@@ -20,7 +20,7 @@ type DevStudentOption = {
 export function LoginPage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
-  const { loginWithGithub, loginWithDevUser, error } = useAuth();
+  const { loginWithGithub, loginWithDevUser, createMockGithubAccount, error } = useAuth();
   const [devStudents, setDevStudents] = useState<DevStudentOption[]>([]);
   const [selectedDevStudentId, setSelectedDevStudentId] = useState('');
   const showDevLogin = ENABLE_DEV_TOOLS;
@@ -160,6 +160,17 @@ export function LoginPage() {
               >
                 <Terminal size={16} className="text-status-campfire" />
                 <span>{t('auth.developerBypass')}</span>
+              </motion.button>
+
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={createMockGithubAccount}
+                className="w-full py-3 px-4 rounded-xl border border-status-quest/40 bg-status-quest/10 text-status-quest font-semibold font-display flex items-center justify-center gap-3 transition-all hover:bg-status-quest/20 cursor-pointer"
+              >
+                <Github size={16} />
+                <span>{t('auth.createMockGithubAccount')}</span>
               </motion.button>
             </>
           )}

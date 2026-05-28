@@ -9,11 +9,14 @@ import {
   fetchCohortStep,
   fetchCohortProgressData,
   fetchClassRoster,
+  fetchGameBonusVoteState,
+  fetchGameRewardCards,
   fetchGuilds,
   fetchMapActivities,
   moveCharacterToActivity,
   spendGuildVotes,
   updateCohortStep,
+  updateGuild,
 } from './api';
 
 describe('game API client', () => {
@@ -98,6 +101,38 @@ describe('game API client', () => {
     });
   });
 
+  it('defaults missing class roster arrays to empty lists', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, guilds: [] })));
+
+    await expect(fetchClassRoster('token-1', 'cohort-1')).resolves.toEqual({
+      guilds: [],
+      unguildedStudents: [],
+    });
+  });
+
+  it('patches editable guild profile fields', async () => {
+    const updatedGuild = {
+      id: 'guild-1',
+      name: 'Solarized Sentinels',
+      description: 'Updated profile',
+      cohortId: 'cohort-1',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, guild: updatedGuild }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      updateGuild('token-1', 'guild-1', { name: 'Solarized Sentinels', description: 'Updated profile' })
+    ).resolves.toEqual(updatedGuild);
+    expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/guilds/guild-1', {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer token-1',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'Solarized Sentinels', description: 'Updated profile' }),
+    });
+  });
+
   it('loads cohort progress data without falling back to local card data', async () => {
     const progress = {
       gauge: { currentPoints: 20, targetPoints: 100, labelI18nKey: 'dashboard.dock.milestone', milestones: [] },
@@ -116,11 +151,24 @@ describe('game API client', () => {
       ],
       edges: [],
       completions: [],
+      nodeOccupancies: [],
       currentActivityId: 'activity-1',
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, map })));
 
     await expect(fetchMapActivities('token-1')).resolves.toEqual(map);
+  });
+
+  it('normalizes empty map payloads from fresh games', async () => {
+    const map = {};
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true, map })));
+
+    await expect(fetchMapActivities('token-1')).resolves.toEqual({
+      activities: [],
+      edges: [],
+      completions: [],
+      nodeOccupancies: [],
+    });
   });
 
   it('posts activity completion to the backend route', async () => {
@@ -231,6 +279,28 @@ describe('game API client', () => {
         Authorization: 'Bearer token-1',
       },
       body: JSON.stringify({ votes: 1 }),
+    });
+  });
+
+  it('defaults empty reward card responses to an empty hand', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ success: true })));
+
+    await expect(fetchGameRewardCards('token-1', 'cohort-1')).resolves.toEqual([]);
+  });
+
+  it('normalizes bonus vote state arrays for cohorts without rewards', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      voteState: {
+        selectedMilestoneId: undefined,
+      },
+    })));
+
+    await expect(fetchGameBonusVoteState('token-1', 'cohort-1')).resolves.toEqual({
+      selectedMilestoneId: undefined,
+      milestones: [],
+      bonusCards: [],
+      voteStates: [],
     });
   });
 

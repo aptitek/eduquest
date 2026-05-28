@@ -69,8 +69,22 @@ export const useGameStore = create<GameState>((set) => ({
   currentMove: null,
 
   setUserSession: (user, student, character, activityCompletions = []) =>
-    set({ user, student, character, activityCompletions }),
-  patchUser: (patch) => set((state) => (state.user ? { user: { ...state.user, ...patch } } : {})),
+    set((state) => ({
+      user,
+      student,
+      character,
+      activityCompletions,
+      nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, student, user),
+    })),
+  patchUser: (patch) =>
+    set((state) => {
+      if (!state.user) return {};
+      const user = { ...state.user, ...patch };
+      return {
+        user,
+        nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, state.student, user),
+      };
+    }),
   patchCharacter: (patch) =>
     set((state) => (state.character ? { character: { ...state.character, ...patch } } : {})),
   setCharacterClass: (characterClass) =>
@@ -107,8 +121,8 @@ export const useGameStore = create<GameState>((set) => ({
     set({
       activities: mapData.activities,
       activityEdges: mapData.edges,
-      mapRun: mapData.run,
-      currentStep: mapData.currentStep ?? mapData.run.currentSectorDepth,
+      mapRun: mapData.run || null,
+      currentStep: mapData.currentStep ?? mapData.run?.currentSectorDepth ?? 0,
       activityCompletions: mapData.completions,
       nodeOccupancies: mapData.nodeOccupancies || [],
       currentActivityId: mapData.currentActivityId || null,
@@ -249,6 +263,37 @@ function updateNodeOccupanciesForMove(
   };
 
   return nextOccupancies;
+}
+
+function syncProfileInNodeOccupancies(
+  nodeOccupancies: GameMapNodeOccupancy[],
+  student: Student | null,
+  user: User
+): GameMapNodeOccupancy[] {
+  if (!student) return nodeOccupancies;
+
+  const displayName = getUserDisplayName(user);
+  const avatarUrl = user.avatarUrl || user.githubAvatarUrl;
+  let changed = false;
+
+  const nextOccupancies = nodeOccupancies.map((occupancy) => ({
+    ...occupancy,
+    segments: occupancy.segments.map((segment) => ({
+      ...segment,
+      members: segment.members?.map((member) => {
+        if (member.studentId !== student.id) return member;
+
+        changed = true;
+        return {
+          ...member,
+          displayName,
+          avatarUrl,
+        };
+      }),
+    })),
+  }));
+
+  return changed ? nextOccupancies : nodeOccupancies;
 }
 
 function getSelectedGuild(state: GameState) {

@@ -78,6 +78,10 @@ export const en: TranslationKeys = {
     },
     changeGame: 'Change game',
   },
+  assignmentRequired: {
+    title: 'Waiting for cohort assignment',
+    description: 'You are not assigned to a cohort yet. Please ask your teacher to add you to the right class before continuing.',
+  },
   dashboard: {
     dock: {
       player: 'Player',
@@ -90,6 +94,9 @@ export const en: TranslationKeys = {
       guildmate: 'Guildmate',
       step: 'Step',
       hiddenMember: 'Hidden member',
+      noGuildTitle: 'No guild yet',
+      noGuildDescription: 'Join or create a guild to unlock boosts and voting.',
+      noGuildBoost: 'Guild required',
       goldSpent: '{amount} gold spent',
       boostPointsSpent: '{amount} boost points spent',
       newRibbon: 'New',
@@ -241,9 +248,11 @@ export const en: TranslationKeys = {
       addSchool: 'Add a school',
       addCohort: 'Add a cohort',
       addStudent: 'Add a student',
+      inviteStudents: 'Invite students',
       deleteSchool: 'Hold to delete {name}',
       deleteCohort: 'Hold to delete {name}',
       deleteStudent: 'Hold to delete {name}',
+      empty: 'No rows to display.',
     },
     schools: {
       logo: 'Logo',
@@ -256,6 +265,7 @@ export const en: TranslationKeys = {
       resetLogo: 'Reset school logo',
       changeLogo: 'Change school logo',
       newSchool: 'New school',
+      unassigned: 'No school assigned',
     },
     cohorts: {
       name: 'Cohort',
@@ -306,11 +316,30 @@ export const en: TranslationKeys = {
       flip: 'Flip card',
       rectoEmpty: 'Recto placeholder',
     },
+    empty: {
+      schools: 'No schools yet. Create the first school to get started.',
+      cohorts: 'No cohorts yet. Add a cohort to an existing school.',
+      students: 'No students yet. Invite students from a cohort so they can create their account with GitHub.',
+      createSchoolFirst: 'Create a school before creating a cohort.',
+      createStudentsWithInvite:
+        'Manual student creation is disabled. Select a cohort and generate an invite link so each student creates their account with GitHub.',
+    },
   },
   map: {
     nav: 'Map',
     hiddenNode: '???',
     addActivity: 'Add activity',
+    empty: {
+      adminTitle: 'No activity on this map',
+      adminDescription: 'Use the side card to create the first activity for this cohort.',
+      studentTitle: 'No activity available',
+      studentDescription: 'Your teacher has not published any activity on this map yet.',
+      profileIncomplete: 'Your game profile is incomplete. Ask an administrator to assign you to a cohort.',
+    },
+    onboarding: {
+      institutionalProfileRequired:
+        'Complete at least one institutional profile field from your profile before validating this step.',
+    },
     stepPreview: {
       title: 'Step',
       uiOnly: 'UI only · DB {step}',
@@ -419,10 +448,16 @@ export const en: TranslationKeys = {
     title: 'Character sheet',
     currentClassRibbon: 'Active class',
     chooseClass: 'Choose a class',
+    onboardingTitle: 'Create your character',
+    onboardingDescription:
+      'Choose a class to create your character card. No character stats are created before this step.',
+    onboardingRibbon: 'Onboarding',
+    creatingCharacter: 'Creating...',
     activeCardDescription: 'Your active adventurer card. Change class below to update its role.',
     pointsRemainingShort: 'pts',
     errors: {
       loadClasses: 'Character class definitions could not be loaded. Default class stats will be shown. Detail: {detail}',
+      saveClass: 'Character class could not be saved. Try again in a moment. Detail: {detail}',
     },
   },
   game: {
@@ -598,6 +633,7 @@ export const en: TranslationKeys = {
       'Sign in with GitHub to open your player card, follow the class map, join guild quests, and keep track of the rewards your cohort unlocks together.',
     loginWithGithub: 'Continue with GitHub',
     developerBypass: 'Developer Bypass (Local)',
+    createMockGithubAccount: 'Create mock GitHub account',
     devStudentLabel: 'Debug student',
     bypassWarning: 'Local debug access is enabled for this environment.',
     logout: 'Logout',

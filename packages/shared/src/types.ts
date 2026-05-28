@@ -435,7 +435,7 @@ export interface GameMapNodeOccupancy {
 }
 
 export interface GameMapData {
-  run: GameMapRun;
+  run?: GameMapRun;
   activities: Activity[];
   edges: GameActivityEdge[];
   completions: GameActivityCompletion[];
@@ -521,6 +521,8 @@ export interface MilestoneBonusVoteState {
   guildVote?: MilestoneBonusVote;
   leadingBonusCardIds: string[];
   hasTie: boolean;
+  isVoteOpen: boolean;
+  isVoteClosed: boolean;
 }
 
 export interface GameBonusVoteState {

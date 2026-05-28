@@ -51,7 +51,7 @@ export class RewardPreviewService {
   async preview(input: RewardPreviewInput): Promise<RewardComputationBreakdown | null> {
     const balanceConfig = input.configOverride
       ? resolvePreviewConfig(input.configOverride)
-      : await RewardBalanceConfigService.getActiveConfig(this.db);
+      : await RewardBalanceConfigService.getActiveConfig(this.db, input.cohortId);
 
     const [activity] = await this.db
       .select({
@@ -70,7 +70,15 @@ export class RewardPreviewService {
     }
 
     const policy = balanceConfig.policies['activity.validated'];
-    const guildProfile = await loadGuildStatProfile(this.db, input.guildId, balanceConfig);
+    let guildProfile;
+    try {
+      guildProfile = await loadGuildStatProfile(this.db, input.guildId, balanceConfig);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('A guild must have between')) {
+        throw new Error('Guild has no eligible RPG members for reward preview.');
+      }
+      throw error;
+    }
     const metadata = (activity.metadata || {}) as Record<string, unknown>;
     const difficultyRaw = metadata.difficulty;
     const difficulty =

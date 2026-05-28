@@ -2,7 +2,20 @@ import { isValidElement, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
-import { BookOpen, Gift, HandHelping, RotateCw, Shield, Sparkles, Trophy, User } from 'lucide-react';
+import {
+  BookOpen,
+  Compass,
+  Gift,
+  GraduationCap,
+  HandHelping,
+  Plus,
+  RotateCw,
+  School,
+  Shield,
+  Sparkles,
+  Trophy,
+  User,
+} from 'lucide-react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import { EditableSchoolLogo } from '../EditableSchoolLogo';
 import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
@@ -56,6 +69,7 @@ export interface PlayingCardSide {
   illustrationUrl?: string;
   illustrationAlt?: string;
   illustration?: ReactNode;
+  illustrationHidden?: boolean;
   ribbonText?: string;
   ribbonIcon?: ReactNode;
   ribbonIconKey?: string;
@@ -83,7 +97,7 @@ export interface PlayingCardData {
   id?: string;
   layoutId?: string;
   disableLayoutAnimation?: boolean;
-  kind?: 'character' | 'guild' | 'reward';
+  kind?: 'activity' | 'character' | 'cohort' | 'guild' | 'reward' | 'school' | 'student';
   title?: string;
   subtitle?: string;
   description?: string;
@@ -94,6 +108,7 @@ export interface PlayingCardData {
   illustrationUrl?: string;
   illustrationAlt?: string;
   illustration?: ReactNode;
+  illustrationHidden?: boolean;
   faceDown?: boolean;
   ribbonText?: string;
   ribbonLabel?: string;
@@ -270,7 +285,15 @@ function PlayingCardFront({
   className,
 }: PlayingCardFrontProps) {
   if (card.faceDown) {
-    return <FaceDownCard kind={card.kind} color={color} size={size} className={className} />;
+    return (
+      <FaceDownCard
+        kind={card.kind}
+        color={color}
+        size={size}
+        editable={Boolean(card.editable)}
+        className={className}
+      />
+    );
   }
 
   if (size === 'full') {
@@ -317,14 +340,16 @@ function PlayingCardFront({
           className="absolute inset-0 rounded-[0.45rem] border-0 bg-transparent transition-all duration-300 group-hover:inset-x-3 group-hover:bottom-12 group-hover:top-3 group-hover:rounded-[1.05rem] group-hover:border group-hover:border-gaming-border group-hover:bg-gaming-base group-focus-within:inset-x-3 group-focus-within:bottom-12 group-focus-within:top-3 group-focus-within:rounded-[1.05rem] group-focus-within:border group-focus-within:border-gaming-border group-focus-within:bg-gaming-base"
           gradientClassName="opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100"
         >
-          <PlayingCardIllustration
-            title={side.title}
-            illustrationUrl={side.illustrationUrl}
-            illustrationAlt={side.illustrationAlt}
-            illustration={side.illustration}
-            iconSize={getIllustrationIconSize(card.kind, 'nano')}
-            layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-          />
+          {side.illustrationHidden ? null : (
+            <PlayingCardIllustration
+              title={side.title}
+              illustrationUrl={side.illustrationUrl}
+              illustrationAlt={side.illustrationAlt}
+              illustration={side.illustration}
+              iconSize={getIllustrationIconSize(card.kind, 'nano')}
+              layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+            />
+          )}
         </PlayingCardArtFrame>
 
         <PlayingCardTitleBlock
@@ -356,14 +381,16 @@ function PlayingCardFront({
       ) : null}
 
       <PlayingCardArtFrame size="mini" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
-        <PlayingCardIllustration
-          title={side.title}
-          illustrationUrl={side.illustrationUrl}
-          illustrationAlt={side.illustrationAlt}
-          illustration={side.illustration}
-          iconSize={getIllustrationIconSize(card.kind, 'mini')}
-          layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-        />
+        {side.illustrationHidden ? null : (
+          <PlayingCardIllustration
+            title={side.title}
+            illustrationUrl={side.illustrationUrl}
+            illustrationAlt={side.illustrationAlt}
+            illustration={side.illustration}
+            iconSize={getIllustrationIconSize(card.kind, 'mini')}
+            layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+          />
+        )}
       </PlayingCardArtFrame>
 
       <PlayingCardTitleBlock
@@ -429,7 +456,7 @@ function FullCardSide({
             color={color}
             icon={resolveRibbonIcon(undefined, side)}
             editableText={
-              canEditRibbon
+              canEditRibbon && side.ribbonText
                 ? {
                     value: side.ribbonText || '',
                     onChange: (value) => updateField('ribbonText', value),
@@ -456,7 +483,7 @@ function FullCardSide({
         ) : null}
 
         <PlayingCardArtFrame size="full" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
-          {canEdit && (!side.illustration || side.illustrationUrl) ? (
+          {side.illustrationHidden ? null : canEdit && (!side.illustration || side.illustrationUrl) ? (
             <motion.div
               layoutId={layoutId ? `${layoutId}-illustration` : undefined}
               transition={PLAYING_CARD_TRANSITION}
@@ -557,28 +584,48 @@ function FaceDownCard({
   kind,
   color,
   size,
+  editable,
   className,
 }: {
   kind?: PlayingCardData['kind'];
   color: string;
   size: PlayingCardSize;
+  editable?: boolean;
   className?: string;
 }) {
   const Icon = getFaceDownIcon(kind);
+  const iconSize = size === 'full' ? 72 : 38;
+  const plusSize = size === 'full' ? 38 : 22;
 
   return (
     <div className={cn('relative h-full min-h-0 overflow-hidden rounded-[1.1rem] p-2', className)}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--playing-card-accent)_0,transparent_62%)] opacity-20" />
       <div className="relative flex h-full w-full items-center justify-center rounded-[0.9rem] border border-dashed border-[color:var(--playing-card-accent)] bg-gaming-base/80 text-[color:var(--playing-card-accent)]">
-        <Icon size={size === 'full' ? 72 : 38} aria-hidden color={color} />
+        <Icon size={iconSize} aria-hidden color={color} className={cn(editable && 'opacity-35')} />
+        {editable ? (
+          <div className={cn('absolute flex', size === 'full' ? 'bottom-5 right-5' : 'bottom-2 right-2')}>
+            <span
+              className={cn(
+                'flex items-center justify-center rounded-full border border-status-completed/60 bg-status-completed text-gaming-base shadow-glow-primary',
+                size === 'full' ? 'h-20 w-20' : 'h-10 w-10'
+              )}
+            >
+              <Plus size={plusSize} aria-hidden strokeWidth={3} />
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
 function getFaceDownIcon(kind: PlayingCardData['kind'] | undefined) {
+  if (kind === 'activity') return Compass;
   if (kind === 'character') return User;
+  if (kind === 'cohort') return GraduationCap;
   if (kind === 'reward') return Gift;
+  if (kind === 'school') return School;
+  if (kind === 'student') return User;
   return Shield;
 }
 
@@ -598,6 +645,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
       ribbonIconKey: card.front.ribbonIconKey || card.ribbonIconKey,
       ribbonIcon:
         card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
+      illustrationHidden: card.front.illustrationHidden,
       editable: card.front.editable ?? card.editable,
       ribbonEditable: card.front.ribbonEditable ?? card.ribbonEditable,
       ribbonHidden: card.front.ribbonHidden,
@@ -626,6 +674,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     illustrationUrl: card.illustrationUrl || card.guild?.iconUrl,
     illustrationAlt: card.illustrationAlt || title,
     illustration: card.illustration,
+    illustrationHidden: card.illustrationHidden,
     ribbonText: card.ribbonText || card.ribbonLabel,
     ribbonIconKey: card.ribbonIconKey,
     ribbonIcon: card.ribbonIcon || getCharacterClassIcon(card.characterClass),

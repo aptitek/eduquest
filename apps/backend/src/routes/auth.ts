@@ -17,7 +17,7 @@ import type {
   User,
   CohortMembership,
 } from '@eduquest/shared';
-import { GAME_CHARACTER_CLASSES } from '@eduquest/shared';
+import { GAME_CHARACTER_CLASSES, GAME_CHARACTER_CLASS_I18N_KEYS } from '@eduquest/shared';
 import type { RewardBalanceConfigPayload } from '@eduquest/shared';
 import { getDb } from '../db';
 import {
@@ -86,7 +86,7 @@ type ManagementBackup = {
   campuses: Campus[];
   cohorts: Cohort[];
   characterClasses: GameCharacterClassDefinition[];
-  students: { user: User; student: Student; character: GameCharacter }[];
+  students: { user: User; student: Student; character?: GameCharacter }[];
 };
 type ManagementStudentUpdateBody = {
   user?: Partial<
@@ -106,11 +106,6 @@ type ManagementStudentUpdateBody = {
   institutionalEmail?: string;
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
-};
-type ManagementStudentCreateBody = {
-  displayName?: string;
-  email?: string;
-  cohortIds?: string[];
 };
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
 type ManagementSchoolCreateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
@@ -321,11 +316,20 @@ function toGameCharacterClassDefinition(
   };
 }
 
-function getDefaultCharacterValues(studentId: string, characterClass: GameCharacterClass) {
-  return {
-    studentId,
-    characterClass,
-  };
+async function ensureCharacterClassSeeds(db: Pick<ReturnType<typeof getDb>, 'select' | 'insert'>) {
+  const existingRecords = await db.select({ slug: gameCharacterClasses.slug }).from(gameCharacterClasses);
+  const existingSlugs = new Set(existingRecords.map((record) => record.slug));
+  const missingClasses = GAME_CHARACTER_CLASSES.filter((slug) => !existingSlugs.has(slug));
+
+  if (missingClasses.length === 0) return;
+
+  await db.insert(gameCharacterClasses).values(
+    missingClasses.map((slug, index) => ({
+      slug,
+      nameI18nKey: GAME_CHARACTER_CLASS_I18N_KEYS[slug],
+      sortOrder: GAME_CHARACTER_CLASSES.indexOf(slug) >= 0 ? GAME_CHARACTER_CLASSES.indexOf(slug) : index,
+    }))
+  );
 }
 
 function toStudent(
@@ -537,14 +541,14 @@ async function getManagementBackup(databaseUrl: string | undefined): Promise<Man
 
   const studentProfiles = studentRecords.flatMap((studentRecord) => {
     const user = userMap.get(studentRecord.userId);
+    if (!user) return [];
     const character = characterMap.get(studentRecord.id);
-    if (!user || !character) return [];
 
     return [
       {
         user,
         student: toStudent(studentRecord, membershipsByUser.get(studentRecord.userId) || []),
-        character,
+        ...(character ? { character } : {}),
       },
     ];
   });
@@ -754,6 +758,7 @@ authRouter.get('/github/callback', async (c) => {
             emailDomain: 'school.edu',
           });
         }
+        await ensureCharacterClassSeeds(db);
 
         // Recherche de l'utilisateur existant
         const existingUsers = await db
@@ -801,10 +806,6 @@ authRouter.get('/github/callback', async (c) => {
                 .returning();
 
               authenticatedStudentId = newStudent.id;
-
-              await db
-                .insert(gameCharacters)
-                .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
             }
           }
         } else {
@@ -836,11 +837,6 @@ authRouter.get('/github/callback', async (c) => {
               .returning();
 
             authenticatedStudentId = newStudent.id;
-
-            // Création du personnage JDR avec stats de départ
-            await db
-              .insert(gameCharacters)
-              .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
           }
         }
 
@@ -883,12 +879,75 @@ authRouter.get('/dev/students', async (c) => {
   });
 });
 
+authRouter.get('/dev/mock-github', async (c) => {
+  if (!isDebugAuthEnabled(c)) return c.notFound();
+  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+
+  const jwtSecret = requireJwtSecret(c.env);
+  const frontendUrl = requireFrontendUrl(c.env);
+  const cohortInvite = await resolveCohortInvite(c.req.query('invite'), jwtSecret);
+  const uniqueId = crypto.randomUUID();
+  const shortId = uniqueId.slice(0, 8);
+  const githubUsername = `mock-github-${shortId}`;
+  const email = `${githubUsername}@github-user.test`;
+  const displayName = `Mock GitHub ${shortId}`;
+  const avatarUrl = `https://avatars.githubusercontent.com/u/${Math.floor(Math.random() * 1000000)}?v=4`;
+
+  try {
+    const db = getDb(c.env.DATABASE_URL);
+    await ensureCharacterClassSeeds(db);
+
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        githubEmail: email,
+        email,
+        githubSsoToken: `mock-dev-token-${uniqueId}`,
+        githubUsername,
+        displayName,
+        githubAvatarUrl: avatarUrl,
+        avatarUrl,
+        isAdmin: false,
+      })
+      .returning();
+
+    const [newStudent] = await db
+      .insert(students)
+      .values({
+        userId: newUser.id,
+      })
+      .returning();
+
+    if (newStudent) {
+      await assignStudentToInvitedCohort(c.env.DATABASE_URL, cohortInvite, newUser.id);
+    }
+
+    const token = await signAuthToken(
+      toAuthPayload({
+        ...toUser(newUser),
+        githubUsername,
+        githubAvatarUrl: avatarUrl,
+        avatarUrl,
+      }),
+      jwtSecret
+    );
+
+    return c.redirect(`${frontendUrl}/?token=${token}`);
+  } catch (dbError: any) {
+    console.error('DB mock GitHub account creation failed:', dbError.message);
+    return c.redirect(`${frontendUrl}/?error=debug_login_failed`);
+  }
+});
+
 authRouter.get('/character-classes', async (c) => {
   if (!c.env.DATABASE_URL) {
     return missingDatabaseUrl(c);
   }
 
-  const characterClasses = await getDb(c.env.DATABASE_URL)
+  const db = getDb(c.env.DATABASE_URL);
+  await ensureCharacterClassSeeds(db);
+
+  const characterClasses = await db
     .select()
     .from(gameCharacterClasses)
     .orderBy(gameCharacterClasses.sortOrder);
@@ -1000,65 +1059,8 @@ authRouter.post('/management/students', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  let body: ManagementStudentCreateBody = {};
-  try {
-    body = await c.req.json();
-  } catch {
-    body = {};
-  }
-
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
-  }
-
-  const db = getDb(c.env.DATABASE_URL);
-  const cohortIds = Array.from(new Set((body.cohortIds || []).filter(Boolean)));
-  if (cohortIds.length > 0) {
-    const validCohorts = await db.select().from(cohorts).where(inArray(cohorts.id, cohortIds));
-    if (validCohorts.length !== cohortIds.length) {
-      return apiError(c, 'One or more cohorts do not exist', 400, { errorCode: 'validation_failed' });
-    }
-  }
-
-  const fallbackEmail = `student-${crypto.randomUUID()}@eduquest.local`;
-  const email = body.email?.trim() || fallbackEmail;
-  const displayName = body.displayName?.trim() || 'Nouvel·le étudiant·e';
-
-  await db.transaction(async (tx) => {
-    const [newUser] = await tx
-      .insert(users)
-      .values({
-        githubEmail: email,
-        email,
-        displayName,
-        isAdmin: false,
-      })
-      .returning();
-
-    const [newStudent] = await tx
-      .insert(students)
-      .values({
-        userId: newUser.id,
-      })
-      .returning();
-
-    await tx
-      .insert(gameCharacters)
-      .values(getDefaultCharacterValues(newStudent.id, DEFAULT_CHARACTER_CLASS));
-
-    if (cohortIds.length > 0) {
-      await tx.insert(cohortMemberships).values(
-        cohortIds.map((cohortId) => ({
-          userId: newUser.id,
-          cohortId,
-        }))
-      );
-    }
-  });
-
-  return c.json({
-    success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+  return apiError(c, 'Student creation from management is disabled. Invite students with GitHub instead.', 409, {
+    errorCode: 'conflict',
   });
 });
 
@@ -1698,13 +1700,14 @@ authRouter.get('/management/reward-balance', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
+  const cohortId = c.req.query('cohortId') || c.req.query('gameId') || undefined;
   if (!c.env.DATABASE_URL) {
     const config = await RewardBalanceConfigService.getActiveConfig();
     return c.json({ success: true, config });
   }
 
   const db = getDb(c.env.DATABASE_URL);
-  const config = await RewardBalanceConfigService.getActiveConfig(db);
+  const config = await RewardBalanceConfigService.getActiveConfig(db, cohortId);
   return c.json({ success: true, config });
 });
 
@@ -1718,7 +1721,8 @@ authRouter.get('/management/reward-balance/versions', async (c) => {
   }
 
   const db = getDb(c.env.DATABASE_URL);
-  const versions = await RewardBalanceConfigService.listVersions(db);
+  const cohortId = c.req.query('cohortId') || c.req.query('gameId') || undefined;
+  const versions = await RewardBalanceConfigService.listVersions(db, cohortId);
   return c.json({ success: true, versions });
 });
 
@@ -1735,9 +1739,10 @@ authRouter.put('/management/reward-balance', async (c) => {
   const body = await parseRequiredJsonBody<RewardBalanceConfigPayload>(c);
   if (body instanceof Response) return body;
 
+  const cohortId = c.req.query('cohortId') || c.req.query('gameId') || undefined;
   const db = getDb(c.env.DATABASE_URL);
-  const created = await RewardBalanceConfigService.publish(db, body, currentUser.id);
-  const config = await RewardBalanceConfigService.getActiveConfig(db);
+  const created = await RewardBalanceConfigService.publish(db, body, currentUser.id, cohortId);
+  const config = await RewardBalanceConfigService.getActiveConfig(db, cohortId);
 
   return c.json({ success: true, version: created, config });
 });
@@ -2295,22 +2300,56 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           } as any;
         }
 
-        // 3. Mise à jour de la table `game_characters`
-        const [updatedChar] = await db
-          .update(gameCharacters)
-          .set({
-            characterClass: normalizeGameCharacterClass(body.characterClass),
-            updatedAt: new Date(),
-          })
-          .where(eq(gameCharacters.studentId, studentId))
-          .returning();
+        if (body.characterClass !== undefined) {
+          if (!GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
+            return apiError(c, 'Character class not found', 404);
+          }
 
-        if (updatedChar) {
-          characterObj = {
-            studentId: updatedChar.studentId,
-            characterClass: normalizeGameCharacterClass(updatedChar.characterClass),
-            stats: toGameCharacterStats(updatedChar),
-          };
+          await ensureCharacterClassSeeds(db);
+          const [existingChar] = await db
+            .select()
+            .from(gameCharacters)
+            .where(eq(gameCharacters.studentId, studentId))
+            .limit(1);
+
+          const [updatedChar] = existingChar
+            ? await db
+                .update(gameCharacters)
+                .set({
+                  characterClass: body.characterClass as GameCharacterClass,
+                  updatedAt: new Date(),
+                })
+                .where(eq(gameCharacters.studentId, studentId))
+                .returning()
+            : await db
+                .insert(gameCharacters)
+                .values({
+                  studentId,
+                  characterClass: body.characterClass as GameCharacterClass,
+                })
+                .returning();
+
+          if (updatedChar) {
+            characterObj = {
+              studentId: updatedChar.studentId,
+              characterClass: normalizeGameCharacterClass(updatedChar.characterClass),
+              stats: toGameCharacterStats(updatedChar),
+            };
+          }
+        } else {
+          const [existingChar] = await db
+            .select()
+            .from(gameCharacters)
+            .where(eq(gameCharacters.studentId, studentId))
+            .limit(1);
+
+          if (existingChar) {
+            characterObj = {
+              studentId: existingChar.studentId,
+              characterClass: normalizeGameCharacterClass(existingChar.characterClass),
+              stats: toGameCharacterStats(existingChar),
+            };
+          }
         }
       }
     } catch (dbError: any) {

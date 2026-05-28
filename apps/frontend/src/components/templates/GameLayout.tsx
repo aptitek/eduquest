@@ -4,13 +4,16 @@ import { DashboardDock } from '../organisms/DashboardDock';
 interface GameLayoutProps {
   children: React.ReactNode;
   fitToViewport?: boolean;
+  hideDashboard?: boolean;
 }
 
-export function GameLayout({ children, fitToViewport = false }: GameLayoutProps) {
+export function GameLayout({ children, fitToViewport = false, hideDashboard = false }: GameLayoutProps) {
   return (
     <div
       className={
-        fitToViewport
+        hideDashboard
+          ? 'flex min-h-screen flex-col bg-gaming-base text-text-primary'
+          : fitToViewport
           ? 'flex h-screen min-h-0 flex-col overflow-hidden bg-gaming-base pb-64 text-text-primary lg:pb-72'
           : 'flex min-h-screen flex-col bg-gaming-base pb-72 text-text-primary lg:pb-80'
       }
@@ -25,7 +28,7 @@ export function GameLayout({ children, fitToViewport = false }: GameLayoutProps)
       >
         {children}
       </main>
-      <DashboardDock />
+      {hideDashboard ? null : <DashboardDock />}
     </div>
   );
 }

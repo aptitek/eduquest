@@ -34,6 +34,7 @@ export function ManagementTable<TData extends { id: string }>({
   onCreateRow,
   onDeleteRow,
   flushTop,
+  emptyMessage,
 }: {
   data: TData[];
   columns: ColumnDef<TData>[];
@@ -48,6 +49,7 @@ export function ManagementTable<TData extends { id: string }>({
   onCreateRow?: () => void;
   onDeleteRow?: (row: TData) => void;
   flushTop?: boolean;
+  emptyMessage?: string;
 }) {
   const { t } = useTranslation();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -238,6 +240,16 @@ export function ManagementTable<TData extends { id: string }>({
                 )}
               </tr>
             ))}
+            {table.getRowModel().rows.length === 0 && (
+              <tr className="border-gaming-border">
+                <td
+                  colSpan={visibleColumns.length + (hasActions ? 1 : 0)}
+                  className="px-4 py-8 text-center text-sm text-text-muted"
+                >
+                  {emptyMessage || t('management.table.empty')}
+                </td>
+              </tr>
+            )}
             {onCreateRow && (
               <tr className="border-gaming-border bg-gaming-base/20">
                 <td colSpan={visibleColumns.length + (hasActions ? 1 : 0)}>

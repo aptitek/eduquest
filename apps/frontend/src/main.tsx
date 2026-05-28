@@ -9,7 +9,10 @@ import { ProgressPage } from './pages/ProgressPage/ProgressPage';
 import { CharacterPage } from './pages/CharacterPage/CharacterPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
+import { GameHeader } from './components/organisms/GameHeader';
+import { GameLayout } from './components/templates/GameLayout';
 import { useAuth } from './features/auth/useAuth';
+import { useGameStore } from './features/game/gameStore';
 import { useTranslation } from './hooks/useTranslation';
 import { LayoutGroup, motion } from 'framer-motion';
 import { Gamepad2 } from 'lucide-react';
@@ -31,7 +34,8 @@ function getHashRoute() {
 
 function App() {
   const { t } = useTranslation();
-  const { user, loadingSession } = useAuth();
+  const { user, student, character, loadingSession } = useAuth();
+  const selectedGameId = useGameStore((state) => state.selectedGameId);
   const [route, setRoute] = React.useState(getHashRoute);
 
   React.useEffect(() => {
@@ -99,6 +103,24 @@ function App() {
     return <MapPage />;
   }
 
+  const selectedMembership =
+    (selectedGameId && student?.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
+    student?.cohortMemberships?.[0];
+  const hasCohortAssignment = Boolean(selectedMembership?.cohortId);
+  const hasPlayerGuild = Boolean(selectedMembership?.guildId || selectedMembership?.guild?.id);
+
+  if (!user.isAdmin && student && !hasCohortAssignment) {
+    return <CohortAssignmentRequiredPage />;
+  }
+
+  if (route === 'character' && !user.isAdmin && student && hasCohortAssignment && !character) {
+    return <CharacterPage />;
+  }
+
+  if (route === 'guild' && !hasPlayerGuild) {
+    return <MapPage />;
+  }
+
   if (route === 'guild') {
     return <GuildPage />;
   }
@@ -116,6 +138,26 @@ function App() {
   }
 
   return <MapPage />;
+}
+
+function CohortAssignmentRequiredPage() {
+  const { t } = useTranslation();
+
+  return (
+    <GameLayout hideDashboard>
+      <GameHeader hideNavigation />
+      <section className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-10">
+        <div className="max-w-lg rounded-3xl border border-gaming-border bg-gaming-card/90 p-8 text-center shadow-card">
+          <p className="font-display text-xl font-black text-text-primary">
+            {t('assignmentRequired.title')}
+          </p>
+          <p className="mt-3 text-sm leading-relaxed text-text-muted">
+            {t('assignmentRequired.description')}
+          </p>
+        </div>
+      </section>
+    </GameLayout>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

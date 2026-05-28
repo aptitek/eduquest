@@ -76,6 +76,10 @@ export const fr = {
     },
     changeGame: 'Changer de partie',
   },
+  assignmentRequired: {
+    title: 'En attente d’affectation',
+    description: 'Vous n’êtes pas encore affecté·e à une cohorte. Demandez à votre enseignant·e de vous ajouter à la bonne classe pour continuer.',
+  },
   dashboard: {
     dock: {
       player: 'Joueur·euse',
@@ -88,6 +92,9 @@ export const fr = {
       guildmate: 'Membre de guilde',
       step: 'Étape',
       hiddenMember: 'Membre masqué',
+      noGuildTitle: 'Aucune guilde',
+      noGuildDescription: 'Rejoignez ou créez une guilde pour débloquer les boosts et les votes.',
+      noGuildBoost: 'Guilde requise',
       goldSpent: '{amount} or dépensé',
       boostPointsSpent: '{amount} points de boost dépensés',
       newRibbon: 'Nouveau',
@@ -240,9 +247,11 @@ export const fr = {
       addSchool: 'Ajouter une école',
       addCohort: 'Ajouter une cohorte',
       addStudent: 'Ajouter un·e étudiant·e',
+      inviteStudents: 'Inviter des étudiant·e·s',
       deleteSchool: 'Maintenir pour supprimer {name}',
       deleteCohort: 'Maintenir pour supprimer {name}',
       deleteStudent: 'Maintenir pour supprimer {name}',
+      empty: 'Aucune ligne à afficher.',
     },
     schools: {
       logo: 'Logo',
@@ -255,6 +264,7 @@ export const fr = {
       resetLogo: "Réinitialiser le logo de l'école",
       changeLogo: "Modifier le logo de l'école",
       newSchool: 'Nouvelle école',
+      unassigned: 'Aucune école assignée',
     },
     cohorts: {
       name: 'Cohorte',
@@ -306,11 +316,30 @@ export const fr = {
       flip: 'Retourner la carte',
       rectoEmpty: 'Recto vide',
     },
+    empty: {
+      schools: 'Aucune école pour le moment. Créez la première école pour commencer.',
+      cohorts: 'Aucune cohorte pour le moment. Ajoutez une cohorte à une école existante.',
+      students: 'Aucun·e étudiant·e pour le moment. Invitez les élèves depuis une cohorte pour créer leur compte avec GitHub.',
+      createSchoolFirst: 'Créez une école avant de créer une cohorte.',
+      createStudentsWithInvite:
+        'La création manuelle d’étudiant·e est désactivée. Sélectionnez une cohorte puis générez un lien d’invitation pour que chaque élève crée son compte avec GitHub.',
+    },
   },
   map: {
     nav: 'Carte',
     hiddenNode: '???',
     addActivity: 'Ajouter une activité',
+    empty: {
+      adminTitle: 'Aucune activité sur cette carte',
+      adminDescription: 'Utilisez la carte latérale pour créer la première activité de cette cohorte.',
+      studentTitle: 'Aucune activité disponible',
+      studentDescription: 'Votre enseignant·e n’a pas encore publié d’activité sur cette carte.',
+      profileIncomplete: 'Votre profil de jeu est incomplet. Demandez à un·e administrateur·ice de vous assigner à une cohorte.',
+    },
+    onboarding: {
+      institutionalProfileRequired:
+        'Complétez au moins une information institutionnelle depuis votre profil avant de valider cette étape.',
+    },
     stepPreview: {
       title: 'Étape',
       uiOnly: 'UI seule · DB {step}',
@@ -419,11 +448,17 @@ export const fr = {
     title: 'Fiche personnage',
     currentClassRibbon: 'Classe active',
     chooseClass: 'Choisir une classe',
+    onboardingTitle: 'Création du personnage',
+    onboardingDescription:
+      'Choisissez une classe pour créer votre carte personnage. Aucune statistique de personnage n’est créée avant cette étape.',
+    onboardingRibbon: 'Onboarding',
+    creatingCharacter: 'Création...',
     activeCardDescription:
       'Votre carte aventurier active. Changez de classe ci-dessous pour mettre à jour son rôle.',
     pointsRemainingShort: 'pts',
     errors: {
       loadClasses: 'Les définitions de classes n’ont pas pu être chargées. Les statistiques par défaut seront affichées. Détail : {detail}',
+      saveClass: 'La classe de personnage n’a pas pu être enregistrée. Réessayez dans un instant. Détail : {detail}',
     },
   },
   game: {
@@ -599,6 +634,7 @@ export const fr = {
       'Connectez-vous avec GitHub pour ouvrir votre fiche joueur·euse, suivre la carte de classe, rejoindre les quêtes de guilde et consulter les récompenses débloquées ensemble.',
     loginWithGithub: 'Continuer avec GitHub',
     developerBypass: 'Bypass Développeur·euse (Local)',
+    createMockGithubAccount: 'Créer un compte GitHub factice',
     devStudentLabel: 'Étudiant·e de debug',
     bypassWarning: 'Accès de debug local activé pour cet environnement.',
     logout: 'Déconnexion',

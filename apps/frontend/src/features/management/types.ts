@@ -42,7 +42,7 @@ export type CohortRow = Cohort & {
 export type ManagementStudentProfile = {
   user: User;
   student: Student;
-  character: GameCharacter;
+  character?: GameCharacter;
 };
 
 export type ManagementBackup = {

@@ -16,10 +16,9 @@ export interface GuildStatProfile {
 
 export class GuildStatCalculator {
   static computeSizeModifier(memberCount: number, config: RewardSystemConfig): number {
+    const missingStudents = Math.max(0, config.guild.targetSizeForModifier - memberCount);
     return (
-      1 +
-      config.guild.sizeModifierPerMissingStudent *
-        (config.guild.targetSizeForModifier - memberCount)
+      1 + config.guild.sizeModifierPerMissingStudent * missingStudents
     );
   }
 

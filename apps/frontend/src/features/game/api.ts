@@ -18,6 +18,8 @@ import type {
   GameRewardCard,
   GameRewardCardPayload,
   Guild,
+  RewardBalanceConfigPayload,
+  RewardSystemConfig,
 } from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 import { throwApiResponseError } from '../errors/api';
@@ -35,6 +37,15 @@ export type ActivityCardFieldsPayload = {
   participationMode?: ActivityParticipationMode;
   mapX?: number;
   mapY?: number;
+};
+
+export type GuildFieldsPayload = Partial<Pick<Guild, 'name' | 'description' | 'iconKey' | 'color'>>;
+
+export type RewardBalanceConfigState = {
+  version: number;
+  label?: string;
+  rewardSystem: RewardSystemConfig;
+  policies: Record<string, unknown>;
 };
 
 function withGameParam(path: string, gameId?: string | null) {
@@ -69,6 +80,16 @@ type DashboardResponse =
   | {
       success: true;
       progress: CohortProgressData;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type RewardBalanceResponse =
+  | {
+      success: true;
+      config: RewardBalanceConfigState;
     }
   | {
       success: false;
@@ -166,6 +187,46 @@ export async function fetchCohortProgressData(
   return data.progress;
 }
 
+export async function fetchRewardBalanceConfig(
+  token: string,
+  gameId?: string | null
+): Promise<RewardBalanceConfigState> {
+  const response = await fetch(withGameParam('/api/auth/management/reward-balance', gameId), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as RewardBalanceResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Reward balance config request failed.');
+  }
+
+  return data.config;
+}
+
+export async function updateRewardBalanceConfig(
+  token: string,
+  payload: RewardBalanceConfigPayload,
+  gameId?: string | null
+): Promise<RewardBalanceConfigState> {
+  const response = await fetch(withGameParam('/api/auth/management/reward-balance', gameId), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as RewardBalanceResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Reward balance config update failed.');
+  }
+
+  return data.config;
+}
+
 export async function fetchGuilds(token: string, gameId?: string | null): Promise<ClassRosterGuild[]> {
   return (await fetchClassRoster(token, gameId)).guilds;
 }
@@ -189,10 +250,10 @@ export async function fetchClassRoster(token: string, gameId?: string | null): P
   };
 }
 
-export async function updateGuildIcon(
+export async function updateGuild(
   token: string,
   guildId: string,
-  iconKey: string
+  payload: GuildFieldsPayload
 ): Promise<Guild> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}`, {
     method: 'PATCH',
@@ -200,7 +261,7 @@ export async function updateGuildIcon(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ iconKey }),
+    body: JSON.stringify(payload),
   });
 
   const data = (await response.json()) as GuildUpdateResponse;
@@ -210,6 +271,10 @@ export async function updateGuildIcon(
   }
 
   return data.guild;
+}
+
+export async function updateGuildIcon(token: string, guildId: string, iconKey: string): Promise<Guild> {
+  return updateGuild(token, guildId, { iconKey });
 }
 
 type MapResponse =
@@ -384,7 +449,13 @@ export async function fetchMapActivities(token: string, gameId?: string | null):
     throwApiResponseError(response, data, 'Map request failed.');
   }
 
-  return data.map;
+  return {
+    ...data.map,
+    activities: data.map.activities || [],
+    edges: data.map.edges || [],
+    completions: data.map.completions || [],
+    nodeOccupancies: data.map.nodeOccupancies || [],
+  };
 }
 
 export async function completeMapActivity(
@@ -783,7 +854,7 @@ export async function fetchGameMilestones(
     throwApiResponseError(response, data, 'Milestones request failed.');
   }
 
-  return data.milestones;
+  return data.milestones || [];
 }
 
 export async function createGameMilestone(
@@ -863,7 +934,12 @@ export async function fetchGameBonusVoteState(token: string, gameId: string): Pr
     throwApiResponseError(response, data, 'Bonus vote state request failed.');
   }
 
-  return data.voteState;
+  return {
+    ...data.voteState,
+    milestones: data.voteState.milestones || [],
+    bonusCards: data.voteState.bonusCards || [],
+    voteStates: data.voteState.voteStates || [],
+  };
 }
 
 export async function castMilestoneBonusVote(
@@ -924,7 +1000,7 @@ export async function fetchGameRewardCards(token: string, gameId: string): Promi
     throwApiResponseError(response, data, 'Reward cards request failed.');
   }
 
-  return data.rewardCards;
+  return data.rewardCards || [];
 }
 
 export async function createGameRewardCard(

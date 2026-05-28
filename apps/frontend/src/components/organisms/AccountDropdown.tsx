@@ -6,7 +6,7 @@ import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from './InstitutionalProfileCard/InstitutionalProfileCard';
-import { CohortMembership, User } from '@eduquest/shared';
+import { CohortMembership, GameCharacter, Student, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
@@ -20,6 +20,8 @@ type ProfileResponse = {
   errorKey?: string;
   token?: string;
   user?: Partial<User>;
+  student?: Student | null;
+  character?: GameCharacter | null;
 };
 
 type ProfileUpdate = Partial<User> & {
@@ -79,6 +81,12 @@ export function AccountDropdown() {
   useEffect(() => {
     setInstitutionalEmailOverride(null);
   }, [latestCohortMembership?.institutionalEmail]);
+
+  useEffect(() => {
+    const openProfileDropdown = () => setIsOpen(true);
+    window.addEventListener('eduquest:open-profile-dropdown', openProfileDropdown);
+    return () => window.removeEventListener('eduquest:open-profile-dropdown', openProfileDropdown);
+  }, []);
 
   if (!user) return null;
 
@@ -148,9 +156,19 @@ export function AccountDropdown() {
         localStorage.setItem('eduquest_token', json.token);
       }
 
-      const optimistic = useGameStore.getState().user!;
+      const store = useGameStore.getState();
+      const optimistic = store.user!;
       const reconciled = reconcileProfileUser(optimistic, data, json.user);
-      patchUser(reconciled);
+      if ('student' in json || 'character' in json) {
+        store.setUserSession(
+          reconciled,
+          json.student ?? store.student,
+          json.character ?? store.character,
+          store.activityCompletions
+        );
+      } else {
+        patchUser(reconciled);
+      }
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('profile.errors.')) {
         if (shouldThrow) throw error;
