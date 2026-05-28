@@ -460,7 +460,16 @@ export interface ProgressMilestone {
   labelI18nKey: string;
   descriptionI18nKey?: string;
   cost: number;
-  reward: ProgressReward;
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GameMilestonePayload {
+  label: string;
+  description?: string;
+  cost: number;
+  sortOrder?: number;
 }
 
 export interface GameRewardCard {
@@ -490,9 +499,44 @@ export interface GameRewardCardPayload {
   sortOrder?: number;
 }
 
+export interface MilestoneBonusVote {
+  id: string;
+  milestoneId: string;
+  bonusCardId: string;
+  guildId: string;
+  voteCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MilestoneBonusVoteResult {
+  bonusCardId: string;
+  voteCount: number;
+  isLeader: boolean;
+}
+
+export interface MilestoneBonusVoteState {
+  milestone: ProgressMilestone;
+  results: MilestoneBonusVoteResult[];
+  guildVote?: MilestoneBonusVote;
+  leadingBonusCardIds: string[];
+  hasTie: boolean;
+}
+
+export interface GameBonusVoteState {
+  milestones: ProgressMilestone[];
+  bonusCards: GameRewardCard[];
+  voteStates: MilestoneBonusVoteState[];
+  selectedMilestoneId?: string;
+  guildId?: string;
+  guildGold?: number;
+  boostCostPreview?: VoteSpendBreakdown;
+  baseVotesPerGuild: number;
+}
+
 export type NotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
-import type { RewardNotificationContext } from './rewards';
+import type { RewardNotificationContext, VoteSpendBreakdown } from './rewards';
 
 export interface Notification {
   id: string;

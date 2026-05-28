@@ -33,17 +33,24 @@ function buildGuildProfile(charismaEffectiveMultiplier = 1) {
 }
 
 describe('SpendBreakdownBuilder', () => {
-  it('returns linear vote cost without charisma discount for low charisma', () => {
+  it('returns configurable quadratic vote cost without charisma discount for low charisma', () => {
     const guildProfile = buildGuildProfile(0);
+    const noDiscountConfig = {
+      ...config,
+      voting: {
+        ...config.voting,
+        charismaDiscountMultiplier: 0,
+      },
+    };
     const breakdown = SpendBreakdownBuilder.build({
       votes: 5,
       guildProfile,
-      config,
+      config: noDiscountConfig,
       guildId: 'guild-1',
     });
 
-    expect(breakdown.baseCost).toBe(5);
-    expect(breakdown.finalCost).toBe(5);
+    expect(breakdown.baseCost).toBe(25);
+    expect(breakdown.finalCost).toBe(25);
     expect(breakdown.modifiers).toHaveLength(1);
   });
 
@@ -56,10 +63,31 @@ describe('SpendBreakdownBuilder', () => {
       guildId: 'guild-1',
     });
 
-    expect(breakdown.baseCost).toBe(10);
-    expect(breakdown.finalCost).toBeLessThan(10);
+    expect(breakdown.baseCost).toBe(100);
+    expect(breakdown.finalCost).toBeLessThan(100);
     expect(breakdown.modifiers.map((modifier) => modifier.kind)).toEqual(
       expect.arrayContaining(['base', 'charisma_discount'])
     );
+  });
+
+  it('charges only the quadratic delta for additional boosts', () => {
+    const guildProfile = buildGuildProfile(0);
+    const noDiscountConfig = {
+      ...config,
+      voting: {
+        ...config.voting,
+        charismaDiscountMultiplier: 0,
+      },
+    };
+    const breakdown = SpendBreakdownBuilder.build({
+      votes: 1,
+      alreadyPurchasedVotes: 2,
+      guildProfile,
+      config: noDiscountConfig,
+      guildId: 'guild-1',
+    });
+
+    expect(breakdown.baseCost).toBe(5);
+    expect(breakdown.finalCost).toBe(5);
   });
 });

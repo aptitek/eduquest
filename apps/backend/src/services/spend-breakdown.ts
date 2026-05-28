@@ -7,6 +7,7 @@ export interface SpendBreakdownInput {
   config: RewardSystemConfig;
   guildId: string;
   studentId?: string;
+  alreadyPurchasedVotes?: number;
   balanceConfigVersion?: number;
 }
 
@@ -23,14 +24,18 @@ export class SpendBreakdownBuilder {
     }
 
     const modifiers: RewardModifier[] = [];
-    const baseCost = Math.pow(votes, config.voting.quadraticExponent);
+    const alreadyPurchasedVotes = Math.max(0, input.alreadyPurchasedVotes || 0);
+    const baseCost =
+      config.voting.baseVoteCost *
+      (Math.pow(alreadyPurchasedVotes + votes, config.voting.quadraticExponent) -
+        Math.pow(alreadyPurchasedVotes, config.voting.quadraticExponent));
 
     modifiers.push({
       id: 'vote_base',
       kind: 'base',
       labelI18nKey: 'rewards.spend.base',
       effect: baseCost,
-      detail: { votes },
+      detail: { votes, alreadyPurchasedVotes },
     });
 
     const chaEffective = guildProfile.stats.charisma.effective;

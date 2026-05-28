@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
+import * as LucideIcons from 'lucide-react';
 import { Search } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { useTranslation } from '../../../hooks/useTranslation';
 import {
-  filterLucideIconIds,
+  kebabCaseFromIconId,
   renderLucideIcon,
 } from '../../../features/game/lucideIconCatalog';
 
@@ -31,6 +32,11 @@ const DEFAULT_ICON_IDS = [
   'Map',
 ];
 
+const ALL_LUCIDE_ICON_IDS = Object.entries(LucideIcons)
+  .filter(([name, value]) => isSelectableLucideIcon(name, value))
+  .map(([name]) => name)
+  .sort((a, b) => a.localeCompare(b));
+
 export function LucideIconSelector({
   value,
   onChange,
@@ -44,7 +50,7 @@ export function LucideIconSelector({
   const resolvedSearchPlaceholder = searchPlaceholder || t('activityCard.iconSearchPlaceholder');
   const visibleIconIds = useMemo(() => {
     if (!query.trim()) return defaultIconIds.slice(0, limit);
-    return filterLucideIconIds(query, limit);
+    return filterIconIds(query, limit);
   }, [defaultIconIds, limit, query]);
 
   return (
@@ -82,6 +88,29 @@ export function LucideIconSelector({
       </div>
     </div>
   );
+}
+
+function filterIconIds(query: string, limit: number) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return ALL_LUCIDE_ICON_IDS.slice(0, limit);
+
+  return ALL_LUCIDE_ICON_IDS.filter((iconId) => {
+    const kebab = kebabCaseFromIconId(iconId);
+    return iconId.toLowerCase().includes(normalized) || kebab.includes(normalized);
+  }).slice(0, limit);
+}
+
+function isSelectableLucideIcon(name: string, value: unknown) {
+  if (!isLucideIconExport(value)) return false;
+  if (!/^[A-Z]/.test(name)) return false;
+  if (name === 'Icon' || name === 'LucideIcon' || name === 'createLucideIcon') return false;
+  if (name.startsWith('Lucide')) return false;
+  if (name.endsWith('Icon')) return false;
+  return true;
+}
+
+function isLucideIconExport(value: unknown) {
+  return typeof value === 'function' || (typeof value === 'object' && value !== null);
 }
 
 export default LucideIconSelector;

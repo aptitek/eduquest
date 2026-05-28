@@ -5,11 +5,13 @@ import type {
   ActivityStepRange,
   BossActivitySubmissionField,
   CohortProgressData,
+  GameBonusVoteState,
   GameActivityCompletion,
   GameActivityEdge,
   GameActivityEdgeStyleWindow,
   GameCharacterClass,
   GameCharacterClassDefinition,
+  GameMilestonePayload,
   GameStats,
   GameCharacterMove,
   GameMapData,
@@ -307,6 +309,8 @@ type SpendGuildVotesResponse =
       error?: string;
     };
 
+type SpendGuildVoteResult = Extract<SpendGuildVotesResponse, { success: true }>['voteSpend'];
+
 type RewardCardsResponse =
   | {
       success: true;
@@ -321,6 +325,47 @@ type RewardCardResponse =
   | {
       success: true;
       rewardCard: GameRewardCard;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type MilestonesResponse =
+  | {
+      success: true;
+      milestones: CohortProgressData['gauge']['milestones'];
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type MilestoneResponse =
+  | {
+      success: true;
+      milestone: CohortProgressData['gauge']['milestones'][number];
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type BonusVoteStateResponse =
+  | {
+      success: true;
+      voteState: GameBonusVoteState;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type BonusVoteResponse =
+  | {
+      success: true;
+      vote: GameBonusVoteState['voteStates'][number]['guildVote'];
+      voteSpend?: SpendGuildVoteResult;
     }
   | {
       success: false;
@@ -721,6 +766,150 @@ export async function spendGuildVotes(token: string, guildId: string, votes = 1)
   }
 
   return data.voteSpend;
+}
+
+export async function fetchGameMilestones(
+  token: string,
+  gameId: string
+): Promise<CohortProgressData['gauge']['milestones']> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as MilestonesResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Milestones request failed.');
+  }
+
+  return data.milestones;
+}
+
+export async function createGameMilestone(
+  token: string,
+  gameId: string,
+  payload: GameMilestonePayload
+): Promise<CohortProgressData['gauge']['milestones'][number]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as MilestoneResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Milestone create failed.');
+  }
+
+  return data.milestone;
+}
+
+export async function updateGameMilestone(
+  token: string,
+  gameId: string,
+  milestoneId: string,
+  payload: GameMilestonePayload
+): Promise<CohortProgressData['gauge']['milestones'][number]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones/${milestoneId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as MilestoneResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Milestone update failed.');
+  }
+
+  return data.milestone;
+}
+
+export async function deleteGameMilestone(
+  token: string,
+  gameId: string,
+  milestoneId: string
+): Promise<CohortProgressData['gauge']['milestones'][number]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones/${milestoneId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as MilestoneResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Milestone delete failed.');
+  }
+
+  return data.milestone;
+}
+
+export async function fetchGameBonusVoteState(token: string, gameId: string): Promise<GameBonusVoteState> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/bonus-votes`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as BonusVoteStateResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Bonus vote state request failed.');
+  }
+
+  return data.voteState;
+}
+
+export async function castMilestoneBonusVote(
+  token: string,
+  gameId: string,
+  milestoneId: string,
+  bonusCardId: string
+) {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones/${milestoneId}/bonus-votes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ bonusCardId }),
+  });
+  const data = (await response.json()) as BonusVoteResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Bonus vote failed.');
+  }
+
+  return data.vote;
+}
+
+export async function boostMilestoneBonusVote(
+  token: string,
+  gameId: string,
+  milestoneId: string,
+  votes = 1
+) {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones/${milestoneId}/boost-votes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ votes }),
+  });
+  const data = (await response.json()) as BonusVoteResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Bonus vote boost failed.');
+  }
+
+  return data;
 }
 
 export async function fetchGameRewardCards(token: string, gameId: string): Promise<GameRewardCard[]> {

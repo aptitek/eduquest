@@ -7,7 +7,14 @@ import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { StepSelector } from '../molecules/StepSelector';
 import { useGameStore } from '../../features/game/gameStore';
-import { fetchCohortStep, fetchGuilds, spendGuildVotes, updateCohortStep, updateGuildIcon } from '../../features/game/api';
+import {
+  fetchCohortStep,
+  fetchGameRewardCards,
+  fetchGuilds,
+  spendGuildVotes,
+  updateCohortStep,
+  updateGuildIcon,
+} from '../../features/game/api';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
@@ -54,12 +61,13 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [progressBonusTarget, setProgressBonusTarget] = useState<HTMLElement | null>(null);
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const [guilds, setGuilds] = useState<DockGuild[]>([]);
+  const [rewardCards, setRewardCards] = useState<PlayingCardData[]>([]);
   const [adminStep, setAdminStep] = useState(0);
   const [isSavingAdminStep, setIsSavingAdminStep] = useState(false);
   const [isVoteOpen, setIsVoteOpen] = useState(false);
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const { user, student, character, selectedGameId } = useGameStore();
-  const { t } = useTranslation();
+  const { t, tMaybe } = useTranslation();
   const reportError = useErrorReporter();
   const showDockError = useCallback((messageKey: string, error: unknown) => {
     reportError(error, { messageKey, id: messageKey });
@@ -211,6 +219,48 @@ export function DashboardDock({ className }: DashboardDockProps) {
   }, [selectedGameId]);
 
   useEffect(() => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token || !selectedGameId) {
+      setRewardCards([]);
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadRewardCards = () => {
+      fetchGameRewardCards(token, selectedGameId)
+        .then((cards) => {
+          if (!isMounted) return;
+          setRewardCards(
+            cards.map((card) => ({
+              kind: 'reward' as const,
+              id: card.id,
+              title: card.title,
+              subtitle: card.subtitle,
+              description: card.description,
+              color: card.color,
+              accentToken: card.accentToken as PlayingCardData['accentToken'],
+              illustrationUrl: card.illustrationUrl,
+              illustration: card.illustrationUrl
+                ? undefined
+                : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+            }))
+          );
+        })
+        .catch((error) => {
+          console.warn('Could not load dashboard reward cards.', error);
+          showDockError('dashboard.dock.errors.loadProgress', error);
+        });
+    };
+
+    loadRewardCards();
+    window.addEventListener('eduquest:reward-cards-updated', loadRewardCards);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('eduquest:reward-cards-updated', loadRewardCards);
+    };
+  }, [selectedGameId, showDockError]);
+
+  useEffect(() => {
     if (!user?.isAdmin || !selectedGameId) return undefined;
 
     const token = localStorage.getItem('eduquest_token');
@@ -231,25 +281,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
     };
   }, [user?.isAdmin, selectedGameId]);
 
-  const milestones = dashboardData?.gauge.milestones || [];
-  const bonusCards = milestones.length
-    ? (milestones.map((milestone) => ({
-        kind: 'reward' as const,
-        id: milestone.reward.id,
-        title: t(milestone.reward.titleI18nKey),
-        subtitle: milestone.reward.subtitleI18nKey ? t(milestone.reward.subtitleI18nKey) : undefined,
-        description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
-        color: milestone.reward.color,
-        accentToken: milestone.reward.accentToken as PlayingCardData['accentToken'],
-        illustrationUrl: milestone.reward.illustrationUrl,
-        illustration: milestone.reward.illustrationUrl
-          ? undefined
-          : renderLucideIcon(milestone.reward.iconKey || 'Gift', 132, 'drop-shadow-lg'),
-        ribbonIcon: renderLucideIcon(milestone.reward.iconKey || 'Gift', 18),
-        ribbonLabel: `${milestone.cost} ${t('rewardCards.pointsShort')}`,
-        ribbonPosition: 'top-left',
-        ribbonClassName: 'bg-status-quest',
-      })) as [PlayingCardData, ...PlayingCardData[]])
+  const bonusCards = rewardCards.length
+    ? (rewardCards as [PlayingCardData, ...PlayingCardData[]])
     : ([
         {
           kind: 'reward' as const,
@@ -269,8 +302,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
         id: milestone.id,
-        label: t(milestone.labelI18nKey),
-        description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
+        label: tMaybe(milestone.labelI18nKey),
+        description: milestone.descriptionI18nKey ? tMaybe(milestone.descriptionI18nKey) : undefined,
         value: milestone.cost,
       }))
     : [];
@@ -783,7 +816,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
       {isGuildPage ? (guildHandTarget ? createPortal(guildContent, guildHandTarget) : guildContent) : null}
 
-      {isProgressPage ? (progressBonusTarget ? createPortal(bonusContent, progressBonusTarget) : bonusContent) : null}
+      {isProgressPage && !user?.isAdmin && progressBonusTarget
+        ? createPortal(bonusContent, progressBonusTarget)
+        : null}
     </>
   );
 }

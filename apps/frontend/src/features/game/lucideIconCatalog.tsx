@@ -16,7 +16,7 @@ import {
   KeyRound,
   Lightbulb,
   Lock,
-  Map,
+  Map as MapIcon,
   Medal,
   Rocket,
   ScrollText,
@@ -33,7 +33,8 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { lazy, Suspense } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ActivityType } from '@eduquest/shared';
 import { ACTIVITY_ICON_KEYS } from '@eduquest/shared';
 
@@ -55,7 +56,7 @@ const ICON_BY_PASCAL: Record<string, LucideIcon> = {
   KeyRound,
   Lightbulb,
   Lock,
-  Map,
+  Map: MapIcon,
   Medal,
   Rocket,
   ScrollText,
@@ -104,6 +105,10 @@ export function kebabCaseFromIconId(iconId: string) {
 }
 
 export function resolveLucideIcon(iconId?: string, fallbackType?: ActivityType): LucideIcon | null {
+  return resolveStaticLucideIcon(iconId, fallbackType) || ICON_BY_PASCAL.Hammer || null;
+}
+
+function resolveStaticLucideIcon(iconId?: string, fallbackType?: ActivityType): LucideIcon | null {
   const candidates = [
     iconId,
     iconId ? pascalCaseFromIconId(iconId) : undefined,
@@ -117,7 +122,34 @@ export function resolveLucideIcon(iconId?: string, fallbackType?: ActivityType):
     if (icon) return icon;
   }
 
-  return ICON_BY_PASCAL.Hammer || null;
+  return null;
+}
+
+type LazyLucideIcon = ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>;
+
+const lazyIconCache: globalThis.Map<string, LazyLucideIcon> = new globalThis.Map();
+
+function getLazyLucideIcon(iconId: string) {
+  const pascal = pascalCaseFromIconId(iconId);
+  if (!pascal) return null;
+
+  const cached = lazyIconCache.get(pascal);
+  if (cached) return cached;
+
+  const LazyIcon = lazy(async () => {
+    const module = await import('lucide-react');
+    const icon = (module as Record<string, unknown>)[pascal];
+    const fallback = (module as Record<string, unknown>).Hammer || Hammer;
+
+    return { default: (isLucideIconExport(icon) ? icon : fallback) as LazyLucideIcon };
+  });
+
+  lazyIconCache.set(pascal, LazyIcon);
+  return LazyIcon;
+}
+
+function isLucideIconExport(value: unknown) {
+  return typeof value === 'function' || (typeof value === 'object' && value !== null);
 }
 
 export function resolveActivityIconId(
@@ -135,8 +167,17 @@ export function resolveActivityIconId(
 }
 
 export function renderLucideIcon(iconId: string, size = 20, className?: string): ReactNode {
-  const Icon = resolveLucideIcon(iconId) || ICON_BY_PASCAL.Hammer;
-  return <Icon size={size} className={className} aria-hidden />;
+  const Icon = resolveStaticLucideIcon(iconId);
+  if (Icon) return <Icon size={size} className={className} aria-hidden />;
+
+  const LazyIcon = getLazyLucideIcon(iconId);
+  if (!LazyIcon) return <Hammer size={size} className={className} aria-hidden />;
+
+  return (
+    <Suspense fallback={<Hammer size={size} className={className} aria-hidden />}>
+      <LazyIcon size={size} className={className} aria-hidden />
+    </Suspense>
+  );
 }
 
 export function filterLucideIconIds(query: string, limit = 48) {

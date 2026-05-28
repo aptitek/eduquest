@@ -18,6 +18,7 @@ import {
   type GameMapNodeOccupancy,
   type GameMapRun,
   type GameRewardCardPayload,
+  type GameMilestonePayload,
   type Guild,
 } from '@eduquest/shared';
 import { getDb } from '../db';
@@ -26,12 +27,14 @@ import {
   gameActivityEdges,
   gameCharacters,
   gameCharacterMoves,
+  gameBonusCards,
   cohortMemberships,
   cohortProgress,
   cohorts,
   gameActivities,
   gameMapRuns,
   guilds,
+  milestoneBonusVotes,
   notifications,
   pointTransactions,
   progressMilestones,
@@ -41,6 +44,7 @@ import {
 import type { UserPayload } from '../middleware/auth';
 import { createEventContext, publishEvent } from '../events';
 import { VotingCostService } from '../services/rewards';
+import { RewardBalanceConfigService } from '../services/reward-balance-config';
 import { apiError, missingDatabaseUrl, parseJsonBody, requireAdminUser, requireDatabaseUrl } from './http';
 
 type Bindings = {
@@ -63,6 +67,8 @@ type StudentRecord = typeof students.$inferSelect;
 type CohortRecord = typeof cohorts.$inferSelect;
 type GuildRecord = typeof guilds.$inferSelect;
 type ProgressMilestoneRecord = typeof progressMilestones.$inferSelect;
+type GameBonusCardRecord = typeof gameBonusCards.$inferSelect;
+type MilestoneBonusVoteRecord = typeof milestoneBonusVotes.$inferSelect;
 type Database = ReturnType<typeof getDb>;
 
 type CompletionSubmissionPayload = {
@@ -961,20 +967,44 @@ function toGamePayload(record: CohortRecord) {
   };
 }
 
-function toRewardCard(record: ProgressMilestoneRecord, gameId: string) {
+function toMilestone(record: ProgressMilestoneRecord) {
+  return {
+    id: record.id,
+    labelI18nKey: record.labelI18nKey,
+    descriptionI18nKey: record.descriptionI18nKey || undefined,
+    cost: record.cost,
+    sortOrder: record.sortOrder,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+function toRewardCard(record: GameBonusCardRecord, gameId: string) {
   return {
     id: record.id,
     gameId,
-    title: record.rewardTitleI18nKey,
-    subtitle: record.rewardSubtitleI18nKey || undefined,
-    description: record.descriptionI18nKey || undefined,
+    title: record.title,
+    subtitle: record.subtitle || undefined,
+    description: record.description || undefined,
     cost: record.cost,
-    accentToken: record.rewardAccentToken,
-    iconKey: record.rewardIconKey,
-    illustrationUrl: record.rewardIllustrationUrl || undefined,
-    color: record.rewardColor || undefined,
+    accentToken: record.accentToken,
+    iconKey: record.iconKey,
+    illustrationUrl: record.illustrationUrl || undefined,
+    color: record.color || undefined,
     sortOrder: record.sortOrder,
     createdAt: toIsoString(record.createdAt),
+  };
+}
+
+function toVote(record: MilestoneBonusVoteRecord) {
+  return {
+    id: record.id,
+    milestoneId: record.milestoneId,
+    bonusCardId: record.bonusCardId,
+    guildId: record.guildId,
+    voteCount: record.voteCount,
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
   };
 }
 
@@ -984,7 +1014,7 @@ function normalizeRewardCardPayload(value: unknown): GameRewardCardPayload | und
   const title = typeof candidate.title === 'string' ? candidate.title.trim() : '';
   const cost = typeof candidate.cost === 'number' ? candidate.cost : Number(candidate.cost);
 
-  if (!title || !Number.isInteger(cost) || cost < 0) return undefined;
+  if (!Number.isInteger(cost) || cost < 0) return undefined;
 
   return {
     title,
@@ -1004,6 +1034,24 @@ function normalizeRewardCardPayload(value: unknown): GameRewardCardPayload | und
       typeof candidate.sortOrder === 'number' && Number.isInteger(candidate.sortOrder)
         ? candidate.sortOrder
         : undefined,
+  };
+}
+
+function normalizeMilestonePayload(value: unknown): GameMilestonePayload | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+  const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+  const description = typeof candidate.description === 'string' ? candidate.description.trim() : undefined;
+  const cost = typeof candidate.cost === 'number' ? candidate.cost : Number(candidate.cost);
+  const sortOrder = typeof candidate.sortOrder === 'number' ? candidate.sortOrder : undefined;
+
+  if (!label || !Number.isInteger(cost) || cost < 0) return undefined;
+
+  return {
+    label,
+    description: description || undefined,
+    cost,
+    sortOrder: Number.isInteger(sortOrder) ? sortOrder : undefined,
   };
 }
 
@@ -1095,6 +1143,26 @@ async function getOrCreateActiveRun(db: Database, cohortId: string) {
   }
 
   return activeRun;
+}
+
+async function getOrCreateCohortProgress(db: Database, cohortId: string) {
+  let [progress] = await db
+    .select()
+    .from(cohortProgress)
+    .where(eq(cohortProgress.cohortId, cohortId))
+    .limit(1);
+
+  if (!progress) {
+    [progress] = await db
+      .insert(cohortProgress)
+      .values({
+        cohortId,
+        labelI18nKey: 'dashboard.dock.milestone',
+      })
+      .returning();
+  }
+
+  return progress;
 }
 
 export const mapRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -2813,21 +2881,7 @@ mapRouter.get('/dashboard', async (c) => {
         currentPoints: progress.currentPoints,
         targetPoints: Number(targetRow?.targetPoints || 0),
         labelI18nKey: progress.labelI18nKey,
-        milestones: milestones.map((milestone) => ({
-          id: milestone.id,
-          labelI18nKey: milestone.labelI18nKey,
-          descriptionI18nKey: milestone.descriptionI18nKey || undefined,
-          cost: milestone.cost,
-          reward: {
-            id: milestone.id,
-            titleI18nKey: milestone.rewardTitleI18nKey,
-            subtitleI18nKey: milestone.rewardSubtitleI18nKey || undefined,
-            accentToken: milestone.rewardAccentToken,
-            iconKey: milestone.rewardIconKey,
-            illustrationUrl: milestone.rewardIllustrationUrl || undefined,
-            color: milestone.rewardColor || undefined,
-          },
-        })),
+        milestones: milestones.map(toMilestone),
       },
       notifications: notificationRows.map((notification) => ({
         id: notification.id,
@@ -2850,6 +2904,164 @@ mapRouter.get('/dashboard', async (c) => {
   }
 });
 
+mapRouter.get('/games/:gameId/milestones', async (c) => {
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = c.get('user')?.isAdmin
+      ? await resolveAdminCohort(db, c.req.param('gameId'))
+      : (await resolveStudentCohortContext(db, c.get('user'), c.req.param('gameId')))?.cohortRecord;
+    if (!cohortRecord) {
+      return apiError(c, 'Game not found.', 404);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const milestones = await db
+      .select()
+      .from(progressMilestones)
+      .where(eq(progressMilestones.progressId, progress.id))
+      .orderBy(progressMilestones.sortOrder);
+
+    return c.json({
+      success: true,
+      source: 'database',
+      milestones: milestones.map(toMilestone),
+    });
+  } catch (error: any) {
+    console.error('Milestones SQL error:', error.message);
+    return apiError(c, 'Milestones could not be loaded.', 500);
+  }
+});
+
+mapRouter.post('/games/:gameId/milestones', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const body = normalizeMilestonePayload(await parseJsonBody<GameMilestonePayload>(c));
+  if (!body) {
+    return apiError(c, 'A label and non-negative integer cost are required.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
+    if (!cohortRecord) {
+      return apiError(c, 'Game not found.', 404);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const [maxSortOrder] = await db
+      .select({ value: sql<number>`coalesce(max(${progressMilestones.sortOrder}), -1)` })
+      .from(progressMilestones)
+      .where(eq(progressMilestones.progressId, progress.id));
+
+    const [created] = await db
+      .insert(progressMilestones)
+      .values({
+        progressId: progress.id,
+        labelI18nKey: body.label,
+        descriptionI18nKey: body.description || null,
+        cost: body.cost,
+        sortOrder: body.sortOrder ?? Number(maxSortOrder?.value ?? -1) + 1,
+      })
+      .returning();
+
+    return c.json({ success: true, milestone: toMilestone(created) }, 201);
+  } catch (error: any) {
+    console.error('Milestone create SQL error:', error.message);
+    return apiError(c, 'Milestone could not be created.', 500);
+  }
+});
+
+mapRouter.patch('/games/:gameId/milestones/:milestoneId', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const body = normalizeMilestonePayload(await parseJsonBody<GameMilestonePayload>(c));
+  if (!body) {
+    return apiError(c, 'A label and non-negative integer cost are required.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
+    if (!cohortRecord) {
+      return apiError(c, 'Game not found.', 404);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const [updated] = await db
+      .update(progressMilestones)
+      .set({
+        labelI18nKey: body.label,
+        descriptionI18nKey: body.description || null,
+        cost: body.cost,
+        sortOrder: body.sortOrder ?? 0,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(progressMilestones.id, c.req.param('milestoneId')),
+          eq(progressMilestones.progressId, progress.id)
+        )
+      )
+      .returning();
+
+    if (!updated) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
+
+    return c.json({ success: true, milestone: toMilestone(updated) });
+  } catch (error: any) {
+    console.error('Milestone update SQL error:', error.message);
+    return apiError(c, 'Milestone could not be updated.', 500);
+  }
+});
+
+mapRouter.delete('/games/:gameId/milestones/:milestoneId', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
+    if (!cohortRecord) {
+      return apiError(c, 'Game not found.', 404);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const [deleted] = await db
+      .delete(progressMilestones)
+      .where(
+        and(
+          eq(progressMilestones.id, c.req.param('milestoneId')),
+          eq(progressMilestones.progressId, progress.id)
+        )
+      )
+      .returning();
+
+    if (!deleted) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
+
+    return c.json({ success: true, milestone: toMilestone(deleted) });
+  } catch (error: any) {
+    console.error('Milestone delete SQL error:', error.message);
+    return apiError(c, 'Milestone could not be deleted.', 500);
+  }
+});
+
 mapRouter.get('/games/:gameId/reward-cards', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
@@ -2866,21 +3078,11 @@ mapRouter.get('/games/:gameId/reward-cards', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const [progress] = await db
-      .select()
-      .from(cohortProgress)
-      .where(eq(cohortProgress.cohortId, cohortRecord.id))
-      .limit(1);
-
-    if (!progress) {
-      return c.json({ success: true, source: 'database', rewardCards: [] });
-    }
-
     const rewardCards = await db
       .select()
-      .from(progressMilestones)
-      .where(eq(progressMilestones.progressId, progress.id))
-      .orderBy(progressMilestones.sortOrder);
+      .from(gameBonusCards)
+      .where(eq(gameBonusCards.cohortId, cohortRecord.id))
+      .orderBy(gameBonusCards.sortOrder);
 
     return c.json({
       success: true,
@@ -2912,40 +3114,23 @@ mapRouter.post('/games/:gameId/reward-cards', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    let [progress] = await db
-      .select()
-      .from(cohortProgress)
-      .where(eq(cohortProgress.cohortId, cohortRecord.id))
-      .limit(1);
-
-    if (!progress) {
-      [progress] = await db
-        .insert(cohortProgress)
-        .values({
-          cohortId: cohortRecord.id,
-          labelI18nKey: 'dashboard.dock.milestone',
-        })
-        .returning();
-    }
-
     const [maxSortOrder] = await db
-      .select({ value: sql<number>`coalesce(max(${progressMilestones.sortOrder}), -1)` })
-      .from(progressMilestones)
-      .where(eq(progressMilestones.progressId, progress.id));
+      .select({ value: sql<number>`coalesce(max(${gameBonusCards.sortOrder}), -1)` })
+      .from(gameBonusCards)
+      .where(eq(gameBonusCards.cohortId, cohortRecord.id));
 
     const [created] = await db
-      .insert(progressMilestones)
+      .insert(gameBonusCards)
       .values({
-        progressId: progress.id,
-        labelI18nKey: body.title,
-        descriptionI18nKey: body.description || null,
+        cohortId: cohortRecord.id,
+        title: body.title,
+        subtitle: body.subtitle || null,
+        description: body.description || null,
         cost: body.cost,
-        rewardTitleI18nKey: body.title,
-        rewardSubtitleI18nKey: body.subtitle || null,
-        rewardAccentToken: body.accentToken || 'quest',
-        rewardIconKey: body.iconKey || 'Gift',
-        rewardIllustrationUrl: body.illustrationUrl || null,
-        rewardColor: body.color || null,
+        accentToken: body.accentToken || 'quest',
+        iconKey: body.iconKey || 'Gift',
+        illustrationUrl: body.illustrationUrl || null,
+        color: body.color || null,
         sortOrder: body.sortOrder ?? Number(maxSortOrder?.value ?? -1) + 1,
       })
       .returning();
@@ -2976,34 +3161,24 @@ mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const [progress] = await db
-      .select()
-      .from(cohortProgress)
-      .where(eq(cohortProgress.cohortId, cohortRecord.id))
-      .limit(1);
-
-    if (!progress) {
-      return apiError(c, 'Game progress not found.', 404);
-    }
-
     const [updated] = await db
-      .update(progressMilestones)
+      .update(gameBonusCards)
       .set({
-        labelI18nKey: body.title,
-        descriptionI18nKey: body.description || null,
+        title: body.title,
+        subtitle: body.subtitle || null,
+        description: body.description || null,
         cost: body.cost,
-        rewardTitleI18nKey: body.title,
-        rewardSubtitleI18nKey: body.subtitle || null,
-        rewardAccentToken: body.accentToken || 'quest',
-        rewardIconKey: body.iconKey || 'Gift',
-        rewardIllustrationUrl: body.illustrationUrl || null,
-        rewardColor: body.color || null,
+        accentToken: body.accentToken || 'quest',
+        iconKey: body.iconKey || 'Gift',
+        illustrationUrl: body.illustrationUrl || null,
+        color: body.color || null,
         sortOrder: body.sortOrder ?? 0,
+        updatedAt: new Date(),
       })
       .where(
         and(
-          eq(progressMilestones.id, c.req.param('rewardCardId')),
-          eq(progressMilestones.progressId, progress.id)
+          eq(gameBonusCards.id, c.req.param('rewardCardId')),
+          eq(gameBonusCards.cohortId, cohortRecord.id)
         )
       )
       .returning();
@@ -3033,22 +3208,12 @@ mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
       return apiError(c, 'Game not found.', 404);
     }
 
-    const [progress] = await db
-      .select()
-      .from(cohortProgress)
-      .where(eq(cohortProgress.cohortId, cohortRecord.id))
-      .limit(1);
-
-    if (!progress) {
-      return apiError(c, 'Game progress not found.', 404);
-    }
-
     const [deleted] = await db
-      .delete(progressMilestones)
+      .delete(gameBonusCards)
       .where(
         and(
-          eq(progressMilestones.id, c.req.param('rewardCardId')),
-          eq(progressMilestones.progressId, progress.id)
+          eq(gameBonusCards.id, c.req.param('rewardCardId')),
+          eq(gameBonusCards.cohortId, cohortRecord.id)
         )
       )
       .returning();
@@ -3061,5 +3226,253 @@ mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
   } catch (error: any) {
     console.error('Reward card delete SQL error:', error.message);
     return apiError(c, 'Reward card could not be deleted.', 500);
+  }
+});
+
+mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  try {
+    const db = getDb(databaseUrl);
+    const user = c.get('user');
+    const requestedGameId = c.req.param('gameId');
+    const context = user?.isAdmin
+      ? undefined
+      : await resolveStudentCohortContext(db, user, requestedGameId);
+    const cohortRecord = user?.isAdmin
+      ? await resolveAdminCohort(db, requestedGameId)
+      : context?.cohortRecord;
+
+    if (!cohortRecord) {
+      return apiError(c, 'Game not found.', 404);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, cohortRecord.id);
+    const [milestones, bonusCards, votes, balanceConfig] = await Promise.all([
+      db
+        .select()
+        .from(progressMilestones)
+        .where(eq(progressMilestones.progressId, progress.id))
+        .orderBy(progressMilestones.sortOrder),
+      db
+        .select()
+        .from(gameBonusCards)
+        .where(eq(gameBonusCards.cohortId, cohortRecord.id))
+        .orderBy(gameBonusCards.sortOrder),
+      db
+        .select()
+        .from(milestoneBonusVotes)
+        .innerJoin(progressMilestones, eq(progressMilestones.id, milestoneBonusVotes.milestoneId))
+        .where(eq(progressMilestones.progressId, progress.id)),
+      RewardBalanceConfigService.getActiveConfig(db),
+    ]);
+
+    const bonusCardIds = new Set(bonusCards.map((card) => card.id));
+    const votesByMilestoneId = new Map<string, MilestoneBonusVoteRecord[]>();
+    for (const row of votes) {
+      const vote = row.milestone_bonus_votes;
+      if (!bonusCardIds.has(vote.bonusCardId)) continue;
+      const current = votesByMilestoneId.get(vote.milestoneId) || [];
+      current.push(vote);
+      votesByMilestoneId.set(vote.milestoneId, current);
+    }
+
+    const voteStates = milestones.map((milestone) => {
+      const milestoneVotes = votesByMilestoneId.get(milestone.id) || [];
+      const totals = new Map<string, number>();
+      for (const vote of milestoneVotes) {
+        totals.set(vote.bonusCardId, (totals.get(vote.bonusCardId) || 0) + vote.voteCount);
+      }
+      const maxVotes = Math.max(0, ...Array.from(totals.values()));
+      const leadingBonusCardIds = Array.from(totals.entries())
+        .filter(([, voteCount]) => voteCount === maxVotes && maxVotes > 0)
+        .map(([bonusCardId]) => bonusCardId);
+
+      return {
+        milestone: toMilestone(milestone),
+        results: bonusCards.map((card) => ({
+          bonusCardId: card.id,
+          voteCount: totals.get(card.id) || 0,
+          isLeader: leadingBonusCardIds.includes(card.id),
+        })),
+        guildVote: context?.membership.guildId
+          ? milestoneVotes.find((vote) => vote.guildId === context.membership.guildId)
+            ? toVote(milestoneVotes.find((vote) => vote.guildId === context.membership.guildId)!)
+            : undefined
+          : undefined,
+        leadingBonusCardIds,
+        hasTie: leadingBonusCardIds.length > 1,
+      };
+    });
+
+    const guildId = context?.membership.guildId || undefined;
+    const [guildRecord] = guildId
+      ? await db.select({ gold: guilds.gold }).from(guilds).where(eq(guilds.id, guildId)).limit(1)
+      : [];
+    const boostCostPreview =
+      guildId && context?.studentRecord
+        ? await new VotingCostService(db).previewGuildVotes({
+            guildId,
+            studentId: context.studentRecord.id,
+            votes: 1,
+          })
+        : undefined;
+
+    return c.json({
+      success: true,
+      source: 'database',
+      voteState: {
+        milestones: milestones.map(toMilestone),
+        bonusCards: bonusCards.map((card) => toRewardCard(card, cohortRecord.id)),
+        voteStates,
+        selectedMilestoneId: milestones[0]?.id,
+        guildId,
+        guildGold: guildRecord?.gold,
+        boostCostPreview,
+        baseVotesPerGuild: balanceConfig.rewardSystem.voting.baseVotesPerGuild,
+      },
+    });
+  } catch (error: any) {
+    console.error('Bonus vote state SQL error:', error.message);
+    return apiError(c, 'Bonus vote state could not be loaded.', 500);
+  }
+});
+
+mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) => {
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const body = await parseJsonBody<{ bonusCardId?: unknown }>(c, {});
+  const bonusCardId = typeof body?.bonusCardId === 'string' ? body.bonusCardId.trim() : '';
+  if (!bonusCardId) {
+    return apiError(c, 'bonusCardId is required.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const context = await resolveStudentCohortContext(db, c.get('user'), c.req.param('gameId'));
+    if (!context?.membership.guildId) {
+      return apiError(c, 'Guild vote is not allowed without a guild.', 403);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, context.cohortRecord.id);
+    const [milestone] = await db
+      .select()
+      .from(progressMilestones)
+      .where(
+        and(
+          eq(progressMilestones.id, c.req.param('milestoneId')),
+          eq(progressMilestones.progressId, progress.id)
+        )
+      )
+      .limit(1);
+    const [bonusCard] = await db
+      .select()
+      .from(gameBonusCards)
+      .where(and(eq(gameBonusCards.id, bonusCardId), eq(gameBonusCards.cohortId, context.cohortRecord.id)))
+      .limit(1);
+
+    if (!milestone || !bonusCard) {
+      return apiError(c, 'Milestone or bonus card not found.', 404);
+    }
+
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
+    const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+    const [existing] = await db
+      .select()
+      .from(milestoneBonusVotes)
+      .where(
+        and(
+          eq(milestoneBonusVotes.milestoneId, milestone.id),
+          eq(milestoneBonusVotes.guildId, context.membership.guildId)
+        )
+      )
+      .limit(1);
+
+    const [saved] = existing
+      ? await db
+          .update(milestoneBonusVotes)
+          .set({
+            bonusCardId: bonusCard.id,
+            voteCount: Math.max(existing.voteCount, baseVotes),
+            updatedAt: new Date(),
+          })
+          .where(eq(milestoneBonusVotes.id, existing.id))
+          .returning()
+      : await db
+          .insert(milestoneBonusVotes)
+          .values({
+            milestoneId: milestone.id,
+            bonusCardId: bonusCard.id,
+            guildId: context.membership.guildId,
+            voteCount: baseVotes,
+          })
+          .returning();
+
+    return c.json({ success: true, vote: toVote(saved) });
+  } catch (error: any) {
+    console.error('Bonus vote cast SQL error:', error.message);
+    return apiError(c, 'Bonus vote could not be saved.', 500);
+  }
+});
+
+mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) => {
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const body = await parseJsonBody<{ votes?: unknown }>(c, {});
+  const votes = typeof body?.votes === 'number' ? body.votes : Number(body?.votes ?? 1);
+  if (!Number.isInteger(votes) || votes <= 0) {
+    return apiError(c, 'votes must be a positive integer.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const context = await resolveStudentCohortContext(db, c.get('user'), c.req.param('gameId'));
+    if (!context?.membership.guildId) {
+      return apiError(c, 'Guild vote boost is not allowed without a guild.', 403);
+    }
+
+    const progress = await getOrCreateCohortProgress(db, context.cohortRecord.id);
+    const [existing] = await db
+      .select()
+      .from(milestoneBonusVotes)
+      .innerJoin(progressMilestones, eq(progressMilestones.id, milestoneBonusVotes.milestoneId))
+      .where(
+        and(
+          eq(milestoneBonusVotes.milestoneId, c.req.param('milestoneId')),
+          eq(milestoneBonusVotes.guildId, context.membership.guildId),
+          eq(progressMilestones.progressId, progress.id)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      return apiError(c, 'Cast a bonus vote before boosting it.', 409);
+    }
+
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
+    const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+    const alreadyPurchasedVotes = Math.max(0, existing.milestone_bonus_votes.voteCount - baseVotes);
+    const voteSpend = await new VotingCostService(db).spendGuildVotes({
+      guildId: context.membership.guildId,
+      studentId: context.studentRecord.id,
+      votes,
+      alreadyPurchasedVotes,
+    });
+    const [updated] = await db
+      .update(milestoneBonusVotes)
+      .set({
+        voteCount: sql`${milestoneBonusVotes.voteCount} + ${votes}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(milestoneBonusVotes.id, existing.milestone_bonus_votes.id))
+      .returning();
+
+    return c.json({ success: true, vote: toVote(updated), voteSpend });
+  } catch (error: any) {
+    console.error('Bonus vote boost SQL error:', error.message);
+    return apiError(c, error.message || 'Bonus vote boost failed.', 400);
   }
 });

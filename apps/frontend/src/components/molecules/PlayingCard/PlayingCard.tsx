@@ -60,6 +60,7 @@ export interface PlayingCardSide {
   ribbonIcon?: ReactNode;
   ribbonIconKey?: string;
   ribbonPosition?: CornerRibbonPosition;
+  ribbonHidden?: boolean;
   stats?: PlayingCardStat[];
   statsLabel?: string;
   statsEditable?: boolean;
@@ -293,7 +294,7 @@ function PlayingCardFront({
           className
         )}
       >
-        {side.ribbonText ? (
+        {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon) ? (
           <div className="absolute inset-0 z-30 origin-top-right scale-50 opacity-0 transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100">
             <PlayingCardRibbon
               layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
@@ -339,7 +340,7 @@ function PlayingCardFront({
 
   return (
     <div className={cn('relative h-full min-h-0 overflow-hidden rounded-[1.25rem]', className)}>
-      {side.ribbonText ? (
+      {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon) ? (
         <PlayingCardRibbon
           layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
           position={side.ribbonPosition || 'top-right'}
@@ -420,7 +421,7 @@ function FullCardSide({
           side.className
         )}
       >
-        {side.ribbonText || canEdit ? (
+        {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon || canEdit) ? (
           <PlayingCardRibbon
             layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
             position={side.ribbonPosition || 'top-right'}
@@ -589,6 +590,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
         card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
       editable: card.front.editable ?? card.editable,
       ribbonEditable: card.front.ribbonEditable ?? card.ribbonEditable,
+      ribbonHidden: card.front.ribbonHidden,
       statsEditable: card.front.statsEditable ?? card.statsEditable ?? card.kind !== 'guild',
       statPointsRemaining: card.front.statPointsRemaining ?? card.statPointsRemaining,
       statPointsRemainingLabel:
@@ -618,6 +620,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     ribbonIconKey: card.ribbonIconKey,
     ribbonIcon: card.ribbonIcon || getCharacterClassIcon(card.characterClass),
     ribbonPosition: card.ribbonPosition,
+    ribbonHidden: false,
     stats: card.stats,
     statsLabel: card.statsLabel,
     statsEditable: card.statsEditable ?? card.kind !== 'guild',

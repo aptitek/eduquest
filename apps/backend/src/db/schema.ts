@@ -419,15 +419,53 @@ export const progressMilestones = pgTable('progress_milestones', {
   labelI18nKey: text('label_i18n_key').notNull(),
   descriptionI18nKey: text('description_i18n_key'),
   cost: integer('cost').notNull(),
-  rewardTitleI18nKey: text('reward_title_i18n_key').notNull(),
-  rewardSubtitleI18nKey: text('reward_subtitle_i18n_key'),
-  rewardAccentToken: text('reward_accent_token').default('quest').notNull(),
-  rewardIconKey: text('reward_icon_key').default('Gift').notNull(),
-  rewardIllustrationUrl: text('reward_illustration_url'),
-  rewardColor: text('reward_color'),
   sortOrder: integer('sort_order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
+
+export const gameBonusCards = pgTable('game_bonus_cards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id')
+    .notNull()
+    .references(() => cohorts.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  description: text('description'),
+  cost: integer('cost').default(0).notNull(),
+  accentToken: text('accent_token').default('quest').notNull(),
+  iconKey: text('icon_key').default('Gift').notNull(),
+  illustrationUrl: text('illustration_url'),
+  color: text('color'),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const milestoneBonusVotes = pgTable(
+  'milestone_bonus_votes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    milestoneId: uuid('milestone_id')
+      .notNull()
+      .references(() => progressMilestones.id, { onDelete: 'cascade' }),
+    bonusCardId: uuid('bonus_card_id')
+      .notNull()
+      .references(() => gameBonusCards.id, { onDelete: 'cascade' }),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    voteCount: integer('vote_count').default(1).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    guildMilestoneIdx: uniqueIndex('milestone_bonus_votes_guild_milestone_idx').on(
+      table.guildId,
+      table.milestoneId
+    ),
+  })
+);
 
 export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -509,6 +547,28 @@ export const progressMilestonesRelations = relations(progressMilestones, ({ one 
   progress: one(cohortProgress, {
     fields: [progressMilestones.progressId],
     references: [cohortProgress.id],
+  }),
+}));
+
+export const gameBonusCardsRelations = relations(gameBonusCards, ({ one }) => ({
+  cohort: one(cohorts, {
+    fields: [gameBonusCards.cohortId],
+    references: [cohorts.id],
+  }),
+}));
+
+export const milestoneBonusVotesRelations = relations(milestoneBonusVotes, ({ one }) => ({
+  milestone: one(progressMilestones, {
+    fields: [milestoneBonusVotes.milestoneId],
+    references: [progressMilestones.id],
+  }),
+  bonusCard: one(gameBonusCards, {
+    fields: [milestoneBonusVotes.bonusCardId],
+    references: [gameBonusCards.id],
+  }),
+  guild: one(guilds, {
+    fields: [milestoneBonusVotes.guildId],
+    references: [guilds.id],
   }),
 }));
 

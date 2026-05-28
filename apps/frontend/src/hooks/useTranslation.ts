@@ -23,6 +23,10 @@ export function formatMissingTranslation(path: string, isDevelopment = import.me
   return isDevelopment ? `${MISSING_TRANSLATION_PREFIX}${path}${MISSING_TRANSLATION_SUFFIX}` : path;
 }
 
+export function isMissingTranslation(value: string) {
+  return value.startsWith(MISSING_TRANSLATION_PREFIX) && value.endsWith(MISSING_TRANSLATION_SUFFIX);
+}
+
 export function resolveTranslation(locale: LocaleType, path: string, isDevelopment = import.meta.env.DEV) {
   const keys = path.split('.');
   let result: TranslationNode = translations[locale];
@@ -45,5 +49,10 @@ export function useTranslation() {
     return resolveTranslation(locale, path);
   };
 
-  return { t, locale, setLocale };
+  const tMaybe = (value: string): string => {
+    const translated = resolveTranslation(locale, value);
+    return isMissingTranslation(translated) ? value : translated;
+  };
+
+  return { t, tMaybe, locale, setLocale };
 }

@@ -48,6 +48,8 @@ export interface RewardSystemConfig {
     constitutionActiveDaysCap: number;
   };
   voting: {
+    baseVotesPerGuild: number;
+    baseVoteCost: number;
     quadraticExponent: number;
     charismaDiscountMultiplier: number;
     minimumDiscountFactor: number;
@@ -170,7 +172,9 @@ export const DEFAULT_REWARD_SYSTEM_CONFIG: RewardSystemConfig = {
     constitutionActiveDaysCap: 5,
   },
   voting: {
-    quadraticExponent: 1,
+    baseVotesPerGuild: 1,
+    baseVoteCost: 1,
+    quadraticExponent: 2,
     charismaDiscountMultiplier: 0.045,
     minimumDiscountFactor: 0.25,
   },

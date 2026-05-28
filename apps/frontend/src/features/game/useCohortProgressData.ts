@@ -50,7 +50,11 @@ export function useCohortProgressData(
     };
 
     window.addEventListener('eduquest:reward-cards-updated', handleRewardCardsUpdated);
-    return () => window.removeEventListener('eduquest:reward-cards-updated', handleRewardCardsUpdated);
+    window.addEventListener('eduquest:milestones-updated', handleRewardCardsUpdated);
+    return () => {
+      window.removeEventListener('eduquest:reward-cards-updated', handleRewardCardsUpdated);
+      window.removeEventListener('eduquest:milestones-updated', handleRewardCardsUpdated);
+    };
   }, [enabled, loadProgressData]);
 
   return progressData;

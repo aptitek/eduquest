@@ -195,6 +195,7 @@ export interface VoteSpendInput {
   guildId: string;
   votes: number;
   studentId?: string;
+  alreadyPurchasedVotes?: number;
 }
 
 export interface VoteSpendResult {
@@ -592,7 +593,8 @@ export class VotingCostService {
     config: RewardSystemConfig,
     guildId: string,
     studentId?: string,
-    balanceConfigVersion?: number
+    balanceConfigVersion?: number,
+    alreadyPurchasedVotes?: number
   ): VoteSpendBreakdown {
     return SpendBreakdownBuilder.build({
       votes,
@@ -600,7 +602,25 @@ export class VotingCostService {
       config,
       guildId,
       studentId,
+      alreadyPurchasedVotes,
       balanceConfigVersion,
+    });
+  }
+
+  async previewGuildVotes(input: VoteSpendInput): Promise<VoteSpendBreakdown> {
+    if (!this.db) {
+      throw new Error('A database client is required to preview guild votes.');
+    }
+
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db);
+    const guildProfile = await loadGuildStatProfile(this.db, input.guildId, balanceConfig);
+    return SpendBreakdownBuilder.build({
+      votes: input.votes,
+      guildProfile,
+      config: balanceConfig.rewardSystem,
+      guildId: input.guildId,
+      studentId: input.studentId,
+      balanceConfigVersion: balanceConfig.version,
     });
   }
 
@@ -619,6 +639,7 @@ export class VotingCostService {
         config,
         guildId: input.guildId,
         studentId: input.studentId,
+        alreadyPurchasedVotes: input.alreadyPurchasedVotes,
         balanceConfigVersion: balanceConfig.version,
       });
       const cost = breakdown.finalCost;
