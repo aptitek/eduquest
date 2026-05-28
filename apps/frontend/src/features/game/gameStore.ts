@@ -22,6 +22,7 @@ interface GameState {
   activities: Activity[];
   activityEdges: GameActivityEdge[];
   mapRun: GameMapRun | null;
+  currentStep: number;
   availableGames: Game[];
   selectedGameId: string | null;
   activityCompletions: GameActivityCompletion[];
@@ -38,6 +39,10 @@ interface GameState {
   patchCharacter: (patch: Partial<GameCharacter>) => void;
   setCharacterClass: (characterClass: GameCharacterClass) => void;
   setActivities: (activities: Activity[]) => void;
+  patchActivity: (activityId: string, patch: Partial<Activity>) => void;
+  setActivityEdges: (activityEdges: GameActivityEdge[]) => void;
+  patchActivityEdge: (edgeId: string, patch: Partial<GameActivityEdge>) => void;
+  removeActivityEdges: (edgeIds: string[]) => void;
   setMapData: (mapData: GameMapData) => void;
   setAvailableGames: (games: Game[]) => void;
   setSelectedGameId: (gameId: string | null) => void;
@@ -55,6 +60,7 @@ export const useGameStore = create<GameState>((set) => ({
   activities: [],
   activityEdges: [],
   mapRun: null,
+  currentStep: 0,
   availableGames: [],
   selectedGameId: null,
   activityCompletions: [],
@@ -80,11 +86,29 @@ export const useGameStore = create<GameState>((set) => ({
         : {}
     ),
   setActivities: (activities) => set({ activities }),
+  patchActivity: (activityId, patch) =>
+    set((state) => ({
+      activities: state.activities.map((activity) =>
+        activity.id === activityId ? { ...activity, ...patch } : activity
+      ),
+    })),
+  setActivityEdges: (activityEdges) => set({ activityEdges }),
+  patchActivityEdge: (edgeId, patch) =>
+    set((state) => ({
+      activityEdges: state.activityEdges.map((edge) =>
+        edge.id === edgeId ? { ...edge, ...patch } : edge
+      ),
+    })),
+  removeActivityEdges: (edgeIds) =>
+    set((state) => ({
+      activityEdges: state.activityEdges.filter((edge) => !edgeIds.includes(edge.id)),
+    })),
   setMapData: (mapData) =>
     set({
       activities: mapData.activities,
       activityEdges: mapData.edges,
       mapRun: mapData.run,
+      currentStep: mapData.currentStep ?? mapData.run.currentSectorDepth,
       activityCompletions: mapData.completions,
       nodeOccupancies: mapData.nodeOccupancies || [],
       currentActivityId: mapData.currentActivityId || null,
@@ -123,6 +147,7 @@ export const useGameStore = create<GameState>((set) => ({
       activities: [],
       activityEdges: [],
       mapRun: null,
+      currentStep: 0,
       availableGames: [],
       selectedGameId: null,
       activityCompletions: [],

@@ -46,6 +46,7 @@ app.route('/api/webhooks', webhooksRouter);
 
 // Enforcer l'authentification sur les endpoints protégés du jeu
 app.use('/api/map', authMiddleware);
+app.use('/api/map/*', authMiddleware);
 app.use('/api/games', authMiddleware);
 app.use('/api/guilds', authMiddleware);
 app.use('/api/dashboard', authMiddleware);

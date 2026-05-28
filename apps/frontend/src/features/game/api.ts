@@ -1,8 +1,13 @@
 import type {
+  Activity,
+  ActivityParticipationMode,
   Game,
+  ActivityStepRange,
   BossActivitySubmissionField,
   CohortProgressData,
   GameActivityCompletion,
+  GameActivityEdge,
+  GameActivityEdgeStyleWindow,
   GameCharacterClass,
   GameCharacterClassDefinition,
   GameStats,
@@ -17,6 +22,16 @@ import { BACKEND_BASE_URL } from '../auth/useAuth';
 export type ActivityCompletionDraft = {
   answers?: Array<Pick<BossActivitySubmissionField, 'fieldId' | 'value'>>;
   files?: Record<string, File[]>;
+};
+
+export type ActivityCardFieldsPayload = {
+  subtitle?: string;
+  description?: string;
+  resources?: Array<{ title?: string; url: string }>;
+  basePoints?: number;
+  participationMode?: ActivityParticipationMode;
+  mapX?: number;
+  mapY?: number;
 };
 
 function withGameParam(path: string, gameId?: string | null) {
@@ -229,6 +244,46 @@ type MoveCharacterResponse =
       error?: string;
     };
 
+type ActivityUpdateResponse =
+  | {
+      success: true;
+      activity: Activity;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type ActivityEdgeDeleteResponse =
+  | {
+      success: true;
+      edge: { id: string };
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type ActivityDeleteResponse =
+  | {
+      success: true;
+      activity: { id: string };
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
+type ActivityEdgeUpdateResponse =
+  | {
+      success: true;
+      edge: GameActivityEdge;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
 type CohortStepResponse =
   | {
       success: true;
@@ -352,6 +407,264 @@ export async function moveCharacterToActivity(
   }
 
   return { move: data.move, currentActivityId: data.currentActivityId };
+}
+
+export async function createMapActivity(
+  token: string,
+  payload: { mapX: number; mapY: number; currentStep: number },
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam('/api/map/activities', gameId), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Activity create failed.' : data.error || 'Activity create failed.');
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityPosition(
+  token: string,
+  activityId: string,
+  position: { mapX: number; mapY: number },
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/position`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(position),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Activity position update failed.' : data.error || 'Activity position update failed.'
+    );
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityTitle(
+  token: string,
+  activityId: string,
+  title: string,
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/title`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ title }),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Activity title update failed.' : data.error || 'Activity title update failed.');
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityCardFields(
+  token: string,
+  activityId: string,
+  payload: ActivityCardFieldsPayload,
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/card-fields`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Activity card fields update failed.' : data.error || 'Activity card fields update failed.'
+    );
+  }
+
+  return data.activity;
+}
+
+export async function deleteMapActivity(
+  token: string,
+  activityId: string,
+  gameId?: string | null
+): Promise<{ id: string }> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}`, gameId), {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as ActivityDeleteResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Activity delete failed.' : data.error || 'Activity delete failed.');
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityIcon(
+  token: string,
+  activityId: string,
+  iconKey: string,
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/icon`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ iconKey }),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Activity icon update failed.' : data.error || 'Activity icon update failed.'
+    );
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityIllustration(
+  token: string,
+  activityId: string,
+  illustrationUrl: string,
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/illustration`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ illustrationUrl }),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Activity illustration update failed.' : data.error || 'Activity illustration update failed.'
+    );
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityCardColor(
+  token: string,
+  activityId: string,
+  cardColor: string,
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/card-color`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ cardColor }),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Activity color update failed.' : data.error || 'Activity color update failed.'
+    );
+  }
+
+  return data.activity;
+}
+
+export async function updateMapActivityStepRanges(
+  token: string,
+  activityId: string,
+  stepRanges: ActivityStepRange[],
+  gameId?: string | null
+): Promise<Activity> {
+  const response = await fetch(withGameParam(`/api/map/activities/${activityId}/step-ranges`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ stepRanges }),
+  });
+  const data = (await response.json()) as ActivityUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.success ? 'Activity step range update failed.' : data.error || 'Activity step range update failed.'
+    );
+  }
+
+  return data.activity;
+}
+
+export async function deleteMapActivityEdge(
+  token: string,
+  edgeId: string,
+  gameId?: string | null
+): Promise<{ id: string }> {
+  const response = await fetch(withGameParam(`/api/map/edges/${edgeId}`, gameId), {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = (await response.json()) as ActivityEdgeDeleteResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Activity edge delete failed.' : data.error || 'Activity edge delete failed.');
+  }
+
+  return data.edge;
+}
+
+export async function updateMapActivityEdgeStyles(
+  token: string,
+  edgeId: string,
+  styleWindows: GameActivityEdgeStyleWindow[],
+  gameId?: string | null
+): Promise<GameActivityEdge> {
+  const response = await fetch(withGameParam(`/api/map/edges/${edgeId}`, gameId), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ styleWindows }),
+  });
+  const data = (await response.json()) as ActivityEdgeUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.success ? 'Activity edge update failed.' : data.error || 'Activity edge update failed.');
+  }
+
+  return data.edge;
 }
 
 export async function fetchCohortStep(token: string, cohortId: string): Promise<number> {

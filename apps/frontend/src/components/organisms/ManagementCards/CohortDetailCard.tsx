@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 import {
   DEFAULT_REWARD_SYSTEM_CONFIG,
   STUDENT_ATTRIBUTES,
@@ -35,6 +36,12 @@ const STAT_LABELS: Record<StudentAttribute, string> = {
   charisma: 'CHA',
 };
 const STAT_CAP = DEFAULT_REWARD_SYSTEM_CONFIG.attributes.levelOneMaxValue;
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
+}
 
 function formatTimeRemaining(expiresAt: string, t: (key: string) => string) {
   const remainingMs = new Date(expiresAt).getTime() - Date.now();
@@ -163,6 +170,10 @@ export function CohortDetailCard({
       })
       .catch((error) => {
         console.warn('Could not load cohort invites.', error);
+        toast.error(
+          t('management.errors.loadInvitesFailed').replace('{detail}', getErrorMessage(error)),
+          { id: 'management.errors.loadInvitesFailed' }
+        );
       });
 
     return () => {
@@ -225,7 +236,7 @@ export function CohortDetailCard({
       ]);
     } catch (error) {
       console.warn('Could not create cohort invite.', error);
-      setInviteError(t('management.errors.updateFailed'));
+      setInviteError(t('management.errors.createInviteFailed'));
     } finally {
       setIsInviteLoading(false);
     }
@@ -254,7 +265,7 @@ export function CohortDetailCard({
       }
     } catch (error) {
       console.warn('Could not revoke cohort invite.', error);
-      setInviteError(t('management.errors.updateFailed'));
+      setInviteError(t('management.errors.revokeInviteFailed'));
     }
   };
 
@@ -266,6 +277,10 @@ export function CohortDetailCard({
       setHasCopiedInvite(true);
     } catch (error) {
       console.warn('Could not copy cohort invite link.', error);
+      toast.error(
+        t('management.errors.copyInviteFailed').replace('{detail}', getErrorMessage(error)),
+        { id: 'management.errors.copyInviteFailed' }
+      );
       setHasCopiedInvite(false);
     }
   };
@@ -295,7 +310,7 @@ export function CohortDetailCard({
       await onUpdateCharacterClass(characterClass, draftStats);
     } catch (error) {
       console.warn('Could not update character class base stats.', error);
-      setClassUpdateError(t('management.errors.updateFailed'));
+      setClassUpdateError(t('management.errors.updateClassStatsFailed'));
     } finally {
       setSavingClass(null);
     }

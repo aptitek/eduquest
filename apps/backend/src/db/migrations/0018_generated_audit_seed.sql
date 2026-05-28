@@ -198,7 +198,7 @@ ON CONFLICT ("student_id") DO UPDATE SET
   "updated_at" = EXCLUDED."updated_at";
 --> statement-breakpoint
 INSERT INTO "game_activities" ("id", "type", "title", "is_graded", "map_x", "map_y", "sector_depth", "required_level", "step_ranges", "card_color", "participation_mode", "base_points", "metadata", "created_at") VALUES
-  ('80000000-0000-4000-8000-000000000006', 'character_creation', 'Le Cercle de Création du Personnage', false, 72, 300, 0, 1, '[{"startStep":0,"endStep":2}]', 'var(--color-status-campfire)', 'solo', 25, '{"kind":"profile-onboarding"}', '2026-01-07')
+  ('80000000-0000-4000-8000-000000000006', 'character_creation', 'Le Cercle de Création du Personnage', false, 72, 300, 0, 1, '[{"startStep":0,"endStep":2}]', null, 'solo', 25, '{"kind":"profile-onboarding"}', '2026-01-07')
 ON CONFLICT ("id") DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "game_activity_edges" ("id", "from_activity_id", "to_activity_id", "metadata", "created_at") VALUES

@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
 import { StepValueDisplay } from '../../atoms/StepValueDisplay';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
 export interface StepSelectorProps {
@@ -17,14 +18,17 @@ export interface StepSelectorProps {
 export function StepSelector({
   value,
   label,
-  decrementLabel = 'Previous step',
-  incrementLabel = 'Next step',
+  decrementLabel,
+  incrementLabel,
   min = 0,
   disabled = false,
   onChange,
   className,
 }: StepSelectorProps) {
+  const { t } = useTranslation();
   const canDecrement = !disabled && value > min;
+  const resolvedDecrementLabel = decrementLabel || t('stepSelector.previousStep');
+  const resolvedIncrementLabel = incrementLabel || t('stepSelector.nextStep');
 
   return (
     <div
@@ -41,7 +45,7 @@ export function StepSelector({
         disabled={disabled}
         className="h-11 w-11 min-h-0 border-primary/40 bg-primary text-primary-content shadow-glow-primary lg:h-12 lg:w-12"
       >
-        <span className="sr-only">{incrementLabel}</span>
+        <span className="sr-only">{resolvedIncrementLabel}</span>
         <ChevronUp size={20} aria-hidden />
       </HoldToConfirmButton>
 
@@ -55,7 +59,7 @@ export function StepSelector({
         disabled={!canDecrement}
         className="h-11 w-11 min-h-0 border-gaming-border bg-gaming-card text-text-primary lg:h-12 lg:w-12"
       >
-        <span className="sr-only">{decrementLabel}</span>
+        <span className="sr-only">{resolvedDecrementLabel}</span>
         <ChevronDown size={20} aria-hidden />
       </HoldToConfirmButton>
     </div>

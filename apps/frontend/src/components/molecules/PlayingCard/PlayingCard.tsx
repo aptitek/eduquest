@@ -416,6 +416,7 @@ function FullCardSide({
             className={getFullCardRibbonOuterEdgeClassName(side.ribbonPosition || 'top-right')}
             icon={resolveRibbonIcon(undefined, side)}
             ribbonClassName={ribbonClassName}
+            contentInteractive={canEditRibbon}
             onClick={side.onRibbonClick}
             ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
           >
@@ -425,6 +426,7 @@ function FullCardSide({
                 onChange={(value) => updateField('ribbonText', value)}
                 placeholder={t('playingCard.placeholders.ribbon')}
                 className="text-inherit"
+                showPencil={false}
                 truncate={false}
               />
             ) : (

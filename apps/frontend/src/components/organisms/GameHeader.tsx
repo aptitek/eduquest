@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
@@ -36,8 +37,24 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     setAvailableGames,
     setSelectedGameId,
   } = useGameStore();
-  const dashboardData = useCohortProgressData(!user?.isAdmin, selectedGameId);
   const { t } = useTranslation();
+  const showHeaderError = useCallback((messageKey: string, error: unknown) => {
+    toast.error(
+      formatTranslation(t(messageKey), {
+        detail: getErrorMessage(error),
+      }),
+      { id: messageKey }
+    );
+  }, [t]);
+  const handleDashboardError = useCallback(
+    (error: unknown) => showHeaderError('header.errors.loadDashboard', error),
+    [showHeaderError]
+  );
+  const dashboardData = useCohortProgressData(
+    !user?.isAdmin,
+    selectedGameId,
+    handleDashboardError
+  );
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
@@ -107,6 +124,7 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
       })
       .catch((error) => {
         console.warn('Could not load selectable games.', error);
+        showHeaderError('header.errors.loadGames', error);
         if (isMounted) setAvailableGames([]);
       });
 
@@ -468,6 +486,19 @@ function runNotificationAction(actionTarget?: string) {
   if (actionTarget === 'map') {
     window.location.hash = '';
   }
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
+}
+
+function formatTranslation(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.split(`{${key}}`).join(String(value)),
+    template
+  );
 }
 
 export default GameHeader;

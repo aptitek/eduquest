@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { and, desc, eq, inArray, or, sql, sum } from 'drizzle-orm';
 import {
   type Activity,
+  type ActivityParticipationMode,
   type BossActivityAnswerField,
   type BossActivitySubmission,
   type BossActivitySubmissionFile,
@@ -12,6 +13,7 @@ import {
   type GameActivityEdge,
   type GameCharacterMove,
   type GameCharacterClass,
+  type GameActivityEdgeStyleWindow,
   type GameMapData,
   type GameMapNodeOccupancy,
   type GameMapRun,
@@ -28,6 +30,7 @@ import {
   cohortProgress,
   cohorts,
   gameActivities,
+  gameBattles,
   gameMapRuns,
   guilds,
   notifications,
@@ -507,19 +510,172 @@ function parseStepRanges(value: unknown, requiredLevel = 1): ActivityStepRange[]
     const endStep = candidate.endStep;
     if (typeof startStep !== 'number' || !Number.isInteger(startStep) || startStep < 0) return [];
     if (
-      endStep !== undefined &&
+      endStep != null &&
       (typeof endStep !== 'number' || !Number.isInteger(endStep) || endStep <= startStep)
     ) {
       return [];
     }
-    return [{ startStep, endStep }];
+    return endStep == null ? [{ startStep }] : [{ startStep, endStep }];
   });
 
   return ranges.length > 0 ? ranges : [{ startStep: Math.max(requiredLevel - 1, 0) }];
 }
 
 function isStepInsideRange(step: number, range: ActivityStepRange) {
-  return step > range.startStep && (range.endStep === undefined || step < range.endStep);
+  return step >= range.startStep && (range.endStep == null || step < range.endStep);
+}
+
+function validateEdgeStyleWindows(value: unknown): GameActivityEdgeStyleWindow[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const windows = value.map((item): GameActivityEdgeStyleWindow => {
+    const candidate = item as Record<string, unknown>;
+    const startStep = candidate?.startStep;
+    const endStep = candidate?.endStep;
+    const color = candidate?.color;
+    const animation = candidate?.animation === 'glow' ? 'pulse' : candidate?.animation;
+
+    if (typeof startStep !== 'number' || !Number.isInteger(startStep) || startStep < 0) {
+      throw new Error('startStep must be a non-negative integer.');
+    }
+    if (
+      endStep != null &&
+      (typeof endStep !== 'number' || !Number.isInteger(endStep) || endStep <= startStep)
+    ) {
+      throw new Error('endStep must be greater than startStep.');
+    }
+    if (color !== undefined && (typeof color !== 'string' || !color.trim())) {
+      throw new Error('color must be a non-empty string.');
+    }
+    if (
+      animation !== undefined &&
+      animation !== 'disabled' &&
+      animation !== 'none' &&
+      animation !== 'flow' &&
+      animation !== 'pulse'
+    ) {
+      throw new Error('animation must be disabled, none, flow, or pulse.');
+    }
+
+    const window: GameActivityEdgeStyleWindow = {
+      startStep,
+    };
+    if (endStep != null) window.endStep = endStep;
+    if (typeof color === 'string' && color.trim()) window.color = color.trim();
+    if (
+      animation === 'none' ||
+      animation === 'flow' ||
+      animation === 'pulse' ||
+      animation === 'disabled'
+    ) {
+      window.animation = animation;
+    }
+
+    return window;
+  });
+
+  const sorted = [...windows].sort((a, b) => a.startStep - b.startStep);
+  for (let index = 1; index < sorted.length; index++) {
+    if (edgeStyleWindowsOverlap(sorted[index - 1], sorted[index])) {
+      throw new Error('styleWindows intervals cannot overlap.');
+    }
+  }
+
+  return windows;
+}
+
+function validateActivityStepRanges(value: unknown): ActivityStepRange[] {
+  if (!Array.isArray(value)) {
+    throw new Error('stepRanges must be an array.');
+  }
+
+  return value.map((item): ActivityStepRange => {
+    const candidate = item as Record<string, unknown>;
+    const startStep = candidate?.startStep;
+    const endStep = candidate?.endStep;
+
+    if (typeof startStep !== 'number' || !Number.isInteger(startStep) || startStep < 0) {
+      throw new Error('startStep must be a non-negative integer.');
+    }
+    if (
+      endStep != null &&
+      (typeof endStep !== 'number' || !Number.isInteger(endStep) || endStep <= startStep)
+    ) {
+      throw new Error('endStep must be greater than startStep.');
+    }
+
+    return endStep == null ? { startStep } : { startStep, endStep };
+  });
+}
+
+function normalizeMetadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function validateOptionalText(value: unknown, fieldName: string, maxLength: number) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be text.`);
+  }
+
+  const normalized = value.trim();
+  if (normalized.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer.`);
+  }
+
+  return normalized;
+}
+
+function validateOptionalInteger(value: unknown, fieldName: string, min: number, max: number) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${fieldName} must be an integer between ${min} and ${max}.`);
+  }
+
+  return value;
+}
+
+function validateOptionalParticipationMode(value: unknown): ActivityParticipationMode | undefined {
+  if (value === undefined) return undefined;
+  if (value !== 'solo' && value !== 'guild') {
+    throw new Error('participationMode must be solo or guild.');
+  }
+
+  return value;
+}
+
+function validateOptionalResources(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error('resources must be an array.');
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('resources must contain resource objects.');
+    }
+
+    const resource = item as Record<string, unknown>;
+    const title = validateOptionalText(resource.title, 'resource title', 160);
+    const url = validateOptionalText(resource.url, 'resource url', 2000);
+    if (!url) return [];
+
+    return title ? [{ title, url }] : [{ url }];
+  });
+}
+
+function edgeStyleWindowsOverlap(
+  first: Pick<GameActivityEdgeStyleWindow, 'startStep' | 'endStep'>,
+  second: Pick<GameActivityEdgeStyleWindow, 'startStep' | 'endStep'>
+) {
+  const firstMin = first.startStep;
+  const firstMax = first.endStep == null ? Number.POSITIVE_INFINITY : first.endStep - 1;
+  const secondMin = second.startStep;
+  const secondMax = second.endStep == null ? Number.POSITIVE_INFINITY : second.endStep - 1;
+
+  return firstMin <= secondMax && secondMin <= firstMax;
 }
 
 function formatOccupancyMemberName(member: MapOccupancyMember) {
@@ -660,7 +816,7 @@ function buildMapData(
     const prerequisitesCompleted = prerequisites.every((id) => completedActivityIds.has(id));
     const isRoot = prerequisites.length === 0;
     const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
-    const hasBeenRevealed = stepRanges.some((range) => currentStep > range.startStep);
+    const hasBeenRevealed = stepRanges.some((range) => currentStep >= range.startStep);
     const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
     const isRevealed = isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
     const isLocked = !isRevealed || !prerequisitesCompleted;
@@ -679,6 +835,7 @@ function buildMapData(
     edges,
     completions,
     nodeOccupancies,
+    currentStep,
     currentActivityId,
     currentMove,
   };
@@ -700,7 +857,7 @@ function getActivityLockState(
   const isRoot = prerequisites.length === 0;
   const isCompleted = completedActivityIds.has(activity.id);
   const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
-  const hasBeenRevealed = stepRanges.some((range) => currentStep > range.startStep);
+  const hasBeenRevealed = stepRanges.some((range) => currentStep >= range.startStep);
   const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
   const isRevealed = isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
 
@@ -918,6 +1075,770 @@ async function getOrCreateActiveRun(db: Database, cohortId: string) {
 }
 
 export const mapRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+mapRouter.post('/map/activities', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ mapX?: unknown; mapY?: unknown; currentStep?: unknown }>(c, {});
+  const mapX = typeof body?.mapX === 'number' && Number.isInteger(body.mapX) ? body.mapX : 500;
+  const mapY = typeof body?.mapY === 'number' && Number.isInteger(body.mapY) ? body.mapY : 300;
+  const currentStep =
+    typeof body?.currentStep === 'number' && Number.isInteger(body.currentStep) && body.currentStep >= 0
+      ? body.currentStep
+      : 0;
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [createdActivity] = await db
+      .insert(gameActivities)
+      .values({
+        cohortId: cohortRecord.id,
+        mapRunId: activeRun.id,
+        type: 'practical',
+        title: 'New activity',
+        isGraded: false,
+        mapX,
+        mapY,
+        sectorDepth: currentStep,
+        requiredLevel: currentStep + 1,
+        stepRanges: [{ startStep: currentStep }],
+        participationMode: 'solo',
+        basePoints: 100,
+        metadata: {},
+      })
+      .returning();
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        createdActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity create failed:', error.message);
+    return apiError(c, 'Activity could not be created.', 500);
+  }
+});
+
+mapRouter.delete('/map/activities/:activityId', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const activityScope = and(
+      eq(gameActivities.id, activityId),
+      or(
+        sql`${gameActivities.cohortId} IS NULL`,
+        eq(gameActivities.cohortId, cohortRecord.id),
+        eq(gameActivities.mapRunId, activeRun.id)
+      )
+    );
+    const [activity] = await db.select().from(gameActivities).where(activityScope).limit(1);
+
+    if (!activity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    await db
+      .delete(gameActivityEdges)
+      .where(or(eq(gameActivityEdges.fromActivityId, activityId), eq(gameActivityEdges.toActivityId, activityId)));
+    await db.delete(gameActivityCompletions).where(eq(gameActivityCompletions.activityId, activityId));
+    await db.delete(gameCharacterMoves).where(eq(gameCharacterMoves.toActivityId, activityId));
+    await db
+      .update(gameCharacterMoves)
+      .set({ fromActivityId: null })
+      .where(eq(gameCharacterMoves.fromActivityId, activityId));
+    await db
+      .update(gameActivities)
+      .set({ templateActivityId: null })
+      .where(eq(gameActivities.templateActivityId, activityId));
+    await db.delete(gameBattles).where(eq(gameBattles.activityId, activityId));
+
+    const [deletedActivity] = await db
+      .delete(gameActivities)
+      .where(eq(gameActivities.id, activityId))
+      .returning({ id: gameActivities.id });
+
+    if (!deletedActivity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    return c.json({
+      success: true,
+      activity: deletedActivity,
+    });
+  } catch (error: any) {
+    console.error('Activity delete failed:', error.message);
+    if (String(error.message || '').includes('foreign key')) {
+      return apiError(c, 'Activity still has linked map history and could not be deleted safely.', 409);
+    }
+    return apiError(c, 'Activity could not be deleted.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/position', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ mapX?: unknown; mapY?: unknown }>(c, {});
+  const mapX = body?.mapX;
+  const mapY = body?.mapY;
+
+  if (
+    typeof mapX !== 'number' ||
+    typeof mapY !== 'number' ||
+    !Number.isInteger(mapX) ||
+    !Number.isInteger(mapY)
+  ) {
+    return apiError(c, 'mapX and mapY must be integers.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({
+        mapX,
+        mapY,
+      })
+      .where(
+        and(
+          eq(gameActivities.id, activityId),
+          or(
+            sql`${gameActivities.cohortId} IS NULL`,
+            eq(gameActivities.cohortId, cohortRecord.id),
+            eq(gameActivities.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .returning();
+
+    if (!updatedActivity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        updatedActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity position update failed:', error.message);
+    return apiError(c, 'Activity position could not be updated.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/title', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ title?: unknown }>(c, {});
+  const title = typeof body?.title === 'string' ? body.title.trim() : '';
+
+  if (!title) {
+    return apiError(c, 'Activity title is required.', 400);
+  }
+
+  if (title.length > 160) {
+    return apiError(c, 'Activity title must be 160 characters or fewer.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({ title })
+      .where(
+        and(
+          eq(gameActivities.id, activityId),
+          or(
+            sql`${gameActivities.cohortId} IS NULL`,
+            eq(gameActivities.cohortId, cohortRecord.id),
+            eq(gameActivities.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .returning();
+
+    if (!updatedActivity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        updatedActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity title update failed:', error.message);
+    return apiError(c, 'Activity title could not be updated.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/card-fields', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{
+    subtitle?: unknown;
+    description?: unknown;
+    resources?: unknown;
+    basePoints?: unknown;
+    participationMode?: unknown;
+    mapX?: unknown;
+    mapY?: unknown;
+  }>(c, {});
+
+  let subtitle: string | undefined;
+  let description: string | undefined;
+  let resources: Array<{ title?: string; url: string }> | undefined;
+  let basePoints: number | undefined;
+  let participationMode: ActivityParticipationMode | undefined;
+  let mapX: number | undefined;
+  let mapY: number | undefined;
+
+  try {
+    subtitle = validateOptionalText(body?.subtitle, 'subtitle', 160);
+    description = validateOptionalText(body?.description, 'description', 4000);
+    resources = validateOptionalResources(body?.resources);
+    basePoints = validateOptionalInteger(body?.basePoints, 'basePoints', 0, 100000);
+    participationMode = validateOptionalParticipationMode(body?.participationMode);
+    mapX = validateOptionalInteger(body?.mapX, 'mapX', -100000, 100000);
+    mapY = validateOptionalInteger(body?.mapY, 'mapY', -100000, 100000);
+  } catch (error: any) {
+    return apiError(c, error.message || 'Invalid activity card field.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const activityScope = and(
+      eq(gameActivities.id, activityId),
+      or(
+        sql`${gameActivities.cohortId} IS NULL`,
+        eq(gameActivities.cohortId, cohortRecord.id),
+        eq(gameActivities.mapRunId, activeRun.id)
+      )
+    );
+    const [activity] = await db.select().from(gameActivities).where(activityScope).limit(1);
+
+    if (!activity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    const metadata = normalizeMetadata(activity.metadata);
+    const nextMetadata = { ...metadata };
+    if (subtitle !== undefined) nextMetadata.subtitle = subtitle;
+    if (description !== undefined) nextMetadata.description = description;
+    if (resources !== undefined) nextMetadata.resources = resources;
+
+    const update: Partial<typeof gameActivities.$inferInsert> = {};
+    if (subtitle !== undefined || description !== undefined || resources !== undefined) {
+      update.metadata = nextMetadata;
+    }
+    if (basePoints !== undefined) update.basePoints = basePoints;
+    if (participationMode !== undefined) update.participationMode = participationMode;
+    if (mapX !== undefined) update.mapX = mapX;
+    if (mapY !== undefined) update.mapY = mapY;
+
+    if (Object.keys(update).length === 0) {
+      return apiError(c, 'No activity card field was provided.', 400);
+    }
+
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set(update)
+      .where(activityScope)
+      .returning();
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        updatedActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity card fields update failed:', error.message);
+    return apiError(c, 'Activity card fields could not be updated.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/step-ranges', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ stepRanges?: unknown }>(c, {});
+
+  let stepRanges: ActivityStepRange[];
+  try {
+    stepRanges = validateActivityStepRanges(body?.stepRanges);
+  } catch (error: any) {
+    return apiError(c, error.message || 'Invalid stepRanges.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const activityScope = or(
+      sql`${gameActivities.cohortId} IS NULL`,
+      eq(gameActivities.cohortId, cohortRecord.id),
+      eq(gameActivities.mapRunId, activeRun.id)
+    );
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({ stepRanges })
+      .where(and(eq(gameActivities.id, activityId), activityScope))
+      .returning();
+
+    if (!updatedActivity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    const [activityRecords, edgeRecords] = await Promise.all([
+      db.select().from(gameActivities).where(activityScope),
+      db
+        .select()
+        .from(gameActivityEdges)
+        .where(
+          or(
+            sql`${gameActivityEdges.cohortId} IS NULL AND ${gameActivityEdges.mapRunId} IS NULL`,
+            eq(gameActivityEdges.cohortId, cohortRecord.id),
+            eq(gameActivityEdges.mapRunId, activeRun.id)
+          )
+        ),
+    ]);
+    const map = buildMapData(
+      toMapRun(activeRun),
+      activityRecords,
+      edgeRecords.map(toActivityEdge),
+      [],
+      undefined,
+      cohortRecord,
+      true
+    );
+    const activity = map.activities.find((candidate) => candidate.id === activityId);
+
+    return c.json({
+      success: true,
+      activity:
+        activity ||
+        toActivity(
+          updatedActivity,
+          { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+          true
+        ),
+    });
+  } catch (error: any) {
+    console.error('Activity step range update failed:', error.message);
+    return apiError(c, 'Activity step ranges could not be updated.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/icon', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ iconKey?: unknown }>(c, {});
+  const iconKey = typeof body?.iconKey === 'string' ? body.iconKey.trim() : '';
+
+  if (!iconKey) {
+    return apiError(c, 'iconKey is required.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [activity] = await db
+      .select()
+      .from(gameActivities)
+      .where(
+        and(
+          eq(gameActivities.id, activityId),
+          or(
+            sql`${gameActivities.cohortId} IS NULL`,
+            eq(gameActivities.cohortId, cohortRecord.id),
+            eq(gameActivities.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .limit(1);
+
+    if (!activity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    const metadata =
+      activity.metadata && typeof activity.metadata === 'object' && !Array.isArray(activity.metadata)
+        ? (activity.metadata as Record<string, unknown>)
+        : {};
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({
+        metadata: {
+          ...metadata,
+          iconKey,
+        },
+      })
+      .where(eq(gameActivities.id, activityId))
+      .returning();
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        updatedActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity icon update failed:', error.message);
+    return apiError(c, 'Activity icon could not be updated.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/card-color', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ cardColor?: unknown }>(c, {});
+  const cardColor = typeof body?.cardColor === 'string' ? body.cardColor.trim() : '';
+
+  if (!cardColor) {
+    return apiError(c, 'cardColor is required.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({ cardColor })
+      .where(
+        and(
+          eq(gameActivities.id, activityId),
+          or(
+            sql`${gameActivities.cohortId} IS NULL`,
+            eq(gameActivities.cohortId, cohortRecord.id),
+            eq(gameActivities.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .returning();
+
+    if (!updatedActivity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        updatedActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity color update failed:', error.message);
+    return apiError(c, 'Activity color could not be updated.', 500);
+  }
+});
+
+mapRouter.patch('/map/activities/:activityId/illustration', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const activityId = c.req.param('activityId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ illustrationUrl?: unknown }>(c, {});
+  const illustrationUrl = typeof body?.illustrationUrl === 'string' ? body.illustrationUrl.trim() : '';
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [activity] = await db
+      .select()
+      .from(gameActivities)
+      .where(
+        and(
+          eq(gameActivities.id, activityId),
+          or(
+            sql`${gameActivities.cohortId} IS NULL`,
+            eq(gameActivities.cohortId, cohortRecord.id),
+            eq(gameActivities.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .limit(1);
+
+    if (!activity) {
+      return apiError(c, 'Activity not found.', 404);
+    }
+
+    const metadata =
+      activity.metadata && typeof activity.metadata === 'object' && !Array.isArray(activity.metadata)
+        ? (activity.metadata as Record<string, unknown>)
+        : {};
+    const nextMetadata = { ...metadata };
+    if (illustrationUrl) {
+      nextMetadata.illustrationUrl = illustrationUrl;
+    } else {
+      delete nextMetadata.illustrationUrl;
+    }
+
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({ metadata: nextMetadata })
+      .where(eq(gameActivities.id, activityId))
+      .returning();
+
+    return c.json({
+      success: true,
+      activity: toActivity(
+        updatedActivity,
+        { isCompleted: false, isRevealed: true, isLocked: false, isCurrent: false },
+        true
+      ),
+    });
+  } catch (error: any) {
+    console.error('Activity illustration update failed:', error.message);
+    return apiError(c, 'Activity illustration could not be updated.', 500);
+  }
+});
+
+mapRouter.delete('/map/edges/:edgeId', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const edgeId = c.req.param('edgeId');
+  const requestedCohortId = getRequestedGameId(c);
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [deletedEdge] = await db
+      .delete(gameActivityEdges)
+      .where(
+        and(
+          eq(gameActivityEdges.id, edgeId),
+          or(
+            sql`${gameActivityEdges.cohortId} IS NULL`,
+            eq(gameActivityEdges.cohortId, cohortRecord.id),
+            eq(gameActivityEdges.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .returning();
+
+    if (!deletedEdge) {
+      return apiError(c, 'Activity edge not found.', 404);
+    }
+
+    return c.json({
+      success: true,
+      edge: toActivityEdge(deletedEdge),
+    });
+  } catch (error: any) {
+    console.error('Activity edge delete failed:', error.message);
+    return apiError(c, 'Activity edge could not be deleted.', 500);
+  }
+});
+
+mapRouter.patch('/map/edges/:edgeId', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const edgeId = c.req.param('edgeId');
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ styleWindows?: unknown }>(c, {});
+
+  let styleWindows: GameActivityEdgeStyleWindow[] | undefined;
+  try {
+    styleWindows = validateEdgeStyleWindows(body?.styleWindows);
+  } catch (error: any) {
+    return apiError(c, error.message || 'Invalid edge style windows.', 400);
+  }
+
+  if (!styleWindows) {
+    return apiError(c, 'styleWindows is required.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const [edge] = await db
+      .select()
+      .from(gameActivityEdges)
+      .where(
+        and(
+          eq(gameActivityEdges.id, edgeId),
+          or(
+            sql`${gameActivityEdges.cohortId} IS NULL`,
+            eq(gameActivityEdges.cohortId, cohortRecord.id),
+            eq(gameActivityEdges.mapRunId, activeRun.id)
+          )
+        )
+      )
+      .limit(1);
+
+    if (!edge) {
+      return apiError(c, 'Activity edge not found.', 404);
+    }
+
+    const metadata =
+      edge.metadata && typeof edge.metadata === 'object' && !Array.isArray(edge.metadata)
+        ? (edge.metadata as Record<string, unknown>)
+        : {};
+    const [updatedEdge] = await db
+      .update(gameActivityEdges)
+      .set({
+        metadata: {
+          ...metadata,
+          styleWindows,
+        },
+      })
+      .where(eq(gameActivityEdges.id, edgeId))
+      .returning();
+
+    return c.json({
+      success: true,
+      edge: toActivityEdge(updatedEdge),
+    });
+  } catch (error: any) {
+    console.error('Activity edge update failed:', error.message);
+    return apiError(c, 'Activity edge could not be updated.', 500);
+  }
+});
 
 mapRouter.get('/games', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;

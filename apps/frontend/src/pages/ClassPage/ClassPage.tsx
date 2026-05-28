@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Trophy, UserRound, Users } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
@@ -45,6 +46,10 @@ export function ClassPage() {
         }
       } catch (error) {
         console.warn('Could not load class guilds.', error);
+        toast.error(
+          t('class.errors.loadGuilds').replace('{detail}', getErrorMessage(error)),
+          { id: 'class.errors.loadGuilds' }
+        );
         if (isMounted) {
           setGuilds([]);
           setUnguildedStudents([]);
@@ -214,6 +219,12 @@ export function ClassPage() {
       </div>
     </GameLayout>
   );
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
 }
 
 function buildUnguildedStudentCard(

@@ -36,6 +36,10 @@ export const fr = {
   },
   header: {
     connectionLost: 'Connexion perdue',
+    errors: {
+      loadGames: 'Les parties n’ont pas pu être chargées. Le sélecteur de partie a été réinitialisé pour éviter des options obsolètes. Détail : {detail}',
+      loadDashboard: 'La progression de l’en-tête n’a pas pu être chargée. Le résumé de progression peut rester vide jusqu’au prochain rafraîchissement. Détail : {detail}',
+    },
     userMenu: {
       inGuildActivity: 'En activité de guilde',
       profileSettings: 'Paramètres du profil',
@@ -58,6 +62,7 @@ export const fr = {
       cohortDeck: 'Deck de cohorte',
       playerGuild: 'Guilde du joueur',
       guildmate: 'Membre de guilde',
+      step: 'Étape',
       hiddenMember: 'Membre masqué',
       goldSpent: '{amount} or dépensé',
       newRibbon: 'Nouveau',
@@ -68,6 +73,14 @@ export const fr = {
       classGuildCardDescription:
         'Carte de guilde de classe qui suit la progression collective et le classement.',
       playerCardDescription: '{class}. Membre actif prêt à transformer les boosts en progression.',
+      errors: {
+        loadProgress: 'La progression du tableau de bord n’a pas pu être chargée. Les cartes de récompense et de podium peuvent être incomplètes jusqu’au prochain rafraîchissement. Détail : {detail}',
+        loadGuilds: 'Les données de guilde n’ont pas pu être chargées. Les cartes de guilde peuvent être incomplètes jusqu’au prochain rafraîchissement. Détail : {detail}',
+        loadStep: 'L’étape actuelle de la cohorte n’a pas pu être chargée. Le sélecteur d’étape peut afficher une valeur obsolète. Détail : {detail}',
+        updateStep: 'L’étape de cohorte n’a pas pu être mise à jour. L’état de révélation de la carte n’a pas changé. Détail : {detail}',
+        updateGuildIcon: 'L’icône de guilde n’a pas pu être enregistrée. L’icône précédente reste active. Détail : {detail}',
+        spendVote: 'Le vote de guilde n’a pas pu être dépensé. L’or de la guilde n’a pas changé. Détail : {detail}',
+      },
     },
     milestones: {
       spark: { label: 'Étincelle', description: 'Premier boost' },
@@ -122,6 +135,10 @@ export const fr = {
         action: 'Consulter',
       },
     },
+  },
+  stepSelector: {
+    previousStep: 'Étape précédente',
+    nextStep: 'Étape suivante',
   },
   rewards: {
     notification: {
@@ -180,6 +197,14 @@ export const fr = {
       missingSession: 'Votre session est introuvable. Veuillez vous reconnecter.',
       loadFailed: 'Les données de gestion n’ont pas pu être chargées.',
       updateFailed: "L'élément de gestion sélectionné n'a pas pu être mis à jour.",
+      loadBackupFailed: 'Les données de gestion n’ont pas pu être chargées. Les écoles, cohortes et étudiant·e·s peuvent être indisponibles jusqu’au prochain rafraîchissement.',
+      updateSchoolFailed: 'Les paramètres de l’école n’ont pas pu être enregistrés. La carte école a été restaurée avec les données précédentes.',
+      updateStudentFailed: 'Les paramètres de l’étudiant·e n’ont pas pu être enregistrés. La carte étudiant·e a été restaurée avec les données précédentes.',
+      updateClassStatsFailed: 'Les statistiques de base de classe n’ont pas pu être enregistrées pour cette cohorte. L’équilibrage précédent reste actif.',
+      loadInvitesFailed: 'Les liens d’invitation de cohorte n’ont pas pu être chargés. Les QR codes existants peuvent manquer jusqu’au prochain rafraîchissement. Détail : {detail}',
+      createInviteFailed: 'Une nouvelle invitation de cohorte n’a pas pu être créée. Aucun lien d’invitation n’a été ajouté.',
+      revokeInviteFailed: 'L’invitation de cohorte n’a pas pu être révoquée. Le lien peut encore être utilisable.',
+      copyInviteFailed: 'Le lien d’invitation de cohorte n’a pas pu être copié dans le presse-papiers. Détail : {detail}',
     },
     schools: {
       logo: 'Logo',
@@ -245,6 +270,27 @@ export const fr = {
   map: {
     nav: 'Carte',
     hiddenNode: '???',
+    addActivity: 'Ajouter une activité',
+    errors: {
+      load: 'La carte n’a pas pu être chargée. La liste des activités a été vidée pour éviter d’afficher des données obsolètes. Détail : {detail}',
+      createActivity: 'L’activité n’a pas pu être créée. Vérifiez qu’une partie/cohorte est sélectionnée puis réessayez. Détail : {detail}',
+      deleteActivity: 'L’activité n’a pas pu être supprimée. Elle est peut-être encore liée à l’historique de carte ou à une autre cohorte. La carte a été restaurée. Détail : {detail}',
+      deleteEdge: 'L’arête n’a pas pu être supprimée. La liste précédente des arêtes a été restaurée. Détail : {detail}',
+      updatePosition: 'La position de l’activité n’a pas pu être enregistrée. Le nœud a été replacé à sa position précédente. Détail : {detail}',
+      updateTitle: 'Le nom de l’activité n’a pas pu être enregistré. Le nom précédent a été restauré. Détail : {detail}',
+      updateSubtitle: 'Le sous-titre de l’activité n’a pas pu être enregistré. Le sous-titre précédent a été restauré. Détail : {detail}',
+      updateDescription: 'La description de l’activité n’a pas pu être enregistrée. La description précédente a été restaurée. Détail : {detail}',
+      updateGoldReward: 'La valeur de récompense de l’activité n’a pas pu être enregistrée. La récompense précédente a été restaurée. Détail : {detail}',
+      updateResources: 'Les liens de ressource de l’activité n’ont pas pu être enregistrés. Les liens précédents ont été restaurés. Détail : {detail}',
+      updateParticipationMode: 'Le mode de participation de l’activité n’a pas pu être enregistré. Le mode précédent a été restauré. Détail : {detail}',
+      updateIcon: 'L’icône de l’activité n’a pas pu être enregistrée. L’icône précédente a été restaurée. Détail : {detail}',
+      updateColor: 'La couleur de l’activité n’a pas pu être enregistrée. La couleur précédente a été restaurée. Détail : {detail}',
+      updateIllustration: 'L’illustration de l’activité n’a pas pu être enregistrée. L’illustration précédente a été restaurée. Détail : {detail}',
+      updateStepRanges: 'Les fenêtres de brouillard de l’activité n’ont pas pu être enregistrées. Les réglages précédents ont été restaurés. Détail : {detail}',
+      updateEdgeStyles: 'Le style de brouillard de l’arête n’a pas pu être enregistré. Le style précédent a été restauré. Détail : {detail}',
+      moveActivity: 'Votre déplacement n’a pas pu être enregistré. La carte peut ne pas afficher votre position actuelle. Détail : {detail}',
+      completeActivity: 'La validation de l’activité n’a pas pu être enregistrée. Votre progression n’a pas changé. Détail : {detail}',
+    },
   },
   guild: {
     nav: 'Guilde',
@@ -267,9 +313,12 @@ export const fr = {
       'Ces étudiant·e·s appartiennent à la cohorte, mais ne sont pas encore rattaché·e·s à une guilde.',
     unguildedRibbon: 'À assigner',
     unguildedDescription: 'Carte temporaire de cohorte pour les profils en attente de guilde.',
+    errors: {
+      loadGuilds: 'Les guildes de classe n’ont pas pu être chargées. La page classe a été vidée pour éviter des données obsolètes. Détail : {detail}',
+    },
   },
   progress: {
-    nav: 'Progression',
+    nav: 'Récompense',
     title: 'Cartes bonus de progression',
     activeBonuses: 'Cartes bonus actives',
     nextVote: 'Disponibles au prochain vote',
@@ -277,9 +326,9 @@ export const fr = {
   rewardCards: {
     eyebrow: 'Récompenses de jeu',
     title: 'Cartes récompense',
-    loadError: 'Les cartes récompense n’ont pas pu être chargées.',
-    saveError: 'La carte récompense n’a pas pu être enregistrée.',
-    deleteError: 'La carte récompense n’a pas pu être supprimée.',
+    loadError: 'Les cartes récompense n’ont pas pu être chargées. L’éditeur de récompenses peut rester vide jusqu’au prochain rafraîchissement. Détail : {detail}',
+    saveError: 'La carte récompense n’a pas pu être enregistrée. La liste des récompenses reste inchangée. Détail : {detail}',
+    deleteError: 'La carte récompense n’a pas pu être supprimée. La carte reste disponible. Détail : {detail}',
     edit: 'Modifier',
     deleteNamed: 'Supprimer {title}',
     editReward: 'Modifier la récompense',
@@ -316,6 +365,9 @@ export const fr = {
     activeCardDescription:
       'Votre carte aventurier active. Changez de classe ci-dessous pour mettre à jour son rôle.',
     pointsRemainingShort: 'pts',
+    errors: {
+      loadClasses: 'Les définitions de classes n’ont pas pu être chargées. Les statistiques par défaut seront affichées. Détail : {detail}',
+    },
   },
   game: {
     classes: {
@@ -388,7 +440,7 @@ export const fr = {
     modeSolo: 'Seul·e',
     modeGuild: 'Avec la guilde',
     visibility: 'Visibilité',
-    afterStep: 'Après l’étape',
+    afterStep: 'Étape de départ',
     beforeStep: 'Avant l’étape',
     addWindow: 'Ajouter une fenêtre',
     removeWindow: 'Retirer la fenêtre',
@@ -398,6 +450,8 @@ export const fr = {
     addAdjacentNode: 'Ajouter un nœud adjacent',
     removeAdjacentNode: 'Retirer le nœud adjacent',
     noAdjacentNodes: 'Aucun nœud adjacent pour le moment.',
+    illustrationUrl: 'URL de l’illustration',
+    illustrationUrlPlaceholder: 'https://example.com/illustration.png',
     cardColor: 'Couleur de carte',
     useCardColor: 'Utiliser la couleur {color}',
     graded: 'Gamifié',
@@ -420,6 +474,40 @@ export const fr = {
       base0: 'Base0',
     },
   },
+  edgeAnimationSelector: {
+    label: 'Animation',
+    disabled: 'Désactivé',
+    disabledDescription: 'Arête statique atténuée',
+    none: 'Aucune',
+    noneDescription: 'Arête statique en couleur pleine',
+    flow: 'Flux',
+    flowDescription: 'Mouvement de parcours',
+    pulse: 'Pulse',
+    pulseDescription: 'Lueur pulsée',
+  },
+  mapEdgeCard: {
+    title: 'Style de l’arête',
+    edgePath: '{from} vers {to}',
+    edgePathTarget: 'vers {to}',
+    fogConditions: 'Conditions de brouillard',
+    saving: 'Enregistrement...',
+    help: 'Chaque intervalle peut remplacer la couleur et l’animation uniquement lorsque l’étape de cohorte {currentStep} est comprise dedans.',
+    addInterval: 'Ajouter un intervalle',
+    removeInterval: 'Retirer l’intervalle',
+    emptyState: 'Aucun remplacement d’arête. Le style de carte par défaut sera utilisé.',
+    intervalTitle: 'Intervalle #{index}',
+    activeNow: 'Actif maintenant',
+    inactive: 'Inactif',
+    color: 'Couleur',
+    defaultColor: 'Par défaut',
+    useColor: 'Utiliser la couleur {color}',
+    errors: {
+      save: 'Le style de l’arête n’a pas pu être enregistré.',
+      startStep: 'L’étape de départ doit être un entier positif ou nul.',
+      endStep: 'L’étape de fin doit être supérieure à l’étape de départ.',
+      overlap: 'Les intervalles ne peuvent pas se chevaucher.',
+    },
+  },
   embeddedFrame: {
     placeholder: 'Contenu intégré',
     expand: 'Agrandir',
@@ -434,6 +522,7 @@ export const fr = {
     radarGraph: 'Graphique radar',
     radarGraphNeedsAxes: 'Le graphique radar nécessite au moins 3 axes.',
     axisValue: 'Valeur {axis}',
+    deleteNode: 'Supprimer l’activité',
     deleteEdge: 'Supprimer l’arête',
   },
   playingCard: {
@@ -462,6 +551,9 @@ export const fr = {
     alphaRibbon: 'Alpha',
     aptitekLogoAlt: 'Logo Aptitek',
     levelShort: 'Niv.',
+    errors: {
+      loadDebugStudents: 'Les comptes étudiant·e·s de debug n’ont pas pu être chargés. Le bypass développeur est indisponible jusqu’au prochain rafraîchissement. Détail : {detail}',
+    },
   },
   profile: {
     errors: {

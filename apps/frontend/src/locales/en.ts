@@ -38,6 +38,10 @@ export const en: TranslationKeys = {
   },
   header: {
     connectionLost: 'Connection lost',
+    errors: {
+      loadGames: 'Games could not be loaded. The game selector was reset to avoid stale options. Detail: {detail}',
+      loadDashboard: 'Header progress could not be loaded. The progress summary may be empty until refresh. Detail: {detail}',
+    },
     userMenu: {
       inGuildActivity: 'In guild activity',
       profileSettings: 'Profile settings',
@@ -60,6 +64,7 @@ export const en: TranslationKeys = {
       cohortDeck: 'Cohort deck',
       playerGuild: 'Player guild',
       guildmate: 'Guildmate',
+      step: 'Step',
       hiddenMember: 'Hidden member',
       goldSpent: '{amount} gold spent',
       newRibbon: 'New',
@@ -69,6 +74,14 @@ export const en: TranslationKeys = {
       classGuildCardDescription:
         'A class guild card that tracks collective progress and ranking momentum.',
       playerCardDescription: '{class}. Active member ready to turn boosts into progress.',
+      errors: {
+        loadProgress: 'Dashboard progress could not be loaded. Reward and podium cards may be incomplete until refresh. Detail: {detail}',
+        loadGuilds: 'Guild data could not be loaded. Guild cards may be incomplete until the next refresh. Detail: {detail}',
+        loadStep: 'The current cohort step could not be loaded. The step control may show an outdated value. Detail: {detail}',
+        updateStep: 'The cohort step could not be updated. The map reveal state was not changed. Detail: {detail}',
+        updateGuildIcon: 'The guild icon could not be saved. The previous icon is still active. Detail: {detail}',
+        spendVote: 'The guild vote could not be spent. Your guild gold was not changed. Detail: {detail}',
+      },
     },
     milestones: {
       spark: { label: 'Spark', description: 'First boost' },
@@ -123,6 +136,10 @@ export const en: TranslationKeys = {
         action: 'Review',
       },
     },
+  },
+  stepSelector: {
+    previousStep: 'Previous step',
+    nextStep: 'Next step',
   },
   rewards: {
     notification: {
@@ -181,6 +198,14 @@ export const en: TranslationKeys = {
       missingSession: 'Your session is missing. Please sign in again.',
       loadFailed: 'Management data could not be loaded.',
       updateFailed: 'The selected management record could not be updated.',
+      loadBackupFailed: 'Management data could not be loaded. Schools, cohorts, and students may be unavailable until refresh.',
+      updateSchoolFailed: 'School settings could not be saved. The school card was restored to the previous data.',
+      updateStudentFailed: 'Student settings could not be saved. The student card was restored to the previous data.',
+      updateClassStatsFailed: 'Character class base stats could not be saved for this cohort. The previous class balance is still active.',
+      loadInvitesFailed: 'Cohort invite links could not be loaded. Existing invite QR codes may be missing until refresh. Detail: {detail}',
+      createInviteFailed: 'A new cohort invite could not be created. No invite link was added.',
+      revokeInviteFailed: 'The cohort invite could not be revoked. The invite may still be usable.',
+      copyInviteFailed: 'The cohort invite link could not be copied to the clipboard. Detail: {detail}',
     },
     schools: {
       logo: 'Logo',
@@ -245,6 +270,27 @@ export const en: TranslationKeys = {
   map: {
     nav: 'Map',
     hiddenNode: '???',
+    addActivity: 'Add activity',
+    errors: {
+      load: 'Map could not be loaded. The activity list was cleared to avoid showing stale data. Detail: {detail}',
+      createActivity: 'Activity could not be created. Check that a game/cohort is selected and try again. Detail: {detail}',
+      deleteActivity: 'Activity could not be deleted. It may still be linked to map history or another cohort. The map was restored. Detail: {detail}',
+      deleteEdge: 'Edge could not be deleted. The previous edge list was restored. Detail: {detail}',
+      updatePosition: 'Activity position could not be saved. The node was moved back to its previous position. Detail: {detail}',
+      updateTitle: 'Activity name could not be saved. The previous name was restored. Detail: {detail}',
+      updateSubtitle: 'Activity subtitle could not be saved. The previous subtitle was restored. Detail: {detail}',
+      updateDescription: 'Activity description could not be saved. The previous description was restored. Detail: {detail}',
+      updateGoldReward: 'Activity reward value could not be saved. The previous reward was restored. Detail: {detail}',
+      updateResources: 'Activity resource links could not be saved. The previous links were restored. Detail: {detail}',
+      updateParticipationMode: 'Activity participation mode could not be saved. The previous mode was restored. Detail: {detail}',
+      updateIcon: 'Activity icon could not be saved. The previous icon was restored. Detail: {detail}',
+      updateColor: 'Activity color could not be saved. The previous color was restored. Detail: {detail}',
+      updateIllustration: 'Activity illustration could not be saved. The previous illustration was restored. Detail: {detail}',
+      updateStepRanges: 'Activity fog windows could not be saved. The previous visibility settings were restored. Detail: {detail}',
+      updateEdgeStyles: 'Edge fog style could not be saved. The previous edge style was restored. Detail: {detail}',
+      moveActivity: 'Your move could not be recorded. The map may not show your current location. Detail: {detail}',
+      completeActivity: 'Activity completion could not be saved. Your progress was not changed. Detail: {detail}',
+    },
   },
   guild: {
     nav: 'Guild',
@@ -267,9 +313,12 @@ export const en: TranslationKeys = {
       'These students belong to the cohort, but have not been assigned to a guild yet.',
     unguildedRibbon: 'To assign',
     unguildedDescription: 'Temporary cohort card for profiles waiting for a guild assignment.',
+    errors: {
+      loadGuilds: 'Class guilds could not be loaded. The class page was cleared to avoid stale guild data. Detail: {detail}',
+    },
   },
   progress: {
-    nav: 'Progress',
+    nav: 'Reward',
     title: 'Progress bonuses',
     activeBonuses: 'Active bonus cards',
     nextVote: 'Available for next vote',
@@ -277,9 +326,9 @@ export const en: TranslationKeys = {
   rewardCards: {
     eyebrow: 'Game rewards',
     title: 'Reward cards',
-    loadError: 'Reward cards could not be loaded.',
-    saveError: 'Reward card could not be saved.',
-    deleteError: 'Reward card could not be deleted.',
+    loadError: 'Reward cards could not be loaded. The reward editor may be empty until refresh. Detail: {detail}',
+    saveError: 'Reward card could not be saved. The reward list was left unchanged. Detail: {detail}',
+    deleteError: 'Reward card could not be deleted. The card is still available. Detail: {detail}',
     edit: 'Edit',
     deleteNamed: 'Delete {title}',
     editReward: 'Edit reward',
@@ -315,6 +364,9 @@ export const en: TranslationKeys = {
     chooseClass: 'Choose a class',
     activeCardDescription: 'Your active adventurer card. Change class below to update its role.',
     pointsRemainingShort: 'pts',
+    errors: {
+      loadClasses: 'Character class definitions could not be loaded. Default class stats will be shown. Detail: {detail}',
+    },
   },
   game: {
     classes: {
@@ -387,7 +439,7 @@ export const en: TranslationKeys = {
     modeSolo: 'Alone',
     modeGuild: 'With guild',
     visibility: 'Visibility',
-    afterStep: 'After step',
+    afterStep: 'Starting step',
     beforeStep: 'Before step',
     addWindow: 'Add window',
     removeWindow: 'Remove window',
@@ -397,6 +449,8 @@ export const en: TranslationKeys = {
     addAdjacentNode: 'Add adjacent node',
     removeAdjacentNode: 'Remove adjacent node',
     noAdjacentNodes: 'No adjacent nodes yet.',
+    illustrationUrl: 'Illustration URL',
+    illustrationUrlPlaceholder: 'https://example.com/illustration.png',
     cardColor: 'Card color',
     useCardColor: 'Use {color} card color',
     graded: 'Gamified',
@@ -419,6 +473,40 @@ export const en: TranslationKeys = {
       base0: 'Base0',
     },
   },
+  edgeAnimationSelector: {
+    label: 'Animation',
+    disabled: 'Disabled',
+    disabledDescription: 'Dim static edge',
+    none: 'None',
+    noneDescription: 'Full-color static edge',
+    flow: 'Flow',
+    flowDescription: 'Travel motion',
+    pulse: 'Pulse',
+    pulseDescription: 'Pulsing glow',
+  },
+  mapEdgeCard: {
+    title: 'Edge style',
+    edgePath: '{from} to {to}',
+    edgePathTarget: 'to {to}',
+    fogConditions: 'Fog conditions',
+    saving: 'Saving...',
+    help: 'Each interval can override color and animation only while cohort step {currentStep} is inside it.',
+    addInterval: 'Add interval',
+    removeInterval: 'Remove interval',
+    emptyState: 'No edge overrides. The default map style will be used.',
+    intervalTitle: 'Interval #{index}',
+    activeNow: 'Active now',
+    inactive: 'Inactive',
+    color: 'Color',
+    defaultColor: 'Default',
+    useColor: 'Use {color}',
+    errors: {
+      save: 'Edge style could not be saved.',
+      startStep: 'Start step must be a non-negative integer.',
+      endStep: 'End step must be greater than start step.',
+      overlap: 'Intervals cannot overlap.',
+    },
+  },
   embeddedFrame: {
     placeholder: 'Embedded content',
     expand: 'Expand',
@@ -433,6 +521,7 @@ export const en: TranslationKeys = {
     radarGraph: 'Radar graph',
     radarGraphNeedsAxes: 'Radar graph needs at least 3 axes.',
     axisValue: '{axis} value',
+    deleteNode: 'Delete activity',
     deleteEdge: 'Delete edge',
   },
   playingCard: {
@@ -461,6 +550,9 @@ export const en: TranslationKeys = {
     alphaRibbon: 'Alpha',
     aptitekLogoAlt: 'Aptitek logo',
     levelShort: 'Lvl',
+    errors: {
+      loadDebugStudents: 'Debug student accounts could not be loaded. Developer bypass is unavailable until refresh. Detail: {detail}',
+    },
   },
   profile: {
     errors: {

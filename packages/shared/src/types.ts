@@ -195,10 +195,15 @@ export const ACTIVITY_ICON_KEYS = GAME_ACTIVITY_TYPES;
 export type ActivityType = (typeof GAME_ACTIVITY_TYPES)[number];
 
 export type ActivityMetadata = Record<string, unknown> & {
+  subtitle?: string;
+  description?: string;
+  illustrationUrl?: string;
+  illustrationAlt?: string;
+  iconKey?: string;
   projectUrl?: string;
   gradingUrl?: string;
   geniallyUrl?: string;
-  resources?: Array<{ title: string; url: string }>;
+  resources?: Array<{ title?: string; url: string }>;
   rubricUrl?: string;
   answerFields?: BossActivityAnswerField[];
   boss?: {
@@ -279,7 +284,14 @@ export interface GameActivityEdge {
   createdAt?: string;
 }
 
-export type GameActivityEdgeAnimation = 'none' | 'flow' | 'pulse';
+export type GameActivityEdgeAnimation = 'disabled' | 'none' | 'flow' | 'pulse';
+
+export interface GameActivityEdgeStyleWindow {
+  startStep: number;
+  endStep?: number;
+  color?: string;
+  animation?: GameActivityEdgeAnimation;
+}
 
 export type GameActivityEdgeMetadata = Record<string, unknown> & {
   color?: string;
@@ -289,6 +301,7 @@ export type GameActivityEdgeMetadata = Record<string, unknown> & {
   strokeDasharray?: string;
   opacity?: number;
   strokeWidth?: number;
+  styleWindows?: GameActivityEdgeStyleWindow[];
 };
 
 export type GameActivityCompletionType = 'read' | 'submission' | 'battle' | 'system';
@@ -385,6 +398,7 @@ export interface GameMapData {
   edges: GameActivityEdge[];
   completions: GameActivityCompletion[];
   nodeOccupancies?: GameMapNodeOccupancy[];
+  currentStep?: number;
   currentActivityId?: string;
   currentMove?: GameCharacterMove;
 }

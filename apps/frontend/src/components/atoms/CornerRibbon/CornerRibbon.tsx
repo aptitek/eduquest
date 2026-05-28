@@ -16,6 +16,7 @@ export interface CornerRibbonProps {
   className?: string;
   ribbonClassName?: string;
   textClassName?: string;
+  contentInteractive?: boolean;
   onClick?: () => void;
   ariaLabel?: string;
 }
@@ -73,16 +74,16 @@ const iconSizeClassMap: Record<CornerRibbonSize, string> = {
 
 const iconCornerPositionClassMap: Record<CornerRibbonSize, Record<CornerRibbonPosition, string>> = {
   sm: {
-    'top-left': 'left-1.5 top-1.5',
-    'top-right': 'right-1.5 top-1.5',
+    'top-left': 'left-1.5 top-1.5 -rotate-45',
+    'top-right': 'right-1.5 top-1.5 rotate-45',
   },
   md: {
-    'top-left': 'left-2 top-2',
-    'top-right': 'right-2 top-2',
+    'top-left': 'left-2 top-2 -rotate-45',
+    'top-right': 'right-2 top-2 rotate-45',
   },
   lg: {
-    'top-left': 'left-2.5 top-2.5',
-    'top-right': 'right-2.5 top-2.5',
+    'top-left': 'left-2.5 top-2.5 -rotate-45',
+    'top-right': 'right-2.5 top-2.5 rotate-45',
   },
 };
 
@@ -96,6 +97,7 @@ export function CornerRibbon({
   className,
   ribbonClassName,
   textClassName,
+  contentInteractive = false,
   onClick,
   ariaLabel,
 }: CornerRibbonProps) {
@@ -106,7 +108,7 @@ export function CornerRibbon({
     : colorSeed
       ? getSeededBackgroundClass(colorSeed)
       : 'bg-status-quest';
-  const hasText = textLength > 0;
+  const hasContent = children !== undefined && children !== null && children !== '';
   const interactiveClass = onClick
     ? 'pointer-events-auto cursor-pointer focus:outline-none'
     : 'pointer-events-none';
@@ -171,10 +173,11 @@ export function CornerRibbon({
           ribbonClassName
         )}
       >
-        {hasText ? (
+        {hasContent ? (
           <span
             className={cn(
               'block whitespace-nowrap px-2 drop-shadow-sm',
+              contentInteractive && 'pointer-events-auto',
               textClassMap[size][textFit],
               textClassName
             )}

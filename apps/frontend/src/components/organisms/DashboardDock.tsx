@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
 import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
@@ -57,8 +58,24 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [isVoteOpen, setIsVoteOpen] = useState(false);
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const { user, student, character, selectedGameId } = useGameStore();
-  const dashboardData = useCohortProgressData(Boolean(user), selectedGameId);
   const { t } = useTranslation();
+  const showDockError = useCallback((messageKey: string, error: unknown) => {
+    toast.error(
+      formatTranslation(t(messageKey), {
+        detail: getErrorMessage(error),
+      }),
+      { id: messageKey }
+    );
+  }, [t]);
+  const handleProgressError = useCallback(
+    (error: unknown) => showDockError('dashboard.dock.errors.loadProgress', error),
+    [showDockError]
+  );
+  const dashboardData = useCohortProgressData(
+    Boolean(user),
+    selectedGameId,
+    handleProgressError
+  );
   const latestMembership =
     (selectedGameId &&
       student?.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
@@ -188,6 +205,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       })
       .catch((error) => {
         console.warn('Could not load dashboard guilds.', error);
+        showDockError('dashboard.dock.errors.loadGuilds', error);
       });
 
     return () => {
@@ -208,6 +226,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       })
       .catch((error) => {
         console.warn('Could not load dashboard cohort step.', error);
+        showDockError('dashboard.dock.errors.loadStep', error);
       });
 
     return () => {
@@ -377,6 +396,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         window.dispatchEvent(new CustomEvent('eduquest:cohort-step-updated'));
       } catch (error) {
         console.warn('Could not update dashboard cohort step.', error);
+        showDockError('dashboard.dock.errors.updateStep', error);
       } finally {
         setIsSavingAdminStep(false);
       }
@@ -408,7 +428,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
             <StepSelector
               value={adminStep}
-              label="Step"
+              label={t('dashboard.dock.step')}
               disabled={!selectedGameId || isSavingAdminStep}
               onChange={updateAdminStep}
               className="h-48 w-20 gap-1.5 sm:w-24 lg:h-52 xl:w-28"
@@ -437,6 +457,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       setGuilds((current) => upsertGuild(current, updatedGuild));
     } catch (error) {
       console.warn('Could not update guild icon.', error);
+      showDockError('dashboard.dock.errors.updateGuildIcon', error);
     }
   };
   const classRemainingCard: PlayingCardData = {
@@ -551,6 +572,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       });
     } catch (error) {
       console.warn('Could not spend guild vote.', error);
+      showDockError('dashboard.dock.errors.spendVote', error);
     }
   };
   const boostButton = (
@@ -942,4 +964,17 @@ function applyEditableSide({
 
 function isEditablePlayingCardSide(value: PlayingCardData['back']): value is PlayingCardSide {
   return Boolean(value && typeof value === 'object' && !('type' in value) && 'title' in value);
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
+}
+
+function formatTranslation(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.split(`{${key}}`).join(String(value)),
+    template
+  );
 }

@@ -77,7 +77,7 @@ export function ManagementPage() {
         if (isMounted) setManagementBackup(backup);
       } catch (error) {
         console.warn('Could not load management backup.', error);
-        if (isMounted) setManagementErrorKey('management.errors.loadFailed');
+        if (isMounted) setManagementErrorKey('management.errors.loadBackupFailed');
       } finally {
         if (isMounted) setIsManagementLoading(false);
       }
@@ -231,7 +231,7 @@ export function ManagementPage() {
       setManagementBackup(backup);
     } catch (error) {
       console.warn('Could not update management school.', error);
-      setManagementErrorKey('management.errors.updateFailed');
+      setManagementErrorKey('management.errors.updateSchoolFailed');
       if (shouldThrow) throw error;
     }
   };
@@ -251,7 +251,7 @@ export function ManagementPage() {
       setManagementBackup(backup);
     } catch (error) {
       console.warn('Could not update management student.', error);
-      setManagementErrorKey('management.errors.updateFailed');
+      setManagementErrorKey('management.errors.updateStudentFailed');
       if (shouldThrow) throw error;
     }
   };
@@ -278,7 +278,7 @@ export function ManagementPage() {
       setManagementBackup(backup);
     } catch (error) {
       console.warn('Could not update management character class.', error);
-      setManagementErrorKey('management.errors.updateFailed');
+      setManagementErrorKey('management.errors.updateClassStatsFailed');
       throw error;
     }
   };

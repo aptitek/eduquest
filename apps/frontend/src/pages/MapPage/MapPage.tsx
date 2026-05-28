@@ -1,11 +1,32 @@
-import { useEffect, useState } from 'react';
-import type { Activity, BossActivityAnswerField, GameActivityCompletion, GameActivityEdge } from '@eduquest/shared';
+import { useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
+import type {
+  Activity,
+  ActivityStepRange,
+  BossActivityAnswerField,
+  GameActivityCompletion,
+  GameActivityEdge,
+  GameActivityEdgeStyleWindow,
+} from '@eduquest/shared';
 import { useGameStore } from '../../features/game/gameStore';
 import {
   type ActivityCompletionDraft,
+  type ActivityCardFieldsPayload,
   completeMapActivity,
+  createMapActivity,
+  deleteMapActivity,
+  deleteMapActivityEdge,
   fetchMapActivities,
   moveCharacterToActivity,
+  updateMapActivityCardColor,
+  updateMapActivityCardFields,
+  updateMapActivityIcon,
+  updateMapActivityIllustration,
+  updateMapActivityEdgeStyles,
+  updateMapActivityPosition,
+  updateMapActivityStepRanges,
+  updateMapActivityTitle,
 } from '../../features/game/api';
 import { getActivityXpReward } from '../../features/game/activityPresentation';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -17,6 +38,7 @@ import { MapContainer, MapArea, MapSidePanel, LoadingMap } from '../../component
 import { GameMap } from '../../components/organisms/GameMap';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
 import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
+import { MapEdgeCard } from '../../components/organisms/MapEdgeCard';
 import { formatUserDisplayName } from '../../utils/displayName';
 
 const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
@@ -54,12 +76,17 @@ export function MapPage() {
     user,
     activities,
     activityEdges,
+    currentStep,
     activityCompletions,
     nodeOccupancies,
     currentActivityId,
     currentMove,
     selectedGameId,
     setActivities,
+    patchActivity,
+    setActivityEdges,
+    patchActivityEdge,
+    removeActivityEdges,
     setMapData,
     addActivityCompletion,
     setCurrentMove,
@@ -67,9 +94,27 @@ export function MapPage() {
   } = useGameStore();
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<GameActivityEdge | null>(null);
   const [loading, setLoading] = useState(true);
   const [completingActivityId, setCompletingActivityId] = useState<string | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [edgeStyleError, setEdgeStyleError] = useState<string | null>(null);
+  const [savingEdgeId, setSavingEdgeId] = useState<string | null>(null);
+  const [isCreatingActivity, setIsCreatingActivity] = useState(false);
+  const deletingActivityIdsRef = useRef(new Set<string>());
+  const deletingEdgeIdsRef = useRef(new Set<string>());
+  const edgeStyleSaveVersionsRef = useRef(new Map<string, number>());
+  const activityStepRangeSaveVersionsRef = useRef(new Map<string, number>());
+  const activityTitleSaveVersionsRef = useRef(new Map<string, number>());
+  const activityCardFieldSaveVersionsRef = useRef(new Map<string, number>());
+  const showMapError = (messageKey: string, error: unknown) => {
+    toast.error(
+      formatTranslation(t(messageKey), {
+        detail: getErrorMessage(error),
+      }),
+      { id: messageKey }
+    );
+  };
 
   // Chargement de la carte depuis le Backend Hono
   const fetchMapData = async () => {
@@ -80,8 +125,10 @@ export function MapPage() {
       const mapData = await fetchMapActivities(token, selectedGameId);
       setMapData(mapData);
       setSelectedActivity(null);
+      setSelectedEdge(null);
     } catch (error: unknown) {
       console.warn('Could not load map activities.', error);
+      showMapError('map.errors.load', error);
       setActivities([]);
     } finally {
       setLoading(false);
@@ -101,10 +148,48 @@ export function MapPage() {
     return () => window.removeEventListener('eduquest:cohort-step-updated', handleCohortStepUpdated);
   }, [selectedGameId]);
 
+  useEffect(() => {
+    setSelectedEdge((current) => {
+      if (!current) return current;
+      return activityEdges.find((edge) => edge.id === current.id) || null;
+    });
+  }, [activityEdges]);
+
+  useEffect(() => {
+    setSelectedActivity((current) => {
+      if (!current) return current;
+      return activities.find((activity) => activity.id === current.id) || null;
+    });
+  }, [activities]);
+
   const completedActivityIds = activityCompletions.map((completion) => completion.activityId);
+
+  const handleCreateActivity = async () => {
+    if (!user?.isAdmin || isCreatingActivity) return;
+
+    setIsCreatingActivity(true);
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const activity = await createMapActivity(
+        token,
+        { mapX: 500, mapY: 300, currentStep },
+        selectedGameId
+      );
+      setActivities([...activities, activity]);
+      setSelectedActivity(activity);
+      setSelectedEdge(null);
+    } catch (error) {
+      console.warn('Could not create activity.', error);
+      showMapError('map.errors.createActivity', error);
+    } finally {
+      setIsCreatingActivity(false);
+    }
+  };
 
   const handleSelectActivity = async (activity: Activity) => {
     setSelectedActivity(activity);
+    setSelectedEdge(null);
     if (user?.isAdmin) return;
     if (activity.isCurrent || activity.isLocked) return;
 
@@ -116,6 +201,7 @@ export function MapPage() {
       setSelectedActivity({ ...activity, isCurrent: true });
     } catch (error) {
       console.warn('Could not track character move.', error);
+      showMapError('map.errors.moveActivity', error);
     }
   };
 
@@ -136,9 +222,445 @@ export function MapPage() {
       setSelectedActivity(null);
     } catch (error) {
       console.warn('Could not complete map activity.', error);
+      showMapError('map.errors.completeActivity', error);
       setCompletionError(t('detailPanel.completionError'));
     } finally {
       setCompletingActivityId(null);
+    }
+  };
+
+  const handleMoveActivityNode = async (activity: Activity, position: { x: number; y: number }) => {
+    if (!user?.isAdmin) return;
+
+    const nextPosition = { mapX: position.x, mapY: position.y };
+    patchActivity(activity.id, nextPosition);
+    if (selectedActivity?.id === activity.id) {
+      setSelectedActivity({ ...selectedActivity, ...nextPosition });
+    }
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityPosition(
+        token,
+        activity.id,
+        nextPosition,
+        selectedGameId
+      );
+      patchActivity(activity.id, updatedActivity);
+      if (selectedActivity?.id === activity.id) {
+        setSelectedActivity((current) =>
+          current?.id === activity.id ? { ...current, ...updatedActivity } : current
+        );
+      }
+    } catch (error) {
+      console.warn('Could not update activity map position.', error);
+      showMapError('map.errors.updatePosition', error);
+      patchActivity(activity.id, { mapX: activity.mapX, mapY: activity.mapY });
+      if (selectedActivity?.id === activity.id) {
+        setSelectedActivity((current) =>
+          current?.id === activity.id
+            ? { ...current, mapX: activity.mapX, mapY: activity.mapY }
+            : current
+        );
+      }
+    }
+  };
+
+  const handleActivityIconChange = async (activity: Activity, iconKey: string) => {
+    if (!user?.isAdmin) return;
+
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const nextPatch = {
+      metadata: {
+        ...previousMetadata,
+        iconKey,
+      },
+    };
+    patchActivity(activity.id, nextPatch);
+    setSelectedActivity((current) => (current?.id === activity.id ? { ...current, ...nextPatch } : current));
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityIcon(token, activity.id, iconKey, selectedGameId);
+      patchActivity(activity.id, updatedActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...updatedActivity } : current
+      );
+    } catch (error) {
+      console.warn('Could not update activity icon.', error);
+      showMapError('map.errors.updateIcon', error);
+      patchActivity(activity.id, { metadata: activity.metadata });
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, metadata: activity.metadata } : current
+      );
+    }
+  };
+
+  const handleActivityTitleChange = async (activity: Activity, title: string) => {
+    if (!user?.isAdmin) return;
+
+    const nextTitle = title.trim();
+    const previousActivity = activity;
+    const saveVersion = (activityTitleSaveVersionsRef.current.get(activity.id) || 0) + 1;
+    activityTitleSaveVersionsRef.current.set(activity.id, saveVersion);
+
+    patchActivity(activity.id, { title: nextTitle });
+    setSelectedActivity((current) => (current?.id === activity.id ? { ...current, title: nextTitle } : current));
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityTitle(token, activity.id, nextTitle, selectedGameId);
+      if (activityTitleSaveVersionsRef.current.get(activity.id) !== saveVersion) return;
+      patchActivity(activity.id, updatedActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...updatedActivity } : current
+      );
+    } catch (error) {
+      if (activityTitleSaveVersionsRef.current.get(activity.id) !== saveVersion) return;
+      console.warn('Could not update activity title.', error);
+      showMapError('map.errors.updateTitle', error);
+      patchActivity(previousActivity.id, previousActivity);
+      setSelectedActivity((current) =>
+        current?.id === previousActivity.id ? previousActivity : current
+      );
+    }
+  };
+
+  const handleActivityCardFieldsChange = async (
+    activity: Activity,
+    saveKey: string,
+    payload: ActivityCardFieldsPayload,
+    optimisticPatch: Partial<Activity>,
+    errorKey: string
+  ) => {
+    if (!user?.isAdmin) return;
+
+    const previousActivity = activity;
+    const versionKey = `${activity.id}:${saveKey}`;
+    const saveVersion = (activityCardFieldSaveVersionsRef.current.get(versionKey) || 0) + 1;
+    activityCardFieldSaveVersionsRef.current.set(versionKey, saveVersion);
+
+    patchActivity(activity.id, optimisticPatch);
+    setSelectedActivity((current) =>
+      current?.id === activity.id ? { ...current, ...optimisticPatch } : current
+    );
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityCardFields(token, activity.id, payload, selectedGameId);
+      if (activityCardFieldSaveVersionsRef.current.get(versionKey) !== saveVersion) return;
+      patchActivity(activity.id, updatedActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...updatedActivity } : current
+      );
+    } catch (error) {
+      if (activityCardFieldSaveVersionsRef.current.get(versionKey) !== saveVersion) return;
+      console.warn('Could not update activity card field.', error);
+      showMapError(errorKey, error);
+      patchActivity(previousActivity.id, previousActivity);
+      setSelectedActivity((current) =>
+        current?.id === previousActivity.id ? previousActivity : current
+      );
+    }
+  };
+
+  const handleActivitySubtitleChange = (activity: Activity, subtitle: string) => {
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const metadata = { ...previousMetadata, subtitle };
+    void handleActivityCardFieldsChange(
+      activity,
+      'subtitle',
+      { subtitle },
+      { metadata },
+      'map.errors.updateSubtitle'
+    );
+  };
+
+  const handleActivityDescriptionChange = (activity: Activity, description: string) => {
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const metadata = { ...previousMetadata, description };
+    void handleActivityCardFieldsChange(
+      activity,
+      'description',
+      { description },
+      { metadata },
+      'map.errors.updateDescription'
+    );
+  };
+
+  const handleActivityGoldRewardChange = (activity: Activity, goldReward: number) => {
+    void handleActivityCardFieldsChange(
+      activity,
+      'basePoints',
+      { basePoints: goldReward },
+      { basePoints: goldReward },
+      'map.errors.updateGoldReward'
+    );
+  };
+
+  const handleActivityResourcesChange = (activity: Activity, resources: ActivityResourceLink[]) => {
+    const normalizedResources = resources
+      .map((resource) => ({
+        ...(resource.title?.trim() ? { title: resource.title.trim() } : {}),
+        url: resource.url.trim(),
+      }))
+      .filter((resource) => resource.url);
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const metadata = { ...previousMetadata, resources: normalizedResources };
+    void handleActivityCardFieldsChange(
+      activity,
+      'resources',
+      { resources: normalizedResources },
+      { metadata },
+      'map.errors.updateResources'
+    );
+  };
+
+  const handleActivityCardPositionChange = (activity: Activity, position: { mapX: number; mapY: number }) => {
+    void handleActivityCardFieldsChange(
+      activity,
+      'position',
+      position,
+      position,
+      'map.errors.updatePosition'
+    );
+  };
+
+  const handleActivityParticipationModeChange = (
+    activity: Activity,
+    participationMode: Activity['participationMode']
+  ) => {
+    if (!participationMode) return;
+    void handleActivityCardFieldsChange(
+      activity,
+      'participationMode',
+      { participationMode },
+      { participationMode },
+      'map.errors.updateParticipationMode'
+    );
+  };
+
+  const handleActivityCardColorChange = async (activity: Activity, cardColor: string) => {
+    if (!user?.isAdmin) return;
+
+    const previousColor = activity.cardColor;
+    patchActivity(activity.id, { cardColor });
+    setSelectedActivity((current) => (current?.id === activity.id ? { ...current, cardColor } : current));
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityCardColor(token, activity.id, cardColor, selectedGameId);
+      patchActivity(activity.id, updatedActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...updatedActivity } : current
+      );
+    } catch (error) {
+      console.warn('Could not update activity card color.', error);
+      showMapError('map.errors.updateColor', error);
+      patchActivity(activity.id, { cardColor: previousColor });
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, cardColor: previousColor } : current
+      );
+    }
+  };
+
+  const handleActivityIllustrationChange = async (activity: Activity, illustrationUrl: string) => {
+    if (!user?.isAdmin) return;
+
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const nextMetadata = { ...previousMetadata };
+    if (illustrationUrl.trim()) {
+      nextMetadata.illustrationUrl = illustrationUrl.trim();
+    } else {
+      delete nextMetadata.illustrationUrl;
+    }
+    const nextPatch = { metadata: nextMetadata };
+    patchActivity(activity.id, nextPatch);
+    setSelectedActivity((current) => (current?.id === activity.id ? { ...current, ...nextPatch } : current));
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityIllustration(
+        token,
+        activity.id,
+        illustrationUrl,
+        selectedGameId
+      );
+      patchActivity(activity.id, updatedActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...updatedActivity } : current
+      );
+    } catch (error) {
+      console.warn('Could not update activity illustration.', error);
+      showMapError('map.errors.updateIllustration', error);
+      patchActivity(activity.id, { metadata: activity.metadata });
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, metadata: activity.metadata } : current
+      );
+    }
+  };
+
+  const handleActivityStepRangesChange = async (
+    activity: Activity,
+    stepRanges: ActivityStepRange[]
+  ) => {
+    if (!user?.isAdmin) return;
+
+    const previousActivity = activities.find((candidate) => candidate.id === activity.id) || activity;
+    const saveVersion = (activityStepRangeSaveVersionsRef.current.get(activity.id) || 0) + 1;
+    activityStepRangeSaveVersionsRef.current.set(activity.id, saveVersion);
+    const optimisticActivity = resolveActivityWithStepRanges(
+      previousActivity,
+      stepRanges,
+      activities,
+      activityEdges,
+      currentStep
+    );
+    patchActivity(activity.id, optimisticActivity);
+    setSelectedActivity((current) =>
+      current?.id === activity.id ? { ...current, ...optimisticActivity } : current
+    );
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedActivity = await updateMapActivityStepRanges(
+        token,
+        activity.id,
+        stepRanges,
+        selectedGameId
+      );
+      if (activityStepRangeSaveVersionsRef.current.get(activity.id) !== saveVersion) return;
+      patchActivity(activity.id, updatedActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...updatedActivity } : current
+      );
+    } catch (error) {
+      if (activityStepRangeSaveVersionsRef.current.get(activity.id) !== saveVersion) return;
+      console.warn('Could not update activity step ranges.', error);
+      showMapError('map.errors.updateStepRanges', error);
+      patchActivity(previousActivity.id, previousActivity);
+      setSelectedActivity((current) =>
+        current?.id === activity.id ? { ...current, ...previousActivity } : current
+      );
+    }
+  };
+
+  const handleDeleteActivityEdges = async (deletedEdges: Array<{ id: string }>) => {
+    if (!user?.isAdmin) return;
+
+    const edgeIds = deletedEdges
+      .map((edge) => edge.id)
+      .filter((edgeId) => edgeId && !deletingEdgeIdsRef.current.has(edgeId));
+    if (edgeIds.length === 0) return;
+
+    const previousEdges = activityEdges;
+    edgeIds.forEach((edgeId) => deletingEdgeIdsRef.current.add(edgeId));
+    removeActivityEdges(edgeIds);
+    setSelectedEdge((current) => (current && edgeIds.includes(current.id) ? null : current));
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      await Promise.all(edgeIds.map((edgeId) => deleteMapActivityEdge(token, edgeId, selectedGameId)));
+    } catch (error) {
+      console.warn('Could not delete activity edge.', error);
+      showMapError('map.errors.deleteEdge', error);
+      setActivityEdges(previousEdges);
+    } finally {
+      edgeIds.forEach((edgeId) => deletingEdgeIdsRef.current.delete(edgeId));
+    }
+  };
+
+  const handleDeleteActivityNodes = async (deletedActivities: Activity[]) => {
+    if (!user?.isAdmin) return;
+
+    const activityIds = deletedActivities
+      .map((activity) => activity.id)
+      .filter((activityId) => activityId && !deletingActivityIdsRef.current.has(activityId));
+    if (activityIds.length === 0) return;
+
+    const previousActivities = activities;
+    const previousEdges = activityEdges;
+    activityIds.forEach((activityId) => deletingActivityIdsRef.current.add(activityId));
+    setActivities(activities.filter((activity) => !activityIds.includes(activity.id)));
+    setActivityEdges(
+      activityEdges.filter(
+        (edge) => !activityIds.includes(edge.fromActivityId) && !activityIds.includes(edge.toActivityId)
+      )
+    );
+    setSelectedActivity((current) => (current && activityIds.includes(current.id) ? null : current));
+    setSelectedEdge((current) =>
+      current &&
+      (activityIds.includes(current.fromActivityId) || activityIds.includes(current.toActivityId))
+        ? null
+        : current
+    );
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      await Promise.all(activityIds.map((activityId) => deleteMapActivity(token, activityId, selectedGameId)));
+    } catch (error) {
+      console.warn('Could not delete activity node.', error);
+      showMapError('map.errors.deleteActivity', error);
+      setActivities(previousActivities);
+      setActivityEdges(previousEdges);
+    } finally {
+      activityIds.forEach((activityId) => deletingActivityIdsRef.current.delete(activityId));
+    }
+  };
+
+  const handleSelectEdge = (edge: GameActivityEdge) => {
+    if (!user?.isAdmin) return;
+    setSelectedActivity(null);
+    setSelectedEdge(edge);
+    setEdgeStyleError(null);
+  };
+
+  const handleChangeEdgeStyles = async (
+    edge: GameActivityEdge,
+    styleWindows: GameActivityEdgeStyleWindow[]
+  ) => {
+    if (!user?.isAdmin) return;
+
+    const previousEdge = activityEdges.find((candidate) => candidate.id === edge.id) || edge;
+    const saveVersion = (edgeStyleSaveVersionsRef.current.get(edge.id) || 0) + 1;
+    edgeStyleSaveVersionsRef.current.set(edge.id, saveVersion);
+    const metadata = {
+      ...(edge.metadata || {}),
+      styleWindows,
+    };
+    const optimisticEdge = { ...edge, metadata };
+    patchActivityEdge(edge.id, optimisticEdge);
+    setSelectedEdge(optimisticEdge);
+    setSavingEdgeId(edge.id);
+    setEdgeStyleError(null);
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const updatedEdge = await updateMapActivityEdgeStyles(token, edge.id, styleWindows, selectedGameId);
+      if (edgeStyleSaveVersionsRef.current.get(edge.id) !== saveVersion) return;
+      patchActivityEdge(edge.id, updatedEdge);
+      setSelectedEdge(updatedEdge);
+    } catch (error) {
+      if (edgeStyleSaveVersionsRef.current.get(edge.id) !== saveVersion) return;
+      console.warn('Could not update activity edge styles.', error);
+      showMapError('map.errors.updateEdgeStyles', error);
+      patchActivityEdge(previousEdge.id, previousEdge);
+      setSelectedEdge(previousEdge);
+      setEdgeStyleError(t('mapEdgeCard.errors.save'));
+    } finally {
+      if (edgeStyleSaveVersionsRef.current.get(edge.id) === saveVersion) {
+        setSavingEdgeId(null);
+      }
     }
   };
 
@@ -159,31 +681,59 @@ export function MapPage() {
           {loading ? (
             <LoadingMap />
           ) : (
-            <GameMap
-              activities={activities}
-              edges={activityEdges}
-              nodeOccupancies={nodeOccupancies}
-              playerMarker={
-                !user?.isAdmin && user && character
-                  ? {
-                      activityId: currentActivityId,
-                      previousActivityId: currentMove?.fromActivityId,
-                      characterClass: character.characterClass,
-                      illustrationUrl: user.avatarUrl || user.githubAvatarUrl,
-                      label: formatUserDisplayName(user),
-                    }
-                  : undefined
-              }
-              canEditLocked={Boolean(user?.isAdmin)}
-              showGuildOccupancyMarkers={Boolean(user?.isAdmin)}
-              showCompletionState={!user?.isAdmin}
-              onSelectNode={handleSelectActivity}
-            />
+            <div className="relative h-full min-h-0">
+              <GameMap
+                activities={activities}
+                edges={activityEdges}
+                nodeOccupancies={nodeOccupancies}
+                playerMarker={
+                  !user?.isAdmin && user && character
+                    ? {
+                        activityId: currentActivityId,
+                        previousActivityId: currentMove?.fromActivityId,
+                        characterClass: character.characterClass,
+                        illustrationUrl: user.avatarUrl || user.githubAvatarUrl,
+                        label: formatUserDisplayName(user),
+                      }
+                    : undefined
+                }
+                canEditLocked={Boolean(user?.isAdmin)}
+                showGuildOccupancyMarkers={Boolean(user?.isAdmin)}
+                showCompletionState={!user?.isAdmin}
+                currentStep={currentStep}
+                onSelectNode={handleSelectActivity}
+                onSelectEdge={user?.isAdmin ? handleSelectEdge : undefined}
+                onNodeMove={handleMoveActivityNode}
+                onDeleteNodes={handleDeleteActivityNodes}
+                onDeleteEdges={handleDeleteActivityEdges}
+              />
+              {user?.isAdmin ? (
+                <button
+                  type="button"
+                  onClick={handleCreateActivity}
+                  disabled={isCreatingActivity}
+                  aria-label={t('map.addActivity')}
+                  title={t('map.addActivity')}
+                  className="absolute bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-status-completed/50 bg-status-completed text-gaming-base shadow-glow-primary transition hover:scale-105 hover:bg-status-completed/90 focus:outline-none focus:ring-2 focus:ring-status-completed disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Plus size={28} strokeWidth={3} aria-hidden />
+                </button>
+              ) : null}
+            </div>
           )}
         </MapArea>
 
         <MapSidePanel>
-          {selectedActivity ? (
+          {selectedEdge && user?.isAdmin ? (
+            <MapEdgeCard
+              edge={selectedEdge}
+              activities={activities}
+              currentStep={currentStep}
+              isSaving={savingEdgeId === selectedEdge.id}
+              error={edgeStyleError}
+              onChange={handleChangeEdgeStyles}
+            />
+          ) : selectedActivity ? (
             <ActivityCard
               activity={toActivityCardData(selectedActivity, activities, activityEdges, t)}
               canEdit={Boolean(user?.isAdmin)}
@@ -195,6 +745,49 @@ export function MapPage() {
                 user?.isAdmin || selectedActivity.isLocked
                   ? undefined
                   : (draft) => handleCompleteActivity(selectedActivity, draft)
+              }
+              onIconChange={
+                user?.isAdmin ? (iconKey) => handleActivityIconChange(selectedActivity, iconKey) : undefined
+              }
+              onTitleChange={
+                user?.isAdmin ? (title) => handleActivityTitleChange(selectedActivity, title) : undefined
+              }
+              onSubtitleChange={
+                user?.isAdmin ? (subtitle) => handleActivitySubtitleChange(selectedActivity, subtitle) : undefined
+              }
+              onDescriptionChange={
+                user?.isAdmin
+                  ? (description) => handleActivityDescriptionChange(selectedActivity, description)
+                  : undefined
+              }
+              onGoldRewardChange={
+                user?.isAdmin ? (goldReward) => handleActivityGoldRewardChange(selectedActivity, goldReward) : undefined
+              }
+              onResourcesChange={
+                user?.isAdmin ? (resources) => handleActivityResourcesChange(selectedActivity, resources) : undefined
+              }
+              onPositionChange={
+                user?.isAdmin ? (position) => handleActivityCardPositionChange(selectedActivity, position) : undefined
+              }
+              onParticipationModeChange={
+                user?.isAdmin
+                  ? (participationMode) => handleActivityParticipationModeChange(selectedActivity, participationMode)
+                  : undefined
+              }
+              onCardColorChange={
+                user?.isAdmin
+                  ? (cardColor) => handleActivityCardColorChange(selectedActivity, cardColor)
+                  : undefined
+              }
+              onIllustrationUrlChange={
+                user?.isAdmin
+                  ? (illustrationUrl) => handleActivityIllustrationChange(selectedActivity, illustrationUrl)
+                  : undefined
+              }
+              onStepRangesChange={
+                user?.isAdmin
+                  ? (stepRanges) => handleActivityStepRangesChange(selectedActivity, stepRanges)
+                  : undefined
               }
               className="h-full min-h-0 w-full max-w-none"
             />
@@ -232,7 +825,9 @@ function toActivityCardData(
 
   return {
     title: activity.title,
-    subtitle: `${t(`common.${activity.type}`)} · ${activity.isGraded ? t('activityCard.graded') : t('activityCard.notGraded')}`,
+    subtitle:
+      getStringMetadata(metadata, 'subtitle') ||
+      `${t(`common.${activity.type}`)} · ${activity.isGraded ? t('activityCard.graded') : t('activityCard.notGraded')}`,
     description:
       getStringMetadata(metadata, 'description') ||
       getStringMetadata(metadata, 'lore') ||
@@ -241,7 +836,7 @@ function toActivityCardData(
     illustrationUrl: getStringMetadata(metadata, 'illustrationUrl'),
     illustrationAlt: getStringMetadata(metadata, 'illustrationAlt') || activity.title,
     goldReward: getActivityXpReward(activity),
-    cardColor: activity.cardColor || getStringMetadata(metadata, 'cardColor'),
+    cardColor: activity.cardColor,
     participationMode: activity.participationMode || 'solo',
     resources,
     selectedIcon: getStringMetadata(metadata, 'iconKey') || activity.type,
@@ -258,6 +853,55 @@ function getStringMetadata(metadata: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined;
 }
 
+function resolveActivityWithStepRanges(
+  activity: Activity,
+  stepRanges: ActivityStepRange[],
+  activities: Activity[],
+  edges: GameActivityEdge[],
+  currentStep: number
+): Activity {
+  const normalizedRanges = stepRanges.length
+    ? stepRanges
+    : [{ startStep: Math.max(activity.requiredLevel - 1, 0) }];
+  const prerequisites = edges
+    .filter((edge) => edge.toActivityId === activity.id)
+    .map((edge) => edge.fromActivityId);
+  const completedActivityIds = new Set(
+    activities.filter((candidate) => candidate.isCompleted).map((candidate) => candidate.id)
+  );
+  const prerequisitesCompleted = prerequisites.every((id) => completedActivityIds.has(id));
+  const isRoot = prerequisites.length === 0;
+  const isCompleted = Boolean(activity.isCompleted);
+  const hasBeenRevealed = normalizedRanges.some((range) => currentStep >= range.startStep);
+  const isActiveForStep = normalizedRanges.some((range) => isStepInsideRange(currentStep, range));
+  const isRevealed =
+    isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
+
+  return {
+    ...activity,
+    stepRanges: normalizedRanges,
+    isRevealed,
+    isLocked: !isRevealed || !prerequisitesCompleted,
+  };
+}
+
+function isStepInsideRange(step: number, range: ActivityStepRange) {
+  return step >= range.startStep && (range.endStep == null || step < range.endStep);
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
+}
+
+function formatTranslation(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.split(`{${key}}`).join(String(value)),
+    template
+  );
+}
+
 function getNestedStringMetadata(metadata: Record<string, unknown>, objectKey: string, key: string) {
   const value = metadata[objectKey];
   if (!value || typeof value !== 'object') return undefined;
@@ -266,6 +910,10 @@ function getNestedStringMetadata(metadata: Record<string, unknown>, objectKey: s
 }
 
 function getActivityResources(metadata: Record<string, unknown>, activityUrl?: string): ActivityResourceLink[] {
+  if (Array.isArray(metadata.resources)) {
+    return getResourceList(metadata);
+  }
+
   const resources = [
     ...getResourceList(metadata),
     resourceFromUrl(getStringMetadata(metadata, 'geniallyUrl')),

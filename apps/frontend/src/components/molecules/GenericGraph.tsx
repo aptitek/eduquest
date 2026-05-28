@@ -72,7 +72,7 @@ export interface GraphEdge {
   opacity?: number;
   strokeWidth?: number;
   strokeDasharray?: string;
-  animation?: 'none' | 'flow' | 'pulse';
+  animation?: 'disabled' | 'none' | 'flow' | 'pulse';
 }
 
 interface GenericGraphProps<TMetadata = unknown> {
@@ -81,8 +81,10 @@ interface GenericGraphProps<TMetadata = unknown> {
   width?: number;
   height?: number | string;
   onSelectNode?: (node: GraphNode<TMetadata>) => void;
+  onSelectEdge?: (edge: GraphEdge) => void;
   onNodeMove?: (node: GraphNode<TMetadata>, position: { x: number; y: number }) => void;
   onConnectNodes?: (edge: GraphEdge) => void;
+  onDeleteNodes?: (nodes: GraphNode<TMetadata>[]) => void;
   onDeleteEdges?: (edges: GraphEdge[]) => void;
   allowLockedSelection?: boolean;
   editable?: boolean;
@@ -100,7 +102,9 @@ interface LayoutNode<TMetadata = unknown> extends GraphNode<TMetadata> {
 interface GraphFlowNodeData<TMetadata = unknown> extends Record<string, unknown> {
   graphNode: LayoutNode<TMetadata>;
   allowLockedSelection: boolean;
+  deletable: boolean;
   onSelectNode?: (node: GraphNode<TMetadata>) => void;
+  onDeleteNode?: (node: GraphNode<TMetadata>) => void;
   renderNode?: (node: GraphNode<TMetadata>) => React.ReactNode;
 }
 
@@ -109,6 +113,7 @@ type GraphFlowNode<TMetadata = unknown> = Node<GraphFlowNodeData<TMetadata>, 'gr
 interface GraphFlowEdgeData extends Record<string, unknown> {
   graphEdge: GraphEdge;
   deletable: boolean;
+  onSelectEdge?: (edge: GraphEdge) => void;
   onDeleteEdge?: (edge: GraphEdge) => void;
 }
 
@@ -130,10 +135,12 @@ const GRAPH_EDGE_ANIMATION_STYLES = `
 
 @keyframes graph-edge-pulse {
   0%, 100% {
-    opacity: 0.25;
+    opacity: 0.45;
+    filter: drop-shadow(0 0 1px currentColor);
   }
   50% {
-    opacity: 0.95;
+    opacity: 1;
+    filter: drop-shadow(0 0 8px currentColor);
   }
 }
 
@@ -144,7 +151,7 @@ const GRAPH_EDGE_ANIMATION_STYLES = `
 }
 
 .graph-edge-pulse {
-  animation: graph-edge-pulse 2.4s ease-in-out infinite;
+  animation: graph-edge-pulse 2.8s ease-in-out infinite;
   stroke-linecap: round;
 }
 
@@ -292,8 +299,10 @@ export function GenericGraph<TMetadata = unknown>({
   width = 800,
   height = 600,
   onSelectNode,
+  onSelectEdge,
   onNodeMove,
   onConnectNodes,
+  onDeleteNodes,
   onDeleteEdges,
   allowLockedSelection = false,
   editable = false,
@@ -334,11 +343,13 @@ export function GenericGraph<TMetadata = unknown>({
           data: {
             graphNode: node,
             allowLockedSelection,
+            deletable,
             onSelectNode,
+            onDeleteNode: (deletedNode) => onDeleteNodes?.([deletedNode]),
             renderNode,
           },
         })),
-    [allowLockedSelection, connectable, editable, layoutedNodes, onSelectNode, renderNode]
+    [allowLockedSelection, connectable, deletable, editable, layoutedNodes, onDeleteNodes, onSelectNode, renderNode]
   );
 
   const initialFlowEdges = useMemo(() => {
@@ -356,11 +367,12 @@ export function GenericGraph<TMetadata = unknown>({
         type: 'graph-edge',
         source: edge.from,
         target: edge.to,
-        animated: edge.animation !== 'none' && Boolean(edge.animation || isCompleted),
+        animated: false,
         reconnectable: connectable,
         data: {
           graphEdge: edge,
           deletable,
+          onSelectEdge,
           onDeleteEdge: (deletedEdge) => onDeleteEdges?.([deletedEdge]),
         },
         style: {
@@ -371,7 +383,7 @@ export function GenericGraph<TMetadata = unknown>({
         },
       };
     });
-  }, [connectable, deletable, initialFlowNodes, onDeleteEdges, renderedEdges]);
+  }, [connectable, deletable, initialFlowNodes, onDeleteEdges, onSelectEdge, renderedEdges]);
 
   const [flowNodes, setFlowNodes] = useState(initialFlowNodes);
   const [flowEdges, setFlowEdges] = useState(initialFlowEdges);
@@ -429,6 +441,7 @@ export function GenericGraph<TMetadata = unknown>({
           data: {
             graphEdge,
             deletable,
+            onSelectEdge,
             onDeleteEdge: (deletedEdge) => onDeleteEdges?.([deletedEdge]),
           },
           style: {
@@ -440,7 +453,7 @@ export function GenericGraph<TMetadata = unknown>({
       ]);
       onConnectNodes?.(graphEdge);
     },
-    [connectable, deletable, onConnectNodes, onDeleteEdges]
+    [connectable, deletable, onConnectNodes, onDeleteEdges, onSelectEdge]
   );
 
   const handleNodeDragStop = useCallback(
@@ -752,6 +765,7 @@ function seededRange(seed: number, min: number, max: number) {
 }
 
 function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>) {
+  const { t } = useTranslation();
   const node = data.graphNode;
   const isDisabled = !data.allowLockedSelection && node.isLocked;
   const handleClassName = cn(
@@ -799,6 +813,20 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
       {node.badge ? (
         <div className="pointer-events-none absolute bottom-4 right-1 z-20 translate-x-1/2 translate-y-1/2">
           {node.badge}
+        </div>
+      ) : null}
+      {data.deletable ? (
+        <div className="absolute bottom-4 left-1 z-30 -translate-x-1/2 translate-y-1/2">
+          <HoldToConfirmButton
+            onConfirm={() => data.onDeleteNode?.(node)}
+            holdDuration={800}
+            shape="round"
+            variant="border border-status-danger bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-gaming-base focus:outline-none focus:ring-2 focus:ring-status-danger"
+            className="h-7 w-7 shrink-0"
+          >
+            <X size={14} aria-hidden />
+            <span className="sr-only">{t('graph.deleteNode')}</span>
+          </HoldToConfirmButton>
         </div>
       ) : null}
       {node.marker ? (
@@ -1007,18 +1035,39 @@ function GraphFlowEdgeRenderer({
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
-      {data?.graphEdge.animation && data.graphEdge.animation !== 'none' ? (
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={getGraphEdgeBaseStyle(style, data?.graphEdge.animation)}
+      />
+      {data?.graphEdge && data.onSelectEdge ? (
         <path
           d={edgePath}
           fill="none"
-          markerEnd={markerEnd}
+          stroke="transparent"
+          strokeWidth={18}
+          className="cursor-pointer"
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onSelectEdge?.(data.graphEdge);
+          }}
+        />
+      ) : null}
+      {data?.graphEdge.animation &&
+      data.graphEdge.animation !== 'none' &&
+      data.graphEdge.animation !== 'disabled' ? (
+        <path
+          d={edgePath}
+          fill="none"
           pointerEvents="none"
-          className={data.graphEdge.animation === 'flow' ? 'graph-edge-flow' : 'graph-edge-pulse'}
+          className={getGraphEdgeAnimationClassName(data.graphEdge.animation)}
           style={{
             stroke: style?.stroke,
-            strokeOpacity: data.graphEdge.animation === 'flow' ? 0.9 : 0.65,
-            strokeWidth: Number(style?.strokeWidth || 3) + 1,
+            strokeOpacity: getGraphEdgeAnimationOpacity(data.graphEdge.animation),
+            strokeWidth:
+              Number(style?.strokeWidth || 3) +
+              getGraphEdgeAnimationStrokeBoost(data.graphEdge.animation),
           }}
         />
       ) : null}
@@ -1046,6 +1095,54 @@ function GraphFlowEdgeRenderer({
       ) : null}
     </>
   );
+}
+
+function getGraphEdgeAnimationClassName(animation: NonNullable<GraphEdge['animation']>) {
+  switch (animation) {
+    case 'flow':
+      return 'graph-edge-flow';
+    case 'pulse':
+      return 'graph-edge-pulse';
+    case 'disabled':
+    case 'none':
+      return undefined;
+  }
+}
+
+function getGraphEdgeBaseStyle(
+  style: React.CSSProperties | undefined,
+  animation: GraphEdge['animation'] | undefined
+) {
+  if (!animation || animation === 'none' || animation === 'disabled') return style;
+
+  return {
+    ...style,
+    strokeOpacity: Math.min(Number(style?.strokeOpacity ?? 0.3), 0.22),
+  };
+}
+
+function getGraphEdgeAnimationOpacity(animation: NonNullable<GraphEdge['animation']>) {
+  switch (animation) {
+    case 'flow':
+      return 0.9;
+    case 'pulse':
+      return 0.72;
+    case 'disabled':
+    case 'none':
+      return 0;
+  }
+}
+
+function getGraphEdgeAnimationStrokeBoost(animation: NonNullable<GraphEdge['animation']>) {
+  switch (animation) {
+    case 'pulse':
+      return 3;
+    case 'flow':
+      return 1;
+    case 'disabled':
+    case 'none':
+      return 0;
+  }
 }
 
 export default GenericGraph;

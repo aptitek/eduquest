@@ -180,6 +180,7 @@ export interface PlayingCardRibbonProps {
   className?: string;
   ribbonClassName?: string;
   layoutId?: string;
+  contentInteractive?: boolean;
   onClick?: () => void;
   ariaLabel?: string;
 }
@@ -193,6 +194,7 @@ export function PlayingCardRibbon({
   className,
   ribbonClassName,
   layoutId,
+  contentInteractive,
   onClick,
   ariaLabel,
 }: PlayingCardRibbonProps) {
@@ -205,6 +207,7 @@ export function PlayingCardRibbon({
         color={color}
         className={className}
         ribbonClassName={ribbonClassName}
+        contentInteractive={contentInteractive}
         onClick={onClick}
         ariaLabel={ariaLabel}
       >

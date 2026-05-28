@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   GAME_CHARACTER_CLASSES,
   type GameCharacterClass,
@@ -84,6 +85,10 @@ export function CharacterPage() {
       })
       .catch((error) => {
         console.warn('Could not load character class definitions.', error);
+        toast.error(
+          t('character.errors.loadClasses').replace('{detail}', getErrorMessage(error)),
+          { id: 'character.errors.loadClasses' }
+        );
       });
 
     return () => {
@@ -231,6 +236,12 @@ export function CharacterPage() {
       </div>
     </GameLayout>
   );
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
 }
 
 function applyPlayerCardOverrides(

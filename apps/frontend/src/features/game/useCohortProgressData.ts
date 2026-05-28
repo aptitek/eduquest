@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CohortProgressData } from '@eduquest/shared';
 import { fetchCohortProgressData } from './api';
 
-export function useCohortProgressData(enabled = true, gameId?: string | null) {
+export function useCohortProgressData(
+  enabled = true,
+  gameId?: string | null,
+  onError?: (error: unknown) => void
+) {
   const [progressData, setProgressData] = useState<CohortProgressData | null>(null);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
   const loadProgressData = useCallback(() => {
     const token = localStorage.getItem('eduquest_token');
     if (!enabled || !token) return undefined;
@@ -15,6 +25,7 @@ export function useCohortProgressData(enabled = true, gameId?: string | null) {
       })
       .catch((error) => {
         console.warn('Could not load cohort progress data.', error);
+        onErrorRef.current?.(error);
       });
 
     return () => {

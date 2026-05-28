@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   BookOpen,
   Castle,
@@ -30,16 +30,11 @@ import {
 } from '../molecules/PlayingCard';
 import { EditableList } from '../molecules/EditableList';
 import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
+import { EditableIcon } from '../atoms/EditableIcon';
 import { EditableText } from '../atoms/EditableText';
 import { useTranslation } from '../../hooks/useTranslation';
 import { SOLARIZED_SWATCH_OPTIONS, resolveColorTextClassName } from '../../styles/colorTokens';
 import { cn } from '../../utils/cn';
-
-const LucideIconSelector = lazy(() =>
-  import('../atoms/LucideIconSelector').then((module) => ({
-    default: module.LucideIconSelector,
-  }))
-);
 
 const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
   TreePine,
@@ -99,6 +94,17 @@ export interface ActivityCardProps {
   isResolving?: boolean;
   resolveError?: string | null;
   onResolve?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
+  onTitleChange?: (title: string) => void | Promise<void>;
+  onSubtitleChange?: (subtitle: string) => void | Promise<void>;
+  onDescriptionChange?: (description: string) => void | Promise<void>;
+  onGoldRewardChange?: (goldReward: number) => void | Promise<void>;
+  onResourcesChange?: (resources: ActivityResourceLink[]) => void | Promise<void>;
+  onPositionChange?: (position: { mapX: number; mapY: number }) => void | Promise<void>;
+  onParticipationModeChange?: (participationMode: ActivityParticipationMode) => void | Promise<void>;
+  onIconChange?: (iconId: string) => void | Promise<void>;
+  onCardColorChange?: (cardColor: string) => void | Promise<void>;
+  onIllustrationUrlChange?: (illustrationUrl: string) => void | Promise<void>;
+  onStepRangesChange?: (stepRanges: ActivityStepRange[]) => void | Promise<void>;
   className?: string;
 }
 
@@ -110,6 +116,17 @@ export function ActivityCard({
   isResolving = false,
   resolveError,
   onResolve,
+  onTitleChange,
+  onSubtitleChange,
+  onDescriptionChange,
+  onGoldRewardChange,
+  onResourcesChange,
+  onPositionChange,
+  onParticipationModeChange,
+  onIconChange,
+  onCardColorChange,
+  onIllustrationUrlChange,
+  onStepRangesChange,
   className,
 }: ActivityCardProps) {
   const { t } = useTranslation();
@@ -140,13 +157,25 @@ export function ActivityCard({
   };
 
   const updateNumber = (field: 'mapX' | 'mapY', value: string) => {
-    updateDraft((current) => ({ ...current, [field]: Number(value) || 0 }));
+    const nextValue = Number(value) || 0;
+    const nextPosition = {
+      mapX: field === 'mapX' ? nextValue : draft.mapX,
+      mapY: field === 'mapY' ? nextValue : draft.mapY,
+    };
+    updateDraft((current) => ({ ...current, [field]: nextValue }));
+    void onPositionChange?.(nextPosition);
   };
   const updateCardColor = (cardColor: string) => {
     updateDraft((current) => ({ ...current, cardColor: cardColor || undefined }));
+    void onCardColorChange?.(cardColor);
   };
   const updateParticipationMode = (participationMode: ActivityParticipationMode) => {
     updateDraft((current) => ({ ...current, participationMode }));
+    void onParticipationModeChange?.(participationMode);
+  };
+  const updateIcon = (selectedIcon: string) => {
+    updateDraft((current) => ({ ...current, selectedIcon }));
+    void onIconChange?.(selectedIcon);
   };
 
   const updateCardField = (field: PlayingCardEditableField, value: string) => {
@@ -158,55 +187,59 @@ export function ActivityCard({
       }
       return current;
     });
+    if (field === 'title') {
+      void onTitleChange?.(value);
+    }
+    if (field === 'subtitle') {
+      void onSubtitleChange?.(value);
+    }
+    if (field === 'description') {
+      void onDescriptionChange?.(value);
+    }
+    if (field === 'ribbonText') {
+      void onGoldRewardChange?.(Number(value) || 0);
+    }
+    if (field === 'illustrationUrl') {
+      void onIllustrationUrlChange?.(value);
+    }
+  };
+
+  const applyResources = (resources: ActivityResourceLink[]) => {
+    updateDraft((current) => ({ ...current, resources }));
+    const hasOnlyCommittedRows = resources.every((resource) => resource.url.trim());
+    const removedRows = resources.length < draft.resources.length;
+    if (hasOnlyCommittedRows || removedRows) {
+      void onResourcesChange?.(resources);
+    }
+  };
+
+  const applyStepRanges = (stepRanges: ActivityStepRange[]) => {
+    updateDraft((current) => ({ ...current, stepRanges }));
+    void onStepRangesChange?.(stepRanges);
   };
 
   const updateStepRange = (index: number, field: keyof ActivityStepRange, value: string) => {
-    updateDraft((current) => ({
-      ...current,
-      stepRanges: current.stepRanges.map((range, rangeIndex) =>
-        rangeIndex === index
-          ? {
-              ...range,
-              [field]: value === '' && field === 'endStep' ? undefined : Number(value) || 0,
-            }
-          : range
-      ),
-    }));
+    const stepRanges = draft.stepRanges.map((range, rangeIndex) =>
+      rangeIndex === index
+        ? {
+            ...range,
+            [field]: value === '' && field === 'endStep' ? undefined : Number(value) || 0,
+          }
+        : range
+    );
+    applyStepRanges(stepRanges);
   };
   const addStepRange = () => {
-    updateDraft((current) => ({
-      ...current,
-      stepRanges: [...current.stepRanges, { startStep: 0 }],
-    }));
+    applyStepRanges([...draft.stepRanges, { startStep: 0 }]);
   };
   const removeStepRange = (index: number) => {
-    updateDraft((current) => ({
-      ...current,
-      stepRanges: current.stepRanges.filter((_, rangeIndex) => rangeIndex !== index),
-    }));
+    applyStepRanges(draft.stepRanges.filter((_, rangeIndex) => rangeIndex !== index));
   };
-  const updateAdjacentNode = (index: number, value: string) => {
-    updateDraft((current) => ({
-      ...current,
-      adjacentNodes: current.adjacentNodes.map((node, nodeIndex) =>
-        nodeIndex === index ? value : node
-      ),
-    }));
-  };
-  const addAdjacentNode = () => {
-    updateDraft((current) => ({ ...current, adjacentNodes: [...current.adjacentNodes, ''] }));
-  };
-  const removeAdjacentNode = (index: number) => {
-    updateDraft((current) => ({
-      ...current,
-      adjacentNodes: current.adjacentNodes.filter((_, nodeIndex) => nodeIndex !== index),
-    }));
-  };
-
   const activityFront = buildActivityFrontSide({
     activity: draft,
     canEdit,
-    onResourcesChange: (resources) => updateDraft((current) => ({ ...current, resources })),
+    onResourcesChange: applyResources,
+    onIconSelect: updateIcon,
     onFieldChange: updateCardField,
   });
 
@@ -238,18 +271,13 @@ export function ActivityCard({
             canEdit ? (
               <ActivityCardBack
                 activity={draft}
-                onIconSelect={(selectedIcon) =>
-                  updateDraft((current) => ({ ...current, selectedIcon }))
-                }
                 onNumberChange={updateNumber}
+                onIllustrationUrlChange={(value) => updateCardField('illustrationUrl', value)}
                 onCardColorChange={updateCardColor}
                 onParticipationModeChange={updateParticipationMode}
                 onStepRangeChange={updateStepRange}
                 onStepRangeAdd={addStepRange}
                 onStepRangeRemove={removeStepRange}
-                onAdjacentNodeChange={updateAdjacentNode}
-                onAdjacentNodeAdd={addAdjacentNode}
-                onAdjacentNodeRemove={removeAdjacentNode}
                 t={t}
               />
             ) : undefined
@@ -438,11 +466,13 @@ function buildActivityFrontSide({
   activity,
   canEdit,
   onResourcesChange,
+  onIconSelect,
   onFieldChange,
 }: {
   activity: ActivityCardData;
   canEdit: boolean;
   onResourcesChange: (resources: ActivityResourceLink[]) => void;
+  onIconSelect: (iconName: string) => void;
   onFieldChange: (field: PlayingCardEditableField, value: string) => void;
 }): PlayingCardSide {
   return {
@@ -453,7 +483,13 @@ function buildActivityFrontSide({
     illustrationUrl: activity.illustrationUrl,
     illustrationAlt: activity.illustrationAlt,
     illustration: activity.illustrationUrl ? undefined : (
-      <ActivityIcon iconId={activity.selectedIcon} size={72} color={activity.cardColor} />
+      <ActivityIcon
+        iconId={activity.selectedIcon}
+        size={72}
+        color={activity.cardColor}
+        canEdit={canEdit}
+        onChange={onIconSelect}
+      />
     ),
     ribbonText: String(activity.goldReward),
     ribbonIcon: <Coins size={18} aria-hidden />,
@@ -596,52 +632,30 @@ function getFaviconUrl(url: string) {
 
 interface ActivityCardBackProps {
   activity: ActivityCardData;
-  onIconSelect: (iconName: string) => void;
   onNumberChange: (field: 'mapX' | 'mapY', value: string) => void;
+  onIllustrationUrlChange: (illustrationUrl: string) => void;
   onCardColorChange: (cardColor: string) => void;
   onParticipationModeChange: (participationMode: ActivityParticipationMode) => void;
   onStepRangeChange: (index: number, field: keyof ActivityStepRange, value: string) => void;
   onStepRangeAdd: () => void;
   onStepRangeRemove: (index: number) => void;
-  onAdjacentNodeChange: (index: number, value: string) => void;
-  onAdjacentNodeAdd: () => void;
-  onAdjacentNodeRemove: (index: number) => void;
   t: (path: string) => string;
 }
 
 function ActivityCardBack({
   activity,
-  onIconSelect,
   onNumberChange,
+  onIllustrationUrlChange,
   onCardColorChange,
   onParticipationModeChange,
   onStepRangeChange,
   onStepRangeAdd,
   onStepRangeRemove,
-  onAdjacentNodeChange,
-  onAdjacentNodeAdd,
-  onAdjacentNodeRemove,
   t,
 }: ActivityCardBackProps) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.1rem] bg-gaming-card text-text-primary">
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 pr-4">
-        <section className="space-y-3">
-          <Suspense
-            fallback={
-              <div className="rounded-xl border border-gaming-border bg-gaming-base px-3 py-4 text-sm text-text-muted">
-                {t('activityCard.loadingIconSelector')}
-              </div>
-            }
-          >
-            <LucideIconSelector
-              value={activity.selectedIcon}
-              onChange={onIconSelect}
-              searchPlaceholder={t('activityCard.iconSearchPlaceholder')}
-            />
-          </Suspense>
-        </section>
-
         <section className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <NumberField
@@ -658,6 +672,16 @@ function ActivityCardBack({
         </section>
 
         <section className="space-y-3">
+          <label className="space-y-1.5 text-sm">
+            <span className="font-bold text-text-secondary">{t('activityCard.illustrationUrl')}</span>
+            <EditableText
+              value={activity.illustrationUrl || ''}
+              onChange={onIllustrationUrlChange}
+              placeholder={t('activityCard.illustrationUrlPlaceholder')}
+              className="min-w-0 text-sm text-text-secondary"
+              truncate={false}
+            />
+          </label>
           <ActivityColorSelector value={activity.cardColor} onChange={onCardColorChange} />
           <label className="space-y-1.5 text-sm">
             <span className="font-bold text-text-secondary">{t('activityCard.activityMode')}</span>
@@ -711,17 +735,11 @@ function ActivityCardBack({
             <EditableList
               items={activity.adjacentNodes}
               getKey={(node, index) => `${node || 'adjacent-node'}-${index}`}
-              renderItem={(node, index) => (
-                <EditableText
-                  value={node}
-                  onChange={(value) => onAdjacentNodeChange(index, value)}
-                  placeholder={t('activityCard.adjacentNodePlaceholder')}
-                  className="min-w-0 text-sm text-text-secondary"
-                  truncate={false}
-                />
+              renderItem={(node) => (
+                <span className="min-w-0 truncate text-sm text-text-secondary">
+                  {node || t('activityCard.adjacentNodePlaceholder')}
+                </span>
               )}
-              onAdd={onAdjacentNodeAdd}
-              onRemove={(_node, index) => onAdjacentNodeRemove(index)}
               addLabel={t('activityCard.addAdjacentNode')}
               removeLabel={t('activityCard.removeAdjacentNode')}
               emptyState={t('activityCard.noAdjacentNodes')}
@@ -783,13 +801,33 @@ function ActivityIcon({
   iconId,
   size = 24,
   color,
+  canEdit,
+  onChange,
 }: {
   iconId: string;
   size?: number;
   color?: string;
+  canEdit?: boolean;
+  onChange?: (iconId: string) => void;
 }) {
   const Icon = PUBLIC_ICON_MAP[iconId] || Sparkles;
-  return <Icon size={size} aria-hidden className={color ? resolveColorTextClassName(color) : undefined} />;
+  const iconClassName = color ? resolveColorTextClassName(color) : undefined;
+
+  if (canEdit && onChange) {
+    return (
+      <EditableIcon
+        value={iconId}
+        onChange={onChange}
+        size={size}
+        label="Change activity icon"
+        searchPlaceholder="Search activity icons..."
+        buttonClassName="h-full w-full rounded-none text-[color:var(--playing-card-accent)]"
+        iconClassName={iconClassName}
+      />
+    );
+  }
+
+  return <Icon size={size} aria-hidden className={iconClassName} />;
 }
 
 function NumberField({

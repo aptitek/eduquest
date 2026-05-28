@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Github, Terminal, Gamepad2, Sparkles, ShieldAlert } from 'lucide-react';
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
@@ -35,6 +36,10 @@ export function LoginPage() {
         }
       } catch (loadError) {
         console.warn('Could not load debug students for dev login.', loadError);
+        toast.error(
+          t('auth.errors.loadDebugStudents').replace('{detail}', getErrorMessage(loadError)),
+          { id: 'auth.errors.loadDebugStudents' }
+        );
       }
     };
 
@@ -188,6 +193,12 @@ export function LoginPage() {
       </motion.div>
     </div>
   );
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Unknown error';
 }
 
 export default LoginPage;
