@@ -1,7 +1,7 @@
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 
 import { throwApiResponseError } from '../errors/api';
-export type AssetKind = 'avatar' | 'school-logo' | 'guild-icon';
+export type AssetKind = 'avatar' | 'school-logo' | 'guild-icon' | 'reward-illustration';
 
 type AssetUploadResponse =
   | {

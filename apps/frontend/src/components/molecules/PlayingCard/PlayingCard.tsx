@@ -70,6 +70,7 @@ export interface PlayingCardSide {
   editable?: boolean;
   ribbonEditable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
+  onIllustrationUpload?: (file: File) => Promise<string | void>;
   onStatChange?: (statId: string, value: number) => void;
   onRibbonClick?: () => void;
   className?: string;
@@ -398,6 +399,14 @@ function FullCardSide({
     side.onFieldChange?.(field, value);
   };
   const updateIllustrationFromFile = async (file: File) => {
+    if (side.onIllustrationUpload) {
+      const uploadedUrl = await side.onIllustrationUpload(file);
+      if (uploadedUrl) {
+        updateField('illustrationUrl', uploadedUrl);
+      }
+      return;
+    }
+
     updateField('illustrationUrl', await readFileAsDataUrl(file));
   };
 
@@ -586,6 +595,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
         card.front.statPointsRemainingLabel ?? card.statPointsRemainingLabel,
       getStatEditableRange: card.front.getStatEditableRange || card.getStatEditableRange,
       onFieldChange: card.front.onFieldChange || card.onFieldChange,
+      onIllustrationUpload: card.front.onIllustrationUpload,
       onStatChange: card.front.onStatChange || card.onStatChange,
       onRibbonClick: card.front.onRibbonClick || card.onRibbonClick,
     };

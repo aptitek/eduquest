@@ -451,6 +451,7 @@ export interface ProgressReward {
   subtitleI18nKey?: string;
   accentToken?: string;
   iconKey?: string;
+  illustrationUrl?: string;
   color?: string;
 }
 
@@ -471,6 +472,7 @@ export interface GameRewardCard {
   cost: number;
   accentToken?: string;
   iconKey?: string;
+  illustrationUrl?: string;
   color?: string;
   sortOrder: number;
   createdAt?: string;
@@ -483,6 +485,7 @@ export interface GameRewardCardPayload {
   cost: number;
   accentToken?: string;
   iconKey?: string;
+  illustrationUrl?: string;
   color?: string;
   sortOrder?: number;
 }

@@ -971,6 +971,7 @@ function toRewardCard(record: ProgressMilestoneRecord, gameId: string) {
     cost: record.cost,
     accentToken: record.rewardAccentToken,
     iconKey: record.rewardIconKey,
+    illustrationUrl: record.rewardIllustrationUrl || undefined,
     color: record.rewardColor || undefined,
     sortOrder: record.sortOrder,
     createdAt: toIsoString(record.createdAt),
@@ -995,6 +996,8 @@ function normalizeRewardCardPayload(value: unknown): GameRewardCardPayload | und
       typeof candidate.accentToken === 'string' ? candidate.accentToken.trim() || 'quest' : 'quest',
     iconKey:
       typeof candidate.iconKey === 'string' ? candidate.iconKey.trim() || 'Gift' : 'Gift',
+    illustrationUrl:
+      typeof candidate.illustrationUrl === 'string' ? candidate.illustrationUrl.trim() || undefined : undefined,
     color:
       typeof candidate.color === 'string' ? candidate.color.trim() || undefined : undefined,
     sortOrder:
@@ -2821,6 +2824,7 @@ mapRouter.get('/dashboard', async (c) => {
             subtitleI18nKey: milestone.rewardSubtitleI18nKey || undefined,
             accentToken: milestone.rewardAccentToken,
             iconKey: milestone.rewardIconKey,
+            illustrationUrl: milestone.rewardIllustrationUrl || undefined,
             color: milestone.rewardColor || undefined,
           },
         })),
@@ -2940,6 +2944,7 @@ mapRouter.post('/games/:gameId/reward-cards', async (c) => {
         rewardSubtitleI18nKey: body.subtitle || null,
         rewardAccentToken: body.accentToken || 'quest',
         rewardIconKey: body.iconKey || 'Gift',
+        rewardIllustrationUrl: body.illustrationUrl || null,
         rewardColor: body.color || null,
         sortOrder: body.sortOrder ?? Number(maxSortOrder?.value ?? -1) + 1,
       })
@@ -2991,6 +2996,7 @@ mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
         rewardSubtitleI18nKey: body.subtitle || null,
         rewardAccentToken: body.accentToken || 'quest',
         rewardIconKey: body.iconKey || 'Gift',
+        rewardIllustrationUrl: body.illustrationUrl || null,
         rewardColor: body.color || null,
         sortOrder: body.sortOrder ?? 0,
       })

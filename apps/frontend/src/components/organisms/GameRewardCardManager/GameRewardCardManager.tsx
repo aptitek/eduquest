@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from 'react';
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from 'react';
 import type { GameRewardCard, GameRewardCardPayload } from '@eduquest/shared';
 import { Plus, Save, Trash2, X } from 'lucide-react';
 import { PlayingCard, type PlayingCardData, type PlayingCardEditableField } from '../../molecules/PlayingCard';
@@ -16,6 +16,7 @@ import { useErrorReporter } from '../../../features/errors/notifications';
 import { SOLARIZED_SWATCH_OPTIONS, resolveUiColorTokenName } from '../../../styles/colorTokens';
 import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
 import { EditableIcon } from '../../atoms/EditableIcon';
+import { uploadAsset } from '../../../features/assets/api';
 
 const DEFAULT_BONUS_COLOR = SOLARIZED_SWATCH_OPTIONS[5].value;
 
@@ -44,6 +45,15 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editingCard = rewardCards.find((card) => card.id === editingId);
+
+  const uploadRewardIllustration = useCallback(async (file: File) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) throw new Error('rewardCards.missingSession');
+
+    const asset = await uploadAsset(token, 'reward-illustration', file, editingId || undefined);
+    setDraft((current) => ({ ...current, illustrationUrl: asset.url }));
+    return asset.url;
+  }, [editingId]);
 
   useEffect(() => {
     if (!gameId) {
@@ -84,8 +94,9 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       toPlayingCard(t, editingCard ? { ...editingCard, ...draft } : draft, {
         editable: true,
         onFieldChange: (field, value) => updateDraftFromCardField(field, value, setDraft),
+        onIllustrationUpload: uploadRewardIllustration,
       }),
-    [draft, editingCard, t]
+    [draft, editingCard, t, uploadRewardIllustration]
   );
 
   const startEditing = (card: GameRewardCard) => {
@@ -97,6 +108,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       cost: card.cost,
       accentToken: card.accentToken || 'quest',
       iconKey: card.iconKey || 'Gift',
+      illustrationUrl: card.illustrationUrl || '',
       color: card.color || DEFAULT_BONUS_COLOR,
       sortOrder: card.sortOrder,
     });
@@ -125,6 +137,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
         cost: Number(draft.cost),
         accentToken: resolveUiColorTokenName(draft.color || draft.accentToken || DEFAULT_BONUS_COLOR),
         iconKey: draft.iconKey || 'Gift',
+        illustrationUrl: draft.illustrationUrl?.trim() || undefined,
         color: draft.color || DEFAULT_BONUS_COLOR,
       };
       const saved = editingId
@@ -295,37 +308,47 @@ function toPlayingCard(
   options?: {
     editable?: boolean;
     onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
+    onIllustrationUpload?: (file: File) => Promise<string | void>;
   }
 ): PlayingCardData {
   const color = card.color || DEFAULT_BONUS_COLOR;
   const iconKey = card.iconKey || 'Gift';
+  const illustrationUrl = card.illustrationUrl || undefined;
+  const fallbackTitle = card.title || t('rewardCards.previewTitle');
   const costText = String(card.cost ?? 0);
 
   return {
     id: card.id,
     kind: 'reward',
-    title: card.title || t('rewardCards.previewTitle'),
+    title: fallbackTitle,
     subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
     description: card.description,
     color,
     accentToken: resolveUiColorTokenName(card.accentToken || color),
-    illustration: renderLucideIcon(iconKey, 132, 'drop-shadow-lg'),
+    illustrationUrl,
+    illustrationAlt: fallbackTitle,
+    illustration: illustrationUrl ? undefined : renderLucideIcon(iconKey, 132, 'drop-shadow-lg'),
     ribbonIconKey: iconKey,
     ribbonIcon: renderLucideIcon(iconKey, 18),
     ribbonLabel: costText,
+    ribbonPosition: 'top-left',
     ribbonClassName: 'bg-status-quest',
     front: {
-      title: card.title || t('rewardCards.previewTitle'),
+      title: fallbackTitle,
       subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
       description: card.description || t('rewardCards.previewDescription'),
       color,
-      illustration: renderLucideIcon(iconKey, 132, 'drop-shadow-lg'),
+      illustrationUrl,
+      illustrationAlt: fallbackTitle,
+      illustration: illustrationUrl || options?.editable ? undefined : renderLucideIcon(iconKey, 132, 'drop-shadow-lg'),
       ribbonText: costText,
       ribbonIconKey: iconKey,
       ribbonIcon: renderLucideIcon(iconKey, 18),
+      ribbonPosition: 'top-left',
       editable: options?.editable,
       ribbonEditable: options?.editable,
       onFieldChange: options?.onFieldChange,
+      onIllustrationUpload: options?.onIllustrationUpload,
     },
     back: options?.editable
       ? {
@@ -350,6 +373,9 @@ function updateDraftFromCardField(
     }
     if (field === 'ribbonIcon') {
       return { ...current, iconKey: value };
+    }
+    if (field === 'illustrationUrl') {
+      return { ...current, illustrationUrl: value || undefined };
     }
     if (field === 'title' || field === 'subtitle' || field === 'description') {
       return { ...current, [field]: value };

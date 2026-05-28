@@ -241,9 +241,13 @@ export function DashboardDock({ className }: DashboardDockProps) {
         description: milestone.descriptionI18nKey ? t(milestone.descriptionI18nKey) : undefined,
         color: milestone.reward.color,
         accentToken: milestone.reward.accentToken as PlayingCardData['accentToken'],
-        illustration: renderLucideIcon(milestone.reward.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+        illustrationUrl: milestone.reward.illustrationUrl,
+        illustration: milestone.reward.illustrationUrl
+          ? undefined
+          : renderLucideIcon(milestone.reward.iconKey || 'Gift', 132, 'drop-shadow-lg'),
         ribbonIcon: renderLucideIcon(milestone.reward.iconKey || 'Gift', 18),
         ribbonLabel: `${milestone.cost} ${t('rewardCards.pointsShort')}`,
+        ribbonPosition: 'top-left',
         ribbonClassName: 'bg-status-quest',
       })) as [PlayingCardData, ...PlayingCardData[]])
     : ([

@@ -11,7 +11,7 @@ type Variables = {
   user?: UserPayload;
 };
 
-type AssetKind = 'avatar' | 'school-logo' | 'guild-icon';
+type AssetKind = 'avatar' | 'school-logo' | 'guild-icon' | 'reward-illustration';
 
 type AssetPolicy = {
   maxBytes: number;
@@ -33,6 +33,12 @@ const assetPolicies: Record<AssetKind, AssetPolicy> = {
     requiresAdmin: true,
   },
   'guild-icon': {
+    maxBytes: 2 * 1024 * 1024,
+    allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
+    allowSvg: true,
+    requiresAdmin: true,
+  },
+  'reward-illustration': {
     maxBytes: 2 * 1024 * 1024,
     allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
     allowSvg: true,
@@ -172,7 +178,8 @@ function buildAssetKey(
   }
 
   const safeEntityId = (entityId || randomId).replace(/[^a-zA-Z0-9_-]/g, '-');
-  return `${kind === 'school-logo' ? 'schools' : 'guilds'}/${safeEntityId}/${kind}-${timestamp}-${randomId}.${extension}`;
+  const folder = kind === 'school-logo' ? 'schools' : kind === 'guild-icon' ? 'guilds' : 'reward-cards';
+  return `${folder}/${safeEntityId}/${kind}-${timestamp}-${randomId}.${extension}`;
 }
 
 function buildAssetUrl(requestUrl: string, publicBaseUrl: string | undefined, key: string) {
@@ -191,7 +198,12 @@ function encodeAssetKey(key: string) {
 }
 
 function isPublicAssetKey(key: string) {
-  return key.startsWith('users/') || key.startsWith('schools/') || key.startsWith('guilds/');
+  return (
+    key.startsWith('users/') ||
+    key.startsWith('schools/') ||
+    key.startsWith('guilds/') ||
+    key.startsWith('reward-cards/')
+  );
 }
 
 function sanitizeSvg(source: string) {
