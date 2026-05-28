@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
 import {
   GAME_CHARACTER_CLASSES,
   type GameCharacterClass,
@@ -20,6 +19,7 @@ import { useGameStore } from '../../features/game/gameStore';
 import { fetchCharacterClasses } from '../../features/game/api';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatUserDisplayName } from '../../utils/displayName';
+import { useErrorReporter } from '../../features/errors/notifications';
 
 type EditablePlayerCardOverride = Partial<Record<PlayingCardEditableField, string>> & {
   stats?: Record<string, number>;
@@ -73,6 +73,7 @@ const CHARACTER_CLASS_BASE_STATS: Record<GameCharacterClass, GameStats> = {
 
 export function CharacterPage() {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const { user, character, setCharacterClass } = useGameStore();
   const [playerCardOverride, setPlayerCardOverride] = useState<EditablePlayerCardOverride>({});
   const [classDefinitions, setClassDefinitions] = useState<GameCharacterClassDefinition[]>([]);
@@ -84,11 +85,11 @@ export function CharacterPage() {
         if (isMounted) setClassDefinitions(definitions);
       })
       .catch((error) => {
-        console.warn('Could not load character class definitions.', error);
-        toast.error(
-          t('character.errors.loadClasses').replace('{detail}', getErrorMessage(error)),
-          { id: 'character.errors.loadClasses' }
-        );
+        reportError(error, {
+          messageKey: 'character.errors.loadClasses',
+          id: 'character.errors.loadClasses',
+          logMessage: 'Could not load character class definitions.',
+        });
       });
 
     return () => {
@@ -236,12 +237,6 @@ export function CharacterPage() {
       </div>
     </GameLayout>
   );
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
 }
 
 function applyPlayerCardOverrides(

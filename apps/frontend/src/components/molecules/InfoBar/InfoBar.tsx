@@ -110,7 +110,7 @@ export function InfoBar({
             </span>
           ) : null}
         </div>
-        {description ? <p className="mt-1 text-xs leading-relaxed text-text-secondary">{description}</p> : null}
+        {description ? <div className="mt-1 text-xs leading-relaxed text-text-secondary">{description}</div> : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

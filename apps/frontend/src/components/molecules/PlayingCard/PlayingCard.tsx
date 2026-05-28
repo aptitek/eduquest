@@ -413,7 +413,6 @@ function FullCardSide({
             position={side.ribbonPosition || 'top-right'}
             size="md"
             color={color}
-            className={getFullCardRibbonOuterEdgeClassName(side.ribbonPosition || 'top-right')}
             icon={resolveRibbonIcon(undefined, side)}
             ribbonClassName={ribbonClassName}
             contentInteractive={canEditRibbon}
@@ -558,10 +557,6 @@ function CardFace({ children, className }: { children: ReactNode; className?: st
       {children}
     </div>
   );
-}
-
-function getFullCardRibbonOuterEdgeClassName(position: CornerRibbonPosition) {
-  return position === 'top-left' ? '-left-2 -top-2' : '-right-2 -top-2';
 }
 
 function resolveFrontSide(card: PlayingCardData): PlayingCardSide {

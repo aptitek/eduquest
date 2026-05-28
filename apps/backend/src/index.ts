@@ -8,6 +8,7 @@ import { assetRouter, publicAssetRouter } from './routes/assets';
 import { webhooksRouter } from './routes/webhooks';
 import { authMiddleware } from './middleware/auth';
 import { getFrontendUrl } from './config/runtime';
+import { apiError } from './routes/http';
 
 type Bindings = {
   APP_ENV?: string;
@@ -63,5 +64,18 @@ app.route('/api', mapRouter);
 app.route('/api/admin', adminRouter);
 app.route('/api', rewardsRouter);
 app.route('/api', assetRouter);
+
+app.notFound((c) => {
+  return apiError(c, 'The requested endpoint could not be found.', 404, {
+    errorCode: 'not_found',
+  });
+});
+
+app.onError((error, c) => {
+  console.error('Unhandled API error:', error);
+  return apiError(c, 'An unexpected server error occurred. Please try again later.', 500, {
+    errorCode: 'internal_error',
+  });
+});
 
 export default app;

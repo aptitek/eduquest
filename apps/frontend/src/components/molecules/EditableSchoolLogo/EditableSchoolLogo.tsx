@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, RotateCcw } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
+import { useErrorReporter } from '../../../features/errors/notifications';
 
 export interface EditableSchoolLogoProps {
   src?: string;
@@ -34,11 +34,17 @@ export function EditableSchoolLogo({
   className,
 }: EditableSchoolLogoProps) {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [optimisticSrc, setOptimisticSrc] = useState<string | null>(null);
-  const showErrorToast = (messageKey: string) => toast.error(t(messageKey), { id: messageKey });
+  const showErrorToast = (messageKey: string) => {
+    reportError(messageKey, { messageKey, id: messageKey, includeDetail: false });
+  };
+  const showOperationError = (error: unknown, messageKey: string) => {
+    reportError(error, { messageKey, id: messageKey });
+  };
 
   useEffect(() => {
     if (!optimisticSrc) return;
@@ -89,7 +95,7 @@ export function EditableSchoolLogo({
       }
       setOptimisticSrc(null);
       console.error('Error uploading school logo:', error);
-      showErrorToast('profile.errors.avatarProcessingFailed');
+      showOperationError(error, 'profile.errors.schoolLogoUploadFailed');
     } finally {
       setIsUploading(false);
     }
@@ -159,6 +165,8 @@ export function EditableSchoolLogo({
             setIsUploading(true);
             try {
               await onReset();
+            } catch (error) {
+              showOperationError(error, 'profile.errors.schoolLogoResetFailed');
             } finally {
               setIsUploading(false);
             }

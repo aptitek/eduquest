@@ -18,6 +18,7 @@ import type {
   Guild,
 } from '@eduquest/shared';
 import { BACKEND_BASE_URL } from '../auth/useAuth';
+import { throwApiResponseError } from '../errors/api';
 
 export type ActivityCompletionDraft = {
   answers?: Array<Pick<BossActivitySubmissionField, 'fieldId' | 'value'>>;
@@ -127,7 +128,7 @@ export async function fetchSelectableGames(
   const data = (await response.json()) as GamesResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Games request failed.' : data.error || 'Games request failed.');
+    throwApiResponseError(response, data, 'Games request failed.');
   }
 
   return { games: data.games, selectedGameId: data.selectedGameId };
@@ -138,11 +139,7 @@ export async function fetchCharacterClasses(): Promise<GameCharacterClassDefinit
   const data = (await response.json()) as CharacterClassesResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success
-        ? 'Character classes request failed.'
-        : data.error || 'Character classes request failed.'
-    );
+    throwApiResponseError(response, data, 'Character classes request failed.');
   }
 
   return data.characterClasses;
@@ -161,7 +158,7 @@ export async function fetchCohortProgressData(
   const data = (await response.json()) as DashboardResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Dashboard request failed.' : data.error || 'Dashboard request failed.');
+    throwApiResponseError(response, data, 'Dashboard request failed.');
   }
 
   return data.progress;
@@ -181,7 +178,7 @@ export async function fetchClassRoster(token: string, gameId?: string | null): P
   const data = (await response.json()) as GuildsResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Guilds request failed.' : data.error || 'Guilds request failed.');
+    throwApiResponseError(response, data, 'Guilds request failed.');
   }
 
   return {
@@ -207,7 +204,7 @@ export async function updateGuildIcon(
   const data = (await response.json()) as GuildUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Guild update failed.' : data.error || 'Guild update failed.');
+    throwApiResponseError(response, data, 'Guild update failed.');
   }
 
   return data.guild;
@@ -339,7 +336,7 @@ export async function fetchMapActivities(token: string, gameId?: string | null):
   const data = (await response.json()) as MapResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Map request failed.' : data.error || 'Map request failed.');
+    throwApiResponseError(response, data, 'Map request failed.');
   }
 
   return data.map;
@@ -364,9 +361,7 @@ export async function completeMapActivity(
   const data = (await response.json()) as CompleteActivityResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity completion failed.' : data.error || 'Activity completion failed.'
-    );
+    throwApiResponseError(response, data, 'Activity completion failed.');
   }
 
   return data.completion;
@@ -403,7 +398,7 @@ export async function moveCharacterToActivity(
   const data = (await response.json()) as MoveCharacterResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Character move failed.' : data.error || 'Character move failed.');
+    throwApiResponseError(response, data, 'Character move failed.');
   }
 
   return { move: data.move, currentActivityId: data.currentActivityId };
@@ -425,7 +420,7 @@ export async function createMapActivity(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Activity create failed.' : data.error || 'Activity create failed.');
+    throwApiResponseError(response, data, 'Activity create failed.');
   }
 
   return data.activity;
@@ -448,9 +443,7 @@ export async function updateMapActivityPosition(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity position update failed.' : data.error || 'Activity position update failed.'
-    );
+    throwApiResponseError(response, data, 'Activity position update failed.');
   }
 
   return data.activity;
@@ -473,7 +466,7 @@ export async function updateMapActivityTitle(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Activity title update failed.' : data.error || 'Activity title update failed.');
+    throwApiResponseError(response, data, 'Activity title update failed.');
   }
 
   return data.activity;
@@ -496,9 +489,7 @@ export async function updateMapActivityCardFields(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity card fields update failed.' : data.error || 'Activity card fields update failed.'
-    );
+    throwApiResponseError(response, data, 'Activity card fields update failed.');
   }
 
   return data.activity;
@@ -518,7 +509,7 @@ export async function deleteMapActivity(
   const data = (await response.json()) as ActivityDeleteResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Activity delete failed.' : data.error || 'Activity delete failed.');
+    throwApiResponseError(response, data, 'Activity delete failed.');
   }
 
   return data.activity;
@@ -541,9 +532,7 @@ export async function updateMapActivityIcon(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity icon update failed.' : data.error || 'Activity icon update failed.'
-    );
+    throwApiResponseError(response, data, 'Activity icon update failed.');
   }
 
   return data.activity;
@@ -566,9 +555,7 @@ export async function updateMapActivityIllustration(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity illustration update failed.' : data.error || 'Activity illustration update failed.'
-    );
+    throwApiResponseError(response, data, 'Activity illustration update failed.');
   }
 
   return data.activity;
@@ -591,9 +578,7 @@ export async function updateMapActivityCardColor(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity color update failed.' : data.error || 'Activity color update failed.'
-    );
+    throwApiResponseError(response, data, 'Activity color update failed.');
   }
 
   return data.activity;
@@ -616,9 +601,7 @@ export async function updateMapActivityStepRanges(
   const data = (await response.json()) as ActivityUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Activity step range update failed.' : data.error || 'Activity step range update failed.'
-    );
+    throwApiResponseError(response, data, 'Activity step range update failed.');
   }
 
   return data.activity;
@@ -638,7 +621,29 @@ export async function deleteMapActivityEdge(
   const data = (await response.json()) as ActivityEdgeDeleteResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Activity edge delete failed.' : data.error || 'Activity edge delete failed.');
+    throwApiResponseError(response, data, 'Activity edge delete failed.');
+  }
+
+  return data.edge;
+}
+
+export async function createMapActivityEdge(
+  token: string,
+  payload: { fromActivityId: string; toActivityId: string },
+  gameId?: string | null
+): Promise<GameActivityEdge> {
+  const response = await fetch(withGameParam('/api/map/edges', gameId), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as ActivityEdgeUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Activity edge create failed.');
   }
 
   return data.edge;
@@ -661,7 +666,7 @@ export async function updateMapActivityEdgeStyles(
   const data = (await response.json()) as ActivityEdgeUpdateResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Activity edge update failed.' : data.error || 'Activity edge update failed.');
+    throwApiResponseError(response, data, 'Activity edge update failed.');
   }
 
   return data.edge;
@@ -676,7 +681,7 @@ export async function fetchCohortStep(token: string, cohortId: string): Promise<
   const data = (await response.json()) as CohortStepResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Cohort step request failed.' : data.error || 'Cohort step request failed.');
+    throwApiResponseError(response, data, 'Cohort step request failed.');
   }
 
   return data.step?.currentStep ?? data.cohort?.currentStep ?? 0;
@@ -694,7 +699,7 @@ export async function updateCohortStep(token: string, cohortId: string, currentS
   const data = (await response.json()) as CohortStepResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Cohort step update failed.' : data.error || 'Cohort step update failed.');
+    throwApiResponseError(response, data, 'Cohort step update failed.');
   }
 
   return data.cohort?.currentStep ?? data.step?.currentStep ?? currentStep;
@@ -712,7 +717,7 @@ export async function spendGuildVotes(token: string, guildId: string, votes = 1)
   const data = (await response.json()) as SpendGuildVotesResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Guild vote spend failed.' : data.error || 'Guild vote spend failed.');
+    throwApiResponseError(response, data, 'Guild vote spend failed.');
   }
 
   return data.voteSpend;
@@ -727,7 +732,7 @@ export async function fetchGameRewardCards(token: string, gameId: string): Promi
   const data = (await response.json()) as RewardCardsResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Reward cards request failed.' : data.error || 'Reward cards request failed.');
+    throwApiResponseError(response, data, 'Reward cards request failed.');
   }
 
   return data.rewardCards;
@@ -749,7 +754,7 @@ export async function createGameRewardCard(
   const data = (await response.json()) as RewardCardResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Reward card create failed.' : data.error || 'Reward card create failed.');
+    throwApiResponseError(response, data, 'Reward card create failed.');
   }
 
   return data.rewardCard;
@@ -772,7 +777,7 @@ export async function updateGameRewardCard(
   const data = (await response.json()) as RewardCardResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Reward card update failed.' : data.error || 'Reward card update failed.');
+    throwApiResponseError(response, data, 'Reward card update failed.');
   }
 
   return data.rewardCard;
@@ -792,7 +797,7 @@ export async function deleteGameRewardCard(
   const data = (await response.json()) as RewardCardResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Reward card delete failed.' : data.error || 'Reward card delete failed.');
+    throwApiResponseError(response, data, 'Reward card delete failed.');
   }
 
   return data.rewardCard;

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import toast from 'react-hot-toast';
 import {
   DEFAULT_REWARD_SYSTEM_CONFIG,
   STUDENT_ATTRIBUTES,
@@ -23,6 +22,7 @@ import type { CohortRow } from '../../../features/management/types';
 import { formatGrade } from '../../../features/management/utils';
 import aptitekLogoUrl from '../../../assets/logo.svg';
 import { keepFocusInContainer } from '../../../utils/focusTrap';
+import { useErrorReporter } from '../../../features/errors/notifications';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -36,12 +36,6 @@ const STAT_LABELS: Record<StudentAttribute, string> = {
   charisma: 'CHA',
 };
 const STAT_CAP = DEFAULT_REWARD_SYSTEM_CONFIG.attributes.levelOneMaxValue;
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
-}
 
 function formatTimeRemaining(expiresAt: string, t: (key: string) => string) {
   const remainingMs = new Date(expiresAt).getTime() - Date.now();
@@ -88,6 +82,7 @@ export function CohortDetailCard({
   ) => Promise<void>;
   t: (key: string) => string;
 }) {
+  const reportError = useErrorReporter();
   const [draft, setDraft] = useState({
     campusName: cohort.campusName,
     name: cohort.name,
@@ -169,11 +164,11 @@ export function CohortDetailCard({
         if (isMounted) setInvites(nextInvites);
       })
       .catch((error) => {
-        console.warn('Could not load cohort invites.', error);
-        toast.error(
-          t('management.errors.loadInvitesFailed').replace('{detail}', getErrorMessage(error)),
-          { id: 'management.errors.loadInvitesFailed' }
-        );
+        reportError(error, {
+          messageKey: 'management.errors.loadInvitesFailed',
+          id: 'management.errors.loadInvitesFailed',
+          logMessage: 'Could not load cohort invites.',
+        });
       });
 
     return () => {
@@ -221,6 +216,11 @@ export function CohortDetailCard({
 
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
       setInviteError(t('management.errors.missingSession'));
       return;
     }
@@ -235,7 +235,11 @@ export function CohortDetailCard({
         ...current.filter((invite) => invite.id !== nextInvite.id),
       ]);
     } catch (error) {
-      console.warn('Could not create cohort invite.', error);
+      reportError(error, {
+        messageKey: 'management.errors.createInviteFailed',
+        id: 'management.errors.createInviteFailed',
+        logMessage: 'Could not create cohort invite.',
+      });
       setInviteError(t('management.errors.createInviteFailed'));
     } finally {
       setIsInviteLoading(false);
@@ -252,6 +256,11 @@ export function CohortDetailCard({
   const revokeInvite = async (inviteId: string) => {
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
       setInviteError(t('management.errors.missingSession'));
       return;
     }
@@ -264,7 +273,11 @@ export function CohortDetailCard({
         setIsInviteModalOpen(false);
       }
     } catch (error) {
-      console.warn('Could not revoke cohort invite.', error);
+      reportError(error, {
+        messageKey: 'management.errors.revokeInviteFailed',
+        id: 'management.errors.revokeInviteFailed',
+        logMessage: 'Could not revoke cohort invite.',
+      });
       setInviteError(t('management.errors.revokeInviteFailed'));
     }
   };
@@ -276,11 +289,11 @@ export function CohortDetailCard({
       await navigator.clipboard.writeText(selectedInvite.url);
       setHasCopiedInvite(true);
     } catch (error) {
-      console.warn('Could not copy cohort invite link.', error);
-      toast.error(
-        t('management.errors.copyInviteFailed').replace('{detail}', getErrorMessage(error)),
-        { id: 'management.errors.copyInviteFailed' }
-      );
+      reportError(error, {
+        messageKey: 'management.errors.copyInviteFailed',
+        id: 'management.errors.copyInviteFailed',
+        logMessage: 'Could not copy cohort invite link.',
+      });
       setHasCopiedInvite(false);
     }
   };
@@ -309,7 +322,11 @@ export function CohortDetailCard({
     try {
       await onUpdateCharacterClass(characterClass, draftStats);
     } catch (error) {
-      console.warn('Could not update character class base stats.', error);
+      reportError(error, {
+        messageKey: 'management.errors.updateClassStatsFailed',
+        id: 'management.errors.updateClassStatsFailed',
+        logMessage: 'Could not update character class base stats.',
+      });
       setClassUpdateError(t('management.errors.updateClassStatsFailed'));
     } finally {
       setSavingClass(null);

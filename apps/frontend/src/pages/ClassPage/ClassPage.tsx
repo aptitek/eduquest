@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Trophy, UserRound, Users } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
@@ -15,12 +14,14 @@ import {
   buildClassGuildHand,
   getLatestCohortMembership,
 } from '../../components/organisms/DashboardDock/dashboardDockData';
+import { useErrorReporter } from '../../features/errors/notifications';
 
 const ALPHABET_SCROLL_MIN_GUILDS = 12;
 const ALPHABET_SCROLL_MIN_LETTERS = 5;
 
 export function ClassPage() {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const { student, selectedGameId } = useGameStore();
   const [guilds, setGuilds] = useState<ClassRosterGuild[]>([]);
   const [unguildedStudents, setUnguildedStudents] = useState<ClassRosterStudent[]>([]);
@@ -45,11 +46,11 @@ export function ClassPage() {
           setUnguildedStudents(roster.unguildedStudents);
         }
       } catch (error) {
-        console.warn('Could not load class guilds.', error);
-        toast.error(
-          t('class.errors.loadGuilds').replace('{detail}', getErrorMessage(error)),
-          { id: 'class.errors.loadGuilds' }
-        );
+        reportError(error, {
+          messageKey: 'class.errors.loadGuilds',
+          id: 'class.errors.loadGuilds',
+          logMessage: 'Could not load class guilds.',
+        });
         if (isMounted) {
           setGuilds([]);
           setUnguildedStudents([]);
@@ -219,12 +220,6 @@ export function ClassPage() {
       </div>
     </GameLayout>
   );
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
 }
 
 function buildUnguildedStudentCard(

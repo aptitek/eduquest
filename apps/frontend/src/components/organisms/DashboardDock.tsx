@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import toast from 'react-hot-toast';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
 import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
@@ -24,6 +23,7 @@ import {
 } from './DashboardDock/dashboardDockData';
 import type { DockGuild } from './DashboardDock/types';
 import { motion, useReducedMotion } from 'framer-motion';
+import { useErrorReporter } from '../../features/errors/notifications';
 
 const LucideIconSelector = lazy(() =>
   import('../atoms/LucideIconSelector').then((module) => ({
@@ -59,14 +59,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const { user, student, character, selectedGameId } = useGameStore();
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const showDockError = useCallback((messageKey: string, error: unknown) => {
-    toast.error(
-      formatTranslation(t(messageKey), {
-        detail: getErrorMessage(error),
-      }),
-      { id: messageKey }
-    );
-  }, [t]);
+    reportError(error, { messageKey, id: messageKey });
+  }, [reportError]);
   const handleProgressError = useCallback(
     (error: unknown) => showDockError('dashboard.dock.errors.loadProgress', error),
     [showDockError]
@@ -966,15 +962,3 @@ function isEditablePlayingCardSide(value: PlayingCardData['back']): value is Pla
   return Boolean(value && typeof value === 'object' && !('type' in value) && 'title' in value);
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
-}
-
-function formatTranslation(template: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (result, [key, value]) => result.split(`{${key}}`).join(String(value)),
-    template
-  );
-}

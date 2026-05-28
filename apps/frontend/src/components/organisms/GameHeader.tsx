@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import toast from 'react-hot-toast';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AccountDropdown } from './AccountDropdown';
 import { StatusIndicator } from '../atoms/StatusIndicator';
@@ -18,6 +17,7 @@ import {
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
+import { useErrorReporter } from '../../features/errors/notifications';
 import {
   formatRewardNotificationDescription,
   formatRewardNotificationTitle,
@@ -38,14 +38,10 @@ export function GameHeader({ currentView = 'map' }: GameHeaderProps) {
     setSelectedGameId,
   } = useGameStore();
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const showHeaderError = useCallback((messageKey: string, error: unknown) => {
-    toast.error(
-      formatTranslation(t(messageKey), {
-        detail: getErrorMessage(error),
-      }),
-      { id: messageKey }
-    );
-  }, [t]);
+    reportError(error, { messageKey, id: messageKey });
+  }, [reportError]);
   const handleDashboardError = useCallback(
     (error: unknown) => showHeaderError('header.errors.loadDashboard', error),
     [showHeaderError]
@@ -486,19 +482,6 @@ function runNotificationAction(actionTarget?: string) {
   if (actionTarget === 'map') {
     window.location.hash = '';
   }
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
-}
-
-function formatTranslation(template: string, values: Record<string, string | number>) {
-  return Object.entries(values).reduce(
-    (result, [key, value]) => result.split(`{${key}}`).join(String(value)),
-    template
-  );
 }
 
 export default GameHeader;

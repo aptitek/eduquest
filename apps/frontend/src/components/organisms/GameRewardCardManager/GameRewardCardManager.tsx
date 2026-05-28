@@ -11,6 +11,8 @@ import {
 } from '../../../features/game/api';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
+import { getUserErrorMessage } from '../../../features/errors/api';
+import { useErrorReporter } from '../../../features/errors/notifications';
 
 const ACCENT_OPTIONS: PlayingCardAccent[] = [
   'quest',
@@ -40,6 +42,7 @@ export interface GameRewardCardManagerProps {
 
 export function GameRewardCardManager({ gameId, className }: GameRewardCardManagerProps) {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const [rewardCards, setRewardCards] = useState<GameRewardCard[]>([]);
   const [draft, setDraft] = useState<GameRewardCardPayload>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,8 +67,14 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
         if (isMounted) setRewardCards(cards);
       })
       .catch((loadError) => {
-        console.warn('Could not load reward cards.', loadError);
-        if (isMounted) setError(t('rewardCards.loadError').replace('{detail}', getErrorMessage(loadError)));
+        reportError(loadError, {
+          messageKey: 'rewardCards.loadError',
+          id: 'rewardCards.loadError',
+          logMessage: 'Could not load reward cards.',
+        });
+        if (isMounted) {
+          setError(t('rewardCards.loadError').replace('{detail}', getUserErrorMessage(loadError, t)));
+        }
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);
@@ -124,8 +133,12 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       resetDraft();
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (saveError) {
-      console.warn('Could not save reward card.', saveError);
-      setError(t('rewardCards.saveError').replace('{detail}', getErrorMessage(saveError)));
+      reportError(saveError, {
+        messageKey: 'rewardCards.saveError',
+        id: 'rewardCards.saveError',
+        logMessage: 'Could not save reward card.',
+      });
+      setError(t('rewardCards.saveError').replace('{detail}', getUserErrorMessage(saveError, t)));
     } finally {
       setIsSaving(false);
     }
@@ -145,8 +158,12 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       if (editingId === card.id) resetDraft();
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (deleteError) {
-      console.warn('Could not delete reward card.', deleteError);
-      setError(t('rewardCards.deleteError').replace('{detail}', getErrorMessage(deleteError)));
+      reportError(deleteError, {
+        messageKey: 'rewardCards.deleteError',
+        id: 'rewardCards.deleteError',
+        logMessage: 'Could not delete reward card.',
+      });
+      setError(t('rewardCards.deleteError').replace('{detail}', getUserErrorMessage(deleteError, t)));
     } finally {
       setIsSaving(false);
     }
@@ -272,11 +289,6 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   );
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
-}
 
 function TextInput({
   label,

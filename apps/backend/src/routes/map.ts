@@ -271,7 +271,7 @@ async function parseCompletionSubmission(
       try {
         parseAnswerJson(answersValue, textAnswers);
       } catch {
-        return c.json({ success: false, error: 'Invalid answer payload.' }, 400);
+        return apiError(c, 'Invalid answer payload.', 400);
       }
     }
 
@@ -291,7 +291,7 @@ async function parseCompletionSubmission(
       try {
         parseAnswerJson(candidate.answers, textAnswers);
       } catch {
-        return c.json({ success: false, error: 'Invalid answer payload.' }, 400);
+        return apiError(c, 'Invalid answer payload.', 400);
       }
     }
   }
@@ -305,22 +305,23 @@ async function parseCompletionSubmission(
     try {
       value = field.kind === 'file' ? undefined : normalizeAnswerValue(field, textAnswers.get(field.id));
     } catch (error) {
-      return c.json(
-        { success: false, error: error instanceof Error ? error.message : 'Invalid answer value.' },
-        400
-      );
+      return apiError(c, error instanceof Error ? error.message : 'Invalid answer value.', 400, {
+        errorCode: 'validation_failed',
+      });
     }
     const files = filesByField.get(field.id) || [];
 
     if (field.kind === 'file') {
       const maxFiles = field.maxFiles || 1;
       if (files.length > maxFiles) {
-        return c.json({ success: false, error: `${field.label} accepts at most ${maxFiles} file(s).` }, 400);
+        return apiError(c, `${field.label} accepts at most ${maxFiles} file(s).`, 400, {
+          errorCode: 'validation_failed',
+        });
       }
     }
 
     if (field.required && !value && files.length === 0) {
-      return c.json({ success: false, error: `${field.label} is required.` }, 400);
+      return apiError(c, `${field.label} is required.`, 400, { errorCode: 'validation_failed' });
     }
 
     let uploadedFiles: BossActivitySubmissionFile[] | undefined;
@@ -351,7 +352,7 @@ async function parseCompletionSubmission(
   }
 
   if (!fields.some((field) => field.value || (field.files && field.files.length > 0))) {
-    return c.json({ success: false, error: 'At least one boss answer is required.' }, 400);
+    return apiError(c, 'At least one boss answer is required.', 400);
   }
 
   return {
@@ -409,7 +410,7 @@ async function uploadSubmissionFiles(
 ): Promise<BossActivitySubmissionFile[] | Response> {
   const bucket = c.env.ASSETS;
   if (!bucket) {
-    return c.json({ success: false, error: 'Project file storage is not configured.' }, 503);
+    return apiError(c, 'Project file storage is not configured.', 503);
   }
 
   const uploadedFiles: BossActivitySubmissionFile[] = [];
@@ -418,13 +419,19 @@ async function uploadSubmissionFiles(
   for (const file of options.files) {
     const contentType = normalizeSubmissionContentType(file.type);
     if (file.size <= 0) {
-      return c.json({ success: false, error: `${file.name || options.field.label} is empty.` }, 400);
+      return apiError(c, `${file.name || options.field.label} is empty.`, 400, {
+        errorCode: 'validation_failed',
+      });
     }
     if (file.size > maxBytes) {
-      return c.json({ success: false, error: `${file.name || options.field.label} is too large.` }, 400);
+      return apiError(c, `${file.name || options.field.label} is too large.`, 400, {
+        errorCode: 'payload_too_large',
+      });
     }
     if (BLOCKED_SUBMISSION_CONTENT_TYPES.has(contentType)) {
-      return c.json({ success: false, error: `${contentType} files are not allowed.` }, 400);
+      return apiError(c, `${contentType} files are not allowed.`, 400, {
+        errorCode: 'unsupported_media_type',
+      });
     }
 
     const fileId = crypto.randomUUID();
@@ -1765,6 +1772,85 @@ mapRouter.delete('/map/edges/:edgeId', async (c) => {
   }
 });
 
+mapRouter.post('/map/edges', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabaseUrl(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const requestedCohortId = getRequestedGameId(c);
+  const body = await parseJsonBody<{ fromActivityId?: unknown; toActivityId?: unknown }>(c, {});
+  const fromActivityId = typeof body?.fromActivityId === 'string' ? body.fromActivityId.trim() : '';
+  const toActivityId = typeof body?.toActivityId === 'string' ? body.toActivityId.trim() : '';
+
+  if (!fromActivityId || !toActivityId) {
+    return apiError(c, 'fromActivityId and toActivityId are required.', 400);
+  }
+
+  if (fromActivityId === toActivityId) {
+    return apiError(c, 'An activity cannot link to itself.', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, requestedCohortId);
+
+    if (!cohortRecord) {
+      return apiError(c, 'Map cohort not found.', 404);
+    }
+
+    const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
+    const activityScope = or(
+      sql`${gameActivities.cohortId} IS NULL`,
+      eq(gameActivities.cohortId, cohortRecord.id),
+      eq(gameActivities.mapRunId, activeRun.id)
+    );
+    const linkedActivities = await db
+      .select({ id: gameActivities.id })
+      .from(gameActivities)
+      .where(and(inArray(gameActivities.id, [fromActivityId, toActivityId]), activityScope));
+
+    if (linkedActivities.length !== 2) {
+      return apiError(c, 'Both activities must exist on this map before they can be linked.', 404);
+    }
+
+    const edgeScope = and(
+      eq(gameActivityEdges.fromActivityId, fromActivityId),
+      eq(gameActivityEdges.toActivityId, toActivityId),
+      or(
+        sql`${gameActivityEdges.cohortId} IS NULL AND ${gameActivityEdges.mapRunId} IS NULL`,
+        eq(gameActivityEdges.cohortId, cohortRecord.id),
+        eq(gameActivityEdges.mapRunId, activeRun.id)
+      )
+    );
+    const [existingEdge] = await db.select().from(gameActivityEdges).where(edgeScope).limit(1);
+
+    if (existingEdge) {
+      return c.json({ success: true, edge: toActivityEdge(existingEdge) });
+    }
+
+    const [createdEdge] = await db
+      .insert(gameActivityEdges)
+      .values({
+        cohortId: cohortRecord.id,
+        mapRunId: activeRun.id,
+        fromActivityId,
+        toActivityId,
+        metadata: {},
+      })
+      .returning();
+
+    return c.json({
+      success: true,
+      edge: toActivityEdge(createdEdge),
+    });
+  } catch (error: any) {
+    console.error('Activity edge create failed:', error.message);
+    return apiError(c, 'Activity edge could not be created.', 500);
+  }
+});
+
 mapRouter.patch('/map/edges/:edgeId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
@@ -1845,7 +1931,7 @@ mapRouter.get('/games', async (c) => {
   const user = c.get('user');
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -1869,7 +1955,7 @@ mapRouter.get('/games', async (c) => {
       : [];
 
     if (!studentRecord) {
-      return c.json({ success: false, error: 'Student profile not found.' }, 404);
+      return apiError(c, 'Student profile not found.', 404);
     }
 
     const memberships = await db
@@ -1896,7 +1982,7 @@ mapRouter.get('/games', async (c) => {
     });
   } catch (error: any) {
     console.error('Game selector SQL error:', error.message);
-    return c.json({ success: false, error: 'Games could not be loaded.' }, 500);
+    return apiError(c, 'Games could not be loaded.', 500);
   }
 });
 
@@ -1906,7 +1992,7 @@ mapRouter.get('/guilds', async (c) => {
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -1916,7 +2002,7 @@ mapRouter.get('/guilds', async (c) => {
       : (await resolveStudentCohortContext(db, user, requestedCohortId))?.cohortRecord;
 
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Guild cohort context not found.' }, 404);
+      return apiError(c, 'Guild cohort context not found.', 404);
     }
 
     const guildRecords = await db
@@ -1989,7 +2075,7 @@ mapRouter.get('/guilds', async (c) => {
     });
   } catch (error: any) {
     console.error('Guild SQL error:', error.message);
-    return c.json({ success: false, error: 'Guilds could not be loaded.' }, 500);
+    return apiError(c, 'Guilds could not be loaded.', 500);
   }
 });
 
@@ -2007,11 +2093,11 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
 
   const iconKey = typeof body.iconKey === 'string' ? body.iconKey.trim() : undefined;
   if (!iconKey || !/^[A-Za-z0-9_-]{1,80}$/.test(iconKey)) {
-    return c.json({ success: false, error: 'iconKey must be a valid icon identifier.' }, 400);
+    return apiError(c, 'iconKey must be a valid icon identifier.', 400);
   }
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -2019,13 +2105,13 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
     const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
 
     if (!guildRecord) {
-      return c.json({ success: false, error: 'Guild not found.' }, 404);
+      return apiError(c, 'Guild not found.', 404);
     }
 
     if (!user?.isAdmin) {
       const context = await resolveStudentCohortContext(db, user, guildRecord.cohortId);
       if (!context || context.membership.guildId !== guildId) {
-        return c.json({ success: false, error: 'Guild update is not allowed.' }, 403);
+        return apiError(c, 'Guild update is not allowed.', 403);
       }
     }
 
@@ -2042,7 +2128,7 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
     });
   } catch (error: any) {
     console.error('Guild update SQL error:', error.message);
-    return c.json({ success: false, error: 'Guild could not be updated.' }, 500);
+    return apiError(c, 'Guild could not be updated.', 500);
   }
 });
 
@@ -2052,7 +2138,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
   const user = c.get('user');
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   let body: { votes?: number };
@@ -2064,7 +2150,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
 
   const votes = body.votes ?? 1;
   if (!Number.isInteger(votes) || votes <= 0) {
-    return c.json({ success: false, error: 'votes must be a positive integer.' }, 400);
+    return apiError(c, 'votes must be a positive integer.', 400);
   }
 
   try {
@@ -2074,7 +2160,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
       : [];
 
     if (!studentRecord) {
-      return c.json({ success: false, error: 'Student profile not found.' }, 404);
+      return apiError(c, 'Student profile not found.', 404);
     }
 
     const [studentMembership] = await db
@@ -2084,7 +2170,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
       .limit(1);
 
     if (!studentMembership) {
-      return c.json({ success: false, error: 'Guild vote spend is not allowed.' }, 403);
+      return apiError(c, 'Guild vote spend is not allowed.', 403);
     }
 
     const result = await new VotingCostService(db).spendGuildVotes({
@@ -2096,7 +2182,7 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
     return c.json({ success: true, source: 'database', voteSpend: result });
   } catch (error: any) {
     console.error('Guild vote spend SQL error:', error.message);
-    return c.json({ success: false, error: error.message || 'Guild vote spend failed.' }, 400);
+    return apiError(c, error.message || 'Guild vote spend failed.', 400);
   }
 });
 
@@ -2107,7 +2193,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -2115,7 +2201,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
     const context = await resolveStudentCohortContext(db, user, requestedCohortId);
 
     if (!context) {
-      return c.json({ success: false, error: 'Cohort context not found.' }, 404);
+      return apiError(c, 'Cohort context not found.', 404);
     }
 
     const { studentRecord, membership } = context;
@@ -2137,7 +2223,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       .limit(1);
 
     if (!activity) {
-      return c.json({ success: false, error: 'Activity not found.' }, 404);
+      return apiError(c, 'Activity not found.', 404);
     }
 
     const [existingCompletion] = await db
@@ -2169,7 +2255,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       activity
     );
     if (lockState.isLocked) {
-      return c.json({ success: false, error: 'Activity is locked for this student.' }, 403);
+      return apiError(c, 'Activity is locked for this student.', 403);
     }
 
     const submission = await parseCompletionSubmission(c, activity, studentRecord, membership);
@@ -2226,7 +2312,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
     });
   } catch (error: any) {
     console.error('Activity completion SQL error:', error.message);
-    return c.json({ success: false, error: 'Activity completion failed.' }, 500);
+    return apiError(c, 'Activity completion failed.', 500);
   }
 });
 
@@ -2237,7 +2323,7 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -2245,7 +2331,7 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
     const context = await resolveStudentCohortContext(db, user, requestedCohortId);
 
     if (!context) {
-      return c.json({ success: false, error: 'Cohort context not found.' }, 404);
+      return apiError(c, 'Cohort context not found.', 404);
     }
     const { studentRecord, membership } = context;
 
@@ -2267,7 +2353,7 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
       .limit(1);
 
     if (!activity) {
-      return c.json({ success: false, error: 'Activity not found in active map.' }, 404);
+      return apiError(c, 'Activity not found in active map.', 404);
     }
 
     const lockState = await loadActivityAuthorizationState(
@@ -2279,7 +2365,7 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
       activity
     );
     if (lockState.isLocked) {
-      return c.json({ success: false, error: 'Activity is locked for this student.' }, 403);
+      return apiError(c, 'Activity is locked for this student.', 403);
     }
 
     const [latestMove] = await db
@@ -2300,6 +2386,36 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
       return c.json({ success: true, source: 'database', move, currentActivityId: move.toActivityId });
     }
 
+    if (latestMove?.toActivityId) {
+      const [directEdge] = await db
+        .select({ id: gameActivityEdges.id })
+        .from(gameActivityEdges)
+        .where(
+          and(
+            or(
+              and(
+                eq(gameActivityEdges.fromActivityId, latestMove.toActivityId),
+                eq(gameActivityEdges.toActivityId, activityId)
+              ),
+              and(
+                eq(gameActivityEdges.fromActivityId, activityId),
+                eq(gameActivityEdges.toActivityId, latestMove.toActivityId)
+              )
+            ),
+            or(
+              sql`${gameActivityEdges.cohortId} IS NULL AND ${gameActivityEdges.mapRunId} IS NULL`,
+              eq(gameActivityEdges.cohortId, membership.cohortId),
+              eq(gameActivityEdges.mapRunId, activeRun.id)
+            )
+          )
+        )
+        .limit(1);
+
+      if (!directEdge) {
+        return apiError(c, 'Characters can only move to directly connected activities.', 403);
+      }
+    }
+
     const [moveRecord] = await db
       .insert(gameCharacterMoves)
       .values({
@@ -2316,7 +2432,7 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
     return c.json({ success: true, source: 'database', move, currentActivityId: move.toActivityId });
   } catch (error: any) {
     console.error('Character move SQL error:', error.message);
-    return c.json({ success: false, error: 'Character move failed.' }, 500);
+    return apiError(c, 'Character move failed.', 500);
   }
 });
 
@@ -2325,7 +2441,7 @@ mapRouter.get('/map', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -2340,11 +2456,11 @@ mapRouter.get('/map', async (c) => {
       : studentContext?.cohortRecord;
 
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Map cohort not found.' }, 404);
+      return apiError(c, 'Map cohort not found.', 404);
     }
 
     if (!user?.isAdmin && !studentContext) {
-      return c.json({ success: false, error: 'Student cohort context not found.' }, 404);
+      return apiError(c, 'Student cohort context not found.', 404);
     }
 
     const activeRun = await getOrCreateActiveRun(db, cohortRecord.id);
@@ -2467,7 +2583,7 @@ mapRouter.get('/map', async (c) => {
     });
   } catch (error: any) {
     console.error('Map SQL error:', error.message);
-    return c.json({ success: false, error: 'Map activities could not be loaded.' }, 500);
+    return apiError(c, 'Map activities could not be loaded.', 500);
   }
 });
 
@@ -2475,7 +2591,7 @@ mapRouter.get('/dashboard', async (c) => {
   const databaseUrl = c.env?.DATABASE_URL;
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   try {
@@ -2490,7 +2606,7 @@ mapRouter.get('/dashboard', async (c) => {
       : studentContext?.cohortRecord;
 
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Progress cohort context not found.' }, 404);
+      return apiError(c, 'Progress cohort context not found.', 404);
     }
 
     const [progress] = await db
@@ -2500,7 +2616,7 @@ mapRouter.get('/dashboard', async (c) => {
       .limit(1);
 
     if (!progress) {
-      return c.json({ success: false, error: 'Cohort progress not found.' }, 404);
+      return apiError(c, 'Cohort progress not found.', 404);
     }
 
     const guildId = studentContext?.membership.guildId;
@@ -2563,7 +2679,7 @@ mapRouter.get('/dashboard', async (c) => {
     return c.json({ success: true, source: 'database', progress: progressData });
   } catch (error: any) {
     console.error('Progress SQL error:', error.message);
-    return c.json({ success: false, error: 'Progress data could not be loaded.' }, 500);
+    return apiError(c, 'Progress data could not be loaded.', 500);
   }
 });
 

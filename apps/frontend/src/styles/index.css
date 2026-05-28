@@ -104,4 +104,10 @@
     font-family: 'Outfit', sans-serif;
     color: var(--color-text-primary);
   }
+
+  [data-missing-i18n-debug='true'] {
+    color: #ff0000 !important;
+    -webkit-text-fill-color: #ff0000 !important;
+    text-shadow: 0 0 10px rgb(255 0 0 / 80%);
+  }
 }

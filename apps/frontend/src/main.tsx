@@ -11,9 +11,10 @@ import { LoginPage } from './pages/LoginPage/LoginPage';
 import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { useAuth } from './features/auth/useAuth';
 import { useTranslation } from './hooks/useTranslation';
-import { Toaster } from 'react-hot-toast';
 import { LayoutGroup, motion } from 'framer-motion';
 import { Gamepad2 } from 'lucide-react';
+import { ErrorNotificationProvider } from './features/errors/notifications';
+import { MissingTranslationHighlighter } from './features/debug/MissingTranslationHighlighter';
 
 const savedTheme = localStorage.getItem('eduquest_theme');
 document.documentElement.dataset.theme =
@@ -118,14 +119,11 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <LayoutGroup id="eduquest-cards">
-      <App />
-    </LayoutGroup>
-    <Toaster
-      position="top-center"
-      toastOptions={{
-        duration: 5000,
-      }}
-    />
+    <ErrorNotificationProvider>
+      <LayoutGroup id="eduquest-cards">
+        <App />
+      </LayoutGroup>
+      <MissingTranslationHighlighter />
+    </ErrorNotificationProvider>
   </React.StrictMode>
 );

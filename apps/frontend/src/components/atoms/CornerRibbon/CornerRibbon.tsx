@@ -22,29 +22,23 @@ export interface CornerRibbonProps {
 }
 
 const containerClassMap: Record<CornerRibbonSize, string> = {
-  sm: 'h-20 w-20',
-  md: 'h-24 w-24',
-  lg: 'h-28 w-28',
-};
-
-const ribbonClassMap: Record<CornerRibbonSize, string> = {
-  sm: 'top-4 w-28 py-1',
-  md: 'top-6 w-36 py-1.5',
-  lg: 'top-7 w-44 py-2',
+  sm: 'h-14 w-32',
+  md: 'h-16 w-40',
+  lg: 'h-20 w-52',
 };
 
 const ribbonPositionClassMap: Record<CornerRibbonSize, Record<CornerRibbonPosition, string>> = {
   sm: {
-    'top-left': '-left-8 -rotate-45',
-    'top-right': '-right-8 rotate-45',
+    'top-left': 'left-0 top-0 -translate-x-1/2 -rotate-45',
+    'top-right': 'right-0 top-0 translate-x-1/2 rotate-45',
   },
   md: {
-    'top-left': '-left-9 -rotate-45',
-    'top-right': '-right-9 rotate-45',
+    'top-left': 'left-0 top-0 -translate-x-1/2 -rotate-45',
+    'top-right': 'right-0 top-0 translate-x-1/2 rotate-45',
   },
   lg: {
-    'top-left': '-left-11 -rotate-45',
-    'top-right': '-right-11 rotate-45',
+    'top-left': 'left-0 top-0 -translate-x-1/2 -rotate-45',
+    'top-right': 'right-0 top-0 translate-x-1/2 rotate-45',
   },
 };
 
@@ -74,16 +68,16 @@ const iconSizeClassMap: Record<CornerRibbonSize, string> = {
 
 const iconCornerPositionClassMap: Record<CornerRibbonSize, Record<CornerRibbonPosition, string>> = {
   sm: {
-    'top-left': 'left-1.5 top-1.5 -rotate-45',
-    'top-right': 'right-1.5 top-1.5 rotate-45',
+    'top-left': '',
+    'top-right': '',
   },
   md: {
-    'top-left': 'left-2 top-2 -rotate-45',
-    'top-right': 'right-2 top-2 rotate-45',
+    'top-left': '',
+    'top-right': '',
   },
   lg: {
-    'top-left': 'left-2.5 top-2.5 -rotate-45',
-    'top-right': 'right-2.5 top-2.5 rotate-45',
+    'top-left': '',
+    'top-right': '',
   },
 };
 
@@ -130,33 +124,22 @@ export function CornerRibbon({
         onClick();
       }}
       className={cn(
-        'absolute top-0 z-[60] block overflow-hidden',
+        "absolute z-[60] flex origin-top flex-col items-center justify-center gap-0.5 overflow-visible bg-status-quest px-2 pb-0.5 pt-1 text-center font-bold uppercase leading-none text-solarized-base3 shadow-md before:absolute before:left-1/2 before:top-0 before:block before:h-3 before:w-8 before:-translate-x-1/2 before:-translate-y-1/2 before:bg-inherit before:content-['']",
         icon && 'drop-shadow-md',
         interactiveClass,
-        position === 'top-left' ? 'left-0' : 'right-0',
         containerClassMap[size],
+        ribbonPositionClassMap[size][position],
+        backgroundClassName,
+        ribbonClassName,
         className
       )}
     >
       {icon ? (
         <span
           className={cn(
-            'absolute inset-0 z-0 block bg-status-quest',
-            position === 'top-left'
-              ? '[clip-path:polygon(0_0,100%_0,0_100%)]'
-              : '[clip-path:polygon(0_0,100%_0,100%_100%)]',
-            backgroundClassName,
-            ribbonClassName
-          )}
-        />
-      ) : null}
-      {icon ? (
-        <span
-          className={cn(
-            'absolute z-10 flex items-center justify-center text-solarized-base3 drop-shadow-sm',
+            'flex shrink-0 items-center justify-center drop-shadow-sm',
             iconCornerPositionClassMap[size][position],
-            iconSizeClassMap[size],
-            ribbonClassName
+            iconSizeClassMap[size]
           )}
           aria-hidden
         >
@@ -165,26 +148,13 @@ export function CornerRibbon({
       ) : null}
       <span
         className={cn(
-          'absolute z-10 block bg-status-quest text-center font-bold uppercase leading-none text-solarized-base3',
-          ribbonClassMap[size],
-          ribbonPositionClassMap[size][position],
-          icon ? 'shadow-none' : 'shadow-md',
-          backgroundClassName,
-          ribbonClassName
+          'flex max-w-full items-center justify-center whitespace-nowrap text-center drop-shadow-sm',
+          contentInteractive && 'pointer-events-auto',
+          textClassMap[size][textFit],
+          textClassName
         )}
       >
-        {hasContent ? (
-          <span
-            className={cn(
-              'block whitespace-nowrap px-2 drop-shadow-sm',
-              contentInteractive && 'pointer-events-auto',
-              textClassMap[size][textFit],
-              textClassName
-            )}
-          >
-            {children}
-          </span>
-        ) : null}
+        {hasContent ? children : null}
       </span>
     </span>
   );

@@ -39,6 +39,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
+import { useErrorReporter } from '../../features/errors/notifications';
 
 function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: string) {
   return legacyEmail || rowUser.email;
@@ -46,6 +47,7 @@ function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: 
 
 export function ManagementPage() {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const { user, student, character } = useGameStore();
   const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,6 +68,11 @@ export function ManagementPage() {
     const loadManagementBackup = async () => {
       const token = localStorage.getItem('eduquest_token');
       if (!token) {
+        reportError('Missing session token.', {
+          messageKey: 'management.errors.missingSession',
+          id: 'management.errors.missingSession',
+          includeDetail: false,
+        });
         setManagementErrorKey('management.errors.missingSession');
         return;
       }
@@ -76,7 +83,11 @@ export function ManagementPage() {
         const backup = await fetchManagementBackup(token);
         if (isMounted) setManagementBackup(backup);
       } catch (error) {
-        console.warn('Could not load management backup.', error);
+        reportError(error, {
+          messageKey: 'management.errors.loadBackupFailed',
+          id: 'management.errors.loadBackupFailed',
+          logMessage: 'Could not load management backup.',
+        });
         if (isMounted) setManagementErrorKey('management.errors.loadBackupFailed');
       } finally {
         if (isMounted) setIsManagementLoading(false);
@@ -220,6 +231,11 @@ export function ManagementPage() {
 
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
       setManagementErrorKey('management.errors.missingSession');
       if (shouldThrow) throw new Error('management.errors.missingSession');
       return;
@@ -230,7 +246,11 @@ export function ManagementPage() {
       const backup = await updateManagementSchool(token, selectedSchoolRow.id, update);
       setManagementBackup(backup);
     } catch (error) {
-      console.warn('Could not update management school.', error);
+      reportError(error, {
+        messageKey: 'management.errors.updateSchoolFailed',
+        id: 'management.errors.updateSchoolFailed',
+        logMessage: 'Could not update management school.',
+      });
       setManagementErrorKey('management.errors.updateSchoolFailed');
       if (shouldThrow) throw error;
     }
@@ -240,6 +260,11 @@ export function ManagementPage() {
 
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
       setManagementErrorKey('management.errors.missingSession');
       if (shouldThrow) throw new Error('management.errors.missingSession');
       return;
@@ -250,7 +275,11 @@ export function ManagementPage() {
       const backup = await updateManagementStudent(token, selectedStudentRow.id, update);
       setManagementBackup(backup);
     } catch (error) {
-      console.warn('Could not update management student.', error);
+      reportError(error, {
+        messageKey: 'management.errors.updateStudentFailed',
+        id: 'management.errors.updateStudentFailed',
+        logMessage: 'Could not update management student.',
+      });
       setManagementErrorKey('management.errors.updateStudentFailed');
       if (shouldThrow) throw error;
     }
@@ -263,6 +292,11 @@ export function ManagementPage() {
 
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
       setManagementErrorKey('management.errors.missingSession');
       throw new Error('management.errors.missingSession');
     }
@@ -277,7 +311,11 @@ export function ManagementPage() {
       );
       setManagementBackup(backup);
     } catch (error) {
-      console.warn('Could not update management character class.', error);
+      reportError(error, {
+        messageKey: 'management.errors.updateClassStatsFailed',
+        id: 'management.errors.updateClassStatsFailed',
+        logMessage: 'Could not update management character class.',
+      });
       setManagementErrorKey('management.errors.updateClassStatsFailed');
       throw error;
     }

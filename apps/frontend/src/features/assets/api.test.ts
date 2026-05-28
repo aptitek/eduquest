@@ -5,6 +5,7 @@ vi.mock('../auth/useAuth', () => ({
 }));
 
 import { uploadAsset } from './api';
+import { ApiClientError } from '../errors/api';
 
 describe('asset API client', () => {
   beforeEach(() => {
@@ -50,9 +51,17 @@ describe('asset API client', () => {
     );
 
     const file = new File(['<script />'], 'logo.svg', { type: 'image/svg+xml' });
-    await expect(uploadAsset('token-1', 'school-logo', file)).rejects.toThrow(
-      'Unsafe SVG content.'
-    );
+    try {
+      await uploadAsset('token-1', 'school-logo', file);
+      throw new Error('Expected uploadAsset to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiClientError);
+      expect(error).toMatchObject({
+        message: 'Unsafe SVG content.',
+        status: 400,
+        errorCode: 'bad_request',
+      });
+    }
   });
 });
 

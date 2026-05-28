@@ -3,7 +3,6 @@ import { LogOut, ChevronDown, Languages, Check, Moon, Sun } from 'lucide-react';
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
 import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
-import toast from 'react-hot-toast';
 import { useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from './InstitutionalProfileCard/InstitutionalProfileCard';
@@ -11,6 +10,7 @@ import { CohortMembership, User } from '@eduquest/shared';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
+import { useErrorReporter } from '../../features/errors/notifications';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -51,6 +51,7 @@ export function AccountDropdown() {
   const { user, student, logout } = useAuth();
   const patchUser = useGameStore((s) => s.patchUser);
   const { t, locale, setLocale } = useTranslation();
+  const reportError = useErrorReporter();
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [institutionalEmailOverride, setInstitutionalEmailOverride] = useState<string | null>(null);
@@ -98,8 +99,12 @@ export function AccountDropdown() {
         : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
     );
   const showErrorToast = (messageKey: string, fallback?: string) => {
-    const translated = t(messageKey);
-    toast.error(translated === messageKey ? fallback || translated : translated, { id: messageKey });
+    reportError(fallback || messageKey, {
+      messageKey,
+      fallback,
+      id: messageKey,
+      includeDetail: Boolean(fallback),
+    });
   };
 
   const updateProfile = async (data: ProfileUpdate, shouldThrow = false) => {

@@ -16,8 +16,8 @@ export const useTranslationStore = create<TranslationStore>((set) => ({
 }));
 
 const translations = { fr, en };
-const MISSING_TRANSLATION_PREFIX = '[[MISSING I18N: ';
-const MISSING_TRANSLATION_SUFFIX = ']]';
+export const MISSING_TRANSLATION_PREFIX = '[[MISSING I18N: ';
+export const MISSING_TRANSLATION_SUFFIX = ']]';
 
 export function formatMissingTranslation(path: string, isDevelopment = import.meta.env.DEV) {
   return isDevelopment ? `${MISSING_TRANSLATION_PREFIX}${path}${MISSING_TRANSLATION_SUFFIX}` : path;

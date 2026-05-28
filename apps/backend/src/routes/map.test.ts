@@ -15,7 +15,8 @@ describe('map routes', () => {
 
     expect(response.status).toBe(503);
     expect(payload.success).toBe(false);
-    expect(payload.error).toBe('DATABASE_URL is required.');
+    expect(payload.errorCode).toBe('server_configuration');
+    expect(payload.error).toBe('Database access is not configured.');
   });
 
   it('does not complete activities without a database', async () => {
@@ -31,7 +32,8 @@ describe('map routes', () => {
 
     expect(response.status).toBe(503);
     expect(payload.success).toBe(false);
-    expect(payload.error).toBe('DATABASE_URL is required.');
+    expect(payload.errorCode).toBe('server_configuration');
+    expect(payload.error).toBe('Database access is not configured.');
   });
 
   it('does not move characters without a database', async () => {
@@ -47,7 +49,8 @@ describe('map routes', () => {
 
     expect(response.status).toBe(503);
     expect(payload.success).toBe(false);
-    expect(payload.error).toBe('DATABASE_URL is required.');
+    expect(payload.errorCode).toBe('server_configuration');
+    expect(payload.error).toBe('Database access is not configured.');
   });
 
   it('requires an admin to update activity positions', async () => {

@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../game/gameStore';
 import { BACKEND_BASE_URL, ENABLE_DEV_TOOLS } from '../../config/deployment';
+import { useErrorReporter } from '../errors/notifications';
+import { throwApiResponseError } from '../errors/api';
 
 export { BACKEND_BASE_URL };
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Unknown authentication error';
-}
 
 function getCohortInviteToken() {
   return new URLSearchParams(window.location.search).get('cohortInvite');
@@ -14,6 +12,7 @@ function getCohortInviteToken() {
 
 export function useAuth() {
   const { user, student, character, setUserSession, logout: clearStoreSession } = useGameStore();
+  const reportError = useErrorReporter();
   const [loadingSession, setLoadingSession] = useState(() => {
     // Si l'utilisateur est déjà présent en mémoire, pas de chargement
     if (useGameStore.getState().user) return false;
@@ -37,18 +36,21 @@ export function useAuth() {
           },
         });
 
-        if (!response.ok) {
-          throw new Error('Unauthorized or session expired');
-        }
-
         const data = await response.json();
+        if (!response.ok) {
+          throwApiResponseError(response, data, 'Your session expired. Please sign in again.');
+        }
         if (data.success && data.user && (data.user.isAdmin || (data.student && data.character))) {
           setUserSession(data.user, data.student || null, data.character || null, data.activityCompletions || []);
         } else {
           throw new Error('Malformed server session payload');
         }
       } catch (err: unknown) {
-        console.warn('Authentication validation failed:', getErrorMessage(err));
+        reportError(err, {
+          fallback: 'Your session expired. Please sign in again.',
+          id: 'auth.invalidSession',
+          logMessage: 'Authentication validation failed:',
+        });
         localStorage.removeItem('eduquest_token');
         clearStoreSession();
         setError('invalidSession');
@@ -56,7 +58,7 @@ export function useAuth() {
         setLoadingSession(false);
       }
     },
-    [setUserSession, clearStoreSession]
+    [setUserSession, clearStoreSession, reportError]
   );
 
   // Initialisation et parsing URL

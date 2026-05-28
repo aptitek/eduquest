@@ -274,6 +274,47 @@ export interface GameMapRun {
   updatedAt?: string;
 }
 
+// ==========================================
+// 5. API RESPONSE CONTRACTS
+// ==========================================
+
+export type ApiErrorCode =
+  | 'bad_request'
+  | 'validation_failed'
+  | 'unauthorized'
+  | 'session_expired'
+  | 'access_denied'
+  | 'not_found'
+  | 'conflict'
+  | 'payload_too_large'
+  | 'unsupported_media_type'
+  | 'service_unavailable'
+  | 'server_configuration'
+  | 'internal_error'
+  | 'network_error'
+  | 'unknown_error';
+
+export interface ApiErrorPayload {
+  success: false;
+  errorCode: ApiErrorCode;
+  /**
+   * Human-readable, user-facing error message.
+   * Kept alongside `error` so older callers can migrate incrementally.
+   */
+  message: string;
+  error: string;
+  errorKey?: string;
+  details?: Record<string, unknown>;
+  fieldErrors?: Record<string, string>;
+}
+
+export type ApiSuccessPayload<T extends Record<string, unknown> = Record<string, never>> =
+  { success: true } & T;
+
+export type ApiResponse<T extends Record<string, unknown> = Record<string, never>> =
+  | ApiSuccessPayload<T>
+  | ApiErrorPayload;
+
 export interface GameActivityEdge {
   id: string;
   cohortId?: string;

@@ -246,10 +246,11 @@ describe('asset routes', () => {
       },
       { JWT_SECRET, APP_ENV: 'development' }
     );
-    const payload = (await response.json()) as { error?: string };
+    const payload = (await response.json()) as { error?: string; errorCode?: string };
 
     expect(response.status).toBe(503);
-    expect(payload.error).toBe('DATABASE_URL is required.');
+    expect(payload.errorCode).toBe('server_configuration');
+    expect(payload.error).toBe('Database access is not configured.');
   });
 
   it('requires a GitHub webhook secret in production', async () => {

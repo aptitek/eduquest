@@ -240,7 +240,11 @@ describe('game API client', () => {
       vi.fn().mockResolvedValue(jsonResponse({ success: false, error: 'DATABASE_URL is required.' }, 503))
     );
 
-    await expect(fetchMapActivities('token-1')).rejects.toThrow('DATABASE_URL is required.');
+    await expect(fetchMapActivities('token-1')).rejects.toMatchObject({
+      status: 503,
+      errorCode: 'server_configuration',
+      message: 'The server is not configured correctly. Please contact an administrator.',
+    });
   });
 });
 

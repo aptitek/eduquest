@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, RotateCcw } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
+import { useErrorReporter } from '../../../features/errors/notifications';
 
 export interface EditableAvatarProps {
   src: string;
@@ -112,6 +112,7 @@ export function EditableAvatar({
   size = 96,
 }: EditableAvatarProps) {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -119,7 +120,12 @@ export function EditableAvatar({
   const avatarSizeClass = size <= 88 ? 'h-[5.5rem] w-[5.5rem]' : 'h-24 w-24';
   const cameraSize = size <= 88 ? 28 : 32;
   const canReset = Boolean(optimisticSrc || (src && src !== githubFallbackSrc));
-  const showErrorToast = (messageKey: string) => toast.error(t(messageKey), { id: messageKey });
+  const showErrorToast = (messageKey: string) => {
+    reportError(messageKey, { messageKey, id: messageKey, includeDetail: false });
+  };
+  const showOperationError = (error: unknown, messageKey: string) => {
+    reportError(error, { messageKey, id: messageKey });
+  };
 
   useEffect(() => {
     if (!optimisticSrc) return;
@@ -180,8 +186,10 @@ export function EditableAvatar({
       }
       setOptimisticSrc(null);
       console.error('Error uploading avatar:', error);
-      if (!(error instanceof Error && error.message.startsWith('profile.errors.'))) {
-        showErrorToast('profile.errors.avatarProcessingFailed');
+      if (error instanceof Error && error.message.startsWith('profile.errors.')) {
+        showErrorToast(error.message);
+      } else {
+        showOperationError(error, 'profile.errors.avatarProcessingFailed');
       }
     } finally {
       setIsUploading(false);
@@ -253,6 +261,8 @@ export function EditableAvatar({
               setIsUploading(true);
               try {
                 await onReset();
+              } catch (error) {
+                showOperationError(error, 'profile.errors.avatarResetFailed');
               } finally {
                 setIsUploading(false);
               }

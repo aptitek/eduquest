@@ -2,6 +2,7 @@ import { BACKEND_BASE_URL } from '../auth/useAuth';
 import type { GameCharacterClass, GameStats, School, User } from '@eduquest/shared';
 import type { ManagementBackup } from './types';
 
+import { throwApiResponseError } from '../errors/api';
 type ManagementResponse =
   | {
       success: true;
@@ -42,9 +43,7 @@ export async function fetchManagementBackup(token: string): Promise<ManagementBa
   const data = (await response.json()) as ManagementResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Management request failed.' : data.error || 'Management request failed.'
-    );
+    throwApiResponseError(response, data, 'Management request failed.');
   }
 
   return data.backup;
@@ -102,9 +101,7 @@ export async function updateManagementStudent(
   const data = (await response.json()) as ManagementResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Management update failed.' : data.error || 'Management update failed.'
-    );
+    throwApiResponseError(response, data, 'Management update failed.');
   }
 
   return data.backup;
@@ -127,9 +124,7 @@ export async function updateManagementSchool(
   const data = (await response.json()) as ManagementResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Management update failed.' : data.error || 'Management update failed.'
-    );
+    throwApiResponseError(response, data, 'Management update failed.');
   }
 
   return data.backup;
@@ -156,9 +151,7 @@ export async function updateManagementCohortCharacterClass(
   const data = (await response.json()) as ManagementResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Character class update failed.' : data.error || 'Character class update failed.'
-    );
+    throwApiResponseError(response, data, 'Character class update failed.');
   }
 
   return data.backup;
@@ -181,9 +174,7 @@ export async function createManagementCohortInvite(
   const data = (await response.json()) as CohortInviteResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Cohort invite request failed.' : data.error || 'Cohort invite request failed.'
-    );
+    throwApiResponseError(response, data, 'Cohort invite request failed.');
   }
 
   return data.invite;
@@ -205,11 +196,7 @@ export async function fetchManagementCohortInvites(
   const data = (await response.json()) as CohortInvitesResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success
-        ? 'Cohort invites request failed.'
-        : data.error || 'Cohort invites request failed.'
-    );
+    throwApiResponseError(response, data, 'Cohort invites request failed.');
   }
 
   return data.invites;
@@ -233,9 +220,7 @@ export async function revokeManagementCohortInvite(
   const data = (await response.json()) as CohortInvitesResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(
-      data.success ? 'Cohort invite revoke failed.' : data.error || 'Cohort invite revoke failed.'
-    );
+    throwApiResponseError(response, data, 'Cohort invite revoke failed.');
   }
 
   return data.invites;

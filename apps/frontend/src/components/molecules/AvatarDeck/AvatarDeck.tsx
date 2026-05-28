@@ -27,6 +27,8 @@ interface AvatarDeckProps {
   avatarClassName?: string;
   labelClassName?: string;
   getAvatarMotion?: (member: AvatarDeckMember, index: number) => AvatarDeckMotion | undefined;
+  expandOnParentHover?: boolean;
+  align?: 'start' | 'center';
 }
 
 const SIZE_CLASS_NAMES = {
@@ -56,6 +58,8 @@ export function AvatarDeck({
   avatarClassName,
   labelClassName,
   getAvatarMotion,
+  expandOnParentHover = true,
+  align = 'start',
 }: AvatarDeckProps) {
   if (members.length === 0) return null;
 
@@ -66,12 +70,16 @@ export function AvatarDeck({
   return (
     <div
       className={cn(
-        'group/avatar-deck relative overflow-visible outline-none transition-[width] duration-300 [width:var(--deck-rest-width)] hover:[width:var(--deck-open-width)] focus:[width:var(--deck-open-width)] focus-within:[width:var(--deck-open-width)] group-hover/graph-node:[width:var(--deck-open-width)] group-focus-within/graph-node:[width:var(--deck-open-width)]',
+        'group/avatar-deck relative z-[90] overflow-visible outline-none transition-[width] duration-300 [width:var(--deck-rest-width)] hover:[width:var(--deck-open-width)] focus:[width:var(--deck-open-width)] focus-within:[width:var(--deck-open-width)]',
+        expandOnParentHover &&
+          'group-hover/graph-node:[width:var(--deck-open-width)] group-focus-within/graph-node:[width:var(--deck-open-width)]',
         sizeClassNames.container,
         className
       )}
       ref={(node) => setDeckSizeProperties(node, restWidth, openWidth)}
       tabIndex={0}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
     >
       {members.map((member, index) => {
         const isEmphasis = index === 0;
@@ -84,27 +92,35 @@ export function AvatarDeck({
         return (
           <div
             key={member.id}
-            className="absolute bottom-0 origin-bottom transition-[filter,transform] duration-300 [transform:translateX(var(--avatar-rest-x))_translateY(var(--avatar-rest-y))_scale(var(--avatar-rest-scale))] group-hover/avatar-deck:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/avatar-deck:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-hover/graph-node:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/graph-node:[transform:translateX(var(--avatar-open-x))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))]"
+            className={cn(
+              'absolute bottom-0 origin-bottom transition-[filter,transform] duration-300 [transform:translateX(calc(var(--avatar-rest-x)_-_var(--avatar-rest-anchor)))_translateY(var(--avatar-rest-y))_scale(var(--avatar-rest-scale))] group-hover/avatar-deck:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/avatar-deck:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))]',
+              expandOnParentHover &&
+                'group-hover/graph-node:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/graph-node:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))]'
+            )}
             ref={(node) =>
               setAvatarItemProperties(node, {
                 zIndex: members.length - index,
                 restX,
+                restAnchor: align === 'center' ? restWidth / 2 : 0,
                 restY: isEmphasis ? 0 : 0.12,
                 restScale: isEmphasis ? 1 : Math.max(1 - depth * 0.05, 0.84),
                 openX,
+                openAnchor: align === 'center' ? openWidth / 2 : 0,
                 openY: isEmphasis ? -0.2 : 0,
                 openScale: isEmphasis ? 1.08 : Math.max(1 - (depth - 1) * 0.035, 0.9),
                 hoverX,
+                hoverAnchor: align === 'center' ? openWidth / 2 : 0,
               })
             }
           >
             <button
               type="button"
               className={cn(
-                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateX(var(--avatar-hover-x))_translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateX(var(--avatar-hover-x))_translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl',
+                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateX(calc(var(--avatar-hover-x)_-_var(--avatar-hover-anchor)))_translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateX(calc(var(--avatar-hover-x)_-_var(--avatar-hover-anchor)))_translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl',
                 motion && 'map-avatar-travel'
               )}
               title={member.name}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
                 member.onClick?.();
@@ -147,23 +163,29 @@ function setAvatarItemProperties(
   properties: {
     zIndex: number;
     restX: number;
+    restAnchor: number;
     restY: number;
     restScale: number;
     openX: number;
+    openAnchor: number;
     openY: number;
     openScale: number;
     hoverX: number;
+    hoverAnchor: number;
   }
 ) {
   if (!node) return;
   node.style.zIndex = String(properties.zIndex);
   node.style.setProperty('--avatar-rest-x', `${properties.restX}rem`);
+  node.style.setProperty('--avatar-rest-anchor', `${properties.restAnchor}rem`);
   node.style.setProperty('--avatar-rest-y', `${properties.restY}rem`);
   node.style.setProperty('--avatar-rest-scale', String(properties.restScale));
   node.style.setProperty('--avatar-open-x', `${properties.openX}rem`);
+  node.style.setProperty('--avatar-open-anchor', `${properties.openAnchor}rem`);
   node.style.setProperty('--avatar-open-y', `${properties.openY}rem`);
   node.style.setProperty('--avatar-open-scale', String(properties.openScale));
   node.style.setProperty('--avatar-hover-x', `${properties.hoverX}rem`);
+  node.style.setProperty('--avatar-hover-anchor', `${properties.hoverAnchor}rem`);
   node.style.setProperty('--avatar-hover-y', '-0.75rem');
 }
 

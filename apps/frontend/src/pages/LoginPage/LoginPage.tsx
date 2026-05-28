@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Github, Terminal, Gamepad2, Sparkles, ShieldAlert } from 'lucide-react';
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ENABLE_DEV_TOOLS } from '../../config/deployment';
 import logoUrl from '../../assets/logo.svg';
+import { useErrorReporter } from '../../features/errors/notifications';
+import { throwApiResponseError } from '../../features/errors/api';
 
 type DevStudentOption = {
   id: string;
@@ -18,6 +19,7 @@ type DevStudentOption = {
 
 export function LoginPage() {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const { loginWithGithub, loginWithDevUser, error } = useAuth();
   const [devStudents, setDevStudents] = useState<DevStudentOption[]>([]);
   const [selectedDevStudentId, setSelectedDevStudentId] = useState('');
@@ -30,16 +32,17 @@ export function LoginPage() {
       try {
         const response = await fetch(`${BACKEND_BASE_URL}/api/auth/dev/students`);
         const data = await response.json();
-        if (data.success && Array.isArray(data.students)) {
-          setDevStudents(data.students);
-          setSelectedDevStudentId((current) => current || data.students[0]?.id || '');
+        if (!response.ok || !data.success || !Array.isArray(data.students)) {
+          throwApiResponseError(response, data, 'Debug student accounts could not be loaded.');
         }
+        setDevStudents(data.students);
+        setSelectedDevStudentId((current) => current || data.students[0]?.id || '');
       } catch (loadError) {
-        console.warn('Could not load debug students for dev login.', loadError);
-        toast.error(
-          t('auth.errors.loadDebugStudents').replace('{detail}', getErrorMessage(loadError)),
-          { id: 'auth.errors.loadDebugStudents' }
-        );
+        reportError(loadError, {
+          messageKey: 'auth.errors.loadDebugStudents',
+          id: 'auth.errors.loadDebugStudents',
+          logMessage: 'Could not load debug students for dev login.',
+        });
       }
     };
 
@@ -195,10 +198,5 @@ export function LoginPage() {
   );
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
-}
 
 export default LoginPage;

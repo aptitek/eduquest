@@ -1,5 +1,6 @@
 import { BACKEND_BASE_URL } from '../auth/useAuth';
 
+import { throwApiResponseError } from '../errors/api';
 export type AssetKind = 'avatar' | 'school-logo' | 'guild-icon';
 
 type AssetUploadResponse =
@@ -35,7 +36,7 @@ export async function uploadAsset(
   const data = (await response.json()) as AssetUploadResponse;
 
   if (!response.ok || !data.success) {
-    throw new Error(data.success ? 'Asset upload failed.' : data.error || 'Asset upload failed.');
+    throwApiResponseError(response, data, 'Asset upload failed.');
   }
 
   return data;

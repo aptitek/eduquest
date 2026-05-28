@@ -615,14 +615,7 @@ authRouter.get('/github', (c) => {
   const inviteToken = c.req.query('invite');
 
   if (!clientId) {
-    return c.json(
-      {
-        success: false,
-        error: 'Configuration Error',
-        message: 'GITHUB_CLIENT_ID is not configured in Wrangler environment variables.',
-      },
-      500
-    );
+    return apiError(c, 'GitHub sign-in is not configured. Please contact an administrator.', 500, { errorCode: 'server_configuration' });
   }
 
   const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
@@ -869,7 +862,7 @@ authRouter.get('/dev/students', async (c) => {
 
 authRouter.get('/character-classes', async (c) => {
   if (!c.env.DATABASE_URL) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   const characterClasses = await getDb(c.env.DATABASE_URL)
@@ -887,13 +880,7 @@ authRouter.use('/management/*', authMiddleware);
 authRouter.get('/management', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   if (!c.env.DATABASE_URL) {
@@ -909,13 +896,7 @@ authRouter.get('/management', async (c) => {
 authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   const cohortId = c.req.param('cohortId');
@@ -931,13 +912,7 @@ authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
 authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   const cohortId = c.req.param('cohortId');
@@ -1001,13 +976,7 @@ authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
 authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   const cohortId = c.req.param('cohortId');
@@ -1033,13 +1002,7 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
 authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   let body: ManagementCharacterClassUpdateBody;
@@ -1057,7 +1020,7 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
 
   const rawClassSlug = c.req.param('classSlug');
   if (!GAME_CHARACTER_CLASS_SET.has(rawClassSlug)) {
-    return c.json({ success: false, error: 'Character class not found' }, 404);
+    return apiError(c, 'Character class not found', 404);
   }
 
   const classSlug = rawClassSlug as GameCharacterClass;
@@ -1075,7 +1038,7 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
   );
 
   if (!baseStats) {
-    return c.json({ success: false, error: 'Invalid base stats' }, 400);
+    return apiError(c, 'Invalid base stats', 400);
   }
 
   try {
@@ -1086,7 +1049,7 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
       .limit(1);
 
     if (!cohortRecord) {
-      return c.json({ success: false, error: 'Cohort not found' }, 404);
+      return apiError(c, 'Cohort not found', 404);
     }
 
     const [classRecord] = await db
@@ -1096,7 +1059,7 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
       .limit(1);
 
     if (!classRecord) {
-      return c.json({ success: false, error: 'Character class not found' }, 404);
+      return apiError(c, 'Character class not found', 404);
     }
 
     await db.transaction(async (tx) => {
@@ -1169,20 +1132,14 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
     });
   } catch (error: any) {
     console.error('Character class management SQL error:', error.message);
-    return c.json({ success: false, error: 'Character class could not be updated.' }, 500);
+    return apiError(c, 'Character class could not be updated.', 500);
   }
 });
 
 authRouter.put('/management/students/:studentId', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   let body: ManagementStudentUpdateBody;
@@ -1199,10 +1156,9 @@ authRouter.put('/management/students/:studentId', async (c) => {
   }
 
   if (body.user?.avatarUrl !== undefined && !isPersistableImageUrl(body.user.avatarUrl)) {
-    return c.json(
-      { success: false, error: 'Avatar URL must reference an uploaded asset or external image.' },
-      400
-    );
+    return apiError(c, 'Avatar URL must reference an uploaded asset or external image.', 400, {
+      errorCode: 'validation_failed',
+    });
   }
 
   const studentId = c.req.param('studentId');
@@ -1352,13 +1308,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
 authRouter.put('/management/schools/:schoolId', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {
-    return c.json(
-      {
-        success: false,
-        error: 'Forbidden',
-      },
-      403
-    );
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   let body: ManagementSchoolUpdateBody;
@@ -1377,10 +1327,9 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
   const schoolId = c.req.param('schoolId');
 
   if (body.logoUrl !== undefined && !isPersistableImageUrl(body.logoUrl)) {
-    return c.json(
-      { success: false, error: 'Logo URL must reference an uploaded asset or external image.' },
-      400
-    );
+    return apiError(c, 'Logo URL must reference an uploaded asset or external image.', 400, {
+      errorCode: 'validation_failed',
+    });
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1423,7 +1372,7 @@ function requireAdmin(c: { get: (key: 'user') => UserPayload | undefined }) {
 
 authRouter.get('/management/reward-balance', async (c) => {
   if (!requireAdmin(c)) {
-    return apiError(c, 'Forbidden', 403);
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1438,7 +1387,7 @@ authRouter.get('/management/reward-balance', async (c) => {
 
 authRouter.get('/management/reward-balance/versions', async (c) => {
   if (!requireAdmin(c)) {
-    return apiError(c, 'Forbidden', 403);
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1453,7 +1402,7 @@ authRouter.get('/management/reward-balance/versions', async (c) => {
 authRouter.put('/management/reward-balance', async (c) => {
   const currentUser = requireAdmin(c);
   if (!currentUser) {
-    return apiError(c, 'Forbidden', 403);
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1472,7 +1421,7 @@ authRouter.put('/management/reward-balance', async (c) => {
 
 authRouter.post('/management/reward-balance/preview', async (c) => {
   if (!requireAdmin(c)) {
-    return apiError(c, 'Forbidden', 403);
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
   if (!c.env.DATABASE_URL) {
@@ -1546,15 +1495,15 @@ authRouter.get('/me', authMiddleware, async (c) => {
   const userPayload = c.get('user') as UserPayload;
 
   if (!userPayload) {
-    return c.json(
-      { success: false, error: 'Unauthorized', errorKey: 'profile.errors.unauthorized' },
-      401
-    );
+    return apiError(c, 'Your session expired. Please sign in again.', 401, {
+      errorCode: 'session_expired',
+      errorKey: 'profile.errors.unauthorized',
+    });
   }
 
   const databaseUrl = c.env.DATABASE_URL;
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   let loadedDbProfile = false;
@@ -1607,7 +1556,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
           isAdmin: userRecord.isAdmin,
         };
       } else {
-        return c.json({ success: false, error: 'User profile not found.' }, 404);
+        return apiError(c, 'User profile not found.', 404);
       }
 
       if (userObj.isAdmin) {
@@ -1735,12 +1684,12 @@ authRouter.get('/me', authMiddleware, async (c) => {
       }
     } catch (dbError: any) {
       console.warn('Database error loading user profile:', dbError.message);
-      return c.json({ success: false, error: 'Profile could not be loaded.' }, 500);
+      return apiError(c, 'Profile could not be loaded.', 500);
     }
   }
 
   if (!userObj.isAdmin && !loadedDbProfile) {
-    return c.json({ success: false, error: 'Student profile not found.' }, 404);
+    return apiError(c, 'Student profile not found.', 404);
   }
 
   return c.json({
@@ -1757,10 +1706,10 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   const userPayload = c.get('user') as UserPayload;
 
   if (!userPayload) {
-    return c.json(
-      { success: false, error: 'Unauthorized', errorKey: 'profile.errors.unauthorized' },
-      401
-    );
+    return apiError(c, 'Your session expired. Please sign in again.', 401, {
+      errorCode: 'session_expired',
+      errorKey: 'profile.errors.unauthorized',
+    });
   }
 
   const databaseUrl = c.env.DATABASE_URL;
@@ -1786,10 +1735,10 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   try {
     body = await c.req.json();
   } catch (e) {
-    return c.json(
-      { success: false, error: 'Invalid JSON body', errorKey: 'profile.errors.invalidPayload' },
-      400
-    );
+    return apiError(c, 'Invalid JSON body', 400, {
+      errorCode: 'validation_failed',
+      errorKey: 'profile.errors.invalidPayload',
+    });
   }
 
   if (body.avatarUrl !== undefined && !isPersistableImageUrl(body.avatarUrl)) {
@@ -1804,7 +1753,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   }
 
   if (!databaseUrl) {
-    return c.json({ success: false, error: 'DATABASE_URL is required.' }, 503);
+    return missingDatabaseUrl(c);
   }
 
   // Objets mis à jour pour la réponse
@@ -1862,7 +1811,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           isAdmin: updatedUser.isAdmin,
         };
       } else {
-        return c.json({ success: false, error: 'User profile not found.' }, 404);
+        return apiError(c, 'User profile not found.', 404);
       }
 
       if (userObj.isAdmin) {
@@ -1879,7 +1828,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
 
         const studentRecord = existingStudents[0];
         if (!studentRecord) {
-          return c.json({ success: false, error: 'Student profile not found.' }, 404);
+          return apiError(c, 'Student profile not found.', 404);
         }
         const studentId = studentRecord.id;
 
@@ -2038,7 +1987,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       }
     } catch (dbError: any) {
       console.warn('Database error saving user profile:', dbError.message);
-      return c.json({ success: false, error: 'Profile could not be saved.' }, 500);
+      return apiError(c, 'Profile could not be saved.', 500);
     }
   }
 

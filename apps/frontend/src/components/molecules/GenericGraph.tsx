@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -466,6 +466,22 @@ export function GenericGraph<TMetadata = unknown>({
     [onNodeMove]
   );
 
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: GraphFlowNode<TMetadata>) => {
+      const graphNode = node.data.graphNode;
+      if (!allowLockedSelection && graphNode.isLocked) return;
+      onSelectNode?.(graphNode);
+    },
+    [allowLockedSelection, onSelectNode]
+  );
+
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: GraphFlowEdge) => {
+      if (edge.data?.graphEdge) onSelectEdge?.(edge.data.graphEdge);
+    },
+    [onSelectEdge]
+  );
+
   const nodeTypes = useMemo(() => ({ 'graph-node': GraphFlowNodeRenderer }), []);
   const edgeTypes = useMemo(() => ({ 'graph-edge': GraphFlowEdgeRenderer }), []);
 
@@ -489,6 +505,8 @@ export function GenericGraph<TMetadata = unknown>({
         onConnect={connectable ? handleConnect : undefined}
         onEdgesDelete={deletable ? handleEdgesDelete : undefined}
         onNodeDragStop={editable ? handleNodeDragStop : undefined}
+        onNodeClick={onSelectNode ? handleNodeClick : undefined}
+        onEdgeClick={onSelectEdge ? handleEdgeClick : undefined}
         nodesDraggable={editable}
         nodesConnectable={connectable}
         edgesFocusable={deletable}
@@ -830,11 +848,11 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
         </div>
       ) : null}
       {node.marker ? (
-        <div className="pointer-events-auto absolute -top-5 left-1/2 z-30 -translate-x-1/2">
+        <div className="pointer-events-auto absolute -top-5 left-1/2 z-50 -translate-x-1/2">
           {node.marker}
         </div>
       ) : null}
-      <div className="pointer-events-none absolute top-14 whitespace-nowrap rounded-sm border border-gaming-border bg-gaming-base px-2 py-1 text-xs font-semibold text-text-muted opacity-0 shadow-md transition-opacity duration-200 group-hover/graph-node:opacity-100">
+      <div className="pointer-events-none absolute top-14 z-10 whitespace-nowrap rounded-sm border border-gaming-border bg-gaming-base px-2 py-1 text-xs font-semibold text-text-muted opacity-0 shadow-md transition-opacity duration-200 group-hover/graph-node:opacity-100">
         {node.displayLabel || node.label}
       </div>
     </div>
@@ -848,7 +866,10 @@ function AnnularNodeRing({
   segments: GraphNodeAnnularSegment[];
   hasAvatarGap: boolean;
 }) {
-  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
+  const [pinnedSegmentId, setPinnedSegmentId] = useState<string | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const activeSegmentId = pinnedSegmentId || hoveredSegmentId;
   const activeSegment = segments.find((segment) => segment.id === activeSegmentId);
   const isExpanded = Boolean(activeSegment);
   const path = describeArc(
@@ -859,11 +880,31 @@ function AnnularNodeRing({
     ANNULAR_RING_GAP_END
   );
   let offset = 0;
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current == null) return;
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  };
+  const scheduleHoverClose = () => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setHoveredSegmentId(null);
+      closeTimerRef.current = null;
+    }, 140);
+  };
+
+  useEffect(() => clearCloseTimer, []);
 
   return (
     <div
-      className="pointer-events-auto absolute left-1/2 top-1/2 z-0 h-[5.4rem] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 overflow-visible"
-      onPointerLeave={() => setActiveSegmentId(null)}
+      className={cn(
+        'pointer-events-auto absolute left-1/2 top-1/2 h-[5.4rem] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 overflow-visible',
+        activeSegment ? 'z-50' : 'z-20'
+      )}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerEnter={clearCloseTimer}
+      onPointerLeave={scheduleHoverClose}
     >
       <svg
         viewBox={`0 0 ${ANNULAR_RING_SIZE} ${ANNULAR_RING_SIZE}`}
@@ -916,9 +957,30 @@ function AnnularNodeRing({
               'pointer-events-auto cursor-help opacity-90 outline-none transition-[opacity,stroke-width] duration-200 hover:opacity-100 focus:opacity-100',
             role: 'button',
             tabIndex: 0,
-            onPointerEnter: () => setActiveSegmentId(segment.id),
-            onFocus: () => setActiveSegmentId(segment.id),
-            onBlur: () => setActiveSegmentId(null),
+            onClick: (event: React.MouseEvent) => {
+              event.stopPropagation();
+              setPinnedSegmentId((current) => (current === segment.id ? null : segment.id));
+              setHoveredSegmentId(segment.id);
+            },
+            onPointerDown: (event: React.PointerEvent) => event.stopPropagation(),
+            onPointerEnter: () => {
+              clearCloseTimer();
+              setHoveredSegmentId(segment.id);
+            },
+            onFocus: () => setHoveredSegmentId(segment.id),
+            onBlur: () => setHoveredSegmentId(null),
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                setPinnedSegmentId((current) => (current === segment.id ? null : segment.id));
+              }
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                setPinnedSegmentId(null);
+                setHoveredSegmentId(null);
+              }
+            },
           };
 
           if (hasAvatarGap) {
@@ -937,17 +999,37 @@ function AnnularNodeRing({
           );
         })}
       </svg>
-      {activeSegment ? <RingSectorPopover segment={activeSegment} /> : null}
+      {activeSegment ? (
+        <RingSectorPopover
+          segment={activeSegment}
+          onPointerEnter={clearCloseTimer}
+          onPointerLeave={scheduleHoverClose}
+        />
+      ) : null}
     </div>
   );
 }
 
-function RingSectorPopover({ segment }: { segment: GraphNodeAnnularSegment }) {
+function RingSectorPopover({
+  segment,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  segment: GraphNodeAnnularSegment;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+}) {
   const { t } = useTranslation();
   const count = segment.members?.length || segment.value;
 
   return (
-    <div className="pointer-events-auto absolute left-full top-1/2 z-[70] ml-3 w-52 -translate-y-1/2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 text-left shadow-2xl backdrop-blur">
+    <div
+      className="pointer-events-auto absolute left-full top-1/2 z-[100] ml-3 w-52 -translate-y-1/2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 text-left shadow-2xl backdrop-blur"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+    >
       <div className="mb-2 flex items-center gap-2">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gaming-border bg-gaming-base text-xs font-black text-text-primary"
@@ -971,7 +1053,12 @@ function RingSectorPopover({ segment }: { segment: GraphNodeAnnularSegment }) {
         </div>
       </div>
       {segment.members?.length ? (
-        <AvatarDeck members={segment.members} color={segment.color} className="min-w-0" />
+        <AvatarDeck
+          members={segment.members}
+          color={segment.color}
+          className="min-w-0"
+          expandOnParentHover={false}
+        />
       ) : null}
     </div>
   );
@@ -1047,6 +1134,7 @@ function GraphFlowEdgeRenderer({
           fill="none"
           stroke="transparent"
           strokeWidth={18}
+          pointerEvents="stroke"
           className="cursor-pointer"
           onClick={(event) => {
             event.stopPropagation();

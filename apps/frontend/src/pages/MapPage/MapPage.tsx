@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import type {
   Activity,
   ActivityStepRange,
@@ -15,6 +14,7 @@ import {
   type ActivityCardFieldsPayload,
   completeMapActivity,
   createMapActivity,
+  createMapActivityEdge,
   deleteMapActivity,
   deleteMapActivityEdge,
   fetchMapActivities,
@@ -36,10 +36,13 @@ import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { MapContainer, MapArea, MapSidePanel, LoadingMap } from '../../components/organisms/MapContainer';
 import { GameMap } from '../../components/organisms/GameMap';
+import type { GraphEdge } from '../../components/molecules/GenericGraph';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
 import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
 import { MapEdgeCard } from '../../components/organisms/MapEdgeCard';
 import { formatUserDisplayName } from '../../utils/displayName';
+import { cn } from '../../utils/cn';
+import { useErrorReporter } from '../../features/errors/notifications';
 
 const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
   {
@@ -70,6 +73,7 @@ function getDefaultBossAnswerFields(t: (path: string) => string): BossActivityAn
 
 export function MapPage() {
   const { t } = useTranslation();
+  const reportError = useErrorReporter();
   const {
     student,
     character,
@@ -101,6 +105,7 @@ export function MapPage() {
   const [edgeStyleError, setEdgeStyleError] = useState<string | null>(null);
   const [savingEdgeId, setSavingEdgeId] = useState<string | null>(null);
   const [isCreatingActivity, setIsCreatingActivity] = useState(false);
+  const [previewStep, setPreviewStep] = useState(currentStep);
   const deletingActivityIdsRef = useRef(new Set<string>());
   const deletingEdgeIdsRef = useRef(new Set<string>());
   const edgeStyleSaveVersionsRef = useRef(new Map<string, number>());
@@ -108,12 +113,7 @@ export function MapPage() {
   const activityTitleSaveVersionsRef = useRef(new Map<string, number>());
   const activityCardFieldSaveVersionsRef = useRef(new Map<string, number>());
   const showMapError = (messageKey: string, error: unknown) => {
-    toast.error(
-      formatTranslation(t(messageKey), {
-        detail: getErrorMessage(error),
-      }),
-      { id: messageKey }
-    );
+    reportError(error, { messageKey, id: messageKey });
   };
 
   // Chargement de la carte depuis le Backend Hono
@@ -140,6 +140,10 @@ export function MapPage() {
   }, [selectedGameId]);
 
   useEffect(() => {
+    setPreviewStep(currentStep);
+  }, [currentStep, selectedGameId]);
+
+  useEffect(() => {
     const handleCohortStepUpdated = () => {
       fetchMapData();
     };
@@ -163,6 +167,33 @@ export function MapPage() {
   }, [activities]);
 
   const completedActivityIds = activityCompletions.map((completion) => completion.activityId);
+  const previewSteps = useMemo(
+    () => getMapPreviewSteps(activities, activityEdges, currentStep),
+    [activities, activityEdges, currentStep]
+  );
+  useEffect(() => {
+    if (!previewSteps.includes(previewStep)) {
+      setPreviewStep(previewSteps.includes(currentStep) ? currentStep : previewSteps[0]);
+    }
+  }, [currentStep, previewStep, previewSteps]);
+  const previewStepIndex = Math.max(0, previewSteps.indexOf(previewStep));
+  const canPreviewPreviousStep = previewStepIndex > 0;
+  const canPreviewNextStep = previewStepIndex >= 0 && previewStepIndex < previewSteps.length - 1;
+  const changePreviewStepByOffset = (offset: -1 | 1) => {
+    const currentIndex = previewSteps.indexOf(previewStep);
+    const fallbackIndex = previewSteps.reduce(
+      (closestIndex, step, index) =>
+        Math.abs(step - previewStep) < Math.abs(previewSteps[closestIndex] - previewStep)
+          ? index
+          : closestIndex,
+      0
+    );
+    const nextIndex = Math.max(
+      0,
+      Math.min(previewSteps.length - 1, (currentIndex >= 0 ? currentIndex : fallbackIndex) + offset)
+    );
+    setPreviewStep(previewSteps[nextIndex]);
+  };
 
   const handleCreateActivity = async () => {
     if (!user?.isAdmin || isCreatingActivity) return;
@@ -192,6 +223,12 @@ export function MapPage() {
     setSelectedEdge(null);
     if (user?.isAdmin) return;
     if (activity.isCurrent || activity.isLocked) return;
+    if (
+      currentActivityId &&
+      !hasDirectMapEdge(activityEdges, currentActivityId, activity.id)
+    ) {
+      return;
+    }
 
     try {
       const token = localStorage.getItem('eduquest_token');
@@ -520,7 +557,7 @@ export function MapPage() {
       stepRanges,
       activities,
       activityEdges,
-      currentStep
+      previewStep
     );
     patchActivity(activity.id, optimisticActivity);
     setSelectedActivity((current) =>
@@ -575,6 +612,46 @@ export function MapPage() {
       setActivityEdges(previousEdges);
     } finally {
       edgeIds.forEach((edgeId) => deletingEdgeIdsRef.current.delete(edgeId));
+    }
+  };
+
+  const handleConnectActivityEdge = async (edge: GraphEdge) => {
+    if (!user?.isAdmin) return;
+    if (edge.from === edge.to) return;
+
+    const alreadyExists = activityEdges.some(
+      (candidate) => candidate.fromActivityId === edge.from && candidate.toActivityId === edge.to
+    );
+    if (alreadyExists) return;
+
+    const optimisticEdge: GameActivityEdge = {
+      id: edge.id,
+      fromActivityId: edge.from,
+      toActivityId: edge.to,
+      metadata: {},
+    };
+    const previousEdges = activityEdges;
+    setActivityEdges([...activityEdges, optimisticEdge]);
+    setSelectedEdge(optimisticEdge);
+
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const createdEdge = await createMapActivityEdge(
+        token,
+        { fromActivityId: edge.from, toActivityId: edge.to },
+        selectedGameId
+      );
+      const latestEdges = useGameStore.getState().activityEdges;
+      const withoutOptimisticEdge = latestEdges.filter((candidate) => candidate.id !== optimisticEdge.id);
+      const hasCreatedEdge = withoutOptimisticEdge.some((candidate) => candidate.id === createdEdge.id);
+      setActivityEdges(hasCreatedEdge ? withoutOptimisticEdge : [...withoutOptimisticEdge, createdEdge]);
+      setSelectedEdge(createdEdge);
+    } catch (error) {
+      console.warn('Could not create activity edge.', error);
+      showMapError('map.errors.createEdge', error);
+      setActivityEdges(previousEdges);
+      setSelectedEdge((current) => (current?.id === optimisticEdge.id ? null : current));
     }
   };
 
@@ -700,24 +777,38 @@ export function MapPage() {
                 canEditLocked={Boolean(user?.isAdmin)}
                 showGuildOccupancyMarkers={Boolean(user?.isAdmin)}
                 showCompletionState={!user?.isAdmin}
-                currentStep={currentStep}
+                currentStep={previewStep}
                 onSelectNode={handleSelectActivity}
                 onSelectEdge={user?.isAdmin ? handleSelectEdge : undefined}
                 onNodeMove={handleMoveActivityNode}
+                onConnectEdges={handleConnectActivityEdge}
                 onDeleteNodes={handleDeleteActivityNodes}
                 onDeleteEdges={handleDeleteActivityEdges}
               />
               {user?.isAdmin ? (
-                <button
-                  type="button"
-                  onClick={handleCreateActivity}
-                  disabled={isCreatingActivity}
-                  aria-label={t('map.addActivity')}
-                  title={t('map.addActivity')}
-                  className="absolute bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-status-completed/50 bg-status-completed text-gaming-base shadow-glow-primary transition hover:scale-105 hover:bg-status-completed/90 focus:outline-none focus:ring-2 focus:ring-status-completed disabled:cursor-wait disabled:opacity-60"
-                >
-                  <Plus size={28} strokeWidth={3} aria-hidden />
-                </button>
+                <>
+                  <MapStepPreviewControl
+                    steps={previewSteps}
+                    value={previewStep}
+                    persistedStep={currentStep}
+                    canPrevious={canPreviewPreviousStep}
+                    canNext={canPreviewNextStep}
+                    onChange={setPreviewStep}
+                    onPrevious={() => changePreviewStepByOffset(-1)}
+                    onNext={() => changePreviewStepByOffset(1)}
+                    t={t}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateActivity}
+                    disabled={isCreatingActivity}
+                    aria-label={t('map.addActivity')}
+                    title={t('map.addActivity')}
+                    className="absolute bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-status-completed/50 bg-status-completed text-gaming-base shadow-glow-primary transition hover:scale-105 hover:bg-status-completed/90 focus:outline-none focus:ring-2 focus:ring-status-completed disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Plus size={28} strokeWidth={3} aria-hidden />
+                  </button>
+                </>
               ) : null}
             </div>
           )}
@@ -728,7 +819,7 @@ export function MapPage() {
             <MapEdgeCard
               edge={selectedEdge}
               activities={activities}
-              currentStep={currentStep}
+              currentStep={previewStep}
               isSaving={savingEdgeId === selectedEdge.id}
               error={edgeStyleError}
               onChange={handleChangeEdgeStyles}
@@ -803,6 +894,97 @@ export function MapPage() {
         </MapSidePanel>
       </MapContainer>
     </GameLayout>
+  );
+}
+
+function MapStepPreviewControl({
+  steps,
+  value,
+  persistedStep,
+  canPrevious,
+  canNext,
+  onChange,
+  onPrevious,
+  onNext,
+  t,
+}: {
+  steps: number[];
+  value: number;
+  persistedStep: number;
+  canPrevious: boolean;
+  canNext: boolean;
+  onChange: (step: number) => void;
+  onPrevious: () => void;
+  onNext: () => void;
+  t: (path: string) => string;
+}) {
+  return (
+    <div className="absolute right-5 top-5 z-40 w-24 overflow-hidden rounded-2xl border border-gaming-border bg-gaming-card/95 text-text-primary shadow-card backdrop-blur-xl">
+      <div className="border-b border-gaming-border px-2.5 py-2 text-center">
+        <p className="font-display text-[0.62rem] font-black uppercase tracking-[0.16em] text-text-muted">
+          {t('map.stepPreview.title')}
+        </p>
+        <p className="mt-0.5 text-[0.62rem] font-semibold text-text-muted">
+          {formatTranslation(t('map.stepPreview.uiOnly'), { step: persistedStep })}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onPrevious}
+        disabled={!canPrevious}
+        className="flex h-8 w-full items-center justify-center border-b border-gaming-border text-text-secondary transition hover:bg-gaming-base focus:outline-none focus:ring-2 focus:ring-status-quest disabled:cursor-not-allowed disabled:opacity-35"
+        aria-label={t('map.stepPreview.previous')}
+        title={t('map.stepPreview.previous')}
+      >
+        <ChevronUp size={16} aria-hidden />
+      </button>
+      <div className="max-h-56 overflow-y-auto p-1.5">
+        <div className="space-y-1">
+          {steps.map((step) => {
+            const isSelected = step === value;
+            const isPersisted = step === persistedStep;
+
+            return (
+              <button
+                key={step}
+                type="button"
+                onClick={() => onChange(step)}
+                aria-pressed={isSelected}
+                title={formatTranslation(t('map.stepPreview.select'), { step })}
+                className={cn(
+                  'relative flex h-9 w-full items-center justify-center rounded-xl border px-2 font-display text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-status-quest',
+                  isSelected
+                    ? 'border-status-quest bg-status-quest text-gaming-base shadow-glow-primary'
+                    : 'border-gaming-border bg-gaming-base/70 text-text-secondary hover:border-status-quest hover:text-status-quest'
+                )}
+              >
+                {step}
+                {isPersisted ? (
+                  <span
+                    className={cn(
+                      'absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full',
+                      isSelected ? 'bg-gaming-base' : 'bg-status-completed'
+                    )}
+                    aria-label={t('map.stepPreview.persisted')}
+                    title={t('map.stepPreview.persisted')}
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!canNext}
+        className="flex h-8 w-full items-center justify-center border-t border-gaming-border text-text-secondary transition hover:bg-gaming-base focus:outline-none focus:ring-2 focus:ring-status-quest disabled:cursor-not-allowed disabled:opacity-35"
+        aria-label={t('map.stepPreview.next')}
+        title={t('map.stepPreview.next')}
+      >
+        <ChevronDown size={16} aria-hidden />
+      </button>
+    </div>
   );
 }
 
@@ -889,10 +1071,46 @@ function isStepInsideRange(step: number, range: ActivityStepRange) {
   return step >= range.startStep && (range.endStep == null || step < range.endStep);
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error.trim()) return error;
-  return 'Unknown error';
+function getMapPreviewSteps(
+  activities: Activity[],
+  edges: GameActivityEdge[],
+  persistedStep: number
+) {
+  const definedSteps = new Set<number>([0, persistedStep]);
+
+  for (const activity of activities) {
+    definedSteps.add(Math.max(activity.requiredLevel - 1, 0));
+    definedSteps.add(activity.sectorDepth);
+    for (const range of activity.stepRanges || []) {
+      definedSteps.add(range.startStep);
+      if (range.endStep != null) definedSteps.add(range.endStep);
+    }
+  }
+
+  for (const edge of edges) {
+    const styleWindows = edge.metadata?.styleWindows;
+    if (!Array.isArray(styleWindows)) continue;
+    for (const window of styleWindows) {
+      const candidate = window as GameActivityEdgeStyleWindow;
+      if (Number.isInteger(candidate.startStep)) definedSteps.add(candidate.startStep);
+      if (candidate.endStep != null && Number.isInteger(candidate.endStep)) {
+        definedSteps.add(candidate.endStep);
+      }
+    }
+  }
+
+  const maxStep = Math.max(
+    ...Array.from(definedSteps).filter((step) => Number.isInteger(step) && step >= 0)
+  );
+  return Array.from({ length: maxStep + 1 }, (_item, index) => index);
+}
+
+function hasDirectMapEdge(edges: GameActivityEdge[], firstActivityId: string, secondActivityId: string) {
+  return edges.some(
+    (edge) =>
+      (edge.fromActivityId === firstActivityId && edge.toActivityId === secondActivityId) ||
+      (edge.fromActivityId === secondActivityId && edge.toActivityId === firstActivityId)
+  );
 }
 
 function formatTranslation(template: string, values: Record<string, string | number>) {

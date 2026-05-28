@@ -45,6 +45,7 @@ interface GameMapProps {
   onSelectNode: (activity: Activity) => void;
   onSelectEdge?: (edge: GameActivityEdge) => void;
   onNodeMove?: (activity: Activity, position: { x: number; y: number }) => void;
+  onConnectEdges?: (edge: GraphEdge) => void;
   onDeleteNodes?: (activities: Activity[]) => void;
   onDeleteEdges?: (edges: GraphEdge[]) => void;
 }
@@ -95,6 +96,7 @@ export function GameMap({
   onSelectNode,
   onSelectEdge,
   onNodeMove,
+  onConnectEdges,
   onDeleteNodes,
   onDeleteEdges,
 }: GameMapProps) {
@@ -246,6 +248,7 @@ export function GameMap({
           if (node.metadata) onNodeMove?.(node.metadata, position);
         }}
         onDeleteEdges={onDeleteEdges}
+        onConnectNodes={onConnectEdges}
         onDeleteNodes={(nodes) => {
           const deletedActivities = nodes.flatMap((node) => (node.metadata ? [node.metadata] : []));
           if (deletedActivities.length > 0) onDeleteNodes?.(deletedActivities);
@@ -493,6 +496,7 @@ function buildMapNodeMarker({
           ]}
           color={CHARACTER_CLASS_COLORS[playerMarker.characterClass]}
           size="md"
+          align="center"
           getAvatarMotion={() =>
             getTravelMotion(getTravelVector(activityById, playerMarker.previousActivityId, activity))
           }
@@ -524,6 +528,7 @@ function GuildMemberMapMarker({
       color={color}
       size="sm"
       className="shrink-0"
+      align="center"
       getAvatarMotion={(member) => {
         const occupancyMember = members.find((candidate) => candidate.studentId === member.id);
         return getTravelMotion(
@@ -571,6 +576,7 @@ function AdminGuildMapMarker({
         color={FALLBACK_GUILD_COLOR}
         size="sm"
         className="shrink-0"
+        align="center"
         getAvatarMotion={(member) => {
           const group = groups.find((candidate) => candidate.id === member.id);
           const fromActivityId = group?.members.find(
