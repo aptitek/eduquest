@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { Plus, X } from 'lucide-react';
-import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { AddButton } from '../../atoms/AddButton';
+import { DeleteButton } from '../../atoms/DeleteButton';
 import { cn } from '../../../utils/cn';
 
 export interface EditableListProps<TItem> {
@@ -46,16 +46,12 @@ export function EditableList<TItem>({
             >
               <div className="min-w-0 flex-1">{renderItem(item, index)}</div>
               {onRemove ? (
-                <HoldToConfirmButton
+                <DeleteButton
                   onConfirm={() => onRemove(item, index)}
                   holdDuration={900}
-                  shape="round"
-                  variant="border border-status-danger bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-gaming-base focus:outline-none focus:ring-2 focus:ring-status-danger"
                   className="h-7 w-7 shrink-0"
-                >
-                  <X size={14} aria-hidden />
-                  <span className="sr-only">{removeLabel}</span>
-                </HoldToConfirmButton>
+                  aria-label={removeLabel}
+                />
               ) : null}
             </div>
           ))}
@@ -69,14 +65,13 @@ export function EditableList<TItem>({
       {addControl || onAdd ? (
         <div className={cn('pt-1', actionsClassName)}>
           {addControl || (
-            <button
-              type="button"
+            <AddButton
               onClick={onAdd}
-              className="inline-flex items-center gap-1 rounded-full border border-gaming-border px-3 py-1.5 text-xs font-bold text-text-secondary transition hover:border-status-quest hover:text-status-quest focus:outline-none focus:ring-2 focus:ring-status-quest"
+              className="rounded-full px-3 py-1.5 text-xs"
+              iconSize={14}
             >
-              <Plus size={14} aria-hidden />
               {addLabel}
-            </button>
+            </AddButton>
           )}
         </div>
       ) : null}

@@ -2,7 +2,7 @@ import { isValidElement, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
-import { BookOpen, HandHelping, RotateCw, Shield, Sparkles, Trophy } from 'lucide-react';
+import { BookOpen, Gift, HandHelping, RotateCw, Shield, Sparkles, Trophy, User } from 'lucide-react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import { EditableSchoolLogo } from '../EditableSchoolLogo';
 import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
@@ -270,7 +270,7 @@ function PlayingCardFront({
   className,
 }: PlayingCardFrontProps) {
   if (card.faceDown) {
-    return <FaceDownCard color={color} size={size} className={className} />;
+    return <FaceDownCard kind={card.kind} color={color} size={size} className={className} />;
   }
 
   if (size === 'full') {
@@ -554,22 +554,32 @@ function FullCardSide({
 }
 
 function FaceDownCard({
+  kind,
   color,
   size,
   className,
 }: {
+  kind?: PlayingCardData['kind'];
   color: string;
   size: PlayingCardSize;
   className?: string;
 }) {
+  const Icon = getFaceDownIcon(kind);
+
   return (
     <div className={cn('relative h-full min-h-0 overflow-hidden rounded-[1.1rem] p-2', className)}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--playing-card-accent)_0,transparent_62%)] opacity-20" />
       <div className="relative flex h-full w-full items-center justify-center rounded-[0.9rem] border border-dashed border-[color:var(--playing-card-accent)] bg-gaming-base/80 text-[color:var(--playing-card-accent)]">
-        <Shield size={size === 'full' ? 72 : 38} aria-hidden color={color} />
+        <Icon size={size === 'full' ? 72 : 38} aria-hidden color={color} />
       </div>
     </div>
   );
+}
+
+function getFaceDownIcon(kind: PlayingCardData['kind'] | undefined) {
+  if (kind === 'character') return User;
+  if (kind === 'reward') return Gift;
+  return Shield;
 }
 
 function CardFace({ children, className }: { children: ReactNode; className?: string }) {

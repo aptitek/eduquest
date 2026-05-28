@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type {
   Activity,
   ActivityStepRange,
@@ -40,6 +40,7 @@ import type { GraphEdge } from '../../components/molecules/GenericGraph';
 import { ActivityDetailPanel } from '../../components/organisms/ActivityDetailPanel';
 import { ActivityCard, type ActivityCardData, type ActivityResourceLink } from '../../components/organisms/ActivityCard';
 import { MapEdgeCard } from '../../components/organisms/MapEdgeCard';
+import { AddButton } from '../../components/atoms/AddButton';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { cn } from '../../utils/cn';
 import { useErrorReporter } from '../../features/errors/notifications';
@@ -798,16 +799,14 @@ export function MapPage() {
                     onNext={() => changePreviewStepByOffset(1)}
                     t={t}
                   />
-                  <button
-                    type="button"
+                  <AddButton
                     onClick={handleCreateActivity}
                     disabled={isCreatingActivity}
                     aria-label={t('map.addActivity')}
                     title={t('map.addActivity')}
-                    className="absolute bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-status-completed/50 bg-status-completed text-gaming-base shadow-glow-primary transition hover:scale-105 hover:bg-status-completed/90 focus:outline-none focus:ring-2 focus:ring-status-completed disabled:cursor-wait disabled:opacity-60"
-                  >
-                    <Plus size={28} strokeWidth={3} aria-hidden />
-                  </button>
+                    iconSize={28}
+                    className="absolute bottom-5 right-5 z-40 h-14 w-14 shadow-glow-primary hover:scale-105 disabled:cursor-wait"
+                  />
                 </>
               ) : null}
             </div>

@@ -18,6 +18,7 @@ export interface GlobalProgressMilestone {
   positionPercent?: number;
   value?: number;
   description?: string;
+  editor?: ReactNode;
 }
 
 export interface GlobalProgressData {
@@ -43,6 +44,7 @@ export interface GlobalProgressGaugeProps {
   rightIndicatorCompactValue?: ReactNode;
   boostLabel?: ReactNode;
   milestoneBadgesExpanded?: boolean;
+  gaugeActions?: ReactNode;
   className?: string;
   /**
    * Kept for compatibility with older call sites. The gauge now morphs from arch to
@@ -109,6 +111,7 @@ export function GlobalProgressGauge({
   rightIndicatorCompactValue,
   boostLabel = 'boost',
   milestoneBadgesExpanded = false,
+  gaugeActions,
   className,
 }: GlobalProgressGaugeProps) {
   const gradientId = useId().replace(/:/g, '');
@@ -231,29 +234,54 @@ export function GlobalProgressGauge({
                 milestone.reached ? 'border-status-completed' : 'border-text-muted'
               )}
             />
-            <MilestoneBadge
-              milestone={milestone}
-              expandable={geometry.showMilestoneLabels}
-              expanded={showFullMilestoneBadge}
-              className={cn(
-                geometry.showMilestoneLabels
-                  ? 'pointer-events-auto z-40 max-w-24 rounded-full px-2 py-1 text-[0.65rem] text-text-secondary opacity-90 shadow-sm group-hover:z-50 group-hover:max-w-36 group-hover:rounded-xl group-hover:px-3 group-hover:py-2 group-hover:text-xs group-hover:text-text-primary group-hover:opacity-100'
-                  : 'bottom-full left-1/2 z-50 mb-2 max-w-36 -translate-x-1/2 opacity-0 shadow-xl group-hover:opacity-100',
-                showFullMilestoneBadge &&
-                  'z-50 max-w-48 rounded-2xl px-3 py-2 text-xs text-text-primary opacity-100 shadow-xl'
-              )}
-              style={
-                geometry.showMilestoneLabels
-                  ? {
-                      top: marker.label.y - marker.dot.y,
-                      left: marker.label.x - marker.dot.x + 8,
-                    }
-                  : undefined
-              }
-            />
+            {milestone.editor ? (
+              <div
+                className={cn(
+                  'pointer-events-auto absolute z-50 w-max -translate-x-1/2 -translate-y-full',
+                  geometry.showMilestoneLabels ? '' : 'bottom-full left-1/2 mb-2'
+                )}
+                style={
+                  geometry.showMilestoneLabels
+                    ? {
+                        top: marker.label.y - marker.dot.y - 8,
+                        left: marker.label.x - marker.dot.x + 8,
+                      }
+                    : undefined
+                }
+              >
+                {milestone.editor}
+              </div>
+            ) : (
+              <MilestoneBadge
+                milestone={milestone}
+                expandable={geometry.showMilestoneLabels}
+                expanded={showFullMilestoneBadge}
+                className={cn(
+                  geometry.showMilestoneLabels
+                    ? 'pointer-events-auto z-40 max-w-24 rounded-full px-2 py-1 text-[0.65rem] text-text-secondary opacity-90 shadow-sm group-hover:z-50 group-hover:max-w-36 group-hover:rounded-xl group-hover:px-3 group-hover:py-2 group-hover:text-xs group-hover:text-text-primary group-hover:opacity-100'
+                    : 'bottom-full left-1/2 z-50 mb-2 max-w-36 -translate-x-1/2 opacity-0 shadow-xl group-hover:opacity-100',
+                  showFullMilestoneBadge &&
+                    'z-50 max-w-48 rounded-2xl px-3 py-2 text-xs text-text-primary opacity-100 shadow-xl'
+                )}
+                style={
+                  geometry.showMilestoneLabels
+                    ? {
+                        top: marker.label.y - marker.dot.y,
+                        left: marker.label.x - marker.dot.x + 8,
+                      }
+                    : undefined
+                }
+              />
+            )}
           </div>
         );
       })}
+
+      {gaugeActions ? (
+        <div className="pointer-events-auto absolute right-2 top-2 z-50">
+          {gaugeActions}
+        </div>
+      ) : null}
 
       <div
         className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"

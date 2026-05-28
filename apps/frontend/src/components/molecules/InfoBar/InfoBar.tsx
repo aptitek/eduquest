@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
-import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react';
+import { DeleteButton } from '../../atoms/DeleteButton';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
@@ -127,16 +127,13 @@ export function InfoBar({
           </button>
         ) : null}
         {onDismiss ? (
-          <HoldToConfirmButton
+          <DeleteButton
             onConfirm={onDismiss}
             holdDuration={700}
-            shape="round"
-            variant=""
-            className="h-8 min-h-0 w-8 border border-gaming-border/70 bg-gaming-base/60 text-text-muted hover:bg-gaming-base hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-          >
-            <span className="sr-only">{resolvedDismissLabel}</span>
-            <X size={15} aria-hidden />
-          </HoldToConfirmButton>
+            aria-label={resolvedDismissLabel}
+            iconSize={15}
+            className="h-8 w-8"
+          />
         ) : null}
       </div>
     </article>

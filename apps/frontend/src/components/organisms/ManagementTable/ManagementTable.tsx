@@ -9,8 +9,8 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Plus, Trash2 } from 'lucide-react';
-import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { AddButton } from '../../atoms/AddButton';
+import { DeleteButton } from '../../atoms/DeleteButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
 import { SchoolLogoBadge } from '../../molecules/SchoolLogoBadge';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -227,37 +227,26 @@ export function ManagementTable<TData extends { id: string }>({
                 ))}
                 {hasActions && (
                   <td className="text-right">
-                    <HoldToConfirmButton
+                    <DeleteButton
                       onConfirm={() => onDeleteRow?.(row.original)}
                       holdDuration={1000}
-                      shape="round"
-                      variant="btn-error"
-                      className="btn-xs h-8 w-8 text-text-primary"
+                      className="btn-xs h-8 w-8"
                       aria-label={deleteRowLabel?.(row.original)}
                       onClick={(event) => event.stopPropagation()}
-                    >
-                      <Trash2 size={14} />
-                    </HoldToConfirmButton>
+                    />
                   </td>
                 )}
               </tr>
             ))}
             {onCreateRow && (
-              <tr
-                onClick={onCreateRow}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  onCreateRow();
-                }}
-                tabIndex={0}
-                className="cursor-pointer border-gaming-border bg-gaming-base/20 text-text-muted transition hover:bg-gaming-base/40 hover:text-text-primary focus-visible:bg-gaming-base/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gaming-border/60"
-              >
+              <tr className="border-gaming-border bg-gaming-base/20">
                 <td colSpan={visibleColumns.length + (hasActions ? 1 : 0)}>
-                  <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-gaming-border/80 px-3 py-2 font-display text-sm font-semibold uppercase tracking-wider">
-                    <Plus size={16} />
+                  <AddButton
+                    onClick={onCreateRow}
+                    className="h-auto w-full justify-center rounded-lg border-dashed px-3 py-2 text-sm"
+                  >
                     {addRowLabel}
-                  </div>
+                  </AddButton>
                 </td>
               </tr>
             )}

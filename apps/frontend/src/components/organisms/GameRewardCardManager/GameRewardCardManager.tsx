@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { GameRewardCard, GameRewardCardPayload } from '@eduquest/shared';
-import { Plus, Trash2 } from 'lucide-react';
-import { PlayingCard, type PlayingCardData, type PlayingCardEditableField } from '../../molecules/PlayingCard';
+import type { GameBonusVoteState, GameRewardCard, GameRewardCardPayload } from '@eduquest/shared';
+import { PlayingCard, PlayingHand, type PlayingCardData, type PlayingCardEditableField } from '../../molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../molecules/ResponsiveCardGrid';
-import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { DeleteButton } from '../../atoms/DeleteButton';
 import {
   createGameRewardCard,
   deleteGameRewardCard,
+  fetchGameBonusVoteState,
   fetchGameRewardCards,
   updateGameRewardCard,
 } from '../../../features/game/api';
@@ -45,10 +46,10 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   const { t } = useTranslation();
   const reportError = useErrorReporter();
   const [rewardCards, setRewardCards] = useState<GameRewardCard[]>([]);
+  const [activeRewardCardIds, setActiveRewardCardIds] = useState<Set<string>>(() => new Set());
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [openColorCardId, setOpenColorCardId] = useState<string | null>(null);
   const [activeCardTarget, setActiveCardTarget] = useState<HTMLElement | null>(null);
-  const [inactiveCardIds, setInactiveCardIds] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +71,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   useEffect(() => {
     if (!gameId) {
       setRewardCards([]);
-      setInactiveCardIds(new Set());
+      setActiveRewardCardIds(new Set());
       return undefined;
     }
 
@@ -79,12 +80,14 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
 
     let isMounted = true;
     setIsLoading(true);
-    fetchGameRewardCards(token, gameId)
-      .then((cards) => {
-        if (isMounted) {
-          setRewardCards(cards);
-          setInactiveCardIds(new Set());
-        }
+    Promise.all([
+      fetchGameRewardCards(token, gameId),
+      fetchGameBonusVoteState(token, gameId).catch(() => null),
+    ])
+      .then(([cards, voteState]) => {
+        if (!isMounted) return;
+        setRewardCards(cards);
+        setActiveRewardCardIds(getActiveRewardCardIds(voteState));
       })
       .catch((loadError) => {
         reportError(loadError, {
@@ -116,8 +119,8 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     try {
       const created = await createGameRewardCard(token, gameId, EMPTY_REWARD_CARD);
       setRewardCards((current) => [...current, created].sort((a, b) => a.sortOrder - b.sortOrder));
-      setInactiveCardIds((current) => new Set(current).add(created.id));
       setEditingCardId(created.id);
+      window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (saveError) {
       reportError(saveError, {
         messageKey: 'rewardCards.saveError',
@@ -130,32 +133,76 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     }
   };
 
-  const renderRewardCard = (card: GameRewardCard) => (
-    <RewardFullSizeCard
-      key={card.id}
-      card={card}
-      isEditing={editingCardId === card.id}
-      isColorPickerOpen={openColorCardId === card.id}
-      isSaving={isSaving}
-      onFocus={() => setEditingCardId(card.id)}
-      onColorPickerOpenChange={(isOpen) => setOpenColorCardId(isOpen ? card.id : null)}
-      onUpdate={(patch) => updateRewardCard(card, patch)}
-      onIllustrationUpload={(file) => uploadRewardIllustration(card, file)}
-      onDelete={() => removeRewardCard(card)}
-      t={t}
+  const activeRewardCards = rewardCards.filter((card) => activeRewardCardIds.has(card.id));
+  const candidateRewardCards = rewardCards.filter((card) => !activeRewardCardIds.has(card.id));
+  const activeCardData = toNonEmptyCards(
+    activeRewardCards.length
+      ? activeRewardCards.map((card) => toEditablePlayingCard(card))
+      : [
+          {
+            kind: 'reward' as const,
+            id: 'empty-active-reward-card-manager',
+            title: 'Aucun bonus actif',
+            subtitle: 'Les bonus deviennent actifs après un vote gagné.',
+            accentToken: 'neutral' as const,
+            faceDown: true,
+          },
+        ]
+  );
+  const spareRewardCard: PlayingCardData = {
+    kind: 'reward',
+    id: 'spare-create-reward-card',
+    title: t('rewardCards.createReward'),
+    subtitle: t('rewardCards.previewSubtitle'),
+    accentToken: 'neutral',
+    faceDown: true,
+    interactive: true,
+    onClick: createRewardCard,
+    className: isSaving ? 'cursor-wait opacity-60' : undefined,
+  };
+  const candidateCardData = [...candidateRewardCards.map((card) => toEditablePlayingCard(card)), spareRewardCard];
+  const activeCardView = (
+    <PlayingHand
+      hand={{
+        id: 'admin-editable-bonus-hand',
+        title: t('bonus.activeBonuses'),
+        cards: activeCardData,
+        mainCardIndex: 0,
+        variant: 'horizontal',
+      }}
+      mode="full"
+      visibleCardCount={activeCardData.length}
+      expandOnHover={false}
+      onCardSelect={(card) => {
+        if (card.id) setEditingCardId(card.id);
+      }}
+      stackSide="left"
+      className="mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]"
+      cardClassName="w-72 md:w-80"
     />
   );
 
-  const activeCards = rewardCards.filter((card) => !inactiveCardIds.has(card.id));
-  const gridCards = rewardCards.filter((card) => inactiveCardIds.has(card.id));
-  const activeCardView = (
-    <ResponsiveCardGrid
-      items={activeCards}
-      getKey={(card) => card.id}
-      renderItem={renderRewardCard}
-      className="pt-2 xl:grid-cols-3 2xl:grid-cols-4"
-    />
-  );
+  function toEditablePlayingCard(card: GameRewardCard): PlayingCardData {
+    return toPlayingCard(t, card, {
+      editable: true,
+      onFieldChange: (field, value) => updateCardField(field, value, (patch) => updateRewardCard(card, patch)),
+      onIconChange: (iconKey) => updateRewardCard(card, { iconKey }),
+      onIllustrationUpload: (file) => uploadRewardIllustration(card, file),
+      isEditing: editingCardId === card.id,
+      footer: (
+        <RewardCardControls
+          color={card.color || DEFAULT_BONUS_COLOR}
+          isColorPickerOpen={openColorCardId === card.id}
+          isSaving={isSaving}
+          onFocus={() => setEditingCardId(card.id)}
+          onColorPickerOpenChange={(isOpen) => setOpenColorCardId(isOpen ? card.id : null)}
+          onColorChange={(color) => updateRewardCard(card, { color, accentToken: resolveUiColorTokenName(color) })}
+          onDelete={() => removeRewardCard(card)}
+          t={t}
+        />
+      ),
+    });
+  }
 
   const updateRewardCard = async (card: GameRewardCard, patch: Partial<GameRewardCardPayload>) => {
     if (!gameId || isSaving) return;
@@ -204,11 +251,6 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     try {
       await deleteGameRewardCard(token, gameId, card.id);
       setRewardCards((current) => current.filter((item) => item.id !== card.id));
-      setInactiveCardIds((current) => {
-        const next = new Set(current);
-        next.delete(card.id);
-        return next;
-      });
       if (editingCardId === card.id) setEditingCardId(null);
       if (openColorCardId === card.id) setOpenColorCardId(null);
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
@@ -235,97 +277,34 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
             {t('rewardCards.title')}
           </h3>
         </div>
-        <div className="flex items-center gap-3">
-          {isLoading ? <span className="text-sm text-text-muted">{t('common.loading')}</span> : null}
-          <button
-            type="button"
-            onClick={createRewardCard}
-            disabled={!gameId || isSaving}
-            className="btn btn-primary font-display text-xs font-black uppercase tracking-[0.16em]"
-          >
-            <Plus size={16} aria-hidden />
-            {t('rewardCards.createReward')}
-          </button>
-        </div>
+        {isLoading ? <span className="text-sm text-text-muted">{t('common.loading')}</span> : null}
       </div>
 
       {error ? <p className="text-sm font-semibold text-status-danger">{error}</p> : null}
 
       {activeCardTarget ? createPortal(activeCardView, activeCardTarget) : activeCardView}
 
-      {gridCards.length > 0 ? (
+      {candidateCardData.length > 0 ? (
         <ResponsiveCardGrid
-          items={gridCards}
-          getKey={(card) => card.id}
+          items={candidateCardData}
+          getKey={(card) => card.id || card.title || 'candidate-reward-card'}
           className="xl:grid-cols-3 2xl:grid-cols-4"
-          renderItem={renderRewardCard}
+          renderItem={(card) => (
+            <PlayingCard
+              {...card}
+              size="full"
+              className="w-full max-w-none"
+              interactive
+              onClick={
+                card.id === spareRewardCard.id
+                  ? card.onClick
+                  : () => card.id && setEditingCardId(card.id)
+              }
+            />
+          )}
         />
       ) : null}
     </section>
-  );
-}
-
-export function RewardFullSizeCard({
-  card,
-  isEditing,
-  isColorPickerOpen,
-  isSaving,
-  onFocus,
-  onColorPickerOpenChange,
-  onUpdate,
-  onIllustrationUpload,
-  onDelete,
-  t,
-}: {
-  card: GameRewardCard;
-  isEditing: boolean;
-  isColorPickerOpen: boolean;
-  isSaving: boolean;
-  onFocus: () => void;
-  onColorPickerOpenChange: (isOpen: boolean) => void;
-  onUpdate: (patch: Partial<GameRewardCardPayload>) => void;
-  onIllustrationUpload: (file: File) => Promise<string | void>;
-  onDelete: () => void;
-  t: (path: string) => string;
-}) {
-  return (
-    <div className="group/reward-card relative" onFocusCapture={onFocus} onClick={onFocus}>
-      <PlayingCard
-        {...toPlayingCard(t, card, {
-          editable: true,
-          onFieldChange: (field, value) => updateCardField(field, value, onUpdate),
-          onIconChange: (iconKey) => onUpdate({ iconKey }),
-          onIllustrationUpload,
-        })}
-        size="full"
-        className={cn(
-          'w-full max-w-none',
-          isEditing && 'ring-2 ring-status-quest ring-offset-2 ring-offset-gaming-base'
-        )}
-      />
-
-      {isEditing ? (
-        <BonusCardColorRibbon
-          value={card.color || DEFAULT_BONUS_COLOR}
-          onChange={(color) => onUpdate({ color, accentToken: resolveUiColorTokenName(color) })}
-          isOpen={isColorPickerOpen}
-          onOpenChange={onColorPickerOpenChange}
-          t={t}
-        />
-      ) : null}
-
-      <HoldToConfirmButton
-        onConfirm={onDelete}
-        holdDuration={1200}
-        shape="round"
-        variant="btn-error"
-        disabled={isSaving}
-        aria-label={t('rewardCards.deleteNamed').replace('{title}', card.title || t('rewardCards.previewTitle'))}
-        className="absolute bottom-3 right-3 z-[80] h-10 w-10 border-status-danger/40 bg-status-danger/95 text-primary-content opacity-0 shadow-xl transition-opacity group-hover/reward-card:opacity-100 group-focus-within/reward-card:opacity-100"
-      >
-        <Trash2 size={16} aria-hidden />
-      </HoldToConfirmButton>
-    </div>
   );
 }
 
@@ -351,6 +330,8 @@ function toPlayingCard(
     onFieldChange: (field: PlayingCardEditableField, value: string) => void;
     onIconChange: (iconKey: string) => void;
     onIllustrationUpload: (file: File) => Promise<string | void>;
+    footer?: ReactNode;
+    isEditing?: boolean;
   }
 ): PlayingCardData {
   const color = card.color || DEFAULT_BONUS_COLOR;
@@ -371,6 +352,7 @@ function toPlayingCard(
     illustration: illustrationUrl
       ? undefined
       : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
+    className: options.isEditing ? 'ring-2 ring-status-quest ring-offset-2 ring-offset-gaming-base' : undefined,
     front: {
       title: fallbackTitle,
       subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
@@ -384,6 +366,7 @@ function toPlayingCard(
       ribbonHidden: true,
       editable: options.editable,
       ribbonEditable: false,
+      footer: options.footer,
       onFieldChange: options.onFieldChange,
       onIllustrationUpload: options.onIllustrationUpload,
     },
@@ -403,48 +386,50 @@ function updateCardField(
   }
 }
 
-function BonusCardColorRibbon({
-  value,
-  onChange,
-  isOpen,
-  onOpenChange,
+function RewardCardControls({
+  color,
+  isColorPickerOpen,
+  isSaving,
+  onFocus,
+  onColorPickerOpenChange,
+  onColorChange,
+  onDelete,
   t,
 }: {
-  value: string;
-  onChange: (color: string) => void;
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
+  color: string;
+  isColorPickerOpen: boolean;
+  isSaving: boolean;
+  onFocus: () => void;
+  onColorPickerOpenChange: (isOpen: boolean) => void;
+  onColorChange: (color: string) => void;
+  onDelete: () => void;
   t: (path: string) => string;
 }) {
-  const selectedOption = SOLARIZED_SWATCH_OPTIONS.find((option) => option.value === value);
-  const colorLabel = selectedOption ? t(selectedOption.labelKey) : t('rewardCards.fields.color');
-
   return (
-    <div className="pointer-events-none absolute inset-0 z-[90] overflow-visible">
-      <div className="absolute inset-0 overflow-hidden rounded-[1.4rem]">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenChange(!isOpen);
-          }}
-          className={cn(
-            'pointer-events-auto absolute right-0 top-0 z-[95] h-20 w-52 translate-x-1/2 rotate-45 shadow-lg transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest',
-            resolveColorBackgroundClassName(value)
-          )}
-          aria-label={t('rewardCards.useCardColor').replace('{color}', colorLabel)}
-          aria-expanded={isOpen}
-          title={colorLabel}
-        />
-      </div>
+    <div className="relative flex flex-wrap items-center gap-2" onFocus={onFocus} onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => onColorPickerOpenChange(!isColorPickerOpen)}
+        className={cn(
+          'h-8 w-8 rounded-lg border border-gaming-border shadow-sm transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest',
+          resolveColorBackgroundClassName(color)
+        )}
+        aria-label={t('rewardCards.fields.color')}
+        aria-expanded={isColorPickerOpen}
+        title={t('rewardCards.fields.color')}
+      />
+      <DeleteButton
+        onConfirm={onDelete}
+        holdDuration={1200}
+        disabled={isSaving}
+        aria-label={t('rewardCards.deleteNamed').replace('{title}', t('rewardCards.previewTitle'))}
+        className="h-8 w-8 shadow-md"
+      />
 
-      {isOpen ? (
-        <div
-          className="pointer-events-auto absolute right-2 top-16 z-[100] grid w-40 grid-cols-3 gap-2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 shadow-2xl backdrop-blur"
-          onClick={(event) => event.stopPropagation()}
-        >
+      {isColorPickerOpen ? (
+        <div className="absolute bottom-10 left-0 z-[100] grid w-40 grid-cols-3 gap-2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 shadow-2xl backdrop-blur">
           {SOLARIZED_SWATCH_OPTIONS.map((option) => {
-            const isSelected = value === option.value;
+            const isSelected = color === option.value;
             const label = t(option.labelKey);
 
             return (
@@ -452,8 +437,8 @@ function BonusCardColorRibbon({
                 key={option.value}
                 type="button"
                 onClick={() => {
-                  onChange(option.value);
-                  onOpenChange(false);
+                  onColorChange(option.value);
+                  onColorPickerOpenChange(false);
                 }}
                 className={cn(
                   'h-8 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
@@ -496,6 +481,22 @@ function renderRewardIcon(
       />
     </div>
   );
+}
+
+function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
+  if (!voteState) return new Set<string>();
+
+  return new Set(
+    voteState.voteStates.flatMap((state) => (state.hasTie ? [] : state.leadingBonusCardIds))
+  );
+}
+
+function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...PlayingCardData[]] {
+  if (cards.length === 0) {
+    throw new Error('Expected at least one card.');
+  }
+
+  return cards as [PlayingCardData, ...PlayingCardData[]];
 }
 
 export default GameRewardCardManager;

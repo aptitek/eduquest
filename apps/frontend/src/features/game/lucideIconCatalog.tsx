@@ -125,7 +125,12 @@ function resolveStaticLucideIcon(iconId?: string, fallbackType?: ActivityType): 
   return null;
 }
 
-type LazyLucideIcon = ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>;
+type LazyLucideIcon = ComponentType<{
+  iconId: string;
+  size?: number;
+  className?: string;
+  'aria-hidden'?: boolean;
+}>;
 
 const lazyIconCache: globalThis.Map<string, LazyLucideIcon> = new globalThis.Map();
 
@@ -137,19 +142,12 @@ function getLazyLucideIcon(iconId: string) {
   if (cached) return cached;
 
   const LazyIcon = lazy(async () => {
-    const module = await import('lucide-react');
-    const icon = (module as Record<string, unknown>)[pascal];
-    const fallback = (module as Record<string, unknown>).Hammer || Hammer;
-
-    return { default: (isLucideIconExport(icon) ? icon : fallback) as LazyLucideIcon };
+    const module = await import('./DynamicLucideIcon');
+    return { default: module.DynamicLucideIcon as LazyLucideIcon };
   });
 
   lazyIconCache.set(pascal, LazyIcon);
   return LazyIcon;
-}
-
-function isLucideIconExport(value: unknown) {
-  return typeof value === 'function' || (typeof value === 'object' && value !== null);
 }
 
 export function resolveActivityIconId(
@@ -175,7 +173,7 @@ export function renderLucideIcon(iconId: string, size = 20, className?: string):
 
   return (
     <Suspense fallback={<Hammer size={size} className={className} aria-hidden />}>
-      <LazyIcon size={size} className={className} aria-hidden />
+      <LazyIcon iconId={iconId} size={size} className={className} aria-hidden />
     </Suspense>
   );
 }

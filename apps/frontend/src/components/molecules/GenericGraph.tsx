@@ -20,8 +20,7 @@ import {
   type NodeProps,
   useReactFlow,
 } from '@xyflow/react';
-import { X } from 'lucide-react';
-import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
+import { DeleteButton } from '../atoms/DeleteButton';
 import { AvatarDeck, type AvatarDeckMember } from './AvatarDeck';
 import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -835,16 +834,12 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
       ) : null}
       {data.deletable ? (
         <div className="absolute bottom-4 left-1 z-30 -translate-x-1/2 translate-y-1/2">
-          <HoldToConfirmButton
+          <DeleteButton
             onConfirm={() => data.onDeleteNode?.(node)}
             holdDuration={800}
-            shape="round"
-            variant="border border-status-danger bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-gaming-base focus:outline-none focus:ring-2 focus:ring-status-danger"
             className="h-7 w-7 shrink-0"
-          >
-            <X size={14} aria-hidden />
-            <span className="sr-only">{t('graph.deleteNode')}</span>
-          </HoldToConfirmButton>
+            aria-label={t('graph.deleteNode')}
+          />
         </div>
       ) : null}
       {node.marker ? (
@@ -1168,16 +1163,12 @@ function GraphFlowEdgeRenderer({
               pointerEvents: 'all',
             }}
           >
-            <HoldToConfirmButton
+            <DeleteButton
               onConfirm={handleDelete}
               holdDuration={800}
-              shape="round"
-              variant="border border-status-danger bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-gaming-base focus:outline-none focus:ring-2 focus:ring-status-danger"
               className="h-7 w-7 shrink-0"
-            >
-              <X size={14} aria-hidden />
-              <span className="sr-only">{t('graph.deleteEdge')}</span>
-            </HoldToConfirmButton>
+              aria-label={t('graph.deleteEdge')}
+            />
           </div>
         </EdgeLabelRenderer>
       ) : null}

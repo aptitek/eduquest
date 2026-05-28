@@ -9,7 +9,6 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useGameStore } from '../../features/game/gameStore';
 import { GameRewardCardManager } from '../../components/organisms/GameRewardCardManager';
 import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
-import { GameMilestoneManager } from '../../components/organisms/GameMilestoneManager/GameMilestoneManager';
 import {
   boostMilestoneBonusVote,
   castMilestoneBonusVote,
@@ -104,8 +103,6 @@ export function ProgressPage() {
               </div>
               <div id="bonus-hand-target" className="relative z-0 min-h-[32rem] overflow-visible" />
             </section>
-
-            <GameMilestoneManager gameId={selectedGameId} />
 
             <GameRewardCardManager gameId={selectedGameId} />
           </>

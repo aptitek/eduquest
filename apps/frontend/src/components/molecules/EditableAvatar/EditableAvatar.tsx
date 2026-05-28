@@ -17,8 +17,10 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const OUTPUT_MIME_TYPE = 'image/webp';
 const OUTPUT_EXTENSION = 'webp';
 const START_QUALITY = 0.86;
-const MIN_QUALITY = 0.58;
+const MIN_QUALITY = 0.4;
 const QUALITY_STEP = 0.08;
+const DIMENSION_STEP = 0.75;
+const MIN_DIMENSION = 64;
 const ALLOWED_TYPES = [
   'image/png',
   'image/jpeg',
@@ -28,9 +30,10 @@ const ALLOWED_TYPES = [
 ];
 const MAX_DIMENSION = 512;
 
-function getOutputFileName(fileName: string) {
+function getOutputFileName(fileName: string, mimeType = OUTPUT_MIME_TYPE) {
+  const extension = mimeType === 'image/png' ? 'png' : OUTPUT_EXTENSION;
   const baseName = fileName.replace(/\.[^.]+$/, '') || 'avatar';
-  return `${baseName}.${OUTPUT_EXTENSION}`;
+  return `${baseName}.${extension}`;
 }
 
 function loadImage(file: File): Promise<HTMLImageElement> {
@@ -75,9 +78,6 @@ async function normalizeAvatarFile(file: File): Promise<File> {
     return file;
   }
 
-  const scale = Math.min(1, MAX_DIMENSION / img.width, MAX_DIMENSION / img.height);
-  const width = Math.max(1, Math.round(img.width * scale));
-  const height = Math.max(1, Math.round(img.height * scale));
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
 
@@ -85,20 +85,50 @@ async function normalizeAvatarFile(file: File): Promise<File> {
     throw new Error('Could not process image.');
   }
 
-  canvas.width = width;
-  canvas.height = height;
-  ctx.drawImage(img, 0, 0, width, height);
+  let targetDimension = Math.max(
+    MIN_DIMENSION,
+    Math.min(MAX_DIMENSION, Math.max(img.width, img.height))
+  );
+  let smallestBlob: Blob | null = null;
 
-  let quality = START_QUALITY;
-  let blob = await canvasToBlob(canvas, OUTPUT_MIME_TYPE, quality);
+  while (targetDimension >= MIN_DIMENSION) {
+    const scale = Math.min(1, targetDimension / img.width, targetDimension / img.height);
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
 
-  while (blob.size > MAX_FILE_SIZE && quality > MIN_QUALITY) {
-    quality = Math.max(MIN_QUALITY, quality - QUALITY_STEP);
-    blob = await canvasToBlob(canvas, OUTPUT_MIME_TYPE, quality);
+    canvas.width = width;
+    canvas.height = height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    let quality = START_QUALITY;
+    let blob = await canvasToBlob(canvas, OUTPUT_MIME_TYPE, quality);
+
+    while (blob.size > MAX_FILE_SIZE && quality > MIN_QUALITY) {
+      quality = Math.max(MIN_QUALITY, quality - QUALITY_STEP);
+      blob = await canvasToBlob(canvas, OUTPUT_MIME_TYPE, quality);
+    }
+
+    if (!smallestBlob || blob.size < smallestBlob.size) {
+      smallestBlob = blob;
+    }
+
+    if (blob.size <= MAX_FILE_SIZE) {
+      return new File([blob], getOutputFileName(file.name, blob.type), {
+        type: blob.type || OUTPUT_MIME_TYPE,
+        lastModified: Date.now(),
+      });
+    }
+
+    targetDimension = Math.floor(targetDimension * DIMENSION_STEP);
   }
 
-  return new File([blob], getOutputFileName(file.name), {
-    type: blob.type || OUTPUT_MIME_TYPE,
+  if (!smallestBlob) {
+    throw new Error('Could not process image.');
+  }
+
+  return new File([smallestBlob], getOutputFileName(file.name, smallestBlob.type), {
+    type: smallestBlob.type || OUTPUT_MIME_TYPE,
     lastModified: Date.now(),
   });
 }

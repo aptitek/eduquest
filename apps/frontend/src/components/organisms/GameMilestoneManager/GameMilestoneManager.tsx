@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CohortProgressData, GameMilestonePayload } from '@eduquest/shared';
-import { Plus, Trash2 } from 'lucide-react';
 import {
   createGameMilestone,
   deleteGameMilestone,
   fetchGameMilestones,
   updateGameMilestone,
 } from '../../../features/game/api';
+import { AddButton } from '../../atoms/AddButton';
+import { DeleteButton } from '../../atoms/DeleteButton';
 import { cn } from '../../../utils/cn';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { getUserErrorMessage } from '../../../features/errors/api';
@@ -157,15 +158,13 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
             Jauge de progression
           </h3>
         </div>
-        <button
-          type="button"
+        <AddButton
           onClick={createMilestone}
           disabled={!gameId || isSaving}
-          className="btn btn-primary font-display text-xs font-black uppercase tracking-[0.16em]"
+          className="text-xs"
         >
-          <Plus size={16} aria-hidden />
           Ajouter
-        </button>
+        </AddButton>
       </div>
 
       {error ? <p className="text-sm font-semibold text-status-danger">{error}</p> : null}
@@ -205,15 +204,13 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
                   />
                 </label>
               </div>
-              <button
-                type="button"
-                onClick={() => removeMilestone(milestone)}
+              <DeleteButton
+                onConfirm={() => removeMilestone(milestone)}
+                holdDuration={1000}
                 disabled={isSaving}
                 aria-label={`Supprimer ${milestone.labelI18nKey}`}
-                className="btn btn-error btn-sm btn-square"
-              >
-                <Trash2 size={16} aria-hidden />
-              </button>
+                className="btn-sm h-8 w-8"
+              />
             </div>
           </article>
         ))}

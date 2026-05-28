@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type CohortGrade } from '@eduquest/shared';
-import { Clipboard, ExternalLink, Trash2, UserPlus, X } from 'lucide-react';
-import { HoldToConfirmButton } from '../../atoms/HoldToConfirmButton';
+import { Clipboard, ExternalLink, X } from 'lucide-react';
+import { AddButton } from '../../atoms/AddButton';
+import { DeleteButton } from '../../atoms/DeleteButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import {
@@ -368,15 +369,13 @@ export function CohortDetailCard({
                           {formatTimeRemaining(selectedInvite.expiresAt, t)}
                         </div>
 
-                        <HoldToConfirmButton
+                        <DeleteButton
                           onConfirm={() => revokeInvite(selectedInvite.id)}
                           holdDuration={1200}
-                          variant="btn-error"
                           className="w-full rounded-xl"
                         >
-                          <Trash2 size={16} />
                           {t('management.cohorts.revokePermanently')}
-                        </HoldToConfirmButton>
+                        </DeleteButton>
                       </>
                     ) : null}
                   </div>
@@ -636,15 +635,14 @@ export function CohortDetailCard({
                       <span className="text-[11px] text-status-quest">
                         {formatTimeRemaining(invite.expiresAt, t)}
                       </span>
-                      <HoldToConfirmButton
+                      <DeleteButton
                         onConfirm={() => revokeInvite(invite.id)}
                         holdDuration={1000}
-                        variant="btn-error"
+                        iconSize={12}
                         className="btn-xs rounded-lg text-[11px]"
                       >
-                        <Trash2 size={12} />
                         {t('management.cohorts.revoke')}
-                      </HoldToConfirmButton>
+                      </DeleteButton>
                     </div>
                   </div>
                 ))}
@@ -654,15 +652,13 @@ export function CohortDetailCard({
             )}
           </div>
 
-          <HoldToConfirmButton
-            onConfirm={openInviteModal}
-            holdDuration={1200}
-            variant="btn-primary"
-            className="btn-lg mt-1 w-full rounded-2xl font-display text-base"
+          <AddButton
+            onClick={openInviteModal}
+            iconSize={20}
+            className="btn-lg mt-1 w-full rounded-2xl text-base"
           >
-            <UserPlus size={20} />
             {t('management.cohorts.inviteButton')}
-          </HoldToConfirmButton>
+          </AddButton>
         </div>
       </div>
 

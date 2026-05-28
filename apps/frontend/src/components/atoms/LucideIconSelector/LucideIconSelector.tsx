@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
-import * as LucideIcons from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { useTranslation } from '../../../hooks/useTranslation';
 import {
   kebabCaseFromIconId,
+  LUCIDE_ICON_IDS,
   renderLucideIcon,
 } from '../../../features/game/lucideIconCatalog';
 
@@ -32,10 +32,14 @@ const DEFAULT_ICON_IDS = [
   'Map',
 ];
 
-const ALL_LUCIDE_ICON_IDS = Object.entries(LucideIcons)
-  .filter(([name, value]) => isSelectableLucideIcon(name, value))
-  .map(([name]) => name)
-  .sort((a, b) => a.localeCompare(b));
+let dynamicIconIdsPromise: Promise<string[]> | null = null;
+
+function loadDynamicLucideIconIds() {
+  dynamicIconIdsPromise ??= import('../../../features/game/DynamicLucideIcon').then((module) =>
+    module.getAllDynamicLucideIconIds()
+  );
+  return dynamicIconIdsPromise;
+}
 
 export function LucideIconSelector({
   value,
@@ -47,11 +51,32 @@ export function LucideIconSelector({
 }: LucideIconSelectorProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const [dynamicIconIds, setDynamicIconIds] = useState<string[] | null>(null);
   const resolvedSearchPlaceholder = searchPlaceholder || t('activityCard.iconSearchPlaceholder');
+  const searchableIconIds = useMemo(
+    () =>
+      dynamicIconIds
+        ? Array.from(new Set([...LUCIDE_ICON_IDS, ...dynamicIconIds])).sort((a, b) => a.localeCompare(b))
+        : LUCIDE_ICON_IDS,
+    [dynamicIconIds]
+  );
   const visibleIconIds = useMemo(() => {
     if (!query.trim()) return defaultIconIds.slice(0, limit);
-    return filterIconIds(query, limit);
-  }, [defaultIconIds, limit, query]);
+    return filterIconIds(searchableIconIds, query, limit);
+  }, [defaultIconIds, limit, query, searchableIconIds]);
+
+  useEffect(() => {
+    if (!query.trim() || dynamicIconIds) return undefined;
+
+    let isMounted = true;
+    loadDynamicLucideIconIds().then((iconIds) => {
+      if (isMounted) setDynamicIconIds(iconIds);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dynamicIconIds, query]);
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -90,27 +115,14 @@ export function LucideIconSelector({
   );
 }
 
-function filterIconIds(query: string, limit: number) {
+function filterIconIds(iconIds: string[], query: string, limit: number) {
   const normalized = query.trim().toLowerCase();
-  if (!normalized) return ALL_LUCIDE_ICON_IDS.slice(0, limit);
+  if (!normalized) return iconIds.slice(0, limit);
 
-  return ALL_LUCIDE_ICON_IDS.filter((iconId) => {
+  return iconIds.filter((iconId) => {
     const kebab = kebabCaseFromIconId(iconId);
     return iconId.toLowerCase().includes(normalized) || kebab.includes(normalized);
   }).slice(0, limit);
-}
-
-function isSelectableLucideIcon(name: string, value: unknown) {
-  if (!isLucideIconExport(value)) return false;
-  if (!/^[A-Z]/.test(name)) return false;
-  if (name === 'Icon' || name === 'LucideIcon' || name === 'createLucideIcon') return false;
-  if (name.startsWith('Lucide')) return false;
-  if (name.endsWith('Icon')) return false;
-  return true;
-}
-
-function isLucideIconExport(value: unknown) {
-  return typeof value === 'function' || (typeof value === 'object' && value !== null);
 }
 
 export default LucideIconSelector;

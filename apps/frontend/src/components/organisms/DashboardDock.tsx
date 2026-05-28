@@ -1,18 +1,26 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import type { DragEvent } from 'react';
 import { createPortal } from 'react-dom';
+import type { CohortProgressData, GameBonusVoteState, GameMilestonePayload } from '@eduquest/shared';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
 import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
+import { AddButton } from '../atoms/AddButton';
+import { DeleteButton } from '../atoms/DeleteButton';
 import { GaugeIndicator } from '../atoms/GaugeIndicator';
 import { StepSelector } from '../molecules/StepSelector';
 import { useGameStore } from '../../features/game/gameStore';
 import {
+  createGameMilestone,
+  deleteGameMilestone,
   fetchCohortStep,
+  fetchGameBonusVoteState,
   fetchGameRewardCards,
   fetchGuilds,
   spendGuildVotes,
   updateCohortStep,
+  updateGameMilestone,
   updateGuildIcon,
 } from '../../features/game/api';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
@@ -20,7 +28,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
-import { Coins } from 'lucide-react';
+import { Coins, GripVertical } from 'lucide-react';
 import {
   buildClassGuildHand,
   buildGuildCardHands,
@@ -46,6 +54,7 @@ export interface DashboardDockProps {
 type EditableCardSideOverride = Partial<Record<PlayingCardEditableField, string>> & {
   stats?: Record<string, number>;
 };
+type ProgressMilestone = CohortProgressData['gauge']['milestones'][number];
 
 const PROGRESS_BONUS_SEEN_STORAGE_PREFIX = 'eduquest_progress_seen_bonus_cards';
 
@@ -62,8 +71,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const [guilds, setGuilds] = useState<DockGuild[]>([]);
   const [rewardCards, setRewardCards] = useState<PlayingCardData[]>([]);
+  const [activeRewardCardIds, setActiveRewardCardIds] = useState<Set<string>>(() => new Set());
   const [adminStep, setAdminStep] = useState(0);
   const [isSavingAdminStep, setIsSavingAdminStep] = useState(false);
+  const [savingMilestoneId, setSavingMilestoneId] = useState<string | null>(null);
+  const [draggedMilestoneId, setDraggedMilestoneId] = useState<string | null>(null);
   const [isVoteOpen, setIsVoteOpen] = useState(false);
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const { user, student, character, selectedGameId } = useGameStore();
@@ -222,13 +234,17 @@ export function DashboardDock({ className }: DashboardDockProps) {
     const token = localStorage.getItem('eduquest_token');
     if (!token || !selectedGameId) {
       setRewardCards([]);
+      setActiveRewardCardIds(new Set());
       return undefined;
     }
 
     let isMounted = true;
     const loadRewardCards = () => {
-      fetchGameRewardCards(token, selectedGameId)
-        .then((cards) => {
+      Promise.all([
+        fetchGameRewardCards(token, selectedGameId),
+        fetchGameBonusVoteState(token, selectedGameId).catch(() => null),
+      ])
+        .then(([cards, voteState]) => {
           if (!isMounted) return;
           setRewardCards(
             cards.map((card) => ({
@@ -245,6 +261,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
                 : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
             }))
           );
+          setActiveRewardCardIds(getActiveRewardCardIds(voteState));
         })
         .catch((error) => {
           console.warn('Could not load dashboard reward cards.', error);
@@ -281,8 +298,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
     };
   }, [user?.isAdmin, selectedGameId]);
 
-  const bonusCards = rewardCards.length
-    ? (rewardCards as [PlayingCardData, ...PlayingCardData[]])
+  const activeRewardCards = rewardCards.filter((card) => card.id && activeRewardCardIds.has(card.id));
+  const bonusCards = activeRewardCards.length
+    ? (activeRewardCards as [PlayingCardData, ...PlayingCardData[]])
     : ([
         {
           kind: 'reward' as const,
@@ -299,12 +317,135 @@ export function DashboardDock({ className }: DashboardDockProps) {
     markProgressBonusCardSeen,
     isProgressPage
   );
+  const notifyMilestonesUpdated = () => {
+    window.dispatchEvent(new CustomEvent('eduquest:milestones-updated'));
+  };
+  const createMilestone = async () => {
+    if (!selectedGameId || savingMilestoneId) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return;
+
+    const milestones = dashboardData?.gauge.milestones || [];
+    const lastMilestone = milestones[milestones.length - 1];
+    const nextCost = Math.max((lastMilestone?.cost || 0) + 100, 100);
+    setSavingMilestoneId('new');
+    try {
+      await createGameMilestone(token, selectedGameId, {
+        label: 'New milestone',
+        description: '',
+        cost: nextCost,
+        sortOrder: milestones.length,
+      });
+      notifyMilestonesUpdated();
+    } catch (error) {
+      console.warn('Could not create dashboard milestone.', error);
+      showDockError('dashboard.dock.errors.loadProgress', error);
+    } finally {
+      setSavingMilestoneId(null);
+    }
+  };
+  const updateMilestone = async (milestone: ProgressMilestone, patch: Partial<GameMilestonePayload>) => {
+    if (!selectedGameId || savingMilestoneId) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return;
+
+    setSavingMilestoneId(milestone.id);
+    try {
+      await updateGameMilestone(token, selectedGameId, milestone.id, toMilestonePayload(milestone, patch));
+      notifyMilestonesUpdated();
+    } catch (error) {
+      console.warn('Could not update dashboard milestone.', error);
+      showDockError('dashboard.dock.errors.loadProgress', error);
+    } finally {
+      setSavingMilestoneId(null);
+    }
+  };
+  const removeMilestone = async (milestone: ProgressMilestone) => {
+    if (!selectedGameId || savingMilestoneId) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return;
+
+    setSavingMilestoneId(milestone.id);
+    try {
+      await deleteGameMilestone(token, selectedGameId, milestone.id);
+      notifyMilestonesUpdated();
+    } catch (error) {
+      console.warn('Could not delete dashboard milestone.', error);
+      showDockError('dashboard.dock.errors.loadProgress', error);
+    } finally {
+      setSavingMilestoneId(null);
+    }
+  };
+  const reorderMilestone = async (sourceMilestoneId: string | null, targetMilestoneId: string) => {
+    const draggedId = sourceMilestoneId || draggedMilestoneId;
+    if (!selectedGameId || savingMilestoneId || !draggedId || draggedId === targetMilestoneId) {
+      setDraggedMilestoneId(null);
+      return;
+    }
+
+    const token = localStorage.getItem('eduquest_token');
+    const milestones = sortProgressMilestones(dashboardData?.gauge.milestones || []);
+    const draggedIndex = milestones.findIndex((milestone) => milestone.id === draggedId);
+    const targetIndex = milestones.findIndex((milestone) => milestone.id === targetMilestoneId);
+    if (!token || draggedIndex < 0 || targetIndex < 0) {
+      setDraggedMilestoneId(null);
+      return;
+    }
+
+    const [dragged] = milestones.splice(draggedIndex, 1);
+    const insertionIndex = draggedIndex < targetIndex ? targetIndex : targetIndex;
+    milestones.splice(insertionIndex, 0, dragged);
+    const updates = milestones
+      .map((milestone, sortOrder) => ({ milestone, sortOrder }))
+      .filter(({ milestone, sortOrder }) => milestone.sortOrder !== sortOrder);
+
+    if (updates.length === 0) {
+      setDraggedMilestoneId(null);
+      return;
+    }
+
+    setSavingMilestoneId('reorder');
+    try {
+      await Promise.all(
+        updates.map(({ milestone, sortOrder }) =>
+          updateGameMilestone(token, selectedGameId, milestone.id, toMilestonePayload(milestone, { sortOrder }))
+        )
+      );
+      notifyMilestonesUpdated();
+    } catch (error) {
+      console.warn('Could not reorder dashboard milestones.', error);
+      showDockError('dashboard.dock.errors.loadProgress', error);
+    } finally {
+      setDraggedMilestoneId(null);
+      setSavingMilestoneId(null);
+    }
+  };
   const gaugeMilestones = dashboardData?.gauge.milestones.length
     ? dashboardData.gauge.milestones.map((milestone) => ({
         id: milestone.id,
-        label: tMaybe(milestone.labelI18nKey),
-        description: milestone.descriptionI18nKey ? tMaybe(milestone.descriptionI18nKey) : undefined,
+        label: user?.isAdmin ? milestone.labelI18nKey : tMaybe(milestone.labelI18nKey),
+        description: user?.isAdmin
+          ? milestone.descriptionI18nKey || undefined
+          : milestone.descriptionI18nKey
+            ? tMaybe(milestone.descriptionI18nKey)
+            : undefined,
         value: milestone.cost,
+        editor: user?.isAdmin ? (
+          <InlineMilestoneEditor
+            milestone={milestone}
+            disabled={Boolean(savingMilestoneId)}
+            isSaving={savingMilestoneId === milestone.id}
+            isDragging={draggedMilestoneId === milestone.id}
+            onDragStart={() => setDraggedMilestoneId(milestone.id)}
+            onDragEnd={() => setDraggedMilestoneId(null)}
+            onDrop={(sourceMilestoneId) => reorderMilestone(sourceMilestoneId, milestone.id)}
+            onUpdate={(patch) => updateMilestone(milestone, patch)}
+            onDelete={() => removeMilestone(milestone)}
+          />
+        ) : undefined,
       }))
     : [];
   const gaugeCurrentPoints = dashboardData?.gauge.currentPoints ?? 0;
@@ -443,6 +584,19 @@ export function DashboardDock({ className }: DashboardDockProps) {
         {isVoteOpen ? 'Close vote' : 'Open vote'}
       </HoldToConfirmButton>
     );
+    const voteControls = (
+      <div className="flex items-center justify-center gap-2">
+        {voteButton}
+        <AddButton
+          onClick={createMilestone}
+          disabled={!selectedGameId || Boolean(savingMilestoneId)}
+          aria-label="Ajouter un milestone"
+          title="Ajouter un milestone"
+          iconSize={20}
+          className="h-10 w-10 shadow-glow-primary hover:scale-105 disabled:cursor-wait"
+        />
+      </div>
+    );
     const updateAdminStep = async (nextStep: number) => {
       if (!selectedGameId || isSavingAdminStep) return;
 
@@ -460,6 +614,21 @@ export function DashboardDock({ className }: DashboardDockProps) {
         setIsSavingAdminStep(false);
       }
     };
+    const adminGaugeContent = (gaugeClassName?: string) => (
+      <GlobalProgressGauge
+        currentPoints={gaugeCurrentPoints}
+        targetPoints={gaugeTargetPoints}
+        milestones={gaugeMilestones}
+        label={gaugeLabel}
+        centerContent={voteControls}
+        boostLabel={isVoteOpen ? 'Close vote' : 'Open vote'}
+        milestoneBadgesExpanded={isProgressPage}
+        className={cn(
+          'rounded-none border-0 bg-transparent shadow-none',
+          gaugeClassName
+        )}
+      />
+    );
 
     return (
       <>
@@ -475,15 +644,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
             {!isClassPage ? adminPodiumContent : null}
 
-            <GlobalProgressGauge
-              currentPoints={gaugeCurrentPoints}
-              targetPoints={gaugeTargetPoints}
-              milestones={gaugeMilestones}
-              label={gaugeLabel}
-              centerContent={voteButton}
-              boostLabel={isVoteOpen ? 'Close vote' : 'Open vote'}
-              className="h-36 w-36 shrink rounded-none border-0 bg-transparent shadow-none sm:h-40 sm:w-40 lg:h-44 lg:w-auto lg:min-w-[20rem] lg:max-w-[42rem] lg:flex-1 xl:min-w-[22rem] 2xl:min-w-[24rem]"
-            />
+            {adminGaugeContent('h-36 w-36 shrink sm:h-40 sm:w-40 lg:h-44 lg:w-auto lg:min-w-[20rem] lg:max-w-[42rem] lg:flex-1 xl:min-w-[22rem] 2xl:min-w-[24rem]')}
 
             <StepSelector
               value={adminStep}
@@ -497,7 +658,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
         {isClassPage ? (classPodiumTarget ? createPortal(adminPodiumContent, classPodiumTarget) : adminPodiumContent) : null}
 
-        {isProgressPage ? (progressBonusTarget ? createPortal(adminBonusContent, progressBonusTarget) : adminBonusContent) : null}
       </>
     );
   }
@@ -893,6 +1053,14 @@ function upsertGuild(guilds: readonly DockGuild[], guild: DockGuild) {
   return [guild, ...guilds.filter((item) => item.id !== guild.id && slugify(item.name) !== slugify(guild.name))];
 }
 
+function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
+  if (!voteState) return new Set<string>();
+
+  return new Set(
+    voteState.voteStates.flatMap((state) => (state.hasTie ? [] : state.leadingBonusCardIds))
+  );
+}
+
 function GuildIconSelectionPanel({
   value,
   onChange,
@@ -937,6 +1105,166 @@ function getHashRoute() {
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function InlineMilestoneEditor({
+  milestone,
+  disabled,
+  isSaving,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  onUpdate,
+  onDelete,
+}: {
+  milestone: ProgressMilestone;
+  disabled: boolean;
+  isSaving: boolean;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDrop: (sourceMilestoneId: string | null) => void;
+  onUpdate: (patch: Partial<GameMilestonePayload>) => void;
+  onDelete: () => void;
+}) {
+  const [labelDraft, setLabelDraft] = useState(milestone.labelI18nKey);
+  const [descriptionDraft, setDescriptionDraft] = useState(milestone.descriptionI18nKey || '');
+  const [costDraft, setCostDraft] = useState(String(milestone.cost));
+
+  useEffect(() => {
+    setLabelDraft(milestone.labelI18nKey);
+    setDescriptionDraft(milestone.descriptionI18nKey || '');
+    setCostDraft(String(milestone.cost));
+  }, [milestone.cost, milestone.descriptionI18nKey, milestone.labelI18nKey]);
+
+  const commitText = (field: 'label' | 'description') => {
+    const nextLabel = labelDraft.trim();
+    const nextDescription = descriptionDraft.trim();
+    if (field === 'label' && nextLabel && nextLabel !== milestone.labelI18nKey) {
+      onUpdate({ label: nextLabel });
+    }
+    if (field === 'description' && nextDescription !== (milestone.descriptionI18nKey || '')) {
+      onUpdate({ description: nextDescription });
+    }
+  };
+  const commitCost = () => {
+    const nextCost = Math.max(0, Number(costDraft || 0));
+    setCostDraft(String(nextCost));
+    if (Number.isFinite(nextCost) && nextCost !== milestone.cost) {
+      onUpdate({ cost: nextCost });
+    }
+  };
+
+  return (
+    <div
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const sourceMilestoneId = event.dataTransfer.getData('application/x-eduquest-milestone-id') ||
+          event.dataTransfer.getData('text/plain') ||
+          null;
+        onDrop(sourceMilestoneId);
+      }}
+      className={cn(
+        'group/editor min-w-36 max-w-52 rounded-2xl border border-gaming-border/80 bg-gaming-card/95 p-2 text-left shadow-xl backdrop-blur-md transition',
+        isDragging && 'scale-95 border-status-quest opacity-70'
+      )}
+    >
+      <div className="flex items-start gap-1.5">
+        <button
+          type="button"
+          draggable={!disabled}
+          onDragStart={(event: DragEvent<HTMLButtonElement>) => {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('application/x-eduquest-milestone-id', milestone.id);
+            event.dataTransfer.setData('text/plain', milestone.id);
+            onDragStart();
+          }}
+          onDragEnd={onDragEnd}
+          disabled={disabled}
+          aria-label={`Déplacer ${milestone.labelI18nKey}`}
+          title="Déplacer le milestone"
+          className="mt-0.5 flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-lg border border-gaming-border bg-gaming-base/80 text-text-muted transition hover:border-status-quest hover:text-status-quest active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <GripVertical size={15} aria-hidden />
+        </button>
+        <div className="min-w-0 flex-1 space-y-1">
+          <input
+            type="text"
+            value={labelDraft}
+            disabled={disabled}
+            aria-label="Nom du milestone"
+            onChange={(event) => setLabelDraft(event.currentTarget.value)}
+            onBlur={() => commitText('label')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+            className="w-full rounded-lg bg-transparent px-1 font-display text-xs font-black text-text-primary outline-none focus:bg-gaming-base focus:ring-2 focus:ring-status-quest"
+          />
+          <input
+            type="text"
+            value={descriptionDraft}
+            disabled={disabled}
+            aria-label="Description du milestone"
+            placeholder="Description..."
+            onChange={(event) => setDescriptionDraft(event.currentTarget.value)}
+            onBlur={() => commitText('description')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+            className="w-full rounded-lg bg-transparent px-1 text-[0.65rem] font-semibold text-text-muted outline-none focus:bg-gaming-base focus:ring-2 focus:ring-status-quest"
+          />
+          <label className="flex items-center gap-1 rounded-full border border-gaming-border bg-gaming-base/80 px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-text-secondary">
+            Seuil
+            <input
+              type="number"
+              min={0}
+              value={costDraft}
+              disabled={disabled}
+              onChange={(event) => setCostDraft(event.currentTarget.value)}
+              onBlur={commitCost}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+              className="w-14 bg-transparent text-right text-text-primary outline-none"
+            />
+          </label>
+        </div>
+        <DeleteButton
+          onConfirm={onDelete}
+          holdDuration={1000}
+          disabled={disabled}
+          aria-label={`Supprimer ${milestone.labelI18nKey}`}
+          className="h-7 w-7 shadow-card hover:scale-105 disabled:cursor-wait"
+        />
+      </div>
+      {isSaving ? (
+        <p className="mt-1 px-1 text-[0.62rem] font-semibold text-status-quest">Sauvegarde...</p>
+      ) : null}
+    </div>
+  );
+}
+
+function toMilestonePayload(
+  milestone: ProgressMilestone,
+  patch: Partial<GameMilestonePayload>
+): GameMilestonePayload {
+  return {
+    label: patch.label ?? milestone.labelI18nKey,
+    description: patch.description ?? milestone.descriptionI18nKey ?? undefined,
+    cost: patch.cost ?? milestone.cost,
+    sortOrder: patch.sortOrder ?? milestone.sortOrder,
+  };
+}
+
+function sortProgressMilestones(milestones: ProgressMilestone[]) {
+  return [...milestones].sort(
+    (first, second) => (first.sortOrder || 0) - (second.sortOrder || 0) || first.cost - second.cost
+  );
 }
 
 function makeEditableDashboardCard({
