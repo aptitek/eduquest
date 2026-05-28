@@ -114,7 +114,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     getLatestCohortMembership(student?.cohortMemberships);
   const playerGuild = latestMembership?.guild;
   const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
-  const playerAvatar = user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
+  const playerAvatar = character?.illustrationUrl || user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
   const isGuildPage = route === 'guild';
   const isClassPage = route === 'class';
   const isProgressPage = route === 'bonus';
@@ -122,6 +122,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
   useEffect(() => {
     const handleHashChange = () => {
+      setClassPodiumTarget(null);
+      setGuildHandTarget(null);
+      setProgressBonusTarget(null);
       const nextRoute = getHashRoute();
       setRoute(nextRoute);
     };
@@ -200,7 +203,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       return undefined;
     }
 
-    const updateTarget = () => setClassPodiumTarget(document.getElementById('class-podium-hands-target'));
+    const updateTarget = () => setClassPodiumTarget(getConnectedElementById('class-podium-hands-target'));
     updateTarget();
 
     const animationFrame = window.requestAnimationFrame(updateTarget);
@@ -213,7 +216,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       return undefined;
     }
 
-    const updateTarget = () => setGuildHandTarget(document.getElementById('guild-hand-target'));
+    const updateTarget = () => setGuildHandTarget(getConnectedElementById('guild-hand-target'));
     updateTarget();
 
     const animationFrame = window.requestAnimationFrame(updateTarget);
@@ -226,7 +229,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       return undefined;
     }
 
-    const updateTarget = () => setProgressBonusTarget(document.getElementById('bonus-hand-target'));
+    const updateTarget = () => setProgressBonusTarget(getConnectedElementById('bonus-hand-target'));
     updateTarget();
 
     const animationFrame = window.requestAnimationFrame(updateTarget);
@@ -774,7 +777,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           </div>
         </aside>
 
-        {isClassPage ? (classPodiumTarget ? createPortal(adminPodiumContent, classPodiumTarget) : adminPodiumContent) : null}
+        {isClassPage ? (isConnectedElement(classPodiumTarget) ? createPortal(adminPodiumContent, classPodiumTarget) : adminPodiumContent) : null}
 
       </>
     );
@@ -1115,11 +1118,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
         </div>
       </aside>
 
-      {isClassPage ? (classPodiumTarget ? createPortal(podiumContent, classPodiumTarget) : podiumContent) : null}
+      {isClassPage ? (isConnectedElement(classPodiumTarget) ? createPortal(podiumContent, classPodiumTarget) : podiumContent) : null}
 
-      {isGuildPage ? (guildHandTarget ? createPortal(guildContent, guildHandTarget) : guildContent) : null}
+      {isGuildPage ? (isConnectedElement(guildHandTarget) ? createPortal(guildContent, guildHandTarget) : guildContent) : null}
 
-      {isProgressPage && !user?.isAdmin && progressBonusTarget
+      {isProgressPage && !user?.isAdmin && isConnectedElement(progressBonusTarget)
         ? createPortal(bonusContent, progressBonusTarget)
         : null}
     </>
@@ -1130,6 +1133,15 @@ export default DashboardDock;
 
 function getProgressBonusSeenStorageKey(userId: string | undefined, gameId: string | null) {
   return `${PROGRESS_BONUS_SEEN_STORAGE_PREFIX}:${userId || 'anonymous'}:${gameId || 'default'}`;
+}
+
+function getConnectedElementById(id: string) {
+  const element = document.getElementById(id);
+  return isConnectedElement(element) ? element : null;
+}
+
+function isConnectedElement(element: HTMLElement | null): element is HTMLElement {
+  return Boolean(element?.isConnected && document.body.contains(element));
 }
 
 function readSeenProgressBonusCardIds(storageKey: string) {

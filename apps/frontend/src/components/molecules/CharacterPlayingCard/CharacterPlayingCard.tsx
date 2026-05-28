@@ -32,7 +32,7 @@ export function CharacterPlayingCard({
 }: CharacterPlayingCardProps) {
   const { t } = useTranslation();
   const displayName = name || formatUserDisplayName(user) || t('game.classCard.fallbackName');
-  const imageUrl = illustrationUrl || user.avatarUrl || user.githubAvatarUrl || '';
+  const imageUrl = illustrationUrl || character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl || '';
   const classLabel = t(`game.classes.${character.characterClass}`);
   const shortDescription = description || user.bio || classLabel;
   const hasRadarGraph = Boolean(radarAxes?.length && radarDatasets?.length);

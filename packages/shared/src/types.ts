@@ -174,6 +174,7 @@ export interface GameCharacter {
   studentId: string;
   characterClass: GameCharacterClass;
   stats: GameStats;
+  illustrationUrl?: string;
   updatedAt?: string;
 }
 
@@ -407,6 +408,7 @@ export interface GameMapOccupancyMember {
   studentId: string;
   displayName: string;
   avatarUrl?: string;
+  characterIllustrationUrl?: string;
   characterClass?: GameCharacterClass;
   guildId?: string;
   guildName?: string;

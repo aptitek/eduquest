@@ -455,7 +455,7 @@ export function GameHeader({
                 title={formatUserDisplayName(user)}
                 ribbonLabel={t(`game.classes.${character.characterClass}`)}
                 characterClass={character.characterClass}
-                illustrationUrl={user.avatarUrl || user.githubAvatarUrl}
+                illustrationUrl={character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl}
                 illustrationAlt={formatUserDisplayName(user)}
                 interactive
                 onClick={() => {

@@ -67,6 +67,7 @@ export type ManagementStudentUpdate = {
   institutionalEmail?: string;
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
+  characterIllustrationUrl?: string;
 };
 
 export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;

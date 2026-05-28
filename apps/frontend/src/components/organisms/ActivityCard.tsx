@@ -110,6 +110,7 @@ export interface ActivityCardProps {
   onIconChange?: (iconId: string) => void | Promise<void>;
   onCardColorChange?: (cardColor: string) => void | Promise<void>;
   onIllustrationUrlChange?: (illustrationUrl: string) => void | Promise<void>;
+  onIllustrationUpload?: (file: File) => Promise<string | void>;
   onStepRangesChange?: (stepRanges: ActivityStepRange[]) => void | Promise<void>;
   emptyCardLabel?: string;
   onEmptyCardClick?: () => void;
@@ -134,6 +135,7 @@ export function ActivityCard({
   onIconChange,
   onCardColorChange,
   onIllustrationUrlChange,
+  onIllustrationUpload,
   onStepRangesChange,
   emptyCardLabel,
   onEmptyCardClick,
@@ -264,6 +266,7 @@ export function ActivityCard({
     onResourcesChange: applyResources,
     onIconSelect: updateIcon,
     onFieldChange: updateCardField,
+    onIllustrationUpload,
   });
 
   return (
@@ -491,12 +494,14 @@ function buildActivityFrontSide({
   onResourcesChange,
   onIconSelect,
   onFieldChange,
+  onIllustrationUpload,
 }: {
   activity: ActivityCardData;
   canEdit: boolean;
   onResourcesChange: (resources: ActivityResourceLink[]) => void;
   onIconSelect: (iconName: string) => void;
   onFieldChange: (field: PlayingCardEditableField, value: string) => void;
+  onIllustrationUpload?: (file: File) => Promise<string | void>;
 }): PlayingCardSide {
   return {
     title: activity.title,
@@ -520,6 +525,7 @@ function buildActivityFrontSide({
     editable: canEdit,
     ribbonEditable: canEdit,
     onFieldChange,
+    onIllustrationUpload,
     footer: (
       <ActivityCardFooter
         activity={activity}

@@ -22,6 +22,7 @@ import { throwApiResponseError } from '../../features/errors/api';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { uploadAsset } from '../../features/assets/api';
 
 type EditablePlayerCardOverride = Partial<Record<PlayingCardEditableField, string>> & {
   stats?: Record<string, number>;
@@ -110,7 +111,7 @@ export function CharacterPage() {
   }
 
   const playerName = formatUserDisplayName(user);
-  const avatarUrl = user.avatarUrl || user.githubAvatarUrl;
+  const avatarUrl = character?.illustrationUrl || user.avatarUrl || user.githubAvatarUrl;
   const saveCharacterClass = async (characterClass: GameCharacterClass) => {
     if (isSavingCharacterClass) return;
 
@@ -159,6 +160,32 @@ export function CharacterPage() {
       ...current,
       [field]: value,
     }));
+  };
+  const uploadPlayerCardIllustration = async (file: File) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) throw new Error('profile.errors.unauthorized');
+
+    const asset = await uploadAsset(token, 'character-illustration', file, character?.studentId);
+
+    const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ characterIllustrationUrl: asset.url }),
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.success || !data.user) {
+      throwApiResponseError(response, data, 'Character illustration could not be saved.');
+    }
+
+    if (typeof data.token === 'string' && data.token) {
+      localStorage.setItem('eduquest_token', data.token);
+    }
+    setUserSession(data.user, data.student || student || null, data.character || character || null, activityCompletions);
+    return asset.url;
   };
   const updatePlayerCardStat = (statId: string, value: number) => {
     if (!character) return;
@@ -221,7 +248,8 @@ export function CharacterPage() {
         }),
         playerCardOverride,
         updatePlayerCardField,
-        updatePlayerCardStat
+        updatePlayerCardStat,
+        uploadPlayerCardIllustration
       )
     : null;
   const currentClassIndex = Math.max(
@@ -342,7 +370,8 @@ function applyPlayerCardOverrides(
   card: PlayingCardData,
   override: EditablePlayerCardOverride,
   onFieldChange: (field: PlayingCardEditableField, value: string) => void,
-  onStatChange: (statId: string, value: number) => void
+  onStatChange: (statId: string, value: number) => void,
+  onIllustrationUpload: (file: File) => Promise<string | void>
 ): PlayingCardData {
   const front = card.front;
 
@@ -365,6 +394,7 @@ function applyPlayerCardOverrides(
           editable: true,
           ribbonEditable: false,
           onFieldChange,
+          onIllustrationUpload,
           onStatChange,
         }
       : front,

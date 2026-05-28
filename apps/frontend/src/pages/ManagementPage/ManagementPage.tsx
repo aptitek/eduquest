@@ -680,16 +680,24 @@ function buildStudentCharacterBackSide(
 ): PlayingCardSide {
   const character = row.character;
   const classLabel = character ? t(`game.classes.${character.characterClass}`) : '';
+  const illustrationUrl = character?.illustrationUrl || row.user.avatarUrl || row.user.githubAvatarUrl;
 
   return {
     title: row.displayName,
     subtitle: classLabel,
     description: row.user.bio || '',
-    illustrationUrl: row.user.avatarUrl || row.user.githubAvatarUrl,
+    illustrationUrl,
     illustrationAlt: row.displayName,
     ribbonText: classLabel,
     ribbonEditable: false,
     editable: true,
+    onIllustrationUpload: async (file) => {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('management.errors.missingSession');
+
+      const asset = await uploadAsset(token, 'character-illustration', file, row.id);
+      return asset.url;
+    },
     statsEditable: false,
     stats: character
       ? [
@@ -713,7 +721,7 @@ function buildStudentCharacterBackSide(
       }
 
       if (field === 'illustrationUrl') {
-        void updateSelectedStudent({ user: { avatarUrl: value } });
+        void updateSelectedStudent({ characterIllustrationUrl: value });
       }
     },
   };

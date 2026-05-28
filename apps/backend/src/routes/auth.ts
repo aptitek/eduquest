@@ -106,6 +106,7 @@ type ManagementStudentUpdateBody = {
   institutionalEmail?: string;
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
+  characterIllustrationUrl?: string;
 };
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
 type ManagementSchoolCreateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
@@ -267,6 +268,7 @@ function toGameCharacter(record: GameCharacterRecord): GameCharacter {
     studentId: record.studentId,
     characterClass: normalizeGameCharacterClass(record.characterClass),
     stats: toGameCharacterStats(record),
+    illustrationUrl: record.illustrationUrl || undefined,
     updatedAt: toIsoString(record.updatedAt),
   };
 }
@@ -1331,6 +1333,11 @@ authRouter.put('/management/students/:studentId', async (c) => {
       errorCode: 'validation_failed',
     });
   }
+  if (body.characterIllustrationUrl !== undefined && !isPersistableImageUrl(body.characterIllustrationUrl)) {
+    return apiError(c, 'Character illustration URL must reference an uploaded asset or external image.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
 
   const studentId = c.req.param('studentId');
 
@@ -1369,6 +1376,16 @@ authRouter.put('/management/students/:studentId', async (c) => {
     if (body.user.pronouns !== undefined) userUpdate.pronouns = body.user.pronouns;
 
     await db.update(users).set(userUpdate).where(eq(users.id, studentRecord.userId));
+  }
+
+  if (body.characterIllustrationUrl !== undefined) {
+    await db
+      .update(gameCharacters)
+      .set({
+        illustrationUrl: body.characterIllustrationUrl || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(gameCharacters.studentId, studentId));
   }
 
   let currentMemberships = await db
@@ -1997,12 +2014,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
           .limit(1);
 
         if (loadedCharacters.length > 0) {
-          const charRecord = loadedCharacters[0];
-          characterObj = {
-            studentId: charRecord.studentId,
-            characterClass: normalizeGameCharacterClass(charRecord.characterClass),
-            stats: toGameCharacterStats(charRecord),
-          };
+          characterObj = toGameCharacter(loadedCharacters[0]);
         }
 
         activityCompletionObj = (
@@ -2063,6 +2075,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     internalDescription?: string;
     photoUrl?: string;
     characterClass?: string;
+    characterIllustrationUrl?: string;
   };
 
   try {
@@ -2079,6 +2092,17 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       {
         success: false,
         error: 'Avatar URL must reference an uploaded asset or external image.',
+        errorKey: 'profile.errors.avatarProcessingFailed',
+      },
+      400
+    );
+  }
+
+  if (body.characterIllustrationUrl !== undefined && !isPersistableImageUrl(body.characterIllustrationUrl)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Character illustration URL must reference an uploaded asset or external image.',
         errorKey: 'profile.errors.avatarProcessingFailed',
       },
       400
@@ -2113,18 +2137,19 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       const db = getDb(databaseUrl);
 
       // 1. Mise à jour de la table `users`
+      const userUpdate: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
+      if (body.displayName !== undefined) userUpdate.displayName = body.displayName;
+      if (body.firstName !== undefined) userUpdate.firstName = body.firstName;
+      if (body.lastName !== undefined) userUpdate.lastName = body.lastName;
+      if (body.email !== undefined) userUpdate.email = body.email;
+      if (body.avatarUrl !== undefined) userUpdate.avatarUrl = body.avatarUrl;
+      if (body.birthDate !== undefined) userUpdate.birthDate = body.birthDate === null ? null : body.birthDate;
+      if (body.bio !== undefined) userUpdate.bio = body.bio;
+      if (body.pronouns !== undefined) userUpdate.pronouns = body.pronouns;
+
       const [updatedUser] = await db
         .update(users)
-        .set({
-          displayName: body.displayName,
-          firstName: body.firstName,
-          lastName: body.lastName,
-          avatarUrl: body.avatarUrl,
-          birthDate: body.birthDate === null ? null : body.birthDate,
-          bio: body.bio,
-          pronouns: body.pronouns,
-          updatedAt: new Date(),
-        })
+        .set(userUpdate)
         .where(eq(users.id, userPayload.id))
         .returning();
 
@@ -2300,8 +2325,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           } as any;
         }
 
-        if (body.characterClass !== undefined) {
-          if (!GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
+        if (body.characterClass !== undefined || body.characterIllustrationUrl !== undefined) {
+          if (body.characterClass !== undefined && !GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
             return apiError(c, 'Character class not found', 404);
           }
 
@@ -2316,7 +2341,12 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             ? await db
                 .update(gameCharacters)
                 .set({
-                  characterClass: body.characterClass as GameCharacterClass,
+                  ...(body.characterClass !== undefined
+                    ? { characterClass: body.characterClass as GameCharacterClass }
+                    : {}),
+                  ...(body.characterIllustrationUrl !== undefined
+                    ? { illustrationUrl: body.characterIllustrationUrl || null }
+                    : {}),
                   updatedAt: new Date(),
                 })
                 .where(eq(gameCharacters.studentId, studentId))
@@ -2325,16 +2355,15 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                 .insert(gameCharacters)
                 .values({
                   studentId,
-                  characterClass: body.characterClass as GameCharacterClass,
+                  characterClass: (body.characterClass || DEFAULT_CHARACTER_CLASS) as GameCharacterClass,
+                  ...(body.characterIllustrationUrl !== undefined
+                    ? { illustrationUrl: body.characterIllustrationUrl || null }
+                    : {}),
                 })
                 .returning();
 
           if (updatedChar) {
-            characterObj = {
-              studentId: updatedChar.studentId,
-              characterClass: normalizeGameCharacterClass(updatedChar.characterClass),
-              stats: toGameCharacterStats(updatedChar),
-            };
+            characterObj = toGameCharacter(updatedChar);
           }
         } else {
           const [existingChar] = await db
@@ -2344,11 +2373,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             .limit(1);
 
           if (existingChar) {
-            characterObj = {
-              studentId: existingChar.studentId,
-              characterClass: normalizeGameCharacterClass(existingChar.characterClass),
-              stats: toGameCharacterStats(existingChar),
-            };
+            characterObj = toGameCharacter(existingChar);
           }
         }
       }

@@ -83,6 +83,7 @@ export function buildProgressBonusCards(
 
 export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [PlayingHandData] {
   const guildColor = resolveCardColor(options.guild.color);
+  const playerClassColor = resolveCardColor(options.characterClass);
   const cards: [PlayingCardData, ...PlayingCardData[]] = [
     {
       id: 'guild',
@@ -117,7 +118,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
           '{class}',
           options.characterClassLabel
         ),
-        color: resolveUiColorTokenValue('quest'),
+        color: playerClassColor,
         illustrationUrl: options.playerAvatar,
         ribbonText: options.characterClassLabel,
         stats: [
@@ -226,6 +227,7 @@ function buildGuildMemberCard(
     ? t(`game.classes.${member.characterClass}`)
     : t('dashboard.dock.guildmate');
   const subtitle = member.institutionalEmail || member.email || classLabel;
+  const illustrationUrl = member.characterIllustrationUrl || member.avatarUrl;
 
   return {
     id: `${layoutPrefix}-member-${member.id || index}`,
@@ -234,7 +236,7 @@ function buildGuildMemberCard(
     characterClass: member.characterClass || 'scholar',
     title: member.displayName,
     subtitle,
-    illustrationUrl: member.avatarUrl,
+    illustrationUrl,
     illustrationAlt: member.displayName,
     accentToken: member.characterClass || 'neutral',
     front: {
@@ -242,7 +244,7 @@ function buildGuildMemberCard(
       subtitle,
       description: t('dashboard.dock.hiddenMember'),
       color: resolveCardColor(member.characterClass || 'neutral'),
-      illustrationUrl: member.avatarUrl,
+      illustrationUrl,
       illustrationAlt: member.displayName,
       ribbonText: classLabel,
       stats: member.stats

@@ -229,6 +229,7 @@ function buildUnguildedStudentCard(
   const characterClass = rosterStudent.characterClass || 'scholar';
   const classLabel = t(`game.classes.${characterClass}`);
   const stats = rosterStudent.stats;
+  const illustrationUrl = rosterStudent.characterIllustrationUrl || rosterStudent.avatarUrl;
 
   return {
     id: `class-unguilded-${rosterStudent.id}`,
@@ -237,14 +238,14 @@ function buildUnguildedStudentCard(
     characterClass,
     title: rosterStudent.displayName,
     subtitle: classLabel,
-    illustrationUrl: rosterStudent.avatarUrl,
+    illustrationUrl,
     illustrationAlt: rosterStudent.displayName,
     ribbonText: t('class.unguildedRibbon'),
     front: {
       title: rosterStudent.displayName,
       subtitle: rosterStudent.institutionalEmail || rosterStudent.email || classLabel,
       description: t('class.unguildedDescription'),
-      illustrationUrl: rosterStudent.avatarUrl,
+      illustrationUrl,
       illustrationAlt: rosterStudent.displayName,
       ribbonText: t('class.unguildedRibbon'),
       stats: stats

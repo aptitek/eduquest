@@ -42,6 +42,7 @@ import { MapEdgeCard } from '../../components/organisms/MapEdgeCard';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { cn } from '../../utils/cn';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { uploadAsset } from '../../features/assets/api';
 
 const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
   {
@@ -567,6 +568,14 @@ export function MapPage() {
     }
   };
 
+  const uploadActivityIllustration = async (activity: Activity, file: File) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) throw new Error('Missing session token.');
+
+    const asset = await uploadAsset(token, 'activity-illustration', file, activity.id);
+    return asset.url;
+  };
+
   const handleActivityStepRangesChange = async (
     activity: Activity,
     stepRanges: ActivityStepRange[]
@@ -794,7 +803,7 @@ export function MapPage() {
                         activityId: currentActivityId,
                         previousActivityId: currentMove?.fromActivityId,
                         characterClass: character?.characterClass,
-                        illustrationUrl: user.avatarUrl || user.githubAvatarUrl,
+                        illustrationUrl: character?.illustrationUrl || user.avatarUrl || user.githubAvatarUrl,
                         label: formatUserDisplayName(user),
                       }
                     : undefined
@@ -902,6 +911,9 @@ export function MapPage() {
                 user?.isAdmin
                   ? (illustrationUrl) => handleActivityIllustrationChange(selectedActivity, illustrationUrl)
                   : undefined
+              }
+              onIllustrationUpload={
+                user?.isAdmin ? (file) => uploadActivityIllustration(selectedActivity, file) : undefined
               }
               onStepRangesChange={
                 user?.isAdmin

@@ -691,7 +691,7 @@ function toAvatarMembers(
   return members.map((member) => ({
     id: member.studentId,
     name: member.displayName,
-    avatarUrl: member.avatarUrl,
+    avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
     subtitle: member.characterClass,
     onClick: () => openClassTarget(member.guildName || guildName, member.studentId),
   }));
@@ -762,7 +762,7 @@ function buildAnnularSegments(
               (segment.members || []).map((member) => ({
                 id: member.studentId,
                 name: member.displayName,
-                avatarUrl: member.avatarUrl,
+                avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
                 subtitle: member.characterClass,
                 onClick: () =>
                   openClassTarget(member.guildName || segment.guildName, member.studentId),
@@ -789,7 +789,7 @@ function buildAnnularSegments(
       members: (segment.members || []).map((member) => ({
         id: member.studentId,
         name: member.displayName,
-        avatarUrl: member.avatarUrl,
+        avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
         subtitle: member.characterClass,
         onClick: () => openClassTarget(member.guildName || segment.guildName, member.studentId),
       })),

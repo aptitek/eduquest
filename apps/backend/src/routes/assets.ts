@@ -11,7 +11,13 @@ type Variables = {
   user?: UserPayload;
 };
 
-type AssetKind = 'avatar' | 'school-logo' | 'guild-icon' | 'reward-illustration';
+type AssetKind =
+  | 'avatar'
+  | 'school-logo'
+  | 'guild-icon'
+  | 'reward-illustration'
+  | 'activity-illustration'
+  | 'character-illustration';
 
 type AssetPolicy = {
   maxBytes: number;
@@ -43,6 +49,17 @@ const assetPolicies: Record<AssetKind, AssetPolicy> = {
     allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
     allowSvg: true,
     requiresAdmin: true,
+  },
+  'activity-illustration': {
+    maxBytes: 2 * 1024 * 1024,
+    allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
+    allowSvg: true,
+    requiresAdmin: true,
+  },
+  'character-illustration': {
+    maxBytes: 2 * 1024 * 1024,
+    allowedTypes: ['image/png', 'image/jpeg', 'image/webp'],
+    allowSvg: false,
   },
 };
 
@@ -178,7 +195,16 @@ function buildAssetKey(
   }
 
   const safeEntityId = (entityId || randomId).replace(/[^a-zA-Z0-9_-]/g, '-');
-  const folder = kind === 'school-logo' ? 'schools' : kind === 'guild-icon' ? 'guilds' : 'reward-cards';
+  const folder =
+    kind === 'school-logo'
+      ? 'schools'
+      : kind === 'guild-icon'
+        ? 'guilds'
+        : kind === 'activity-illustration'
+          ? 'activities'
+          : kind === 'character-illustration'
+            ? 'characters'
+          : 'reward-cards';
   return `${folder}/${safeEntityId}/${kind}-${timestamp}-${randomId}.${extension}`;
 }
 
@@ -202,6 +228,8 @@ function isPublicAssetKey(key: string) {
     key.startsWith('users/') ||
     key.startsWith('schools/') ||
     key.startsWith('guilds/') ||
+    key.startsWith('activities/') ||
+    key.startsWith('characters/') ||
     key.startsWith('reward-cards/')
   );
 }

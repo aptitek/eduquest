@@ -246,6 +246,7 @@ export const gameCharacters = pgTable('game_characters', {
   intelligence: integer('intelligence').default(0).notNull(),
   wisdom: integer('wisdom').default(0).notNull(),
   charisma: integer('charisma').default(0).notNull(),
+  illustrationUrl: text('illustration_url'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 

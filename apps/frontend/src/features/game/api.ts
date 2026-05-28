@@ -126,6 +126,7 @@ export interface ClassRosterStudent {
   email?: string;
   institutionalEmail?: string;
   avatarUrl?: string;
+  characterIllustrationUrl?: string;
   characterClass?: GameCharacterClass;
   stats?: GameStats;
 }

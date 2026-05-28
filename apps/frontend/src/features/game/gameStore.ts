@@ -74,7 +74,7 @@ export const useGameStore = create<GameState>((set) => ({
       student,
       character,
       activityCompletions,
-      nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, student, user),
+      nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, student, user, character),
     })),
   patchUser: (patch) =>
     set((state) => {
@@ -82,7 +82,7 @@ export const useGameStore = create<GameState>((set) => ({
       const user = { ...state.user, ...patch };
       return {
         user,
-        nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, state.student, user),
+        nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, state.student, user, state.character),
       };
     }),
   patchCharacter: (patch) =>
@@ -189,6 +189,7 @@ function updateNodeOccupanciesForMove(
     studentId: state.student.id,
     displayName: getUserDisplayName(state.user),
     avatarUrl: state.user.avatarUrl || state.user.githubAvatarUrl,
+    characterIllustrationUrl: state.character.illustrationUrl,
     characterClass: state.character.characterClass,
     guildId: guild?.id,
     guildName: guild?.name,
@@ -268,7 +269,8 @@ function updateNodeOccupanciesForMove(
 function syncProfileInNodeOccupancies(
   nodeOccupancies: GameMapNodeOccupancy[],
   student: Student | null,
-  user: User
+  user: User,
+  character: GameCharacter | null
 ): GameMapNodeOccupancy[] {
   if (!student) return nodeOccupancies;
 
@@ -288,6 +290,7 @@ function syncProfileInNodeOccupancies(
           ...member,
           displayName,
           avatarUrl,
+          characterIllustrationUrl: character?.illustrationUrl,
         };
       }),
     })),

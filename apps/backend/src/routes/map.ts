@@ -94,6 +94,7 @@ interface MapOccupancyMember {
   email?: string | null;
   avatarUrl?: string | null;
   githubAvatarUrl?: string | null;
+  characterIllustrationUrl?: string | null;
   characterClass?: string | null;
   guildId?: string | null;
   guildName?: string | null;
@@ -716,6 +717,7 @@ function toClassRosterStudent(student: ClassRosterStudentRecord) {
     email: student.email || undefined,
     institutionalEmail: student.institutionalEmail || undefined,
     avatarUrl: student.avatarUrl || student.githubAvatarUrl || undefined,
+    characterIllustrationUrl: student.characterIllustrationUrl || undefined,
     characterClass,
     stats: characterClass
       ? {
@@ -768,6 +770,7 @@ function buildNodeOccupancies(
       studentId: member.studentId,
       displayName: formatOccupancyMemberName(member),
       avatarUrl: member.avatarUrl || member.githubAvatarUrl || undefined,
+      characterIllustrationUrl: member.characterIllustrationUrl || undefined,
       characterClass: toCharacterClass(member.characterClass),
       guildId: member.guildId || undefined,
       guildName: member.guildName || undefined,
@@ -2386,6 +2389,7 @@ mapRouter.post('/guilds', async (c) => {
         guildId: cohortMemberships.guildId,
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
+        characterIllustrationUrl: gameCharacters.illustrationUrl,
         strength: gameCharacters.strength,
         dexterity: gameCharacters.dexterity,
         constitution: gameCharacters.constitution,
@@ -2486,6 +2490,7 @@ mapRouter.get('/guilds', async (c) => {
         guildId: cohortMemberships.guildId,
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
+        characterIllustrationUrl: gameCharacters.illustrationUrl,
         strength: gameCharacters.strength,
         dexterity: gameCharacters.dexterity,
         constitution: gameCharacters.constitution,
@@ -3025,6 +3030,7 @@ mapRouter.get('/map', async (c) => {
           avatarUrl: users.avatarUrl,
           githubAvatarUrl: users.githubAvatarUrl,
           characterClass: gameCharacters.characterClass,
+          characterIllustrationUrl: gameCharacters.illustrationUrl,
           guildId: cohortMemberships.guildId,
           guildName: guilds.name,
           guildIconUrl: guilds.iconUrl,

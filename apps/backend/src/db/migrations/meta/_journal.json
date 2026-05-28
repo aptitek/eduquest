@@ -29,6 +29,13 @@
       "when": 1780041480000,
       "tag": "0003_split_milestones_bonus_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780041840000,
+      "tag": "0006_add_character_illustration_url",
+      "breakpoints": true
     }
   ]
 }
