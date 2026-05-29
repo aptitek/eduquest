@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type {
   Activity,
@@ -71,6 +71,56 @@ function getDefaultBossAnswerFields(t: (path: string) => string): BossActivityAn
   }));
 }
 
+function isPendingGuildVote(completion: GameActivityCompletion) {
+  const guildVote = completion.metadata?.guildVote;
+  return (
+    guildVote &&
+    typeof guildVote === 'object' &&
+    !Array.isArray(guildVote) &&
+    (guildVote as Record<string, unknown>).status === 'pending'
+  );
+}
+
+function getActivityGuildVoteState(activity: Activity) {
+  const guildVote = activity.metadata?.guildVote;
+  if (!guildVote || typeof guildVote !== 'object' || Array.isArray(guildVote)) return undefined;
+
+  const candidate = guildVote as Record<string, unknown>;
+  const requiredVotes = Number(candidate.requiredVotes);
+  const receivedVotes = Number(candidate.receivedVotes);
+  if (!Number.isFinite(requiredVotes) || requiredVotes <= 0 || !Number.isFinite(receivedVotes)) {
+    return undefined;
+  }
+
+  return {
+    requiredVotes,
+    receivedVotes: Math.max(0, receivedVotes),
+    status: candidate.status === 'complete' ? 'complete' : 'pending',
+    hasVoted: candidate.hasVoted === true,
+  };
+}
+
+function getGuildVoteProgressTarget(memberCount?: number) {
+  const requiredVotes = Math.max(1, Math.ceil(Math.max(1, memberCount || 1) / 2));
+  return 1 / requiredVotes;
+}
+
+function getGuildVoteProgressValue(activity: Activity) {
+  const voteState = getActivityGuildVoteState(activity);
+  if (!voteState) return 0;
+  return Math.min(1, voteState.receivedVotes / voteState.requiredVotes);
+}
+
+function getNextGuildVoteProgressTarget(activity: Activity, fallbackMemberCount?: number) {
+  const voteState = getActivityGuildVoteState(activity);
+  if (!voteState) return getGuildVoteProgressTarget(fallbackMemberCount);
+  return Math.min(1, (voteState.receivedVotes + (voteState.hasVoted ? 0 : 1)) / voteState.requiredVotes);
+}
+
+function hasCurrentStudentVotedForGuildActivity(activity: Activity) {
+  return getActivityGuildVoteState(activity)?.hasVoted === true;
+}
+
 export function MapPage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
@@ -85,6 +135,7 @@ export function MapPage() {
     nodeOccupancies,
     currentActivityId,
     currentMove,
+    availableGames,
     selectedGameId,
     setActivities,
     patchActivity,
@@ -102,6 +153,8 @@ export function MapPage() {
   const [loading, setLoading] = useState(true);
   const [completingActivityId, setCompletingActivityId] = useState<string | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [pendingGuildVoteActivityIds, setPendingGuildVoteActivityIds] = useState<Set<string>>(new Set());
+  const [currentGuildMemberCount, setCurrentGuildMemberCount] = useState<number | undefined>();
   const [edgeStyleError, setEdgeStyleError] = useState<string | null>(null);
   const [savingEdgeId, setSavingEdgeId] = useState<string | null>(null);
   const [isCreatingActivity, setIsCreatingActivity] = useState(false);
@@ -117,27 +170,39 @@ export function MapPage() {
   };
 
   // Chargement de la carte depuis le Backend Hono
-  const fetchMapData = async () => {
-    setLoading(true);
+  const fetchMapData = useCallback(async (options: { preserveSelection?: boolean; silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setLoading(true);
+    }
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
       const mapData = await fetchMapActivities(token, selectedGameId);
+      setCurrentGuildMemberCount(mapData.currentGuildMemberCount);
+      setPendingGuildVoteActivityIds((current) => {
+        const completedActivityIds = new Set(mapData.completions.map((completion) => completion.activityId));
+        return new Set([...current].filter((activityId) => !completedActivityIds.has(activityId)));
+      });
       setMapData(mapData);
-      setSelectedActivity(null);
-      setSelectedEdge(null);
+      if (!options.preserveSelection) {
+        setSelectedActivity(null);
+        setSelectedEdge(null);
+      }
     } catch (error: unknown) {
       console.warn('Could not load map activities.', error);
       showMapError('map.errors.load', error);
       setActivities([]);
+      setCurrentGuildMemberCount(undefined);
     } finally {
-      setLoading(false);
+      if (!options.silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, [selectedGameId, setActivities, setMapData]);
 
   useEffect(() => {
     fetchMapData();
-  }, [selectedGameId]);
+  }, [fetchMapData]);
 
   useEffect(() => {
     setPreviewStep(currentStep);
@@ -150,7 +215,18 @@ export function MapPage() {
 
     window.addEventListener('eduquest:cohort-step-updated', handleCohortStepUpdated);
     return () => window.removeEventListener('eduquest:cohort-step-updated', handleCohortStepUpdated);
-  }, [selectedGameId]);
+  }, [fetchMapData]);
+
+  useEffect(() => {
+    const handleOnboardingStateUpdated = () => {
+      setCompletionError(null);
+      fetchMapData();
+    };
+
+    window.addEventListener('eduquest:onboarding-state-updated', handleOnboardingStateUpdated);
+    return () =>
+      window.removeEventListener('eduquest:onboarding-state-updated', handleOnboardingStateUpdated);
+  }, [fetchMapData]);
 
   useEffect(() => {
     setSelectedEdge((current) => {
@@ -171,6 +247,20 @@ export function MapPage() {
     () => getMapPreviewSteps(activities, activityEdges, currentStep),
     [activities, activityEdges, currentStep]
   );
+  const currentStudentGuildId = useMemo(() => {
+    const memberships = student?.cohortMemberships || [];
+    const directMembership = selectedGameId
+      ? memberships.find((item) => item.cohortId === selectedGameId)
+      : undefined;
+    const selectedGame = selectedGameId ? availableGames.find((game) => game.id === selectedGameId) : undefined;
+    const gameMembership = selectedGame?.cohortId
+      ? memberships.find((item) => item.cohortId === selectedGame.cohortId)
+      : undefined;
+    const membership = directMembership || gameMembership || memberships[0];
+
+    return membership?.guildId || membership?.guild?.id;
+  }, [availableGames, selectedGameId, student?.cohortMemberships]);
+
   useEffect(() => {
     if (!previewSteps.includes(previewStep)) {
       setPreviewStep(previewSteps.includes(currentStep) ? currentStep : previewSteps[0]);
@@ -221,9 +311,19 @@ export function MapPage() {
   const handleSelectActivity = async (activity: Activity) => {
     setSelectedActivity(activity);
     setSelectedEdge(null);
+    const onboardingTask = getStringMetadata(
+      (activity.metadata || {}) as Record<string, unknown>,
+      'onboardingTask'
+    );
     if (user?.isAdmin) return;
-    if (!character) return;
-    if (activity.isCurrent || activity.isLocked) return;
+    if (activity.isCurrent || activity.isLocked) {
+      return;
+    }
+    const canMoveWithoutCharacter =
+      onboardingTask === 'institutional_profile' || onboardingTask === 'character_card';
+    if (!character && !canMoveWithoutCharacter) {
+      return;
+    }
     if (
       currentActivityId &&
       !hasDirectMapEdge(activityEdges, currentActivityId, activity.id)
@@ -279,9 +379,24 @@ export function MapPage() {
       if (!token) throw new Error('Missing session token.');
       const completion: GameActivityCompletion = await completeMapActivity(token, act.id, selectedGameId, draft);
 
+      if (isPendingGuildVote(completion)) {
+        setPendingGuildVoteActivityIds((current) => new Set(current).add(act.id));
+        return;
+      }
+
+      setPendingGuildVoteActivityIds((current) => {
+        const next = new Set(current);
+        next.delete(act.id);
+        return next;
+      });
       addActivityCompletion(completion);
       gainXp(getActivityXpReward(act));
-      setSelectedActivity(null);
+      if (act.participationMode === 'guild') {
+        await fetchMapData({ preserveSelection: true, silent: true });
+      } else {
+        setSelectedActivity(null);
+        await fetchMapData();
+      }
     } catch (error) {
       console.warn('Could not complete map activity.', error);
       showMapError('map.errors.completeActivity', error);
@@ -800,6 +915,8 @@ export function MapPage() {
                 playerMarker={
                   !user?.isAdmin && user
                     ? {
+                        studentId: student?.id,
+                        guildId: currentStudentGuildId,
                         activityId: currentActivityId,
                         previousActivityId: currentMove?.fromActivityId,
                         characterClass: character?.characterClass,
@@ -869,6 +986,21 @@ export function MapPage() {
               isCompleted={completedActivityIds.includes(selectedActivity.id)}
               isResolving={completingActivityId === selectedActivity.id}
               resolveError={completionError}
+              completionProgressTarget={
+                selectedActivity.participationMode === 'guild'
+                  ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
+                  : undefined
+              }
+              completionProgressValue={
+                pendingGuildVoteActivityIds.has(selectedActivity.id)
+                  ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
+                  : getGuildVoteProgressValue(selectedActivity)
+              }
+              isCompletionPending={
+                pendingGuildVoteActivityIds.has(selectedActivity.id) ||
+                hasCurrentStudentVotedForGuildActivity(selectedActivity)
+              }
+              completionPendingLabel={t('activityCard.waitingGuild')}
               onResolve={
                 user?.isAdmin || selectedActivity.isLocked
                   ? undefined

@@ -3,6 +3,7 @@ import {
   GAME_CHARACTER_CLASSES,
   type GameCharacterClass,
   type GameCharacterClassDefinition,
+  type GameCharacterStatConfig,
   type GameStats,
 } from '@eduquest/shared';
 import { UserRound } from 'lucide-react';
@@ -28,6 +29,14 @@ type EditablePlayerCardOverride = Partial<Record<PlayingCardEditableField, strin
   stats?: Record<string, number>;
 };
 
+type CharacterProfileUpdatePayload = {
+  displayName?: string;
+  bio?: string;
+  characterIllustrationUrl?: string;
+  characterStats?: GameStats;
+  gameId?: string | null;
+};
+
 type GameStatKey = keyof GameStats;
 
 const STAT_FIELDS: Array<{ id: GameStatKey; label: string }> = [
@@ -44,50 +53,58 @@ const CHARACTER_CLASS_BASE_STATS: Record<GameCharacterClass, GameStats> = {
     strength: 0,
     dexterity: 0,
     constitution: 0,
-    intelligence: 3,
+    intelligence: 2,
     wisdom: 1,
-    charisma: 0,
+    charisma: 1,
   },
   champion: {
-    strength: 3,
+    strength: 2,
     dexterity: 0,
-    constitution: 2,
+    constitution: 1,
     intelligence: 0,
     wisdom: 0,
     charisma: 1,
   },
   guide: {
     strength: 0,
-    dexterity: 3,
+    dexterity: 2,
     constitution: 0,
     intelligence: 0,
-    wisdom: 2,
+    wisdom: 1,
     charisma: 1,
   },
   specialist: {
     strength: 1,
     dexterity: 1,
-    constitution: 0,
-    intelligence: 2,
+    constitution: 1,
+    intelligence: 1,
     wisdom: 0,
     charisma: 0,
   },
 };
 
+const DEFAULT_STAT_CONFIG: GameCharacterStatConfig = {
+  maxValue: 5,
+  allocationBudget: 6,
+};
+
 export function CharacterPage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
-  const { user, student, character, activityCompletions, setUserSession } = useGameStore();
+  const { user, student, character, activityCompletions, selectedGameId, setUserSession } = useGameStore();
   const [playerCardOverride, setPlayerCardOverride] = useState<EditablePlayerCardOverride>({});
   const [classDefinitions, setClassDefinitions] = useState<GameCharacterClassDefinition[]>([]);
+  const [statConfig, setStatConfig] = useState<GameCharacterStatConfig>(DEFAULT_STAT_CONFIG);
   const [isSavingCharacterClass, setIsSavingCharacterClass] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    fetchCharacterClasses()
-      .then((definitions) => {
-        if (isMounted) setClassDefinitions(definitions);
+    fetchCharacterClasses(selectedGameId)
+      .then((catalog) => {
+        if (!isMounted) return;
+        setClassDefinitions(catalog.characterClasses);
+        setStatConfig(catalog.statConfig);
       })
       .catch((error) => {
         reportError(error, {
@@ -100,7 +117,7 @@ export function CharacterPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedGameId]);
 
   if (!user) {
     return (
@@ -112,6 +129,43 @@ export function CharacterPage() {
 
   const playerName = formatUserDisplayName(user);
   const avatarUrl = character?.illustrationUrl || user.avatarUrl || user.githubAvatarUrl;
+  const savePlayerCardProfileUpdate = async (payload: CharacterProfileUpdatePayload) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setSaveError(t('profile.errors.unauthorized'));
+      return;
+    }
+
+    setSaveError(null);
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ...payload, gameId: selectedGameId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success || !data.user) {
+        throwApiResponseError(response, data, 'Character profile could not be saved.');
+      }
+
+      if (typeof data.token === 'string' && data.token) {
+        localStorage.setItem('eduquest_token', data.token);
+      }
+      setUserSession(data.user, data.student || student || null, data.character || character || null, activityCompletions);
+      window.dispatchEvent(new Event('eduquest:onboarding-state-updated'));
+    } catch (error) {
+      reportError(error, {
+        messageKey: 'character.errors.saveProfile',
+        id: 'character.errors.saveProfile',
+        logMessage: 'Could not save character profile card.',
+      });
+      setSaveError(t('character.errors.saveProfile'));
+    }
+  };
   const saveCharacterClass = async (characterClass: GameCharacterClass) => {
     if (isSavingCharacterClass) return;
 
@@ -130,7 +184,7 @@ export function CharacterPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ characterClass }),
+        body: JSON.stringify({ characterClass, gameId: selectedGameId }),
       });
       const data = await response.json();
 
@@ -142,6 +196,7 @@ export function CharacterPage() {
         localStorage.setItem('eduquest_token', data.token);
       }
       setUserSession(data.user, data.student || student || null, data.character, activityCompletions);
+      window.dispatchEvent(new Event('eduquest:onboarding-state-updated'));
       setPlayerCardOverride({});
     } catch (error) {
       reportError(error, {
@@ -155,36 +210,26 @@ export function CharacterPage() {
     }
   };
   const updatePlayerCardField = (field: PlayingCardEditableField, value: string) => {
-    if (field === 'ribbonText') return;
+    if (field === 'ribbonText' || field === 'ribbonIcon' || field === 'subtitle') return;
     setPlayerCardOverride((current) => ({
       ...current,
       [field]: value,
     }));
+
+    const trimmedValue = value.trim();
+    if (field === 'title') {
+      void savePlayerCardProfileUpdate({ displayName: trimmedValue });
+    } else if (field === 'description') {
+      void savePlayerCardProfileUpdate({ bio: value });
+    } else if (field === 'illustrationUrl') {
+      void savePlayerCardProfileUpdate({ characterIllustrationUrl: trimmedValue });
+    }
   };
   const uploadPlayerCardIllustration = async (file: File) => {
     const token = localStorage.getItem('eduquest_token');
     if (!token) throw new Error('profile.errors.unauthorized');
 
     const asset = await uploadAsset(token, 'character-illustration', file, character?.studentId);
-
-    const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ characterIllustrationUrl: asset.url }),
-    });
-    const data = await response.json();
-
-    if (!response.ok || !data.success || !data.user) {
-      throwApiResponseError(response, data, 'Character illustration could not be saved.');
-    }
-
-    if (typeof data.token === 'string' && data.token) {
-      localStorage.setItem('eduquest_token', data.token);
-    }
-    setUserSession(data.user, data.student || student || null, data.character || character || null, activityCompletions);
     return asset.url;
   };
   const updatePlayerCardStat = (statId: string, value: number) => {
@@ -192,23 +237,23 @@ export function CharacterPage() {
     const statKey = getGameStatKey(statId);
     if (!statKey) return;
 
-    setPlayerCardOverride((current) => {
-      const currentAllocations = getCurrentStatAllocations(character.stats, current.stats, statBudget);
-      const currentRemainingPoints = getRemainingStatPoints(statBudget, currentAllocations);
-      const nextAllocation = clampStatValue(
-        value - baseStats[statKey],
-        0,
-        currentAllocations[statKey] + currentRemainingPoints
-      );
+    const currentAllocations = getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue);
+    const currentRemainingPoints = getRemainingStatPoints(statBudget, currentAllocations);
+    const nextAllocation = clampStatValue(
+      value - baseStats[statKey],
+      0,
+      Math.min(statMaxValue - baseStats[statKey], currentAllocations[statKey] + currentRemainingPoints)
+    );
+    const nextStats = {
+      ...currentAllocations,
+      [statKey]: nextAllocation,
+    };
 
-      return {
-        ...current,
-        stats: {
-          ...current.stats,
-          [statKey]: nextAllocation,
-        },
-      };
-    });
+    setPlayerCardOverride((current) => ({
+      ...current,
+      stats: nextStats,
+    }));
+    void savePlayerCardProfileUpdate({ characterStats: nextStats });
   };
   const getPlayerCardStatRange = (statId: string, currentValue: number) => {
     if (!character) return { min: 0, max: currentValue };
@@ -220,14 +265,15 @@ export function CharacterPage() {
 
     return {
       min: baseValue,
-      max: baseValue + currentAllocation + remainingStatPoints,
+      max: Math.min(statMaxValue, baseValue + currentAllocation + remainingStatPoints),
     };
   };
   const currentClassLabel = character ? t(`game.classes.${character.characterClass}`) : '';
   const baseStats = character ? getCharacterClassBaseStats(character.characterClass, classDefinitions) : createEmptyStats();
-  const statBudget = character ? getStatAllocationBudget(character.stats) : 0;
+  const statMaxValue = statConfig.maxValue;
+  const statBudget = character ? statConfig.allocationBudget : 0;
   const statAllocations = character
-    ? getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget)
+    ? getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue)
     : createEmptyStats();
   const remainingStatPoints = getRemainingStatPoints(statBudget, statAllocations);
   const playerCard = character
@@ -239,7 +285,7 @@ export function CharacterPage() {
           classLabel: currentClassLabel,
           statAllocations,
           baseStats,
-          statBudget,
+          statMaxValue,
           remainingStatPoints,
           remainingStatPointsLabel: t('character.pointsRemainingShort'),
           getStatEditableRange: getPlayerCardStatRange,
@@ -408,7 +454,7 @@ function buildPlayerCharacterCard({
   classLabel,
   statAllocations,
   baseStats,
-  statBudget,
+  statMaxValue,
   remainingStatPoints,
   remainingStatPointsLabel,
   getStatEditableRange,
@@ -421,7 +467,7 @@ function buildPlayerCharacterCard({
   classLabel: string;
   statAllocations: GameStats;
   baseStats: GameStats;
-  statBudget: number;
+  statMaxValue: number;
   remainingStatPoints: number;
   remainingStatPointsLabel: string;
   getStatEditableRange: (statId: string, currentValue: number) => { min: number; max: number };
@@ -451,9 +497,9 @@ function buildPlayerCharacterCard({
       stats: STAT_FIELDS.map(({ id, label }) => ({
         id,
         label,
-        value: baseStats[id] + statAllocations[id],
+        value: Math.min(statMaxValue, baseStats[id] + statAllocations[id]),
         min: baseStats[id],
-        max: baseStats[id] + statBudget,
+        max: statMaxValue,
       })),
     },
   };
@@ -476,10 +522,16 @@ function getStatAllocationBudget(stats: GameStats) {
 function getCurrentStatAllocations(
   characterStats: GameStats,
   overrides: Record<string, number> | undefined,
-  statBudget: number
+  statBudget: number,
+  baseStats: GameStats,
+  statMaxValue: number
 ): GameStats {
   const allocations = STAT_FIELDS.reduce<GameStats>((current, { id }) => {
-    current[id] = Math.max(0, Math.round(overrides?.[id] ?? characterStats[id]));
+    current[id] = clampStatValue(
+      Math.round(overrides?.[id] ?? characterStats[id]),
+      0,
+      Math.max(0, statMaxValue - baseStats[id])
+    );
     return current;
   }, createEmptyStats());
   const spentPoints = getStatAllocationBudget(allocations);
@@ -553,9 +605,16 @@ function buildClassCard({
         id,
         label: statLabel,
         value: baseStats[id],
+        displayValue: formatClassStatBonus(baseStats[id]),
       })),
     },
   };
+}
+
+function formatClassStatBonus(value: number) {
+  const roundedValue = Math.round(value);
+  if (roundedValue <= 0) return '';
+  return `+${roundedValue}`;
 }
 
 export default CharacterPage;

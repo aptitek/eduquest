@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, inArray, isNull, or, sql, sum } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, sum } from 'drizzle-orm';
 import {
+  STUDENT_ATTRIBUTES,
   type Activity,
   type ActivityParticipationMode,
   type BossActivityAnswerField,
@@ -13,6 +14,7 @@ import {
   type GameActivityEdge,
   type GameCharacterMove,
   type GameCharacterClass,
+  type GameStats,
   type GameActivityEdgeStyleWindow,
   type GameMapData,
   type GameMapNodeOccupancy,
@@ -20,6 +22,8 @@ import {
   type GameRewardCardPayload,
   type GameMilestonePayload,
   type Guild,
+  type GuildInvitation,
+  type GuildRecruitmentStatus,
   type VoteSpendBreakdown,
 } from '@eduquest/shared';
 import { getDb } from '../db';
@@ -27,6 +31,7 @@ import {
   gameActivityCompletions,
   gameActivityEdges,
   gameCharacters,
+  gameCharacterClasses,
   gameCharacterMoves,
   gameBonusCards,
   cohortMemberships,
@@ -34,6 +39,7 @@ import {
   cohorts,
   gameActivities,
   gameMapRuns,
+  guildInvitations,
   guilds,
   milestoneBonusVotes,
   notifications,
@@ -67,10 +73,14 @@ type CohortMembershipRecord = typeof cohortMemberships.$inferSelect;
 type StudentRecord = typeof students.$inferSelect;
 type CohortRecord = typeof cohorts.$inferSelect;
 type GuildRecord = typeof guilds.$inferSelect;
+type GuildInvitationRecord = typeof guildInvitations.$inferSelect;
 type ProgressMilestoneRecord = typeof progressMilestones.$inferSelect;
 type GameBonusCardRecord = typeof gameBonusCards.$inferSelect;
 type MilestoneBonusVoteRecord = typeof milestoneBonusVotes.$inferSelect;
 type Database = ReturnType<typeof getDb>;
+type GuildMutationDb = Pick<Database, 'select' | 'update'>;
+
+const ONLINE_PRESENCE_WINDOW_MS = 60 * 60 * 1000;
 
 type CompletionSubmissionPayload = {
   workUrl?: string;
@@ -80,11 +90,20 @@ type CompletionSubmissionPayload = {
 type CreateGuildPayload = {
   name?: unknown;
   description?: unknown;
+  iconUrl?: unknown;
   iconKey?: unknown;
   color?: unknown;
+  recruitmentStatus?: unknown;
+  recruitmentMessage?: unknown;
+  maxMembers?: unknown;
 };
 
 type UpdateGuildPayload = Partial<CreateGuildPayload>;
+
+type GuildInvitationPayload = {
+  inviteeUserId?: unknown;
+  message?: unknown;
+};
 
 interface MapOccupancyMember {
   studentId: string;
@@ -128,8 +147,37 @@ function toGuildPayload(guild: GuildRecord): Guild {
     iconKey: guild.iconKey || undefined,
     color: guild.color || undefined,
     gold: guild.gold,
+    recruitmentStatus: guild.recruitmentStatus,
+    recruitmentMessage: guild.recruitmentMessage || undefined,
+    maxMembers: guild.maxMembers,
     createdAt: guild.createdAt?.toISOString?.(),
     updatedAt: guild.updatedAt?.toISOString?.(),
+  };
+}
+
+function toGuildInvitationPayload(
+  invitation: GuildInvitationRecord,
+  details: {
+    guild?: GuildRecord;
+    inviter?: Pick<MapOccupancyMember, 'displayName' | 'firstName' | 'lastName' | 'email'>;
+    invitee?: Pick<MapOccupancyMember, 'displayName' | 'firstName' | 'lastName' | 'email'>;
+  } = {}
+): GuildInvitation {
+  return {
+    id: invitation.id,
+    cohortId: invitation.cohortId,
+    guildId: invitation.guildId,
+    guild: details.guild ? toGuildPayload(details.guild) : undefined,
+    inviterUserId: invitation.inviterUserId,
+    inviterDisplayName: details.inviter ? formatOccupancyMemberName(details.inviter) : undefined,
+    inviteeUserId: invitation.inviteeUserId,
+    inviteeDisplayName: details.invitee ? formatOccupancyMemberName(details.invitee) : undefined,
+    status: invitation.status,
+    message: invitation.message || undefined,
+    respondedAt: toIsoString(invitation.respondedAt),
+    expiresAt: toIsoString(invitation.expiresAt),
+    createdAt: toIsoString(invitation.createdAt),
+    updatedAt: toIsoString(invitation.updatedAt),
   };
 }
 
@@ -170,6 +218,74 @@ function toActivityCompletion(record: ActivityCompletionRecord): GameActivityCom
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
   };
+}
+
+type GuildActivityVoteState = {
+  requiredVotes: number;
+  receivedVotes: number;
+  isComplete: boolean;
+  hasVoted?: boolean;
+};
+
+function withGuildVoteState(
+  completion: GameActivityCompletion,
+  voteState: GuildActivityVoteState
+): GameActivityCompletion {
+  return {
+    ...completion,
+    metadata: {
+      ...(completion.metadata || {}),
+      guildVote: {
+        requiredVotes: voteState.requiredVotes,
+        receivedVotes: voteState.receivedVotes,
+        status: voteState.isComplete ? 'complete' : 'pending',
+        hasVoted: Boolean(voteState.hasVoted),
+      },
+    },
+  };
+}
+
+function withActivityGuildVoteState(
+  activity: ActivityRecord,
+  voteState: GuildActivityVoteState,
+  hasVoted: boolean
+): ActivityRecord {
+  return {
+    ...activity,
+    metadata: {
+      ...((activity.metadata || {}) as Record<string, unknown>),
+      guildVote: {
+        requiredVotes: voteState.requiredVotes,
+        receivedVotes: voteState.receivedVotes,
+        status: voteState.isComplete ? 'complete' : 'pending',
+        hasVoted,
+      },
+    },
+  };
+}
+
+function getRequiredGuildActivityVotes(memberCount: number) {
+  return Math.max(1, Math.ceil(memberCount / 2));
+}
+
+function isRecentlyOnline(
+  member: { updatedAt?: Date | null; lastLogin?: Date | null },
+  now = new Date()
+) {
+  const lastSeenAt = Math.max(
+    member.updatedAt?.getTime?.() || 0,
+    member.lastLogin?.getTime?.() || 0
+  );
+  return lastSeenAt > 0 && now.getTime() - lastSeenAt <= ONLINE_PRESENCE_WINDOW_MS;
+}
+
+async function touchUserPresence(db: Database, user?: UserPayload) {
+  if (!user?.id) return;
+
+  await db
+    .update(users)
+    .set({ updatedAt: new Date() })
+    .where(eq(users.id, user.id));
 }
 
 function toCharacterMove(record: CharacterMoveRecord): GameCharacterMove {
@@ -661,6 +777,15 @@ function validateOptionalInteger(value: unknown, fieldName: string, min: number,
   return value;
 }
 
+function validateOptionalRecruitmentStatus(value: unknown): GuildRecruitmentStatus | undefined {
+  if (value === undefined) return undefined;
+  if (value !== 'open' && value !== 'invite_only' && value !== 'closed') {
+    throw new Error('recruitmentStatus must be open, invite_only, or closed.');
+  }
+
+  return value;
+}
+
 function validateOptionalParticipationMode(value: unknown): ActivityParticipationMode | undefined {
   if (value === undefined) return undefined;
   if (value !== 'solo' && value !== 'guild') {
@@ -702,7 +827,9 @@ function edgeStyleWindowsOverlap(
   return firstMin <= secondMax && secondMin <= firstMax;
 }
 
-function formatOccupancyMemberName(member: MapOccupancyMember) {
+function formatOccupancyMemberName(
+  member: Pick<MapOccupancyMember, 'displayName' | 'firstName' | 'lastName' | 'email'>
+) {
   const fullName = [member.firstName, member.lastName].filter(Boolean).join(' ').trim();
   return member.displayName || fullName || member.email || 'Unknown player';
 }
@@ -719,6 +846,11 @@ function toClassRosterStudent(student: ClassRosterStudentRecord) {
     avatarUrl: student.avatarUrl || student.githubAvatarUrl || undefined,
     characterIllustrationUrl: student.characterIllustrationUrl || undefined,
     characterClass,
+    guildId: student.guildId || undefined,
+    guildName: student.guildName || undefined,
+    guildIconUrl: student.guildIconUrl || undefined,
+    guildIconKey: student.guildIconKey || undefined,
+    guildColor: student.guildColor || undefined,
     stats: characterClass
       ? {
           strength: student.strength || 0,
@@ -730,6 +862,24 @@ function toClassRosterStudent(student: ClassRosterStudentRecord) {
         }
       : undefined,
   };
+}
+
+function buildWeightedGuildStats(
+  members: ReturnType<typeof toClassRosterStudent>[],
+  config: Awaited<ReturnType<typeof RewardBalanceConfigService.getActiveConfig>>['rewardSystem']
+): GameStats | undefined {
+  const statCap = config.attributes.levelOneMaxValue;
+  const divisor = Math.max(1, members.length);
+  const stats = {} as GameStats;
+  let hasStats = false;
+
+  for (const attribute of STUDENT_ATTRIBUTES) {
+    const rawSum = members.reduce((sum, member) => sum + (member.stats?.[attribute] || 0), 0);
+    stats[attribute] = Math.ceil(Math.min(statCap, rawSum / divisor));
+    hasStats = hasStats || rawSum > 0;
+  }
+
+  return hasStats ? stats : undefined;
 }
 
 function toCharacterClass(value?: string | null): GameCharacterClass | undefined {
@@ -822,7 +972,8 @@ function buildMapData(
   cohortProgression?: Pick<CohortRecord, 'currentStep'>,
   includeStepRanges = false,
   nodeOccupancies: GameMapNodeOccupancy[] = [],
-  defaultCurrentActivityId?: string
+  defaultCurrentActivityId?: string,
+  currentGuildMemberCount?: number
 ): GameMapData {
   const completedActivityIds = new Set(completions.map((completion) => completion.activityId));
   const currentActivityId = currentMove?.toActivityId || defaultCurrentActivityId;
@@ -862,6 +1013,7 @@ function buildMapData(
     edges,
     completions,
     nodeOccupancies,
+    currentGuildMemberCount,
     currentStep,
     currentActivityId,
     currentMove,
@@ -901,7 +1053,8 @@ async function loadActivityAuthorizationState(
   mapRunId: string,
   studentId: string,
   currentStep: number,
-  activity: ActivityRecord
+  activity: ActivityRecord,
+  guildId?: string | null
 ) {
   const [activityRecords, edgeRecords, completionRecords] = await Promise.all([
     db
@@ -935,11 +1088,40 @@ async function loadActivityAuthorizationState(
       ),
   ]);
 
+  const completionItems = completionRecords.map(toActivityCompletion);
+  if (guildId) {
+    const voteStates = await loadGuildActivityVoteStates(
+      db,
+      cohortId,
+      guildId,
+      activityRecords
+        .filter((activityRecord) => activityRecord.participationMode === 'guild')
+        .map((activityRecord) => activityRecord.id),
+      { includeStudentId: studentId }
+    );
+    const completedActivityIds = new Set(completionItems.map((completion) => completion.activityId));
+    for (const [activityId, voteState] of voteStates) {
+      if (!voteState.isComplete || completedActivityIds.has(activityId)) continue;
+      completionItems.push(
+        withGuildVoteState(
+          {
+            id: `guild:${guildId}:${activityId}`,
+            studentId,
+            cohortId,
+            activityId,
+            completionType: 'system',
+          },
+          voteState
+        )
+      );
+    }
+  }
+
   return getActivityLockState(
     activity,
     activityRecords,
     edgeRecords.map(toActivityEdge),
-    completionRecords.map(toActivityCompletion),
+    completionItems,
     currentStep
   );
 }
@@ -1010,8 +1192,69 @@ function toVote(record: MilestoneBonusVoteRecord) {
     bonusCardId: record.bonusCardId,
     guildId: record.guildId,
     voteCount: record.voteCount,
+    metadata: (record.metadata || {}) as Record<string, unknown>,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
+  };
+}
+
+type BoostApprovalMetadata = {
+  votes: number;
+  approverStudentIds: string[];
+};
+
+function getBoostApprovalMetadata(record: Pick<MilestoneBonusVoteRecord, 'metadata'>): BoostApprovalMetadata | undefined {
+  const metadata = record.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+
+  const approval = (metadata as Record<string, unknown>).boostApproval;
+  if (!approval || typeof approval !== 'object' || Array.isArray(approval)) return undefined;
+
+  const candidate = approval as Record<string, unknown>;
+  const votes = Number(candidate.votes);
+  const approverStudentIds = Array.isArray(candidate.approverStudentIds)
+    ? candidate.approverStudentIds.filter((id): id is string => typeof id === 'string' && Boolean(id))
+    : [];
+
+  if (!Number.isInteger(votes) || votes <= 0 || approverStudentIds.length === 0) return undefined;
+  return { votes, approverStudentIds: [...new Set(approverStudentIds)] };
+}
+
+function setBoostApprovalMetadata(
+  metadata: unknown,
+  approval: BoostApprovalMetadata | undefined,
+  voteState?: { requiredVotes: number; hasVoted: boolean }
+) {
+  const base = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? { ...(metadata as Record<string, unknown>) }
+    : {};
+
+  if (!approval) {
+    delete base.boostApproval;
+    return base;
+  }
+
+  base.boostApproval = {
+    votes: approval.votes,
+    approverStudentIds: approval.approverStudentIds,
+    requiredVotes: voteState?.requiredVotes,
+    receivedVotes: approval.approverStudentIds.length,
+    hasVoted: voteState?.hasVoted,
+    status: 'pending',
+  };
+  return base;
+}
+
+function withBoostApprovalState(
+  record: MilestoneBonusVoteRecord,
+  voteState: { requiredVotes: number; hasVoted: boolean }
+) {
+  const approval = getBoostApprovalMetadata(record);
+  if (!approval) return record;
+
+  return {
+    ...record,
+    metadata: setBoostApprovalMetadata(record.metadata, approval, voteState),
   };
 }
 
@@ -1102,6 +1345,155 @@ async function resolveStudentCohortContext(
     .limit(1);
 
   return cohortRecord ? { studentRecord, membership, cohortRecord } : undefined;
+}
+
+async function countGuildMembers(db: GuildMutationDb, cohortId: string, guildId: string) {
+  const [memberCountRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(cohortMemberships)
+    .where(and(eq(cohortMemberships.cohortId, cohortId), eq(cohortMemberships.guildId, guildId)));
+
+  return Number(memberCountRow?.count || 0);
+}
+
+async function loadActiveGuildStudentIds(
+  db: Database,
+  cohortId: string,
+  guildId: string,
+  options: { includeStudentId?: string; now?: Date } = {}
+) {
+  const memberRows = await db
+    .select({
+      studentId: students.id,
+      updatedAt: users.updatedAt,
+      lastLogin: users.lastLogin,
+    })
+    .from(cohortMemberships)
+    .innerJoin(students, eq(students.userId, cohortMemberships.userId))
+    .innerJoin(users, eq(users.id, cohortMemberships.userId))
+    .where(and(eq(cohortMemberships.cohortId, cohortId), eq(cohortMemberships.guildId, guildId)));
+
+  return memberRows
+    .filter((row) => row.studentId === options.includeStudentId || isRecentlyOnline(row, options.now))
+    .map((row) => row.studentId);
+}
+
+async function loadGuildActivityVoteStates(
+  db: Database,
+  cohortId: string,
+  guildId: string,
+  activityIds: string[],
+  options: { includeStudentId?: string; now?: Date } = {}
+) {
+  const uniqueActivityIds = [...new Set(activityIds)];
+  const states = new Map<string, GuildActivityVoteState>();
+  if (uniqueActivityIds.length === 0) return states;
+
+  const memberIds = await loadActiveGuildStudentIds(db, cohortId, guildId, options);
+  const requiredVotes = getRequiredGuildActivityVotes(memberIds.length);
+
+  for (const activityId of uniqueActivityIds) {
+    states.set(activityId, {
+      requiredVotes,
+      receivedVotes: 0,
+      isComplete: false,
+    });
+  }
+
+  if (requiredVotes === 0) return states;
+
+  const voteRows = await db
+    .select({
+      activityId: gameActivityCompletions.activityId,
+      studentId: gameActivityCompletions.studentId,
+    })
+    .from(gameActivityCompletions)
+    .where(
+      and(
+        eq(gameActivityCompletions.cohortId, cohortId),
+        inArray(gameActivityCompletions.activityId, uniqueActivityIds),
+        inArray(gameActivityCompletions.studentId, memberIds)
+      )
+    );
+  const votersByActivity = new Map<string, Set<string>>();
+  for (const row of voteRows) {
+    const voters = votersByActivity.get(row.activityId) || new Set<string>();
+    voters.add(row.studentId);
+    votersByActivity.set(row.activityId, voters);
+  }
+
+  for (const activityId of uniqueActivityIds) {
+    const receivedVotes = votersByActivity.get(activityId)?.size || 0;
+    states.set(activityId, {
+      requiredVotes,
+      receivedVotes,
+      isComplete: receivedVotes >= requiredVotes,
+    });
+  }
+
+  return states;
+}
+
+async function cancelPendingInvitationsForFullGuild(
+  db: GuildMutationDb,
+  guild: Pick<GuildRecord, 'id' | 'cohortId' | 'maxMembers'>
+) {
+  const memberCount = await countGuildMembers(db, guild.cohortId, guild.id);
+  if (memberCount < guild.maxMembers) return memberCount;
+
+  await db
+    .update(guildInvitations)
+    .set({ status: 'cancelled', respondedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(guildInvitations.guildId, guild.id), eq(guildInvitations.status, 'pending')));
+
+  return memberCount;
+}
+
+async function switchStudentGuild(
+  db: GuildMutationDb,
+  params: {
+    membership: CohortMembershipRecord;
+    targetGuild: Pick<GuildRecord, 'id' | 'cohortId' | 'maxMembers'>;
+  }
+) {
+  const previousGuildId = params.membership.guildId || undefined;
+
+  await db
+    .update(cohortMemberships)
+    .set({ guildId: params.targetGuild.id })
+    .where(
+      and(
+        eq(cohortMemberships.userId, params.membership.userId),
+        eq(cohortMemberships.cohortId, params.membership.cohortId)
+      )
+    );
+
+  await db
+    .update(guildInvitations)
+    .set({ status: 'cancelled', respondedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(guildInvitations.cohortId, params.membership.cohortId),
+        eq(guildInvitations.inviteeUserId, params.membership.userId),
+        eq(guildInvitations.status, 'pending')
+      )
+    );
+
+  if (previousGuildId && previousGuildId !== params.targetGuild.id) {
+    await db
+      .update(guildInvitations)
+      .set({ status: 'cancelled', respondedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(guildInvitations.cohortId, params.membership.cohortId),
+          eq(guildInvitations.guildId, previousGuildId),
+          eq(guildInvitations.inviterUserId, params.membership.userId),
+          eq(guildInvitations.status, 'pending')
+        )
+      );
+  }
+
+  await cancelPendingInvitationsForFullGuild(db, params.targetGuild);
 }
 
 async function resolveAdminCohort(
@@ -1202,7 +1594,7 @@ function getOnboardingTask(activity: Pick<ActivityRecord, 'metadata'>) {
 
 function isSystemOnboardingActivity(activity: Pick<ActivityRecord, 'metadata'>) {
   const task = getOnboardingTask(activity);
-  return task === 'institutional_profile' || task === 'character_card';
+  return task === 'institutional_profile' || task === 'character_card' || task === 'guild_rally';
 }
 
 function withDefaultOnboardingResource(
@@ -1228,6 +1620,9 @@ function getDefaultOnboardingResource(task: string | undefined) {
   if (task === 'character_card') {
     return { title: 'Créer la carte personnage', url: '#character' };
   }
+  if (task === 'guild_rally') {
+    return { title: 'Créer ou rejoindre une guilde', url: '#guild' };
+  }
 
   return undefined;
 }
@@ -1235,6 +1630,7 @@ function getDefaultOnboardingResource(task: string | undefined) {
 function getDefaultOnboardingIconKey(task: string | undefined) {
   if (task === 'institutional_profile') return 'user-check';
   if (task === 'character_card') return 'anvil';
+  if (task === 'guild_rally') return 'users';
   return undefined;
 }
 
@@ -1249,6 +1645,9 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
   );
   const existingCharacterActivity = existingActivities.find(
     (activity) => getOnboardingTask(activity) === 'character_card'
+  );
+  const existingGuildRallyActivity = existingActivities.find(
+    (activity) => getOnboardingTask(activity) === 'guild_rally'
   );
   const values: Array<typeof gameActivities.$inferInsert> = [];
 
@@ -1302,6 +1701,32 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
     });
   }
 
+  if (!existingGuildRallyActivity) {
+    values.push({
+      cohortId,
+      mapRunId,
+      type: 'tavern',
+      title: 'Ralliement de guilde',
+      isGraded: false,
+      mapX: 740,
+      mapY: 320,
+      sectorDepth: 0,
+      requiredLevel: 1,
+      stepRanges: [{ startStep: 0 }],
+      participationMode: 'solo',
+      basePoints: 0,
+      metadata: {
+        onboardingTask: 'guild_rally',
+        guildTask: 'recruitment',
+        subtitle: 'Onboarding · Recrutement',
+        description:
+          'Créez une guilde, rejoignez un groupe existant ou répondez à vos invitations.',
+        iconKey: 'users',
+        resources: [{ title: 'Créer ou rejoindre une guilde', url: '#guild' }],
+      },
+    });
+  }
+
   const createdActivities = values.length > 0
     ? await db.insert(gameActivities).values(values).returning()
     : [];
@@ -1312,6 +1737,9 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
   const characterActivity =
     existingCharacterActivity ||
     createdActivities.find((activity) => getOnboardingTask(activity) === 'character_card');
+  const guildRallyActivity =
+    existingGuildRallyActivity ||
+    createdActivities.find((activity) => getOnboardingTask(activity) === 'guild_rally');
   if (profileActivity && characterActivity) {
     const [existingEdge] = await db
       .select()
@@ -1331,6 +1759,28 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
         fromActivityId: profileActivity.id,
         toActivityId: characterActivity.id,
         metadata: { systemEdge: 'onboarding' },
+      });
+    }
+  }
+  if (characterActivity && guildRallyActivity) {
+    const [existingEdge] = await db
+      .select()
+      .from(gameActivityEdges)
+      .where(
+        and(
+          eq(gameActivityEdges.fromActivityId, characterActivity.id),
+          eq(gameActivityEdges.toActivityId, guildRallyActivity.id)
+        )
+      )
+      .limit(1);
+
+    if (!existingEdge) {
+      await db.insert(gameActivityEdges).values({
+        cohortId,
+        mapRunId,
+        fromActivityId: characterActivity.id,
+        toActivityId: guildRallyActivity.id,
+        metadata: { systemEdge: 'guild_rally' },
       });
     }
   }
@@ -2307,8 +2757,22 @@ mapRouter.post('/guilds', async (c) => {
 
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const description = typeof body?.description === 'string' ? body.description.trim() : undefined;
+  const iconUrl = typeof body?.iconUrl === 'string' ? body.iconUrl.trim() : undefined;
   const iconKey = typeof body?.iconKey === 'string' ? body.iconKey.trim() : undefined;
   const color = typeof body?.color === 'string' ? body.color.trim() : undefined;
+  let recruitmentStatus: GuildRecruitmentStatus | undefined;
+  let recruitmentMessage: string | undefined;
+  let maxMembers: number | undefined;
+
+  try {
+    recruitmentStatus = validateOptionalRecruitmentStatus(body?.recruitmentStatus);
+    recruitmentMessage = validateOptionalText(body?.recruitmentMessage, 'recruitmentMessage', 400);
+    maxMembers = validateOptionalInteger(body?.maxMembers, 'maxMembers', 1, 12);
+  } catch (error: any) {
+    return apiError(c, error.message, 400, {
+      errorCode: 'validation_failed',
+    });
+  }
 
   if (!name || name.length > 80) {
     return apiError(c, 'Guild name is required and must be 80 characters or fewer.', 400, {
@@ -2317,6 +2781,11 @@ mapRouter.post('/guilds', async (c) => {
   }
   if (description && description.length > 400) {
     return apiError(c, 'Guild description must be 400 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (iconUrl && iconUrl.length > 2000) {
+    return apiError(c, 'iconUrl must be 2000 characters or fewer.', 400, {
       errorCode: 'validation_failed',
     });
   }
@@ -2341,10 +2810,6 @@ mapRouter.post('/guilds', async (c) => {
     if (!context) {
       return apiError(c, 'Cohort context not found.', 404);
     }
-    if (context.membership.guildId) {
-      return apiError(c, 'Student already belongs to a guild for this cohort.', 409);
-    }
-
     const createdGuild = await db.transaction(async (tx) => {
       const [guildRecord] = await tx
         .insert(guilds)
@@ -2352,8 +2817,12 @@ mapRouter.post('/guilds', async (c) => {
           cohortId: context.cohortRecord.id,
           name,
           description: description || null,
+          iconUrl: iconUrl || null,
           iconKey: iconKey || null,
           color: color || null,
+          recruitmentStatus: recruitmentStatus || 'open',
+          recruitmentMessage: recruitmentMessage || null,
+          maxMembers: maxMembers || 3,
         })
         .returning();
 
@@ -2363,8 +2832,7 @@ mapRouter.post('/guilds', async (c) => {
         .where(
           and(
             eq(cohortMemberships.userId, context.membership.userId),
-            eq(cohortMemberships.cohortId, context.membership.cohortId),
-            isNull(cohortMemberships.guildId)
+            eq(cohortMemberships.cohortId, context.membership.cohortId)
           )
         )
         .returning();
@@ -2387,20 +2855,26 @@ mapRouter.post('/guilds', async (c) => {
         avatarUrl: users.avatarUrl,
         githubAvatarUrl: users.githubAvatarUrl,
         guildId: cohortMemberships.guildId,
+        guildName: guilds.name,
+        guildIconUrl: guilds.iconUrl,
+        guildIconKey: guilds.iconKey,
+        guildColor: guilds.color,
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
         characterIllustrationUrl: gameCharacters.illustrationUrl,
-        strength: gameCharacters.strength,
-        dexterity: gameCharacters.dexterity,
-        constitution: gameCharacters.constitution,
-        intelligence: gameCharacters.intelligence,
-        wisdom: gameCharacters.wisdom,
-        charisma: gameCharacters.charisma,
+        strength: sql<number>`coalesce(${gameCharacters.strength}, 0) + coalesce(${gameCharacterClasses.baseStrength}, 0)`,
+        dexterity: sql<number>`coalesce(${gameCharacters.dexterity}, 0) + coalesce(${gameCharacterClasses.baseDexterity}, 0)`,
+        constitution: sql<number>`coalesce(${gameCharacters.constitution}, 0) + coalesce(${gameCharacterClasses.baseConstitution}, 0)`,
+        intelligence: sql<number>`coalesce(${gameCharacters.intelligence}, 0) + coalesce(${gameCharacterClasses.baseIntelligence}, 0)`,
+        wisdom: sql<number>`coalesce(${gameCharacters.wisdom}, 0) + coalesce(${gameCharacterClasses.baseWisdom}, 0)`,
+        charisma: sql<number>`coalesce(${gameCharacters.charisma}, 0) + coalesce(${gameCharacterClasses.baseCharisma}, 0)`,
       })
       .from(cohortMemberships)
       .innerJoin(students, eq(students.userId, cohortMemberships.userId))
       .innerJoin(users, eq(users.id, cohortMemberships.userId))
+      .leftJoin(guilds, eq(guilds.id, cohortMemberships.guildId))
       .leftJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+      .leftJoin(gameCharacterClasses, eq(gameCharacterClasses.slug, gameCharacters.characterClass))
       .where(
         and(
           eq(cohortMemberships.userId, context.membership.userId),
@@ -2477,6 +2951,7 @@ mapRouter.get('/guilds', async (c) => {
     const boostPointsSpentByGuildId = new Map(
       guildSpendRows.map((row) => [row.guildId, Number(row.boostPointsSpent || 0)])
     );
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, cohortRecord.id);
     const rosterStudentRecords = await db
       .select({
         studentId: students.id,
@@ -2491,22 +2966,28 @@ mapRouter.get('/guilds', async (c) => {
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
         characterIllustrationUrl: gameCharacters.illustrationUrl,
-        strength: gameCharacters.strength,
-        dexterity: gameCharacters.dexterity,
-        constitution: gameCharacters.constitution,
-        intelligence: gameCharacters.intelligence,
-        wisdom: gameCharacters.wisdom,
-        charisma: gameCharacters.charisma,
+        strength: sql<number>`coalesce(${gameCharacters.strength}, 0) + coalesce(${gameCharacterClasses.baseStrength}, 0)`,
+        dexterity: sql<number>`coalesce(${gameCharacters.dexterity}, 0) + coalesce(${gameCharacterClasses.baseDexterity}, 0)`,
+        constitution: sql<number>`coalesce(${gameCharacters.constitution}, 0) + coalesce(${gameCharacterClasses.baseConstitution}, 0)`,
+        intelligence: sql<number>`coalesce(${gameCharacters.intelligence}, 0) + coalesce(${gameCharacterClasses.baseIntelligence}, 0)`,
+        wisdom: sql<number>`coalesce(${gameCharacters.wisdom}, 0) + coalesce(${gameCharacterClasses.baseWisdom}, 0)`,
+        charisma: sql<number>`coalesce(${gameCharacters.charisma}, 0) + coalesce(${gameCharacterClasses.baseCharisma}, 0)`,
       })
       .from(cohortMemberships)
       .innerJoin(students, eq(students.userId, cohortMemberships.userId))
       .innerJoin(users, eq(users.id, cohortMemberships.userId))
       .leftJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+      .leftJoin(gameCharacterClasses, eq(gameCharacterClasses.slug, gameCharacters.characterClass))
+      .leftJoin(guilds, eq(guilds.id, cohortMemberships.guildId))
       .where(eq(cohortMemberships.cohortId, cohortRecord.id));
     const rosterStudents = rosterStudentRecords.map((record) => ({
       student: toClassRosterStudent(record),
       guildId: record.guildId,
     }));
+    const currentMembership = user?.id
+      ? rosterStudentRecords.find((record) => record.userId === user.id)
+      : undefined;
+    const currentGuildId = currentMembership?.guildId || undefined;
     const membersByGuildId = rosterStudents.reduce<Map<string, ReturnType<typeof toClassRosterStudent>[]>>(
       (groups, item) => {
         if (!item.guildId) return groups;
@@ -2517,22 +2998,39 @@ mapRouter.get('/guilds', async (c) => {
       },
       new Map()
     );
+    const statsByGuildId = new Map(
+      Array.from(membersByGuildId.entries()).map(([guildId, members]) => [
+        guildId,
+        buildWeightedGuildStats(members, balanceConfig.rewardSystem),
+      ])
+    );
+    const invitations = user?.id
+      ? await db
+          .select()
+          .from(guildInvitations)
+          .where(
+            and(
+              eq(guildInvitations.cohortId, cohortRecord.id),
+              eq(guildInvitations.status, 'pending'),
+              or(
+                eq(guildInvitations.inviteeUserId, user.id),
+                eq(guildInvitations.inviterUserId, user.id),
+                currentGuildId ? eq(guildInvitations.guildId, currentGuildId) : sql`false`
+              )
+            )
+          )
+          .orderBy(desc(guildInvitations.createdAt))
+      : [];
+    const guildById = new Map(guildRecords.map((guild) => [guild.id, guild]));
+    const rosterByUserId = new Map(rosterStudentRecords.map((student) => [student.userId, student]));
 
     return c.json({
       success: true,
       source: 'database',
       guilds: guildRecords.map((guild) => ({
-        id: guild.id,
-        cohortId: guild.cohortId,
-        name: guild.name,
-        description: guild.description || undefined,
-        iconUrl: guild.iconUrl || undefined,
-        iconKey: guild.iconKey || undefined,
-        color: guild.color || undefined,
-        gold: guild.gold,
+        ...toGuildPayload(guild),
         boostPointsSpent: boostPointsSpentByGuildId.get(guild.id) || 0,
-        createdAt: guild.createdAt?.toISOString?.(),
-        updatedAt: guild.updatedAt?.toISOString?.(),
+        stats: statsByGuildId.get(guild.id),
         members: (membersByGuildId.get(guild.id) || []).sort((a, b) =>
           a.displayName.localeCompare(b.displayName)
         ),
@@ -2541,6 +3039,26 @@ mapRouter.get('/guilds', async (c) => {
         .filter((item) => !item.guildId)
         .map((item) => item.student)
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      invitableStudents: currentGuildId
+        ? rosterStudents
+            .filter((item) => item.student.userId !== user?.id && !item.guildId)
+            .map((item) => item.student)
+            .sort((a, b) => a.displayName.localeCompare(b.displayName))
+        : [],
+      guildedStudents: currentGuildId
+        ? rosterStudents
+            .filter((item) => item.student.userId !== user?.id && item.guildId)
+            .map((item) => item.student)
+            .sort((a, b) => a.displayName.localeCompare(b.displayName))
+        : [],
+      currentGuildId,
+      invitations: invitations.map((invitation) =>
+        toGuildInvitationPayload(invitation, {
+          guild: guildById.get(invitation.guildId),
+          inviter: rosterByUserId.get(invitation.inviterUserId),
+          invitee: rosterByUserId.get(invitation.inviteeUserId),
+        })
+      ),
     });
   } catch (error: any) {
     console.error('Guild SQL error:', error.message);
@@ -2562,15 +3080,46 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
 
   const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
   const hasDescription = Object.prototype.hasOwnProperty.call(body, 'description');
+  const hasIconUrl = Object.prototype.hasOwnProperty.call(body, 'iconUrl');
   const hasIconKey = Object.prototype.hasOwnProperty.call(body, 'iconKey');
   const hasColor = Object.prototype.hasOwnProperty.call(body, 'color');
+  const hasRecruitmentStatus = Object.prototype.hasOwnProperty.call(body, 'recruitmentStatus');
+  const hasRecruitmentMessage = Object.prototype.hasOwnProperty.call(body, 'recruitmentMessage');
+  const hasMaxMembers = Object.prototype.hasOwnProperty.call(body, 'maxMembers');
   const name = hasName && typeof body.name === 'string' ? body.name.trim() : undefined;
   const description =
     hasDescription && typeof body.description === 'string' ? body.description.trim() : undefined;
+  const iconUrl = hasIconUrl && typeof body.iconUrl === 'string' ? body.iconUrl.trim() : undefined;
   const iconKey = hasIconKey && typeof body.iconKey === 'string' ? body.iconKey.trim() : undefined;
   const color = hasColor && typeof body.color === 'string' ? body.color.trim() : undefined;
+  let recruitmentStatus: GuildRecruitmentStatus | undefined;
+  let recruitmentMessage: string | undefined;
+  let maxMembers: number | undefined;
 
-  if (!hasName && !hasDescription && !hasIconKey && !hasColor) {
+  try {
+    recruitmentStatus = hasRecruitmentStatus
+      ? validateOptionalRecruitmentStatus(body.recruitmentStatus)
+      : undefined;
+    recruitmentMessage = hasRecruitmentMessage
+      ? validateOptionalText(body.recruitmentMessage, 'recruitmentMessage', 400)
+      : undefined;
+    maxMembers = hasMaxMembers ? validateOptionalInteger(body.maxMembers, 'maxMembers', 1, 12) : undefined;
+  } catch (error: any) {
+    return apiError(c, error.message, 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+
+  if (
+    !hasName &&
+    !hasDescription &&
+    !hasIconUrl &&
+    !hasIconKey &&
+    !hasColor &&
+    !hasRecruitmentStatus &&
+    !hasRecruitmentMessage &&
+    !hasMaxMembers
+  ) {
     return apiError(c, 'At least one guild field is required.', 400, {
       errorCode: 'validation_failed',
     });
@@ -2582,6 +3131,11 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   }
   if (hasDescription && description && description.length > 400) {
     return apiError(c, 'Guild description must be 400 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (hasIconUrl && iconUrl && iconUrl.length > 2000) {
+    return apiError(c, 'iconUrl must be 2000 characters or fewer.', 400, {
       errorCode: 'validation_failed',
     });
   }
@@ -2618,8 +3172,12 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
       .set({
         ...(hasName ? { name } : {}),
         ...(hasDescription ? { description: description || null } : {}),
+        ...(hasIconUrl ? { iconUrl: iconUrl || null } : {}),
         ...(hasIconKey ? { iconKey } : {}),
         ...(hasColor ? { color: color || null } : {}),
+        ...(hasRecruitmentStatus && recruitmentStatus ? { recruitmentStatus } : {}),
+        ...(hasRecruitmentMessage ? { recruitmentMessage: recruitmentMessage || null } : {}),
+        ...(hasMaxMembers && maxMembers !== undefined ? { maxMembers } : {}),
         updatedAt: new Date(),
       })
       .where(eq(guilds.id, guildId))
@@ -2633,6 +3191,261 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   } catch (error: any) {
     console.error('Guild update SQL error:', error.message);
     return apiError(c, 'Guild could not be updated.', 500);
+  }
+});
+
+mapRouter.post('/guilds/:guildId/join', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const user = c.get('user');
+  const guildId = c.req.param('guildId');
+
+  if (!databaseUrl) {
+    return missingDatabaseUrl(c);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+    if (!guildRecord) {
+      return apiError(c, 'Guild not found.', 404);
+    }
+    if (guildRecord.recruitmentStatus !== 'open') {
+      return apiError(c, 'Guild is not open for direct join.', 403);
+    }
+
+    const context = await resolveStudentCohortContext(db, user, guildRecord.cohortId);
+    if (!context) {
+      return apiError(c, 'Cohort context not found.', 404);
+    }
+    if (context.membership.guildId === guildId) {
+      return c.json({ success: true, source: 'database', guild: toGuildPayload(guildRecord) });
+    }
+
+    const memberCount = await countGuildMembers(db, guildRecord.cohortId, guildId);
+    if (memberCount >= guildRecord.maxMembers) {
+      await cancelPendingInvitationsForFullGuild(db, guildRecord);
+      return apiError(c, 'Guild is full.', 409);
+    }
+
+    const [updatedGuild] = await db.transaction(async (tx) => {
+      await switchStudentGuild(tx, {
+        membership: context.membership,
+        targetGuild: guildRecord,
+      });
+
+      return tx.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+    });
+
+    return c.json({ success: true, source: 'database', guild: toGuildPayload(updatedGuild) });
+  } catch (error: any) {
+    console.error('Guild join SQL error:', error.message);
+    return apiError(c, 'Guild could not be joined.', 500);
+  }
+});
+
+mapRouter.post('/guilds/:guildId/invitations', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const user = c.get('user');
+  const guildId = c.req.param('guildId');
+  const body = await parseJsonBody<GuildInvitationPayload>(c, {});
+  const inviteeUserId = typeof body?.inviteeUserId === 'string' ? body.inviteeUserId.trim() : '';
+  const message = typeof body?.message === 'string' ? body.message.trim() : undefined;
+
+  if (!inviteeUserId) {
+    return apiError(c, 'inviteeUserId is required.', 400, { errorCode: 'validation_failed' });
+  }
+  if (inviteeUserId === user?.id) {
+    return apiError(c, 'You cannot invite yourself.', 400, { errorCode: 'validation_failed' });
+  }
+  if (message && message.length > 400) {
+    return apiError(c, 'Invitation message must be 400 characters or fewer.', 400, {
+      errorCode: 'validation_failed',
+    });
+  }
+  if (!databaseUrl) {
+    return missingDatabaseUrl(c);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+    if (!guildRecord) {
+      return apiError(c, 'Guild not found.', 404);
+    }
+
+    const context = await resolveStudentCohortContext(db, user, guildRecord.cohortId);
+    if (!context || context.membership.guildId !== guildId) {
+      return apiError(c, 'Only guild members can invite students.', 403);
+    }
+
+    const [inviteeMembership] = await db
+      .select()
+      .from(cohortMemberships)
+      .where(and(eq(cohortMemberships.userId, inviteeUserId), eq(cohortMemberships.cohortId, guildRecord.cohortId)))
+      .limit(1);
+    if (!inviteeMembership) {
+      return apiError(c, 'Invitee is not in this cohort.', 404);
+    }
+    if (inviteeMembership.guildId) {
+      return apiError(c, 'Invitee already belongs to a guild.', 409);
+    }
+
+    const [existingInvitation] = await db
+      .select()
+      .from(guildInvitations)
+      .where(
+        and(
+          eq(guildInvitations.guildId, guildId),
+          eq(guildInvitations.inviteeUserId, inviteeUserId),
+          eq(guildInvitations.status, 'pending')
+        )
+      )
+      .limit(1);
+    if (existingInvitation) {
+      return apiError(c, 'A pending invitation already exists for this student.', 409, {
+        errorCode: 'conflict',
+      });
+    }
+
+    const [memberCountRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(cohortMemberships)
+      .where(and(eq(cohortMemberships.cohortId, guildRecord.cohortId), eq(cohortMemberships.guildId, guildId)));
+    if (Number(memberCountRow?.count || 0) >= guildRecord.maxMembers) {
+      return apiError(c, 'Guild is full.', 409);
+    }
+
+    const [createdInvitation] = await db
+      .insert(guildInvitations)
+      .values({
+        cohortId: guildRecord.cohortId,
+        guildId,
+        inviterUserId: context.membership.userId,
+        inviteeUserId,
+        message: message || null,
+      })
+      .returning();
+
+    return c.json(
+      {
+        success: true,
+        source: 'database',
+        invitation: toGuildInvitationPayload(createdInvitation, { guild: guildRecord }),
+      },
+      201
+    );
+  } catch (error: any) {
+    console.error('Guild invitation SQL error:', error.message);
+    return apiError(c, 'Guild invitation could not be created.', 500);
+  }
+});
+
+mapRouter.post('/guild-invitations/:invitationId/accept', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const user = c.get('user');
+  const invitationId = c.req.param('invitationId');
+
+  if (!databaseUrl) {
+    return missingDatabaseUrl(c);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [invitation] = await db
+      .select()
+      .from(guildInvitations)
+      .where(eq(guildInvitations.id, invitationId))
+      .limit(1);
+    if (!invitation) {
+      return apiError(c, 'Invitation not found.', 404);
+    }
+
+    if (invitation.inviteeUserId !== user?.id) {
+      return apiError(c, 'Invitation is not addressed to this user.', 403);
+    }
+    if (invitation.status !== 'pending') {
+      return apiError(c, 'Invitation is not pending.', 409);
+    }
+    if (invitation.expiresAt && invitation.expiresAt.getTime() < Date.now()) {
+      return apiError(c, 'Invitation has expired.', 409);
+    }
+
+    const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, invitation.guildId)).limit(1);
+    if (!guildRecord) {
+      return apiError(c, 'Guild not found.', 404);
+    }
+    const context = await resolveStudentCohortContext(db, user, invitation.cohortId);
+    if (!context) {
+      return apiError(c, 'Cohort context not found.', 404);
+    }
+
+    const memberCount = await countGuildMembers(db, invitation.cohortId, invitation.guildId);
+    if (context.membership.guildId !== invitation.guildId && memberCount >= guildRecord.maxMembers) {
+      await cancelPendingInvitationsForFullGuild(db, guildRecord);
+      return apiError(c, 'Guild is full.', 409);
+    }
+
+    const [updatedInvitation] = await db.transaction(async (tx) => {
+      const [accepted] = await tx
+        .update(guildInvitations)
+        .set({ status: 'accepted', respondedAt: new Date(), updatedAt: new Date() })
+        .where(eq(guildInvitations.id, invitation.id))
+        .returning();
+      await switchStudentGuild(tx, {
+        membership: context.membership,
+        targetGuild: guildRecord,
+      });
+      return [accepted];
+    });
+
+    return c.json({
+      success: true,
+      source: 'database',
+      invitation: toGuildInvitationPayload(updatedInvitation, { guild: guildRecord }),
+      guild: toGuildPayload(guildRecord),
+    });
+  } catch (error: any) {
+    console.error('Guild invitation accept SQL error:', error.message);
+    return apiError(c, 'Guild invitation could not be accepted.', 500);
+  }
+});
+
+mapRouter.post('/guild-invitations/:invitationId/decline', async (c) => {
+  const databaseUrl = c.env?.DATABASE_URL;
+  const user = c.get('user');
+  const invitationId = c.req.param('invitationId');
+
+  if (!databaseUrl) {
+    return missingDatabaseUrl(c);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [updatedInvitation] = await db
+      .update(guildInvitations)
+      .set({ status: 'declined', respondedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(guildInvitations.id, invitationId),
+          eq(guildInvitations.inviteeUserId, user?.id || ''),
+          eq(guildInvitations.status, 'pending')
+        )
+      )
+      .returning();
+
+    if (!updatedInvitation) {
+      return apiError(c, 'Invitation not found.', 404);
+    }
+
+    const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, updatedInvitation.guildId)).limit(1);
+    return c.json({
+      success: true,
+      source: 'database',
+      invitation: toGuildInvitationPayload(updatedInvitation, { guild: guildRecord }),
+    });
+  } catch (error: any) {
+    console.error('Guild invitation decline SQL error:', error.message);
+    return apiError(c, 'Guild invitation could not be declined.', 500);
   }
 });
 
@@ -2708,6 +3521,7 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
     if (!context) {
       return apiError(c, 'Cohort context not found.', 404);
     }
+    await touchUserPresence(db, user);
 
     const { studentRecord, membership } = context;
     const activeRun = await getOrCreateActiveRun(db, membership.cohortId);
@@ -2744,6 +3558,29 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       .limit(1);
 
     if (existingCompletion) {
+      if (activity.participationMode === 'guild') {
+        if (!membership.guildId) {
+          return apiError(c, 'Guild activity requires an active guild membership.', 403);
+        }
+
+        const voteState = (
+          await loadGuildActivityVoteStates(db, membership.cohortId, membership.guildId, [activityId], {
+            includeStudentId: studentRecord.id,
+          })
+        ).get(activityId);
+
+        if (voteState) voteState.hasVoted = true;
+
+        return c.json({
+          success: true,
+          source: 'database',
+          completion: withGuildVoteState(
+            toActivityCompletion(existingCompletion),
+            voteState || { requiredVotes: 0, receivedVotes: 0, isComplete: false }
+          ),
+        });
+      }
+
       return c.json({
         success: true,
         source: 'database',
@@ -2757,11 +3594,17 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       activeRun.id,
       studentRecord.id,
       context.cohortRecord.currentStep,
-      activity
+      activity,
+      membership.guildId
     );
     if (lockState.isLocked) {
       return apiError(c, 'Activity is locked for this student.', 403);
     }
+
+    if (activity.participationMode === 'guild' && !membership.guildId) {
+      return apiError(c, 'Guild activity requires an active guild membership.', 403);
+    }
+    const activityGuildId = activity.participationMode === 'guild' ? membership.guildId : undefined;
 
     const submission = await parseCompletionSubmission(c, activity, studentRecord, membership);
     if (submission instanceof Response) return submission;
@@ -2778,6 +3621,24 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
         metadata: submission.metadata || {},
       })
       .returning();
+
+    if (activity.participationMode === 'guild') {
+      const voteState = (
+        await loadGuildActivityVoteStates(db, membership.cohortId, activityGuildId!, [activityId], {
+          includeStudentId: studentRecord.id,
+        })
+      ).get(activityId) || { requiredVotes: 0, receivedVotes: 0, isComplete: false };
+      voteState.hasVoted = true;
+      const completionPayload = withGuildVoteState(toActivityCompletion(completion), voteState);
+
+      if (!voteState.isComplete) {
+        return c.json({
+          success: true,
+          source: 'database',
+          completion: completionPayload,
+        });
+      }
+    }
 
     const eventContext = createEventContext({ db, env: c.env, userId: user?.id });
     await publishEvent(
@@ -2867,7 +3728,8 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
       activeRun.id,
       studentRecord.id,
       context.cohortRecord.currentStep,
-      activity
+      activity,
+      membership.guildId
     );
     if (lockState.isLocked) {
       return apiError(c, 'Activity is locked for this student.', 403);
@@ -2953,6 +3815,7 @@ mapRouter.get('/map', async (c) => {
     const db = getDb(databaseUrl);
     const user = c.get('user');
     const requestedCohortId = getRequestedGameId(c);
+    await touchUserPresence(db, user);
     const studentContext = user?.isAdmin
       ? undefined
       : await resolveStudentCohortContext(db, user, requestedCohortId);
@@ -3005,6 +3868,63 @@ mapRouter.get('/map', async (c) => {
           )
           .orderBy(desc(gameActivityCompletions.createdAt))
       : [];
+    let visibleCompletions = completionsFromDb.map(toActivityCompletion);
+    let activityRecordsForMap = activitiesFromDb;
+    if (studentContext?.membership.guildId) {
+      const activityById = new Map(activitiesFromDb.map((activity) => [activity.id, activity]));
+      const guildActivityIds = activitiesFromDb
+        .filter((activity) => activity.participationMode === 'guild')
+        .map((activity) => activity.id);
+      const currentStudentVoteActivityIds = new Set(
+        completionsFromDb
+          .filter((completion) => activityById.get(completion.activityId)?.participationMode === 'guild')
+          .map((completion) => completion.activityId)
+      );
+      const voteStates = await loadGuildActivityVoteStates(
+        db,
+        cohortRecord.id,
+        studentContext.membership.guildId,
+        guildActivityIds,
+        { includeStudentId: studentContext.studentRecord.id }
+      );
+      activityRecordsForMap = activitiesFromDb.map((activity) => {
+        if (activity.participationMode !== 'guild') return activity;
+
+        const voteState = voteStates.get(activity.id);
+        return voteState
+          ? withActivityGuildVoteState(
+              activity,
+              voteState,
+              currentStudentVoteActivityIds.has(activity.id)
+            )
+          : activity;
+      });
+
+      visibleCompletions = visibleCompletions.flatMap((completion) => {
+        const activity = activityById.get(completion.activityId);
+        if (activity?.participationMode !== 'guild') return [completion];
+
+        const voteState = voteStates.get(completion.activityId);
+        if (!voteState?.isComplete) return [];
+        return [withGuildVoteState(completion, voteState)];
+      });
+      const completedActivityIds = new Set(visibleCompletions.map((completion) => completion.activityId));
+      for (const [activityId, voteState] of voteStates) {
+        if (!voteState.isComplete || completedActivityIds.has(activityId)) continue;
+        visibleCompletions.push(
+          withGuildVoteState(
+            {
+              id: `guild:${studentContext.membership.guildId}:${activityId}`,
+              studentId: studentContext.studentRecord.id,
+              cohortId: cohortRecord.id,
+              activityId,
+              completionType: 'system',
+            },
+            voteState
+          )
+        );
+      }
+    }
     const [latestMove] = studentContext
       ? await db
           .select()
@@ -3054,6 +3974,13 @@ mapRouter.get('/map', async (c) => {
         ),
     ]);
     const nodeOccupancies = buildNodeOccupancies(activitiesFromDb, occupancyMembers, occupancyMoves);
+    const currentGuildMemberCount = studentContext?.membership.guildId
+      ? (
+          await loadActiveGuildStudentIds(db, cohortRecord.id, studentContext.membership.guildId, {
+            includeStudentId: studentContext.studentRecord.id,
+          })
+        ).length
+      : undefined;
     const defaultCurrentActivityId =
       studentContext && !latestMove
         ? activitiesFromDb.find((activity) => getOnboardingTask(activity) === 'institutional_profile')?.id
@@ -3067,26 +3994,28 @@ mapRouter.get('/map', async (c) => {
           toMapRun(activeRun),
           [],
           [],
-          completionsFromDb.map(toActivityCompletion),
+          visibleCompletions,
           latestMove ? toCharacterMove(latestMove) : undefined,
           cohortRecord,
           Boolean(user?.isAdmin),
           nodeOccupancies,
-          defaultCurrentActivityId
+          defaultCurrentActivityId,
+          currentGuildMemberCount
         ),
       });
     }
 
     const map = buildMapData(
       toMapRun(activeRun),
-      activitiesFromDb,
+      activityRecordsForMap,
       edgesFromDb.map(toActivityEdge),
-      completionsFromDb.map(toActivityCompletion),
+      visibleCompletions,
       latestMove ? toCharacterMove(latestMove) : undefined,
       cohortRecord,
       Boolean(user?.isAdmin),
       nodeOccupancies,
-      defaultCurrentActivityId
+      defaultCurrentActivityId,
+      currentGuildMemberCount
     );
 
     return c.json({
@@ -3534,6 +4463,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
     const db = getDb(databaseUrl);
     const user = c.get('user');
     const requestedGameId = c.req.param('gameId');
+    await touchUserPresence(db, user);
     const context = user?.isAdmin
       ? undefined
       : await resolveStudentCohortContext(db, user, requestedGameId);
@@ -3589,6 +4519,14 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
       votesByMilestoneId.set(vote.milestoneId, current);
     }
 
+    const guildId = context?.membership.guildId || undefined;
+    const guildStudentIds = guildId
+      ? await loadActiveGuildStudentIds(db, cohortRecord.id, guildId, {
+          includeStudentId: context?.studentRecord.id,
+        })
+      : [];
+    const requiredBoostApprovals = getRequiredGuildActivityVotes(guildStudentIds.length);
+
     const voteStates = milestones.map((milestone) => {
       const milestoneVotes = votesByMilestoneId.get(milestone.id) || [];
       const totals = new Map<string, number>();
@@ -3602,6 +4540,18 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
 
       const isVoteClosed = progress.currentPoints >= milestone.cost;
 
+      const guildVote = guildId
+        ? milestoneVotes.find((vote) => vote.guildId === guildId)
+        : undefined;
+      const guildVoteWithApproval = guildVote
+        ? withBoostApprovalState(guildVote, {
+            requiredVotes: requiredBoostApprovals,
+            hasVoted: context?.studentRecord
+              ? getBoostApprovalMetadata(guildVote)?.approverStudentIds.includes(context.studentRecord.id) || false
+              : false,
+          })
+        : undefined;
+
       return {
         milestone: toMilestone(milestone),
         results: bonusCards.map((card) => ({
@@ -3609,11 +4559,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
           voteCount: totals.get(card.id) || 0,
           isLeader: leadingBonusCardIds.includes(card.id),
         })),
-        guildVote: context?.membership.guildId
-          ? milestoneVotes.find((vote) => vote.guildId === context.membership.guildId)
-            ? toVote(milestoneVotes.find((vote) => vote.guildId === context.membership.guildId)!)
-            : undefined
-          : undefined,
+        guildVote: guildVoteWithApproval ? toVote(guildVoteWithApproval) : undefined,
         leadingBonusCardIds,
         hasTie: leadingBonusCardIds.length > 1,
         isVoteOpen: !isVoteClosed,
@@ -3621,7 +4567,6 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
       };
     });
 
-    const guildId = context?.membership.guildId || undefined;
     const [guildRecord] = guildId
       ? await db.select({ gold: guilds.gold }).from(guilds).where(eq(guilds.id, guildId)).limit(1)
       : [];
@@ -3653,6 +4598,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         selectedMilestoneId,
         guildId,
         guildGold: guildRecord?.gold,
+        currentGuildMemberCount: guildStudentIds.length || undefined,
         boostCostPreview,
         baseVotesPerGuild: balanceConfig.rewardSystem.voting.baseVotesPerGuild,
       },
@@ -3679,6 +4625,7 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
     if (!context?.membership.guildId) {
       return apiError(c, 'Guild vote is not allowed without a guild.', 403);
     }
+    await touchUserPresence(db, c.get('user'));
 
     const progress = await getCohortProgress(db, context.cohortRecord.id);
     if (!progress) {
@@ -3764,6 +4711,7 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) =
     if (!context?.membership.guildId) {
       return apiError(c, 'Guild vote boost is not allowed without a guild.', 403);
     }
+    await touchUserPresence(db, c.get('user'));
 
     const progress = await getCohortProgress(db, context.cohortRecord.id);
     if (!progress) {
@@ -3792,18 +4740,51 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) =
 
     const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, context.cohortRecord.id);
     const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+    const guildStudentIds = await loadActiveGuildStudentIds(
+      db,
+      context.cohortRecord.id,
+      context.membership.guildId,
+      { includeStudentId: context.studentRecord.id }
+    );
+    const requiredVotes = getRequiredGuildActivityVotes(guildStudentIds.length);
+    const pendingApproval = getBoostApprovalMetadata(existing.milestone_bonus_votes);
+    const approvalVotes = pendingApproval?.votes || votes;
+    const approverStudentIds = new Set(pendingApproval?.approverStudentIds || []);
+    approverStudentIds.add(context.studentRecord.id);
+    const nextApproval = {
+      votes: approvalVotes,
+      approverStudentIds: [...approverStudentIds],
+    };
+
+    if (nextApproval.approverStudentIds.length < requiredVotes) {
+      const [updated] = await db
+        .update(milestoneBonusVotes)
+        .set({
+          metadata: setBoostApprovalMetadata(existing.milestone_bonus_votes.metadata, nextApproval),
+          updatedAt: new Date(),
+        })
+        .where(eq(milestoneBonusVotes.id, existing.milestone_bonus_votes.id))
+        .returning();
+
+      return c.json({
+        success: true,
+        vote: toVote(withBoostApprovalState(updated, { requiredVotes, hasVoted: true })),
+      });
+    }
+
     const alreadyPurchasedVotes = Math.max(0, existing.milestone_bonus_votes.voteCount - baseVotes);
     const voteSpend = await new VotingCostService(db).spendGuildVotes({
       guildId: context.membership.guildId,
       cohortId: context.cohortRecord.id,
       studentId: context.studentRecord.id,
-      votes,
+      votes: approvalVotes,
       alreadyPurchasedVotes,
     });
     const [updated] = await db
       .update(milestoneBonusVotes)
       .set({
-        voteCount: sql`${milestoneBonusVotes.voteCount} + ${votes}`,
+        voteCount: sql`${milestoneBonusVotes.voteCount} + ${approvalVotes}`,
+        metadata: setBoostApprovalMetadata(existing.milestone_bonus_votes.metadata, undefined),
         updatedAt: new Date(),
       })
       .where(eq(milestoneBonusVotes.id, existing.milestone_bonus_votes.id))

@@ -42,7 +42,6 @@ const assetPolicies: Record<AssetKind, AssetPolicy> = {
     maxBytes: 2 * 1024 * 1024,
     allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
     allowSvg: true,
-    requiresAdmin: true,
   },
   'reward-illustration': {
     maxBytes: 2 * 1024 * 1024,

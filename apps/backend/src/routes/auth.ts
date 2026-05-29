@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type {
   Address,
   Campus,
@@ -44,6 +44,7 @@ import { RewardBalanceConfigService } from '../services/reward-balance-config';
 import { RewardPreviewService } from '../services/reward-preview';
 import {
   normalizeBaseStats,
+  normalizeManualAllocation,
   repairManualAllocation,
   type CharacterStatAllocation,
 } from '../services/character-class-reallocation';
@@ -69,6 +70,40 @@ export const authRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>
 const DEFAULT_CHARACTER_CLASS: GameCharacterClass = 'scholar';
 const GAME_CHARACTER_CLASS_SET = new Set<string>(GAME_CHARACTER_CLASSES);
 const AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 8;
+const DEFAULT_CHARACTER_CLASS_BASE_STATS: Record<GameCharacterClass, GameStats> = {
+  scholar: {
+    strength: 0,
+    dexterity: 0,
+    constitution: 0,
+    intelligence: 2,
+    wisdom: 1,
+    charisma: 1,
+  },
+  champion: {
+    strength: 2,
+    dexterity: 0,
+    constitution: 1,
+    intelligence: 0,
+    wisdom: 0,
+    charisma: 1,
+  },
+  guide: {
+    strength: 0,
+    dexterity: 2,
+    constitution: 0,
+    intelligence: 0,
+    wisdom: 1,
+    charisma: 1,
+  },
+  specialist: {
+    strength: 1,
+    dexterity: 1,
+    constitution: 1,
+    intelligence: 1,
+    wisdom: 0,
+    charisma: 0,
+  },
+};
 
 type AddressRecord = typeof addresses.$inferSelect;
 type CampusRecord = typeof campuses.$inferSelect;
@@ -111,12 +146,12 @@ type ManagementStudentUpdateBody = {
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
 type ManagementSchoolCreateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
 type ManagementCohortUpdateBody = Partial<
-  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'registrationOpen' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
 > & {
   campusName?: string;
 };
 type ManagementCohortCreateBody = Partial<
-  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'registrationOpen' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
 > & {
   campusName?: string;
 };
@@ -216,6 +251,7 @@ function toCohort(record: CohortRecord, school?: School, campus?: Campus): Cohor
     startYear: record.startYear,
     grade: record.grade as CohortGrade,
     level: record.level,
+    registrationOpen: record.registrationOpen,
     name: record.name,
     majorSpeciality: record.majorSpeciality || undefined,
     minorSpeciality: record.minorSpeciality || undefined,
@@ -329,6 +365,12 @@ async function ensureCharacterClassSeeds(db: Pick<ReturnType<typeof getDb>, 'sel
     missingClasses.map((slug, index) => ({
       slug,
       nameI18nKey: GAME_CHARACTER_CLASS_I18N_KEYS[slug],
+      baseStrength: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].strength,
+      baseDexterity: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].dexterity,
+      baseConstitution: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].constitution,
+      baseIntelligence: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].intelligence,
+      baseWisdom: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].wisdom,
+      baseCharisma: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].charisma,
       sortOrder: GAME_CHARACTER_CLASSES.indexOf(slug) >= 0 ? GAME_CHARACTER_CLASSES.indexOf(slug) : index,
     }))
   );
@@ -416,33 +458,48 @@ async function resolveCohortInvite(
   }
 }
 
-async function assignStudentToInvitedCohort(
+async function assignStudentToRegistrationCohort(
   databaseUrl: string | undefined,
   invite: CohortInvitePayload | null,
   userId: string
 ) {
-  if (!databaseUrl || !invite) return;
+  if (!databaseUrl) return;
 
   const db = getDb(databaseUrl);
-  const [inviteRecord] = await db
-    .select()
-    .from(cohortInvites)
-    .where(eq(cohortInvites.id, invite.inviteId))
-    .limit(1);
+  let targetCohortId: string | undefined;
 
-  if (
-    !inviteRecord ||
-    inviteRecord.cohortId !== invite.cohortId ||
-    inviteRecord.revokedAt ||
-    inviteRecord.expiresAt.getTime() <= Date.now()
-  ) {
-    return;
+  if (invite) {
+    const [inviteRecord] = await db
+      .select()
+      .from(cohortInvites)
+      .where(eq(cohortInvites.id, invite.inviteId))
+      .limit(1);
+
+    if (
+      inviteRecord &&
+      inviteRecord.cohortId === invite.cohortId &&
+      !inviteRecord.revokedAt &&
+      inviteRecord.expiresAt.getTime() > Date.now()
+    ) {
+      targetCohortId = invite.cohortId;
+    }
   }
+
+  if (!targetCohortId) {
+    const [openCohort] = await db
+      .select({ id: cohorts.id })
+      .from(cohorts)
+      .where(eq(cohorts.registrationOpen, true))
+      .limit(1);
+    targetCohortId = openCohort?.id;
+  }
+
+  if (!targetCohortId) return;
 
   const [cohortRecord] = await db
     .select()
     .from(cohorts)
-    .where(eq(cohorts.id, invite.cohortId))
+    .where(eq(cohorts.id, targetCohortId))
     .limit(1);
 
   if (!cohortRecord) return;
@@ -451,16 +508,27 @@ async function assignStudentToInvitedCohort(
     .select()
     .from(cohortMemberships)
     .where(
-      and(eq(cohortMemberships.userId, userId), eq(cohortMemberships.cohortId, invite.cohortId))
+      and(eq(cohortMemberships.userId, userId), eq(cohortMemberships.cohortId, targetCohortId))
     )
     .limit(1);
 
   if (existingMembership.length === 0) {
     await db.insert(cohortMemberships).values({
       userId,
-      cohortId: invite.cohortId,
+      cohortId: targetCohortId,
     });
   }
+}
+
+async function hasCohortRegistrationTarget(db: ReturnType<typeof getDb>, invite: CohortInvitePayload | null) {
+  if (invite) return true;
+
+  const [openCohort] = await db
+    .select({ id: cohorts.id })
+    .from(cohorts)
+    .where(eq(cohorts.registrationOpen, true))
+    .limit(1);
+  return Boolean(openCohort);
 }
 
 async function getManagementBackup(databaseUrl: string | undefined): Promise<ManagementBackup> {
@@ -799,7 +867,7 @@ authRouter.get('/github/callback', async (c) => {
 
             if (existingStudents[0]) {
               authenticatedStudentId = existingStudents[0].id;
-            } else if (cohortInvite) {
+            } else if (await hasCohortRegistrationTarget(db, cohortInvite)) {
               const [newStudent] = await db
                 .insert(students)
                 .values({
@@ -843,7 +911,7 @@ authRouter.get('/github/callback', async (c) => {
         }
 
         if (!isAdmin && authenticatedStudentId) {
-          await assignStudentToInvitedCohort(databaseUrl, cohortInvite, userId);
+          await assignStudentToRegistrationCohort(databaseUrl, cohortInvite, userId);
         }
       } catch (dbError: any) {
         console.error('Database registration error:', dbError.message);
@@ -921,7 +989,7 @@ authRouter.get('/dev/mock-github', async (c) => {
       .returning();
 
     if (newStudent) {
-      await assignStudentToInvitedCohort(c.env.DATABASE_URL, cohortInvite, newUser.id);
+      await assignStudentToRegistrationCohort(c.env.DATABASE_URL, cohortInvite, newUser.id);
     }
 
     const token = await signAuthToken(
@@ -948,6 +1016,7 @@ authRouter.get('/character-classes', async (c) => {
 
   const db = getDb(c.env.DATABASE_URL);
   await ensureCharacterClassSeeds(db);
+  const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, c.req.query('gameId'));
 
   const characterClasses = await db
     .select()
@@ -957,6 +1026,10 @@ authRouter.get('/character-classes', async (c) => {
   return c.json({
     success: true,
     characterClasses: characterClasses.map(toGameCharacterClassDefinition),
+    statConfig: {
+      maxValue: balanceConfig.rewardSystem.attributes.levelOneMaxValue,
+      allocationBudget: balanceConfig.rewardSystem.attributes.statAllocationBudget,
+    },
   });
 });
 
@@ -1037,16 +1110,23 @@ authRouter.post('/management/cohorts', async (c) => {
     (await db.select().from(campuses).where(eq(campuses.schoolId, schoolId)).limit(1))[0]?.id ||
     null;
 
-  await db.insert(cohorts).values({
-    schoolId,
-    campusId,
-    startYear: body.startYear || new Date().getFullYear(),
-    grade: body.grade || 'bachelor',
-    level: body.level || 1,
-    name: body.name?.trim() || 'Nouvelle cohorte',
-    majorSpeciality: body.majorSpeciality?.trim() || null,
-    minorSpeciality: body.minorSpeciality?.trim() || null,
-    description: body.description?.trim() || null,
+  await db.transaction(async (tx) => {
+    if (body.registrationOpen) {
+      await tx.update(cohorts).set({ registrationOpen: false, updatedAt: new Date() });
+    }
+
+    await tx.insert(cohorts).values({
+      schoolId,
+      campusId,
+      startYear: body.startYear || new Date().getFullYear(),
+      grade: body.grade || 'bachelor',
+      level: body.level || 1,
+      registrationOpen: Boolean(body.registrationOpen),
+      name: body.name?.trim() || 'Nouvelle cohorte',
+      majorSpeciality: body.majorSpeciality?.trim() || null,
+      minorSpeciality: body.minorSpeciality?.trim() || null,
+      description: body.description?.trim() || null,
+    });
   });
 
   return c.json({
@@ -1279,7 +1359,8 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
             charisma: character.charisma,
           },
           baseStats,
-          balanceConfig.rewardSystem.attributes.levelOneMaxValue
+          balanceConfig.rewardSystem.attributes.levelOneMaxValue,
+          balanceConfig.rewardSystem.attributes.statAllocationBudget
         );
 
         if (!repair.changed) continue;
@@ -1576,6 +1657,7 @@ authRouter.put('/management/cohorts/:cohortId', async (c) => {
   if (body.majorSpeciality !== undefined) cohortUpdate.majorSpeciality = body.majorSpeciality.trim() || null;
   if (body.minorSpeciality !== undefined) cohortUpdate.minorSpeciality = body.minorSpeciality.trim() || null;
   if (body.description !== undefined) cohortUpdate.description = body.description.trim() || null;
+  if (body.registrationOpen !== undefined) cohortUpdate.registrationOpen = body.registrationOpen;
 
   await db.transaction(async (tx) => {
     if (body.campusName !== undefined) {
@@ -1595,6 +1677,13 @@ authRouter.put('/management/cohorts/:cohortId', async (c) => {
           .returning();
         cohortUpdate.campusId = newCampus.id;
       }
+    }
+
+    if (body.registrationOpen === true) {
+      await tx
+        .update(cohorts)
+        .set({ registrationOpen: false, updatedAt: new Date() })
+        .where(sql`${cohorts.id} <> ${cohortId}`);
     }
 
     await tx.update(cohorts).set(cohortUpdate).where(eq(cohorts.id, cohortId));
@@ -1819,7 +1908,7 @@ authRouter.get('/dev/login', async (c) => {
     }
 
     if (!user.isAdmin) {
-      await assignStudentToInvitedCohort(c.env.DATABASE_URL, cohortInvite, user.id);
+      await assignStudentToRegistrationCohort(c.env.DATABASE_URL, cohortInvite, user.id);
     }
 
     await getDb(c.env.DATABASE_URL)
@@ -2076,6 +2165,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     photoUrl?: string;
     characterClass?: string;
     characterIllustrationUrl?: string;
+    characterStats?: Partial<GameStats>;
+    gameId?: string;
   };
 
   try {
@@ -2108,6 +2199,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       400
     );
   }
+
+  let characterStatsUpdate: CharacterStatAllocation | undefined;
 
   if (!databaseUrl) {
     return missingDatabaseUrl(c);
@@ -2325,7 +2418,11 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           } as any;
         }
 
-        if (body.characterClass !== undefined || body.characterIllustrationUrl !== undefined) {
+        if (
+          body.characterClass !== undefined ||
+          body.characterIllustrationUrl !== undefined ||
+          body.characterStats !== undefined
+        ) {
           if (body.characterClass !== undefined && !GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
             return apiError(c, 'Character class not found', 404);
           }
@@ -2337,6 +2434,48 @@ authRouter.put('/profile', authMiddleware, async (c) => {
             .where(eq(gameCharacters.studentId, studentId))
             .limit(1);
 
+          const nextClassSlug = (body.characterClass ||
+            existingChar?.characterClass ||
+            DEFAULT_CHARACTER_CLASS) as GameCharacterClass;
+          const [classRecord] = await db
+            .select()
+            .from(gameCharacterClasses)
+            .where(eq(gameCharacterClasses.slug, nextClassSlug))
+            .limit(1);
+
+          if (!classRecord) {
+            return apiError(c, 'Character class not found', 404);
+          }
+
+          const baseStats = toGameCharacterClassDefinition(classRecord).baseStats;
+          const balanceConfig = await RewardBalanceConfigService.getActiveConfig(
+            db,
+            typeof body.gameId === 'string' && body.gameId ? body.gameId : latestMembership?.cohortId
+          );
+          const statCap = balanceConfig.rewardSystem.attributes.levelOneMaxValue;
+          const statBudget = balanceConfig.rewardSystem.attributes.statAllocationBudget;
+
+          if (body.characterStats !== undefined) {
+            characterStatsUpdate = normalizeManualAllocation(body.characterStats, {
+              cap: statCap,
+              budget: statBudget,
+              baseStats,
+            });
+            if (!characterStatsUpdate) {
+              return apiError(c, 'Character stats must respect the configured budget and cap.', 400, {
+                errorCode: 'validation_failed',
+                errorKey: 'profile.errors.invalidPayload',
+              });
+            }
+          } else if (body.characterClass !== undefined && existingChar) {
+            characterStatsUpdate = repairManualAllocation(
+              toGameCharacterStats(existingChar),
+              baseStats,
+              statCap,
+              statBudget
+            ).nextManual;
+          }
+
           const [updatedChar] = existingChar
             ? await db
                 .update(gameCharacters)
@@ -2346,6 +2485,16 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                     : {}),
                   ...(body.characterIllustrationUrl !== undefined
                     ? { illustrationUrl: body.characterIllustrationUrl || null }
+                    : {}),
+                  ...(characterStatsUpdate
+                    ? {
+                        strength: characterStatsUpdate.strength,
+                        dexterity: characterStatsUpdate.dexterity,
+                        constitution: characterStatsUpdate.constitution,
+                        intelligence: characterStatsUpdate.intelligence,
+                        wisdom: characterStatsUpdate.wisdom,
+                        charisma: characterStatsUpdate.charisma,
+                      }
                     : {}),
                   updatedAt: new Date(),
                 })
@@ -2358,6 +2507,16 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                   characterClass: (body.characterClass || DEFAULT_CHARACTER_CLASS) as GameCharacterClass,
                   ...(body.characterIllustrationUrl !== undefined
                     ? { illustrationUrl: body.characterIllustrationUrl || null }
+                    : {}),
+                  ...(characterStatsUpdate
+                    ? {
+                        strength: characterStatsUpdate.strength,
+                        dexterity: characterStatsUpdate.dexterity,
+                        constitution: characterStatsUpdate.constitution,
+                        intelligence: characterStatsUpdate.intelligence,
+                        wisdom: characterStatsUpdate.wisdom,
+                        charisma: characterStatsUpdate.charisma,
+                      }
                     : {}),
                 })
                 .returning();

@@ -111,6 +111,7 @@ export interface PlayingCardTitleBlockProps {
   layoutId?: string;
   editable?: boolean;
   onTitleChange?: (title: string) => void;
+  titleAccessory?: ReactNode;
   className?: string;
 }
 
@@ -121,6 +122,7 @@ export function PlayingCardTitleBlock({
   layoutId,
   editable,
   onTitleChange,
+  titleAccessory,
   className,
 }: PlayingCardTitleBlockProps) {
   const { t } = useTranslation();
@@ -132,24 +134,27 @@ export function PlayingCardTitleBlock({
         transition={PLAYING_CARD_TRANSITION}
         className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4', className)}
       >
-        <h3
-          className={cn(
-            'pr-10 font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg',
-            editable && 'pointer-events-auto'
-          )}
-        >
-          {editable && onTitleChange ? (
-            <EditableText
-              value={title}
-              onChange={onTitleChange}
-              placeholder={t('playingCard.placeholders.title')}
-              className="font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg"
-              truncate={false}
-            />
-          ) : (
-            title
-          )}
-        </h3>
+        <div className="flex items-center gap-2 pr-10">
+          <h3
+            className={cn(
+              'min-w-0 flex-1 font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg',
+              editable && 'pointer-events-auto'
+            )}
+          >
+            {editable && onTitleChange ? (
+              <EditableText
+                value={title}
+                onChange={onTitleChange}
+                placeholder={t('playingCard.placeholders.title')}
+                className="font-display text-xl font-bold leading-tight text-text-primary drop-shadow-lg"
+                truncate={false}
+              />
+            ) : (
+              title
+            )}
+          </h3>
+          {titleAccessory ? <div className="pointer-events-auto shrink-0">{titleAccessory}</div> : null}
+        </div>
         <div className="mt-2 h-1 w-14 rounded-full bg-[color:var(--playing-card-accent)]" />
       </motion.div>
     );
@@ -230,6 +235,8 @@ export function PlayingCardRibbon({
 export interface PlayingCardStatPanelProps {
   axes: RadarGraphAxis[];
   datasets: RadarGraphDataset[];
+  maxValue?: number;
+  levels?: number;
   layoutId?: string;
   editable?: boolean;
   editableDatasetId?: string;
@@ -242,6 +249,8 @@ export interface PlayingCardStatPanelProps {
 export function PlayingCardStatPanel({
   axes,
   datasets,
+  maxValue,
+  levels,
   layoutId,
   editable,
   editableDatasetId,
@@ -254,11 +263,13 @@ export function PlayingCardStatPanel({
     <motion.div
       layoutId={layoutId}
       transition={PLAYING_CARD_TRANSITION}
-      className="w-40 shrink-0 self-start rounded-[1rem] border border-gaming-border bg-gaming-base/60 p-1"
+      className="w-52 shrink-0 self-start rounded-[1rem] border border-solarized-base0/40 bg-transparent p-1"
     >
       <RadarGraph
         axes={axes}
         datasets={datasets}
+        maxValue={maxValue}
+        levels={levels}
         editable={editable}
         editableDatasetId={editableDatasetId}
         remainingValue={remainingValue}

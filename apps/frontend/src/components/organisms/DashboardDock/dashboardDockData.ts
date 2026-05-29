@@ -8,6 +8,7 @@ type Translate = (path: string) => string;
 interface GuildHandOptions {
   guild: DockGuild;
   guildName: string;
+  playerStudentId?: string;
   playerName: string;
   playerAvatar: string;
   characterClass: GameCharacterClass;
@@ -38,7 +39,8 @@ export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): Pl
       '{amount}',
       String(guild.boostPointsSpent || 0)
     ),
-    illustrationHidden: true,
+    illustrationUrl: guild.iconUrl,
+    illustrationAlt: guild.name,
     ribbonIconKey: guild.iconKey || 'Shield',
   });
 
@@ -84,6 +86,9 @@ export function buildProgressBonusCards(
 export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [PlayingHandData] {
   const guildColor = resolveCardColor(options.guild.color);
   const playerClassColor = resolveCardColor(options.characterClass);
+  const otherMemberCards = (options.guild.members || [])
+    .filter((member) => member.id !== options.playerStudentId)
+    .map((member, index) => buildGuildMemberCard(t, member, 'guild-hand', index));
   const cards: [PlayingCardData, ...PlayingCardData[]] = [
     {
       id: 'guild',
@@ -96,11 +101,12 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         title: options.guildName,
         description: options.guild.description || t('dashboard.dock.guildCardDescription'),
         color: guildColor,
-        illustrationHidden: true,
+        illustrationUrl: options.guild.iconUrl,
+        illustrationAlt: options.guildName,
         ribbonIconKey: options.guild.iconKey || 'Shield',
-        stats: [
-          { id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 },
-        ],
+        stats: options.guild.stats
+          ? buildGuildStatLines(options.guild.stats)
+          : [{ id: 'gold', label: t('dashboard.dock.gold'), value: options.guild.gold || 0, max: 250 }],
       },
     },
     {
@@ -129,6 +135,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         ],
       },
     },
+    ...otherMemberCards,
   ];
 
   return [
@@ -175,16 +182,19 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
           title: guildName,
           description: options.guild.description || t('dashboard.dock.classGuildCardDescription'),
           color: guildColor,
-          illustrationHidden: true,
+          illustrationUrl: options.guild.iconUrl,
+          illustrationAlt: guildName,
           ribbonIconKey: options.guild.iconKey || 'Shield',
-          stats: [
-            {
-              id: 'gold',
-              label: t('dashboard.dock.gold'),
-              value: options.guild.gold || 0,
-              max: 250,
-            },
-          ],
+          stats: options.guild.stats
+            ? buildGuildStatLines(options.guild.stats)
+            : [
+                {
+                  id: 'gold',
+                  label: t('dashboard.dock.gold'),
+                  value: options.guild.gold || 0,
+                  max: 250,
+                },
+              ],
         },
       },
       ...memberCards,
@@ -249,14 +259,27 @@ function buildGuildMemberCard(
       ribbonText: classLabel,
       stats: member.stats
         ? [
-            { id: 'strength', label: 'STR', value: member.stats.strength, max: 20 },
-            { id: 'dexterity', label: 'DEX', value: member.stats.dexterity, max: 20 },
-            { id: 'constitution', label: 'CON', value: member.stats.constitution, max: 20 },
-            { id: 'intelligence', label: 'INT', value: member.stats.intelligence, max: 20 },
-            { id: 'wisdom', label: 'WIS', value: member.stats.wisdom, max: 20 },
-            { id: 'charisma', label: 'CHA', value: member.stats.charisma, max: 20 },
+            { id: 'strength', label: 'STR', value: member.stats.strength, max: 5 },
+            { id: 'dexterity', label: 'DEX', value: member.stats.dexterity, max: 5 },
+            { id: 'constitution', label: 'CON', value: member.stats.constitution, max: 5 },
+            { id: 'intelligence', label: 'INT', value: member.stats.intelligence, max: 5 },
+            { id: 'wisdom', label: 'WIS', value: member.stats.wisdom, max: 5 },
+            { id: 'charisma', label: 'CHA', value: member.stats.charisma, max: 5 },
           ]
         : undefined,
     },
   };
+}
+
+function buildGuildStatLines(stats: GameStats | undefined) {
+  if (!stats) return [];
+
+  return [
+    { id: 'strength', label: 'STR', value: stats.strength, max: 5 },
+    { id: 'dexterity', label: 'DEX', value: stats.dexterity, max: 5 },
+    { id: 'constitution', label: 'CON', value: stats.constitution, max: 5 },
+    { id: 'intelligence', label: 'INT', value: stats.intelligence, max: 5 },
+    { id: 'wisdom', label: 'WIS', value: stats.wisdom, max: 5 },
+    { id: 'charisma', label: 'CHA', value: stats.charisma, max: 5 },
+  ];
 }

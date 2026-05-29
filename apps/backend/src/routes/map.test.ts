@@ -197,6 +197,21 @@ describe('map routes', () => {
     expect(payload.errorCode).toBe('server_configuration');
   });
 
+  it('requires authentication before accepting guild invitations', async () => {
+    const response = await app.request(
+      '/api/guild-invitations/00000000-0000-4000-8000-000000000001/accept',
+      {
+        method: 'POST',
+      },
+      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(401);
+    expect(payload.success).toBe(false);
+    expect(payload.errorCode).toBe('unauthorized');
+  });
+
   it('rejects invalid activity icons before updating', async () => {
     const response = await app.request(
       '/api/map/activities/debug_activity_api_bridge/icon',

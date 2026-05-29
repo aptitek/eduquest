@@ -1,7 +1,5 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
-import { AdaptiveTooltipBadge } from '../../atoms/AdaptiveTooltipBadge';
-import { UI_COLOR_TOKENS } from '../../../styles/colorTokens';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { cn } from '../../../utils/cn';
 
@@ -16,6 +14,7 @@ export interface RadarGraphDataset {
   id: string;
   label: string;
   values: Record<string, number>;
+  valueLabels?: Record<string, string>;
   color?: string;
   fillOpacity?: number;
   strokeOpacity?: number;
@@ -39,18 +38,20 @@ export interface RadarGraphProps {
 }
 
 const DEFAULT_COLORS = [
-  UI_COLOR_TOKENS.quest,
-  UI_COLOR_TOKENS.campfire,
-  UI_COLOR_TOKENS.specialist,
-  UI_COLOR_TOKENS.completed,
-  UI_COLOR_TOKENS.danger,
+  'var(--color-solarized-blue)',
+  'var(--color-solarized-cyan)',
+  'var(--color-solarized-violet)',
+  'var(--color-solarized-green)',
+  'var(--color-solarized-orange)',
 ];
 const VIEWBOX_SIZE = 100;
-const VIEWBOX_MIN = -8;
-const VIEWBOX_RENDER_SIZE = 116;
+const VIEWBOX_MIN = -26;
+const VIEWBOX_RENDER_SIZE = 152;
 const CENTER = VIEWBOX_SIZE / 2;
-const RADIUS = 39;
-const LABEL_RADIUS = 44;
+const RADIUS = 50;
+const LABEL_RADIUS = 56;
+const ZERO_RING_RADIUS = 4;
+const DATA_RADIUS = RADIUS - ZERO_RING_RADIUS;
 
 function polarToCartesian(angle: number, radius: number) {
   return {
@@ -69,6 +70,10 @@ function clampRatio(value: number, max: number) {
   }
 
   return Math.min(Math.max(value / max, 0), 1);
+}
+
+function getValueRadius(ratio: number) {
+  return ZERO_RING_RADIUS + DATA_RADIUS * Math.min(Math.max(ratio, 0), 1);
 }
 
 function clampValue(value: number, min: number, max: number) {
@@ -94,12 +99,10 @@ export function RadarGraph({
 }: RadarGraphProps) {
   const { t } = useTranslation();
   const titleId = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [activeAxisId, setActiveAxisId] = useState<string | null>(null);
-  const size = useElementSize(containerRef);
+  const [hoveredAxisId, setHoveredAxisId] = useState<string | null>(null);
   const safeLevels = Math.max(Math.floor(levels), 1);
-  const showInlineAxisLabels = size.width >= 180;
   const editableDataset =
     datasets.find((dataset) => dataset.id === editableDatasetId) || datasets[0];
   const canEdit = editable && Boolean(onValueChange) && Boolean(editableDataset);
@@ -114,8 +117,12 @@ export function RadarGraph({
 
     const angles = usableAxes.map((_, index) => (Math.PI * 2 * index) / axisCount - Math.PI / 2);
     const gridPolygons = Array.from({ length: safeLevels }, (_, index) => {
-      const levelRadius = RADIUS * ((index + 1) / safeLevels);
-      return toPolygonPoints(angles.map((angle) => polarToCartesian(angle, levelRadius)));
+      const levelRatio = (index + 1) / safeLevels;
+      const levelRadius = getValueRadius(levelRatio);
+      return {
+        points: toPolygonPoints(angles.map((angle) => polarToCartesian(angle, levelRadius))),
+        radius: levelRadius,
+      };
     });
 
     const axisLines = angles.map((angle, index) => ({
@@ -130,7 +137,7 @@ export function RadarGraph({
       const points = usableAxes.map((axis, axisIndex) => {
         const axisMax = axis.max ?? maxValue ?? 100;
         const ratio = clampRatio(dataset.values[axis.id] ?? 0, axisMax);
-        return polarToCartesian(angles[axisIndex], RADIUS * ratio);
+        return polarToCartesian(angles[axisIndex], getValueRadius(ratio));
       });
 
       return {
@@ -149,15 +156,19 @@ export function RadarGraph({
       const value = editableDataset?.values[axis.id] ?? 0;
       const ratio = editableDataset ? clampRatio(value, axisMax) : 1;
       const editableRange = getResolvedEditableRange(axis, value, getEditableRange);
+      const pointRadius = getValueRadius(ratio);
 
       return {
         axis,
         angle: angles[axisIndex],
         value,
+        valueLabel: editableDataset?.valueLabels?.[axis.id],
         min: editableRange.min,
         editableMax: editableRange.max,
         max: axisMax,
-        point: polarToCartesian(angles[axisIndex], RADIUS * ratio),
+        ratio,
+        point: polarToCartesian(angles[axisIndex], pointRadius),
+        label: polarToCartesian(angles[axisIndex], LABEL_RADIUS),
       };
     });
 
@@ -183,13 +194,15 @@ export function RadarGraph({
     if (!screenMatrix) return;
 
     const cursor = svgPoint.matrixTransform(screenMatrix.inverse());
-    const projection =
-      ((cursor.x - CENTER) * Math.cos(angle) + (cursor.y - CENTER) * Math.sin(angle)) / RADIUS;
+    const projectedRadius = (cursor.x - CENTER) * Math.cos(angle) + (cursor.y - CENTER) * Math.sin(angle);
     const axisMax = axis.max ?? maxValue ?? 100;
     const currentValue = editableDataset?.values[axis.id] ?? axis.min ?? 0;
     const range = getResolvedEditableRange(axis, currentValue, getEditableRange);
 
-    onValueChange(axis.id, clampValue(projection * axisMax, range.min, range.max));
+    onValueChange(
+      axis.id,
+      clampValue(((projectedRadius - ZERO_RING_RADIUS) / DATA_RADIUS) * axisMax, range.min, range.max)
+    );
   };
 
   const updateAxisByStep = (axis: RadarGraphAxis, currentValue: number, step: number) => {
@@ -234,7 +247,7 @@ export function RadarGraph({
   }
 
   return (
-    <div ref={containerRef} className={cn('relative min-w-0 overflow-visible', className)}>
+    <div className={cn('relative min-w-0 overflow-visible', className)}>
       <svg
         ref={svgRef}
         viewBox={`${VIEWBOX_MIN} ${VIEWBOX_MIN} ${VIEWBOX_RENDER_SIZE} ${VIEWBOX_RENDER_SIZE}`}
@@ -253,15 +266,29 @@ export function RadarGraph({
           {datasets.map((dataset) => dataset.label).join(', ') || t('graph.radarGraph')}
         </title>
 
-        <g className="fill-none stroke-gaming-border/70">
-          {chart.gridPolygons.map((points) => (
-            <polygon key={points} points={points} strokeWidth="0.45" />
+        <g className="fill-none" stroke="var(--color-solarized-base0)">
+          {chart.gridPolygons.map((level, index) => (
+            <polygon
+              key={level.points}
+              points={level.points}
+              strokeWidth={index === chart.gridPolygons.length - 1 ? '0.85' : '0.55'}
+              opacity={index === chart.gridPolygons.length - 1 ? 0.95 : 0.62}
+            />
           ))}
           {chart.axisLines.map(({ axis, end }) => (
-            <line key={axis.id} x1={CENTER} y1={CENTER} x2={end.x} y2={end.y} strokeWidth="0.55" />
+            <line key={axis.id} x1={CENTER} y1={CENTER} x2={end.x} y2={end.y} strokeWidth="0.5" opacity="0.58" />
           ))}
-          <circle cx={CENTER} cy={CENTER} r="1.2" className="fill-gaming-border stroke-none" />
         </g>
+
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={ZERO_RING_RADIUS}
+          fill="transparent"
+          stroke="var(--color-solarized-cyan)"
+          strokeOpacity="0.85"
+          strokeWidth="0.85"
+        />
 
         {chart.datasetPolygons.map((polygon) => (
           <g key={polygon.id}>
@@ -283,26 +310,30 @@ export function RadarGraph({
             <circle
               cx={CENTER}
               cy={CENTER}
-              r="9.5"
-              className="fill-gaming-card/90 stroke-gaming-border"
-              strokeWidth="0.55"
+              r="11.25"
+              fill="transparent"
+              stroke="var(--color-solarized-yellow)"
+              strokeOpacity="0.7"
+              strokeWidth="0.65"
             />
             <text
               x={CENTER}
-              y={CENTER - 1.4}
+              y={CENTER - 2}
               textAnchor="middle"
               dominantBaseline="central"
-              className="fill-text-primary text-[0.48rem] font-bold"
+              className="text-[1.05rem] font-black"
+              fill="var(--color-solarized-yellow)"
             >
               {remainingValue}
             </text>
             {remainingValueLabel ? (
               <text
                 x={CENTER}
-                y={CENTER + 5.2}
+                y={CENTER + 6.5}
                 textAnchor="middle"
                 dominantBaseline="central"
-                className="fill-text-muted text-[0.18rem] font-bold uppercase tracking-widest"
+                className="text-[0.38rem] font-black uppercase tracking-widest"
+                fill="var(--color-solarized-base1)"
               >
                 {remainingValueLabel}
               </text>
@@ -316,12 +347,13 @@ export function RadarGraph({
                 key={axis.id}
                 cx={point.x}
                 cy={point.y}
-                r={canEdit ? '3.2' : '1.7'}
+                r={hoveredAxisId === axis.id || activeAxisId === axis.id ? '3.8' : canEdit ? '3.2' : '2.2'}
                 className={cn(
                   canEdit
-                    ? 'cursor-grab fill-gaming-card stroke-[color:var(--color-status-quest)] outline-none focus-visible:stroke-primary active:cursor-grabbing'
-                    : 'fill-transparent stroke-gaming-border'
+                    ? 'cursor-grab fill-transparent outline-none active:cursor-grabbing'
+                    : 'fill-transparent'
                 )}
+                stroke={canEdit ? 'var(--color-solarized-cyan)' : 'var(--color-solarized-base1)'}
                 strokeWidth={canEdit ? '1.15' : '0.55'}
                 role={canEdit ? 'slider' : undefined}
                 tabIndex={canEdit ? 0 : undefined}
@@ -342,6 +374,8 @@ export function RadarGraph({
                       }
                     : undefined
                 }
+                onPointerEnter={() => setHoveredAxisId(axis.id)}
+                onPointerLeave={() => setHoveredAxisId((current) => (current === axis.id ? null : current))}
                 onPointerUp={
                   canEdit
                     ? (event) => {
@@ -357,32 +391,47 @@ export function RadarGraph({
               />
             ))
           : null}
+
+        {showLabels ? (
+          <g className="select-none font-display">
+            {chart.axisMarkers.map(({ axis, label, value, valueLabel }) => {
+              const isActive = hoveredAxisId === axis.id || activeAxisId === axis.id;
+              const labelAnchor = getTextAnchor(label.x);
+              const labelPosition = getLabelTextPosition(label);
+
+              return (
+                <g
+                  key={`label-${axis.id}`}
+                  className={canEdit ? 'pointer-events-none' : 'cursor-help'}
+                  onPointerEnter={() => setHoveredAxisId(axis.id)}
+                  onPointerLeave={() => setHoveredAxisId((current) => (current === axis.id ? null : current))}
+                >
+                  <text
+                    x={labelPosition.x}
+                    y={labelPosition.valueY}
+                    textAnchor={labelAnchor}
+                    dominantBaseline="central"
+                    className="text-[0.82rem] font-black"
+                    fill={isActive ? 'var(--color-solarized-yellow)' : 'var(--color-solarized-cyan)'}
+                  >
+                    {valueLabel || formatStatValue(value)}
+                  </text>
+                  <text
+                    x={labelPosition.x}
+                    y={labelPosition.labelY}
+                    textAnchor={labelAnchor}
+                    dominantBaseline="central"
+                    className="text-[0.56rem] font-black uppercase tracking-[0.025em]"
+                    fill={isActive ? 'var(--color-solarized-base3)' : 'var(--color-solarized-base2)'}
+                  >
+                    {axis.label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        ) : null}
       </svg>
-
-      {showLabels
-        ? chart.axisMarkers.map(({ axis, point }) => {
-            const position = getViewBoxPercent(point);
-            const shortLabel = getCompactAxisLabel(axis.label);
-
-            return (
-              <span
-                key={axis.id}
-                ref={(element) => applyAxisLabelPosition(element, position)}
-                className={cn(
-                  'absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2',
-                  canEdit && 'pointer-events-none'
-                )}
-              >
-                <AdaptiveTooltipBadge
-                  label={axis.label}
-                  compactLabel={shortLabel}
-                  mode={showInlineAxisLabels ? 'compact' : 'dot'}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                />
-              </span>
-            );
-          })
-        : null}
     </div>
   );
 }
@@ -404,56 +453,26 @@ function getResolvedEditableRange(
   };
 }
 
-function useElementSize(ref: React.RefObject<HTMLElement>) {
-  const [size, setSize] = useState({ width: 0, height: 0 });
-
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return undefined;
-
-    const updateSize = () => {
-      const rect = element.getBoundingClientRect();
-      setSize({
-        width: Math.max(0, rect.width),
-        height: Math.max(0, rect.height),
-      });
-    };
-
-    updateSize();
-
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-
-  return size;
+function formatStatValue(value: number) {
+  if (!Number.isFinite(value)) return '0';
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
-function getViewBoxPercent(point: { x: number; y: number }) {
+function getTextAnchor(x: number): 'start' | 'middle' | 'end' {
+  if (Math.abs(x - CENTER) < 3) return 'middle';
+  return x > CENTER ? 'start' : 'end';
+}
+
+function getLabelTextPosition(point: { x: number; y: number }) {
+  const horizontalOffset = Math.abs(point.x - CENTER) < 3 ? 0 : point.x > CENTER ? 2 : -2;
+  const verticalBias = Math.abs(point.y - CENTER) < 3 ? 0 : point.y > CENTER ? 1.2 : -1.2;
+
   return {
-    x: ((point.x - VIEWBOX_MIN) / VIEWBOX_RENDER_SIZE) * 100,
-    y: ((point.y - VIEWBOX_MIN) / VIEWBOX_RENDER_SIZE) * 100,
+    x: point.x + horizontalOffset,
+    valueY: point.y - 4.8 + verticalBias,
+    labelY: point.y + 2.6 + verticalBias,
   };
-}
-
-function getCompactAxisLabel(label: string) {
-  const words = label.trim().split(/\s+/).filter(Boolean);
-  if (words.length > 1)
-    return words
-      .map((word) => word[0])
-      .join('')
-      .slice(0, 2);
-  return label.trim().slice(0, 2);
-}
-
-function applyAxisLabelPosition(
-  element: HTMLSpanElement | null,
-  position: { x: number; y: number }
-) {
-  if (!element) return;
-
-  element.style.left = `${position.x}%`;
-  element.style.top = `${position.y}%`;
 }
 
 export default RadarGraph;

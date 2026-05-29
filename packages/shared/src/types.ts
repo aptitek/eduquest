@@ -72,6 +72,7 @@ export interface Cohort {
   startYear: number;
   grade: CohortGrade;
   level: number;
+  registrationOpen?: boolean;
   name: string;
   majorSpeciality?: string;
   minorSpeciality?: string;
@@ -91,6 +92,9 @@ export interface Game {
   updatedAt?: string;
 }
 
+export type GuildRecruitmentStatus = 'open' | 'invite_only' | 'closed';
+export type GuildInvitationStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
+
 // Table `guilds` : Groupes de JDR restreints à une cohort
 export interface Guild {
   id: string;
@@ -104,6 +108,27 @@ export interface Guild {
   color?: string; // Design accent token, e.g. quest, danger, specialist
   gold?: number;
   boostPointsSpent?: number;
+  stats?: GameStats;
+  recruitmentStatus?: GuildRecruitmentStatus;
+  recruitmentMessage?: string;
+  maxMembers?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GuildInvitation {
+  id: string;
+  cohortId: string;
+  guildId: string;
+  guild?: Guild;
+  inviterUserId: string;
+  inviterDisplayName?: string;
+  inviteeUserId: string;
+  inviteeDisplayName?: string;
+  status: GuildInvitationStatus;
+  message?: string;
+  respondedAt?: string;
+  expiresAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -167,6 +192,11 @@ export interface GameStats {
   dexterity: number;
   constitution: number;
   charisma: number;
+}
+
+export interface GameCharacterStatConfig {
+  maxValue: number;
+  allocationBudget: number;
 }
 
 // Table `game_characters` : Verso de la carte étudiant (Stats JDR)
@@ -442,6 +472,7 @@ export interface GameMapData {
   edges: GameActivityEdge[];
   completions: GameActivityCompletion[];
   nodeOccupancies?: GameMapNodeOccupancy[];
+  currentGuildMemberCount?: number;
   currentStep?: number;
   currentActivityId?: string;
   currentMove?: GameCharacterMove;
@@ -507,6 +538,15 @@ export interface MilestoneBonusVote {
   bonusCardId: string;
   guildId: string;
   voteCount: number;
+  metadata?: Record<string, unknown> & {
+    boostApproval?: {
+      requiredVotes: number;
+      receivedVotes: number;
+      hasVoted?: boolean;
+      votes?: number;
+      status?: 'pending' | 'complete';
+    };
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -534,6 +574,7 @@ export interface GameBonusVoteState {
   selectedMilestoneId?: string;
   guildId?: string;
   guildGold?: number;
+  currentGuildMemberCount?: number;
   boostCostPreview?: VoteSpendBreakdown;
   baseVotesPerGuild: number;
 }
@@ -551,7 +592,7 @@ export interface Notification {
   icon?: string;
   tone?: NotificationTone;
   actionLabelI18nKey?: string;
-  actionTarget?: 'map' | 'acknowledge' | 'collect' | 'review';
+  actionTarget?: 'map' | 'guild' | 'acknowledge' | 'collect' | 'review';
   context?: RewardNotificationContext;
 }
 

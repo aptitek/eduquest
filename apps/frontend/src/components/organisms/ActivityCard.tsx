@@ -99,6 +99,10 @@ export interface ActivityCardProps {
   isCompleted?: boolean;
   isResolving?: boolean;
   resolveError?: string | null;
+  completionProgressTarget?: number;
+  completionProgressValue?: number;
+  isCompletionPending?: boolean;
+  completionPendingLabel?: string;
   onResolve?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
   onTitleChange?: (title: string) => void | Promise<void>;
   onSubtitleChange?: (subtitle: string) => void | Promise<void>;
@@ -124,6 +128,10 @@ export function ActivityCard({
   isCompleted = false,
   isResolving = false,
   resolveError,
+  completionProgressTarget,
+  completionProgressValue,
+  isCompletionPending,
+  completionPendingLabel,
   onResolve,
   onTitleChange,
   onSubtitleChange,
@@ -326,6 +334,10 @@ export function ActivityCard({
                 error={resolveError}
                 onComplete={onResolve}
                 mode={draft.participationMode}
+                progressTarget={completionProgressTarget}
+                progressValue={completionProgressValue}
+                isPending={isCompletionPending}
+                pendingLabel={completionPendingLabel}
                 completeLabel={
                   draft.participationMode === 'guild'
                     ? t('activityCard.vote')
@@ -503,6 +515,8 @@ function buildActivityFrontSide({
   onFieldChange: (field: PlayingCardEditableField, value: string) => void;
   onIllustrationUpload?: (file: File) => Promise<string | void>;
 }): PlayingCardSide {
+  const showUploadTarget = canEdit && Boolean(onIllustrationUpload);
+
   return {
     title: activity.title,
     subtitle: activity.subtitle,
@@ -510,7 +524,7 @@ function buildActivityFrontSide({
     color: activity.cardColor,
     illustrationUrl: activity.illustrationUrl,
     illustrationAlt: activity.illustrationAlt,
-    illustration: activity.illustrationUrl ? undefined : (
+    illustration: activity.illustrationUrl || showUploadTarget ? undefined : (
       <ActivityIcon
         iconId={activity.selectedIcon}
         size={72}

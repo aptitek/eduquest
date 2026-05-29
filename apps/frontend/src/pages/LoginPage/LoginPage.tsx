@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Github, Terminal, Gamepad2, Sparkles, ShieldAlert } from 'lucide-react';
-import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
+import { BACKEND_BASE_URL, type AuthControls } from '../../features/auth/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ENABLE_DEV_TOOLS } from '../../config/deployment';
 import logoUrl from '../../assets/logo.svg';
@@ -17,13 +17,18 @@ type DevStudentOption = {
   level: number;
 };
 
-export function LoginPage() {
+type LoginPageProps = {
+  auth: AuthControls;
+};
+
+export function LoginPage({ auth }: LoginPageProps) {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
-  const { loginWithGithub, loginWithDevUser, createMockGithubAccount, error } = useAuth();
+  const { loginWithGithub, loginWithDevUser, createMockGithubAccount, error } = auth;
   const [devStudents, setDevStudents] = useState<DevStudentOption[]>([]);
   const [selectedDevStudentId, setSelectedDevStudentId] = useState('');
   const showDevLogin = ENABLE_DEV_TOOLS;
+  const authErrorMessage = getAuthErrorMessage(error, t);
 
   useEffect(() => {
     if (!showDevLogin) return;
@@ -47,7 +52,7 @@ export function LoginPage() {
     };
 
     loadDevStudents();
-  }, [showDevLogin]);
+  }, [showDevLogin, reportError]);
 
   return (
     <div className="min-h-screen bg-gaming-base flex flex-col justify-center items-center p-4 relative overflow-hidden font-body selection:bg-status-boss/30 selection:text-text-primary">
@@ -105,17 +110,23 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* Error Notification Alert */}
-        {error && (
+        {/* Auth failure is shown in place so it does not get buried in global notifications. */}
+        {authErrorMessage && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full p-3 rounded-lg bg-solarized-red/10 border border-solarized-red/30 text-xs text-solarized-red flex items-center gap-3"
+            role="alert"
+            className="w-full rounded-xl border border-solarized-red/40 bg-solarized-red/10 p-4 text-sm text-solarized-red shadow-[0_0_24px_rgba(220,50,47,0.12)]"
           >
-            <ShieldAlert size={18} className="shrink-0" />
-            <span>
-              {error === 'invalidSession' ? t('auth.invalidSession') : t('auth.loginError')}
-            </span>
+            <div className="flex items-start gap-3">
+              <ShieldAlert size={20} className="mt-0.5 shrink-0" />
+              <div className="flex flex-col gap-1">
+                <p className="font-display text-xs font-black uppercase tracking-[0.16em]">
+                  {t('auth.loginFailureTitle')}
+                </p>
+                <p className="text-xs leading-relaxed text-solarized-red/90">{authErrorMessage}</p>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -211,3 +222,9 @@ export function LoginPage() {
 
 
 export default LoginPage;
+
+function getAuthErrorMessage(error: string | null, t: (path: string) => string) {
+  if (!error) return null;
+  if (error === 'invalidSession') return t('auth.invalidSession');
+  return t('auth.loginUnavailable');
+}

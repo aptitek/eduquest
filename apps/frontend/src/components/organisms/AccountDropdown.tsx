@@ -169,6 +169,7 @@ export function AccountDropdown() {
       } else {
         patchUser(reconciled);
       }
+      window.dispatchEvent(new Event('eduquest:onboarding-state-updated'));
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('profile.errors.')) {
         if (shouldThrow) throw error;

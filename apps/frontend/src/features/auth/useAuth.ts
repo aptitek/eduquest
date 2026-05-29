@@ -1,10 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../game/gameStore';
 import { BACKEND_BASE_URL, ENABLE_DEV_TOOLS } from '../../config/deployment';
-import { useErrorReporter } from '../errors/notifications';
-import { throwApiResponseError } from '../errors/api';
+import { ApiClientError, throwApiResponseError } from '../errors/api';
 
 export { BACKEND_BASE_URL };
+
+export type AuthErrorCode = 'invalidSession' | 'loginUnavailable';
+
+export type AuthControls = {
+  error: AuthErrorCode | string | null;
+  loginWithGithub: () => void;
+  loginWithDevUser: (studentId?: string) => void;
+  createMockGithubAccount: () => void;
+};
 
 function getCohortInviteToken() {
   return new URLSearchParams(window.location.search).get('cohortInvite');
@@ -12,7 +20,6 @@ function getCohortInviteToken() {
 
 export function useAuth() {
   const { user, student, character, setUserSession, logout: clearStoreSession } = useGameStore();
-  const reportError = useErrorReporter();
   const [loadingSession, setLoadingSession] = useState(() => {
     // Si l'utilisateur est déjà présent en mémoire, pas de chargement
     if (useGameStore.getState().user) return false;
@@ -49,19 +56,15 @@ export function useAuth() {
           throw new Error('Malformed server session payload');
         }
       } catch (err: unknown) {
-        reportError(err, {
-          fallback: 'Your session expired. Please sign in again.',
-          id: 'auth.invalidSession',
-          logMessage: 'Authentication validation failed:',
-        });
+        console.warn('Authentication validation failed:', err);
         localStorage.removeItem('eduquest_token');
         clearStoreSession();
-        setError('invalidSession');
+        setError(getAuthErrorCode(err));
       } finally {
         setLoadingSession(false);
       }
     },
-    [setUserSession, clearStoreSession, reportError]
+    [setUserSession, clearStoreSession]
   );
 
   // Initialisation et parsing URL
@@ -148,4 +151,21 @@ export function useAuth() {
     createMockGithubAccount,
     logout,
   };
+}
+
+function getAuthErrorCode(error: unknown): AuthErrorCode {
+  if (error instanceof ApiClientError) {
+    if (
+      error.status >= 500 ||
+      ['internal_error', 'network_error', 'server_configuration', 'service_unavailable'].includes(error.errorCode)
+    ) {
+      return 'loginUnavailable';
+    }
+  }
+
+  if (error instanceof TypeError || error instanceof SyntaxError) {
+    return 'loginUnavailable';
+  }
+
+  return 'invalidSession';
 }

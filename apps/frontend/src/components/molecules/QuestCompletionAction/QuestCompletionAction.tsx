@@ -11,6 +11,10 @@ export interface QuestCompletionActionProps {
   mode?: ActivityParticipationMode;
   completeLabel?: string;
   completedLabel?: string;
+  progressTarget?: number;
+  progressValue?: number;
+  isPending?: boolean;
+  pendingLabel?: string;
 }
 
 export function QuestCompletionAction({
@@ -21,6 +25,10 @@ export function QuestCompletionAction({
   mode = 'solo',
   completeLabel,
   completedLabel,
+  progressTarget,
+  progressValue,
+  isPending,
+  pendingLabel,
 }: QuestCompletionActionProps) {
   const { t } = useTranslation();
   const resolvedCompleteLabel = completeLabel || t('activityCard.completeQuest');
@@ -53,9 +61,13 @@ export function QuestCompletionAction({
         holdDuration={1200}
         shape="round"
         variant="btn-primary"
-        disabled={isResolving || !onComplete}
+        disabled={isResolving || isPending || !onComplete}
+        progressTarget={progressTarget}
+        progressValue={progressValue}
         className={
-          mode === 'guild'
+          isPending
+            ? 'h-24 w-24 min-h-0 border-status-completed/50 bg-gaming-card text-status-completed font-display text-sm font-black uppercase leading-tight tracking-[0.08em] shadow-[0_0_18px_rgba(133,153,0,0.28)] opacity-100'
+            : mode === 'guild'
             ? 'h-24 w-24 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-sm font-black uppercase leading-tight tracking-[0.08em] shadow-glow-primary'
             : 'h-24 w-24 min-h-0 border-status-quest/40 bg-status-quest text-gaming-base font-display text-sm font-black uppercase leading-tight tracking-[0.08em] shadow-glow-primary'
         }
@@ -65,6 +77,11 @@ export function QuestCompletionAction({
           <span>{isResolving ? t('activityCard.resolving') : resolvedCompleteLabel}</span>
         </span>
       </HoldToConfirmButton>
+      {isPending && pendingLabel ? (
+        <p className="mt-3 max-w-28 text-center text-[0.65rem] font-bold uppercase leading-tight tracking-[0.14em] text-status-completed">
+          {pendingLabel}
+        </p>
+      ) : null}
     </div>
   );
 }

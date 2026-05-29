@@ -278,6 +278,7 @@ export const en: TranslationKeys = {
       students: 'Students',
       description: 'Description',
       inviteButton: 'Hold to invite students',
+      newInvite: 'Create registration link',
       inviteEyebrow: 'Limited-time assignment',
       inviteTitle: 'Register new students',
       inviteDescription:
@@ -305,6 +306,15 @@ export const en: TranslationKeys = {
       and: 'and',
       revoke: 'Revoke',
       revokePermanently: 'Hold to revoke permanently',
+      registrationOpen: 'Automatic registration open',
+      registrationClosed: 'Automatic registration closed',
+      registrationOpenDescription:
+        'New student accounts without an invite link will be automatically assigned to this cohort.',
+      registrationClosedDescription:
+        'Open this cohort to assign new student accounts here without a dedicated link. Only one cohort can be open at a time.',
+      openRegistration: 'Open automatic registration',
+      closeRegistration: 'Close automatic registration',
+      registrationUpdating: 'Updating...',
       major: 'Major',
       minor: 'Minor',
       classCards: 'Class cards',
@@ -375,6 +385,12 @@ export const en: TranslationKeys = {
     title: 'Guild hand',
     subtitle: 'Review the tactical hand for {guildName} and its member cards.',
     emptyState: 'No guild hand to display.',
+    errors: {
+      illustrationUpload: 'The guild illustration could not be saved. Detail: {detail}',
+      invite: 'The guild invitation could not be sent. Detail: {detail}',
+      acceptInvitation: 'The guild invitation could not be accepted. Detail: {detail}',
+      declineInvitation: 'The guild invitation could not be declined. Detail: {detail}',
+    },
   },
   class: {
     nav: 'Class',
@@ -458,6 +474,7 @@ export const en: TranslationKeys = {
     errors: {
       loadClasses: 'Character class definitions could not be loaded. Default class stats will be shown. Detail: {detail}',
       saveClass: 'Character class could not be saved. Try again in a moment. Detail: {detail}',
+      saveProfile: 'Character sheet could not be saved. Try again in a moment. Detail: {detail}',
     },
   },
   game: {
@@ -513,6 +530,7 @@ export const en: TranslationKeys = {
     completeQuest: 'Complete quest',
     resolving: 'Resolving...',
     questResolved: 'Quest resolved',
+    waitingGuild: 'Waiting for guild',
     bossSubmission: 'Boss submission',
     bossSubmissionHelp: 'Submit your answer links and project files.',
     submitting: 'Submitting...',
@@ -638,6 +656,9 @@ export const en: TranslationKeys = {
     bypassWarning: 'Local debug access is enabled for this environment.',
     logout: 'Logout',
     loginError: 'Could not complete GitHub sign-in. Please try again.',
+    loginFailureTitle: 'Sign-in unavailable',
+    loginUnavailable:
+      'Sign-in is not working right now. Please try again in a moment or contact an administrator if the problem continues.',
     invalidSession: 'Game session expired. Please sign in again.',
     loreCommand: 'Quest Access',
     alphaRibbon: 'Alpha',

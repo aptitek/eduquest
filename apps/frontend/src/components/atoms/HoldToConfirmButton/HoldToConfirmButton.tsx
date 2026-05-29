@@ -26,6 +26,8 @@ export interface HoldToConfirmButtonProps
   variant?: string;
   shape?: HoldToConfirmButtonShape;
   disabled?: boolean;
+  progressTarget?: number;
+  progressValue?: number;
 }
 
 export function HoldToConfirmButton({
@@ -36,6 +38,8 @@ export function HoldToConfirmButton({
   variant = 'btn-error',
   shape = 'default',
   disabled = false,
+  progressTarget = 1,
+  progressValue = 0,
   ...buttonProps
 }: HoldToConfirmButtonProps) {
   const controls = useAnimation();
@@ -44,7 +48,11 @@ export function HoldToConfirmButton({
   const isMounted = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const isRound = shape === 'round';
-  const idleProgressState = isRound ? { pathLength: 0, opacity: 0 } : { scaleX: 0, opacity: 0.2 };
+  const resolvedProgressTarget = Math.min(1, Math.max(0, progressTarget));
+  const resolvedProgressValue = Math.min(1, Math.max(0, progressValue));
+  const idleProgressState = isRound
+    ? { pathLength: resolvedProgressValue, opacity: resolvedProgressValue > 0 ? 0.85 : 0 }
+    : { scaleX: resolvedProgressValue, opacity: resolvedProgressValue > 0 ? 0.2 : 0.2 };
 
   useEffect(() => {
     isMounted.current = true;
@@ -56,6 +64,11 @@ export function HoldToConfirmButton({
     };
   }, []);
 
+  useEffect(() => {
+    if (isHeld.current || isSuccess) return;
+    controls.set(idleProgressState);
+  }, [controls, idleProgressState, isSuccess]);
+
   const startHold = () => {
     if (disabled || !isMounted.current) return;
     clearTimeout(timeoutRef.current);
@@ -64,7 +77,7 @@ export function HoldToConfirmButton({
     setIsSuccess(false);
 
     void controls.start({
-      ...(isRound ? { pathLength: 1, opacity: 0.85 } : { scaleX: 1 }),
+      ...(isRound ? { pathLength: resolvedProgressTarget, opacity: 0.85 } : { scaleX: resolvedProgressTarget }),
       transition: { duration: holdDuration / 1000, ease: 'linear' },
     });
 

@@ -165,6 +165,25 @@ export function DashboardDock({ className }: DashboardDockProps) {
     [playerGuild?.id, showDockError]
   );
 
+  const updateEditableGuildColor = useCallback(
+    (color: string) => {
+      if (!playerGuild?.id) return;
+
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) return;
+
+      updateGuild(token, playerGuild.id, { color })
+        .then((updatedGuild) => {
+          setGuilds((current) => upsertGuild(current, updatedGuild));
+        })
+        .catch((error) => {
+          console.warn('Could not update guild color.', error);
+          showDockError('dashboard.dock.errors.updateGuildIcon', error);
+        });
+    },
+    [playerGuild?.id, showDockError]
+  );
+
   const updateEditableCardStat = useCallback((sideKey: string, statId: string, value: number) => {
     setEditableCardSides((current) => ({
       ...current,
@@ -523,6 +542,11 @@ export function DashboardDock({ className }: DashboardDockProps) {
     ? toNonEmptyCards([podiumDeckCards[podiumCards.length]])
     : null;
   const openClassPage = (card?: PlayingCardData) => {
+    if (!user?.isAdmin && !hasPlayerGuild) {
+      window.location.hash = 'guild';
+      return;
+    }
+
     const guildName = card?.guild?.name || (card?.kind === 'guild' && !card.faceDown ? card.title : undefined);
     if (guildName) {
       sessionStorage.setItem('eduquest_class_scroll_target', JSON.stringify({ guildName }));
@@ -813,6 +837,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
               cardKey: 'guild',
               sideOverrides: editableCardSides,
               onFieldChange: updateEditableCardField,
+              onColorChange: updateEditableGuildColor,
               onStatChange: updateEditableCardStat,
             })
           : handCard
@@ -825,6 +850,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const guildHandBase = buildGuildCardHands(t, {
     guild: activePlayerGuild,
     guildName: activePlayerGuild.name || t('dashboard.dock.playerGuild'),
+    playerStudentId: student.id,
     playerName,
     playerAvatar,
     characterClass: character.characterClass,
@@ -844,6 +870,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           cardKey: 'guild',
           sideOverrides: editableCardSides,
           onFieldChange: updateEditableCardField,
+          onColorChange: updateEditableGuildColor,
           onStatChange: updateEditableCardStat,
         });
       }
@@ -1020,10 +1047,13 @@ export function DashboardDock({ className }: DashboardDockProps) {
       )}
     >
       {isGuildPage ? (
-        <PlayingHandPanel
+        <PlayingHand
           hand={guildHand}
-          className="border-0 bg-transparent p-0 shadow-none"
-          handClassName="h-[30rem] md:h-[32rem]"
+          mode="full"
+          visibleCardCount={guildHand.cards.length}
+          expandOnHover={false}
+          className="mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]"
+          cardClassName="shadow-glow-primary"
         />
       ) : (
         <PlayingHand
@@ -1032,7 +1062,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           variant={!usesWideGuildDeck ? 'vertical' : 'horizontal'}
           visibleCardCount={guildHand.cards.length}
           expandOnHover
-          onCardSelect={hasPlayerGuild ? openGuildPage : openCharacterPage}
+          onCardSelect={openGuildPage}
           className="h-full w-full"
           cardClassName="w-32 translate-y-0 sm:w-36 xl:w-40"
           stackCardClassName="w-28 translate-y-0 sm:w-32 xl:w-36"
@@ -1547,12 +1577,14 @@ function makeEditableDashboardCard({
   cardKey,
   sideOverrides,
   onFieldChange,
+  onColorChange,
   onStatChange,
 }: {
   card: PlayingCardData;
   cardKey: string;
   sideOverrides: Record<string, EditableCardSideOverride>;
   onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
+  onColorChange?: (color: string) => void;
   onStatChange: (sideKey: string, statId: string, value: number) => void;
 }): PlayingCardData {
   const frontSideKey = `${cardKey}:front`;
@@ -1574,6 +1606,7 @@ function makeEditableDashboardCard({
     sideKey: frontSideKey,
     override: sideOverrides[frontSideKey],
     onFieldChange,
+    onColorChange: card.kind === 'guild' ? onColorChange : undefined,
     onStatChange,
     canEditStats,
   });
@@ -1583,6 +1616,7 @@ function makeEditableDashboardCard({
         sideKey: backSideKey,
         override: sideOverrides[backSideKey],
         onFieldChange,
+        onColorChange: card.kind === 'guild' ? onColorChange : undefined,
         onStatChange,
         canEditStats,
       })
@@ -1605,6 +1639,7 @@ function applyEditableSide({
   sideKey,
   override,
   onFieldChange,
+  onColorChange,
   onStatChange,
   canEditStats,
 }: {
@@ -1612,6 +1647,7 @@ function applyEditableSide({
   sideKey: string;
   override?: EditableCardSideOverride;
   onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
+  onColorChange?: (color: string) => void;
   onStatChange: (sideKey: string, statId: string, value: number) => void;
   canEditStats: boolean;
 }): PlayingCardSide {
@@ -1628,6 +1664,7 @@ function applyEditableSide({
     })),
     editable: true,
     onFieldChange: (field, value) => onFieldChange(sideKey, field, value),
+    onColorChange,
     onStatChange: canEditStats ? (statId, value) => onStatChange(sideKey, statId, value) : undefined,
   };
 }

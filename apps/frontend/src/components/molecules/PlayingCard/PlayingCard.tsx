@@ -1,5 +1,6 @@
-import { isValidElement, useState } from 'react';
+import { isValidElement, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
 import {
@@ -25,7 +26,9 @@ import { readFileAsDataUrl } from '../../../utils/readFileAsDataUrl';
 import { useTranslation } from '../../../hooks/useTranslation';
 import {
   DEFAULT_UI_COLOR_TOKEN,
+  SOLARIZED_SWATCH_OPTIONS,
   UI_COLOR_TOKENS,
+  resolveColorBackgroundClassName,
   resolvePlayingCardAccentClassName,
   resolveUiColorTokenName,
   resolveUiColorTokenValue,
@@ -49,6 +52,7 @@ export interface PlayingCardStat {
   id: string;
   label: string;
   value: number;
+  displayValue?: string;
   min?: number;
   max?: number;
 }
@@ -82,10 +86,14 @@ export interface PlayingCardSide {
   statPointsRemainingLabel?: string;
   getStatEditableRange?: (statId: string, currentValue: number) => { min: number; max: number };
   footer?: ReactNode;
+  titleAccessory?: ReactNode;
+  colorEditable?: boolean;
   editable?: boolean;
   ribbonEditable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
   onIllustrationUpload?: (file: File) => Promise<string | void>;
+  illustrationUploadErrorMessageKey?: string;
+  onColorChange?: (color: string) => void;
   onStatChange?: (statId: string, value: number) => void;
   onRibbonClick?: () => void;
   className?: string;
@@ -123,6 +131,8 @@ export interface PlayingCardData {
   statPointsRemainingLabel?: string;
   getStatEditableRange?: (statId: string, currentValue: number) => { min: number; max: number };
   footer?: ReactNode;
+  titleAccessory?: ReactNode;
+  colorEditable?: boolean;
   frontContent?: ReactNode;
   front?: PlayingCardSide;
   back?: PlayingCardBack;
@@ -133,6 +143,7 @@ export interface PlayingCardData {
   editable?: boolean;
   ribbonEditable?: boolean;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
+  onColorChange?: (color: string) => void;
   onStatChange?: (statId: string, value: number) => void;
   onRibbonClick?: () => void;
   onClick?: () => void;
@@ -153,6 +164,8 @@ const CHARACTER_CLASS_ACCENTS: Record<GameCharacterClass, PlayingCardAccent> = {
   guide: 'guide',
   specialist: 'specialist',
 };
+const GAME_STAT_IDS = new Set(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']);
+const GAME_STAT_MAX_VALUE = 5;
 
 export function PlayingCard({
   size = 'mini',
@@ -423,6 +436,7 @@ function FullCardSide({
   const canEdit = Boolean(side.editable);
   const canEditStats = canEdit && side.statsEditable !== false && Boolean(side.onStatChange);
   const canEditRibbon = canEdit && side.ribbonEditable !== false;
+  const canEditColor = canEdit && kind === 'guild' && side.colorEditable !== false && Boolean(side.onColorChange);
   const updateField = (field: PlayingCardEditableField, value: string) => {
     side.onFieldChange?.(field, value);
   };
@@ -495,6 +509,7 @@ function FullCardSide({
                 name={side.illustrationAlt || side.title}
                 isEditing
                 canReset={Boolean(side.illustrationUrl)}
+                uploadErrorMessageKey={side.illustrationUploadErrorMessageKey}
                 onUpload={updateIllustrationFromFile}
                 onReset={() => {
                   updateField('illustrationUrl', '');
@@ -520,6 +535,16 @@ function FullCardSide({
             layoutId={layoutId ? `${layoutId}-title` : undefined}
             editable={canEdit}
             onTitleChange={(value) => updateField('title', value)}
+            titleAccessory={
+              canEditColor ? (
+                <>
+                  <GuildColorPicker color={color} onColorChange={(value) => side.onColorChange?.(value)} />
+                  {side.titleAccessory}
+                </>
+              ) : (
+                side.titleAccessory
+              )
+            }
           />
         </PlayingCardArtFrame>
 
@@ -565,6 +590,8 @@ function FullCardSide({
             <PlayingCardStatPanel
               axes={radarGraph.axes}
               datasets={radarGraph.datasets}
+              maxValue={radarGraph.maxValue}
+              levels={radarGraph.levels}
               layoutId={layoutId ? `${layoutId}-stats` : undefined}
               editable={canEditStats}
               editableDatasetId={radarGraph.editableDatasetId}
@@ -577,6 +604,121 @@ function FullCardSide({
         </section>
       </div>
     </EditableFieldContext.Provider>
+  );
+}
+
+function GuildColorPicker({
+  color,
+  onColorChange,
+}: {
+  color: string;
+  onColorChange: (color: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 16 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const panelWidth = 160;
+      const margin = 16;
+      setPanelPosition({
+        top: rect.bottom + 8,
+        left: Math.min(window.innerWidth - panelWidth - margin, Math.max(margin, rect.left + rect.width / 2 - panelWidth / 2)),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsOpen((current) => !current);
+        }}
+        className={cn(
+          'h-7 w-7 rounded-full border border-gaming-border shadow-lg transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest',
+          resolveColorBackgroundClassName(color)
+        )}
+        aria-label="Changer la couleur de la guilde"
+        aria-expanded={isOpen}
+        title="Changer la couleur"
+      />
+
+      {isOpen
+        ? createPortal(
+            <span
+              ref={panelRef}
+              className="fixed z-[120] grid w-40 grid-cols-3 gap-2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 shadow-2xl backdrop-blur"
+              style={{ top: panelPosition.top, left: panelPosition.left }}
+            >
+              {SOLARIZED_SWATCH_OPTIONS.map((option) => {
+                const isSelected = color === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onColorChange(option.value);
+                      setIsOpen(false);
+                    }}
+                    className={cn(
+                      'h-8 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
+                      isSelected
+                        ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
+                        : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
+                    )}
+                    aria-label={`Utiliser la couleur ${option.label}`}
+                    aria-pressed={isSelected}
+                    title={option.label}
+                  >
+                    <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
+                  </button>
+                );
+              })}
+            </span>,
+            document.body
+          )
+        : null}
+    </span>
   );
 }
 
@@ -647,6 +789,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
         card.front.ribbonIcon || card.ribbonIcon || getCharacterClassIcon(card.characterClass),
       illustrationHidden: card.front.illustrationHidden,
       editable: card.front.editable ?? card.editable,
+      colorEditable: card.front.colorEditable ?? card.colorEditable,
       ribbonEditable: card.front.ribbonEditable ?? card.ribbonEditable,
       ribbonHidden: card.front.ribbonHidden,
       statsEditable: card.front.statsEditable ?? card.statsEditable ?? card.kind !== 'guild',
@@ -655,6 +798,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
         card.front.statPointsRemainingLabel ?? card.statPointsRemainingLabel,
       getStatEditableRange: card.front.getStatEditableRange || card.getStatEditableRange,
       onFieldChange: card.front.onFieldChange || card.onFieldChange,
+      onColorChange: card.front.onColorChange || card.onColorChange,
       onIllustrationUpload: card.front.onIllustrationUpload,
       onStatChange: card.front.onStatChange || card.onStatChange,
       onRibbonClick: card.front.onRibbonClick || card.onRibbonClick,
@@ -687,9 +831,12 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     statPointsRemainingLabel: card.statPointsRemainingLabel,
     getStatEditableRange: card.getStatEditableRange,
     footer: card.footer,
+      titleAccessory: card.titleAccessory,
+    colorEditable: card.colorEditable,
     editable: card.editable,
     ribbonEditable: card.ribbonEditable,
     onFieldChange: card.onFieldChange,
+    onColorChange: card.onColorChange,
     onStatChange: card.onStatChange,
     onRibbonClick: card.onRibbonClick,
   };
@@ -827,14 +974,21 @@ function formatCharacterClass(characterClass: GameCharacterClass) {
 function buildRadarGraph(stats: PlayingCardStat[] | undefined, label: string, color: string) {
   if (!stats?.length) return null;
 
-  const axes: RadarGraphAxis[] = stats.map((stat) => ({
-    id: stat.id,
-    label: stat.label,
-    min: stat.min,
-    max: stat.max,
-  }));
+  const axes: RadarGraphAxis[] = stats.map((stat) => {
+    const defaultMax = GAME_STAT_IDS.has(stat.id) ? GAME_STAT_MAX_VALUE : undefined;
+    return {
+      id: stat.id,
+      label: stat.label,
+      min: stat.min,
+      max: stat.max ?? defaultMax,
+    };
+  });
   const values = stats.reduce<Record<string, number>>((accumulator, stat) => {
     accumulator[stat.id] = stat.value;
+    return accumulator;
+  }, {});
+  const valueLabels = stats.reduce<Record<string, string>>((accumulator, stat) => {
+    if (stat.displayValue !== undefined) accumulator[stat.id] = stat.displayValue;
     return accumulator;
   }, {});
   const minValues = stats.reduce<Record<string, number>>((accumulator, stat) => {
@@ -842,7 +996,7 @@ function buildRadarGraph(stats: PlayingCardStat[] | undefined, label: string, co
     return accumulator;
   }, {});
   const maxValues = stats.reduce<Record<string, number>>((accumulator, stat) => {
-    accumulator[stat.id] = stat.max ?? stat.value;
+    accumulator[stat.id] = stat.max ?? (GAME_STAT_IDS.has(stat.id) ? GAME_STAT_MAX_VALUE : stat.value);
     return accumulator;
   }, {});
   const hasRestrictedRange = stats.some((stat) => stat.min !== undefined || stat.max !== undefined);
@@ -850,14 +1004,24 @@ function buildRadarGraph(stats: PlayingCardStat[] | undefined, label: string, co
     ...(hasRestrictedRange
       ? [
           {
+            id: 'stat-limit-underlay',
+            label: `${label} limit warning`,
+            values: maxValues,
+            color: resolveUiColorTokenValue('danger'),
+            fillOpacity: 0.08,
+            strokeOpacity: 0.32,
+            strokeWidth: 1.7,
+            strokeDasharray: '2.2 1.4',
+          },
+          {
             id: 'stat-maximum',
             label: `${label} maximum`,
             values: maxValues,
-            color: resolveUiColorTokenValue('danger'),
-            fillOpacity: 0.12,
-            strokeOpacity: 0.85,
-            strokeWidth: 0.85,
-            strokeDasharray: '1.7 1.4',
+            color: 'rgba(248, 250, 252, 0.92)',
+            fillOpacity: 0.035,
+            strokeOpacity: 0.95,
+            strokeWidth: 0.95,
+            strokeDasharray: '1.8 1.35',
           },
         ]
       : []),
@@ -865,6 +1029,7 @@ function buildRadarGraph(stats: PlayingCardStat[] | undefined, label: string, co
       id: 'stats',
       label,
       values,
+      valueLabels,
       color,
       fillOpacity: hasRestrictedRange ? 0.2 : 0.22,
     },
@@ -883,7 +1048,19 @@ function buildRadarGraph(stats: PlayingCardStat[] | undefined, label: string, co
       : []),
   ];
 
-  return { axes, datasets, editableDatasetId: 'stats' };
+  const axisMaxValues = axes.map((axis) => axis.max).filter((value): value is number => value !== undefined);
+  const sharedMaxValue =
+    axisMaxValues.length === axes.length && new Set(axisMaxValues).size === 1
+      ? axisMaxValues[0]
+      : undefined;
+
+  return {
+    axes,
+    datasets,
+    editableDatasetId: 'stats',
+    maxValue: sharedMaxValue,
+    levels: sharedMaxValue === GAME_STAT_MAX_VALUE ? GAME_STAT_MAX_VALUE : undefined,
+  };
 }
 
 export default PlayingCard;

@@ -34,7 +34,8 @@ function getHashRoute() {
 
 function App() {
   const { t } = useTranslation();
-  const { user, student, character, loadingSession } = useAuth();
+  const auth = useAuth();
+  const { user, student, character, loadingSession } = auth;
   const selectedGameId = useGameStore((state) => state.selectedGameId);
   const [route, setRoute] = React.useState(getHashRoute);
 
@@ -92,7 +93,7 @@ function App() {
 
   // Force authentication to access the app
   if (!user) {
-    return <LoginPage />;
+    return <LoginPage auth={auth} />;
   }
 
   if (route === 'management' && user.isAdmin) {
@@ -107,7 +108,6 @@ function App() {
     (selectedGameId && student?.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
     student?.cohortMemberships?.[0];
   const hasCohortAssignment = Boolean(selectedMembership?.cohortId);
-  const hasPlayerGuild = Boolean(selectedMembership?.guildId || selectedMembership?.guild?.id);
 
   if (!user.isAdmin && student && !hasCohortAssignment) {
     return <CohortAssignmentRequiredPage />;
@@ -115,10 +115,6 @@ function App() {
 
   if (route === 'character' && !user.isAdmin && student && hasCohortAssignment && !character) {
     return <CharacterPage />;
-  }
-
-  if (route === 'guild' && !hasPlayerGuild) {
-    return <MapPage />;
   }
 
   if (route === 'guild') {

@@ -250,12 +250,12 @@ function buildUnguildedStudentCard(
       ribbonText: t('class.unguildedRibbon'),
       stats: stats
         ? [
-            { id: 'strength', label: 'STR', value: stats.strength, max: 20 },
-            { id: 'dexterity', label: 'DEX', value: stats.dexterity, max: 20 },
-            { id: 'constitution', label: 'CON', value: stats.constitution, max: 20 },
-            { id: 'intelligence', label: 'INT', value: stats.intelligence, max: 20 },
-            { id: 'wisdom', label: 'WIS', value: stats.wisdom, max: 20 },
-            { id: 'charisma', label: 'CHA', value: stats.charisma, max: 20 },
+            { id: 'strength', label: 'STR', value: stats.strength, max: 5 },
+            { id: 'dexterity', label: 'DEX', value: stats.dexterity, max: 5 },
+            { id: 'constitution', label: 'CON', value: stats.constitution, max: 5 },
+            { id: 'intelligence', label: 'INT', value: stats.intelligence, max: 5 },
+            { id: 'wisdom', label: 'WIS', value: stats.wisdom, max: 5 },
+            { id: 'charisma', label: 'CHA', value: stats.charisma, max: 5 },
           ]
         : undefined,
     },

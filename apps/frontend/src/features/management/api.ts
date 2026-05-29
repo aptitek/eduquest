@@ -75,13 +75,13 @@ export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | '
 export type ManagementSchoolCreate = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
 
 export type ManagementCohortUpdate = Partial<
-  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'registrationOpen' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
 > & {
   campusName?: string;
 };
 
 export type ManagementCohortCreate = Partial<
-  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
+  Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'registrationOpen' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
 > & {
   campusName?: string;
 };

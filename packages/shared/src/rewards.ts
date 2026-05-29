@@ -35,6 +35,7 @@ export interface RewardSystemConfig {
   };
   attributes: {
     levelOneMaxValue: number;
+    statAllocationBudget: number;
     earningMultiplier: number;
     guildEarningMultiplier: number;
   };
@@ -159,6 +160,7 @@ export const DEFAULT_REWARD_SYSTEM_CONFIG: RewardSystemConfig = {
   },
   attributes: {
     levelOneMaxValue: 5,
+    statAllocationBudget: 6,
     earningMultiplier: 0.13,
     guildEarningMultiplier: 0.06,
   },

@@ -12,6 +12,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  check,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
@@ -66,13 +67,18 @@ export const cohorts = pgTable('cohorts', {
   grade: text('grade').notNull(),
   level: integer('level').notNull(),
   currentStep: integer('current_step').default(1).notNull(),
+  registrationOpen: boolean('registration_open').default(false).notNull(),
   name: text('name').notNull(),
   majorSpeciality: text('major_speciality'),
   minorSpeciality: text('minor_speciality'),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => ({
+  registrationOpenIdx: uniqueIndex('cohorts_registration_open_idx')
+    .on(table.registrationOpen)
+    .where(sql`${table.registrationOpen} = true`),
+}));
 
 export const cohortInvites = pgTable('cohort_invites', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -84,6 +90,19 @@ export const cohortInvites = pgTable('cohort_invites', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
+
+export const guildRecruitmentStatusEnum = pgEnum('guild_recruitment_status', [
+  'open',
+  'invite_only',
+  'closed',
+]);
+
+export const guildInvitationStatusEnum = pgEnum('guild_invitation_status', [
+  'pending',
+  'accepted',
+  'declined',
+  'cancelled',
+]);
 
 // Table des guildes (groupes d'étudiants / de jeu). Chaque guilde appartient à une seule cohort.
 export const guilds = pgTable('guilds', {
@@ -97,6 +116,9 @@ export const guilds = pgTable('guilds', {
   iconKey: text('icon_key'),
   color: text('color'), // Code Hexa
   gold: integer('gold').default(0).notNull(),
+  recruitmentStatus: guildRecruitmentStatusEnum('recruitment_status').default('open').notNull(),
+  recruitmentMessage: text('recruitment_message'),
+  maxMembers: integer('max_members').default(3).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -153,6 +175,41 @@ export const cohortMemberships = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.cohortId] }),
+  })
+);
+
+export const guildInvitations = pgTable(
+  'guild_invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => cohorts.id, { onDelete: 'cascade' }),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    inviterUserId: uuid('inviter_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    inviteeUserId: uuid('invitee_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: guildInvitationStatusEnum('status').default('pending').notNull(),
+    message: text('message'),
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    pendingInviteIdx: uniqueIndex('guild_invitations_pending_invitee_idx')
+      .on(table.guildId, table.inviteeUserId)
+      .where(sql`${table.status} = 'pending'`),
+    inviteeStatusIdx: index('guild_invitations_invitee_status_idx').on(
+      table.inviteeUserId,
+      table.status,
+      table.createdAt
+    ),
   })
 );
 
@@ -232,23 +289,41 @@ export const gameCharacterClasses = pgTable('game_character_classes', {
 });
 
 // Table des fiches personnages (le "verso" de l'étudiant)
-export const gameCharacters = pgTable('game_characters', {
-  studentId: uuid('student_id')
-    .primaryKey()
-    .references(() => students.id),
-  characterClass: text('character_class')
-    .notNull()
-    .default('scholar')
-    .references(() => gameCharacterClasses.slug, { onDelete: 'restrict', onUpdate: 'cascade' }),
-  strength: integer('strength').default(0).notNull(),
-  dexterity: integer('dexterity').default(0).notNull(),
-  constitution: integer('constitution').default(0).notNull(),
-  intelligence: integer('intelligence').default(0).notNull(),
-  wisdom: integer('wisdom').default(0).notNull(),
-  charisma: integer('charisma').default(0).notNull(),
-  illustrationUrl: text('illustration_url'),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+export const gameCharacters = pgTable(
+  'game_characters',
+  {
+    studentId: uuid('student_id')
+      .primaryKey()
+      .references(() => students.id),
+    characterClass: text('character_class')
+      .notNull()
+      .default('scholar')
+      .references(() => gameCharacterClasses.slug, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    strength: integer('strength').default(0).notNull(),
+    dexterity: integer('dexterity').default(0).notNull(),
+    constitution: integer('constitution').default(0).notNull(),
+    intelligence: integer('intelligence').default(0).notNull(),
+    wisdom: integer('wisdom').default(0).notNull(),
+    charisma: integer('charisma').default(0).notNull(),
+    illustrationUrl: text('illustration_url'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    manualStatRangeCheck: check(
+      'game_characters_manual_stat_range_check',
+      sql`${table.strength} BETWEEN 0 AND 5
+        AND ${table.dexterity} BETWEEN 0 AND 5
+        AND ${table.constitution} BETWEEN 0 AND 5
+        AND ${table.intelligence} BETWEEN 0 AND 5
+        AND ${table.wisdom} BETWEEN 0 AND 5
+        AND ${table.charisma} BETWEEN 0 AND 5`
+    ),
+    manualStatBudgetCheck: check(
+      'game_characters_manual_stat_budget_check',
+      sql`${table.strength} + ${table.dexterity} + ${table.constitution} + ${table.intelligence} + ${table.wisdom} + ${table.charisma} <= 6`
+    ),
+  })
+);
 
 export const gameMapRuns = pgTable(
   'game_map_runs',
@@ -457,6 +532,7 @@ export const milestoneBonusVotes = pgTable(
       .notNull()
       .references(() => guilds.id, { onDelete: 'cascade' }),
     voteCount: integer('vote_count').default(1).notNull(),
+    metadata: jsonb('metadata').default({}).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
@@ -585,5 +661,24 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   guild: one(guilds, {
     fields: [notifications.guildId],
     references: [guilds.id],
+  }),
+}));
+
+export const guildInvitationsRelations = relations(guildInvitations, ({ one }) => ({
+  cohort: one(cohorts, {
+    fields: [guildInvitations.cohortId],
+    references: [cohorts.id],
+  }),
+  guild: one(guilds, {
+    fields: [guildInvitations.guildId],
+    references: [guilds.id],
+  }),
+  inviter: one(users, {
+    fields: [guildInvitations.inviterUserId],
+    references: [users.id],
+  }),
+  invitee: one(users, {
+    fields: [guildInvitations.inviteeUserId],
+    references: [users.id],
   }),
 }));

@@ -13,7 +13,7 @@ export type DockGuildMember = {
 
 export type DockGuild = Pick<
   Guild,
-  'id' | 'name' | 'description' | 'color' | 'iconUrl' | 'iconKey' | 'gold' | 'boostPointsSpent'
+  'id' | 'name' | 'description' | 'color' | 'iconUrl' | 'iconKey' | 'gold' | 'boostPointsSpent' | 'stats'
 > & {
   members?: DockGuildMember[];
 };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type CohortGrade } from '@eduquest/shared';
-import { Clipboard, ExternalLink, X } from 'lucide-react';
+import { Clipboard, ExternalLink, LockKeyhole, UnlockKeyhole, X } from 'lucide-react';
 import { AddButton } from '../../atoms/AddButton';
 import { DeleteButton } from '../../atoms/DeleteButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
@@ -80,6 +80,7 @@ export function CohortDetailCard({
   const [selectedInvite, setSelectedInvite] = useState<ManagementCohortInvite | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isInviteLoading, setIsInviteLoading] = useState(false);
+  const [isRegistrationUpdating, setIsRegistrationUpdating] = useState(false);
   const [hasCopiedInvite, setHasCopiedInvite] = useState(false);
   const [isQrFullscreenOpen, setIsQrFullscreenOpen] = useState(false);
   const inviteDialogRef = useRef<HTMLDivElement>(null);
@@ -268,6 +269,15 @@ export function CohortDetailCard({
     }
   };
 
+  const toggleAutomaticRegistration = async () => {
+    setIsRegistrationUpdating(true);
+    try {
+      await onUpdate?.({ registrationOpen: !cohort.registrationOpen });
+    } finally {
+      setIsRegistrationUpdating(false);
+    }
+  };
+
   const qrCodeUrl = selectedInvite
     ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(
         selectedInvite.url
@@ -449,12 +459,12 @@ export function CohortDetailCard({
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: true }}>
-      <div className="relative h-full min-h-[18rem] p-5 pt-10">
+      <div className="relative h-full min-h-0 overflow-y-auto p-5 pt-10">
         <div className="badge badge-outline absolute left-0 top-0 rounded-none rounded-br-xl border-0 bg-gaming-base px-3 py-2 text-xs font-semibold text-text-secondary">
           {cohort.studentCount} {t('management.cohorts.students')}
         </div>
 
-        <div className="flex h-full flex-col gap-5">
+        <div className="flex min-h-full flex-col gap-5">
           <div className="flex w-full flex-col items-center gap-2">
             <div
               className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-2"
@@ -611,9 +621,19 @@ export function CohortDetailCard({
               <p className="text-xs font-display font-semibold uppercase tracking-wider text-text-muted">
                 {t('management.cohorts.validInvites')}
               </p>
-              <span className="badge badge-sm border-gaming-border bg-gaming-card text-text-secondary">
-                {invites.length}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="badge badge-sm border-gaming-border bg-gaming-card text-text-secondary">
+                  {invites.length}
+                </span>
+                <AddButton
+                  onClick={openInviteModal}
+                  iconSize={14}
+                  shape="round"
+                  className="h-7 w-7"
+                  aria-label={t('management.cohorts.newInvite')}
+                  title={t('management.cohorts.newInvite')}
+                />
+              </div>
             </div>
 
             {invites.length > 0 ? (
@@ -652,13 +672,61 @@ export function CohortDetailCard({
             )}
           </div>
 
-          <AddButton
-            onClick={openInviteModal}
-            iconSize={20}
-            className="btn-lg mt-1 w-full rounded-2xl text-base"
+          <div
+            className={[
+              'rounded-2xl border p-4',
+              cohort.registrationOpen
+                ? 'border-status-completed/50 bg-status-completed/10'
+                : 'border-gaming-border bg-gaming-base/50',
+            ].join(' ')}
           >
-            {t('management.cohorts.inviteButton')}
-          </AddButton>
+            <div className="flex items-start gap-3">
+              <div
+                className={[
+                  'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                  cohort.registrationOpen
+                    ? 'bg-status-completed text-gaming-base'
+                    : 'bg-gaming-card text-text-secondary',
+                ].join(' ')}
+              >
+                {cohort.registrationOpen ? (
+                  <UnlockKeyhole size={18} aria-hidden />
+                ) : (
+                  <LockKeyhole size={18} aria-hidden />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-display font-bold uppercase tracking-[0.12em] text-text-primary">
+                  {cohort.registrationOpen
+                    ? t('management.cohorts.registrationOpen')
+                    : t('management.cohorts.registrationClosed')}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+                  {cohort.registrationOpen
+                    ? t('management.cohorts.registrationOpenDescription')
+                    : t('management.cohorts.registrationClosedDescription')}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleAutomaticRegistration}
+              disabled={isRegistrationUpdating}
+              className={[
+                'btn mt-4 w-full rounded-xl font-display font-black uppercase tracking-[0.14em]',
+                cohort.registrationOpen
+                  ? 'border-gaming-border bg-gaming-card text-text-secondary hover:text-text-primary'
+                  : 'border-status-quest/50 bg-status-quest text-gaming-base hover:bg-status-quest/90',
+              ].join(' ')}
+            >
+              {isRegistrationUpdating
+                ? t('management.cohorts.registrationUpdating')
+                : cohort.registrationOpen
+                  ? t('management.cohorts.closeRegistration')
+                  : t('management.cohorts.openRegistration')}
+            </button>
+          </div>
         </div>
       </div>
 

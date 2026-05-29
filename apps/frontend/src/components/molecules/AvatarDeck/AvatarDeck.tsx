@@ -29,6 +29,7 @@ interface AvatarDeckProps {
   getAvatarMotion?: (member: AvatarDeckMember, index: number) => AvatarDeckMotion | undefined;
   expandOnParentHover?: boolean;
   align?: 'start' | 'center';
+  interactive?: boolean;
 }
 
 const SIZE_CLASS_NAMES = {
@@ -37,14 +38,12 @@ const SIZE_CLASS_NAMES = {
     label: 'text-[0.65rem]',
     restOffset: 0.55,
     openOffset: 2.35,
-    hoverOffset: 2.65,
   },
   md: {
     container: 'h-12',
     label: 'text-xs',
     restOffset: 0.7,
     openOffset: 2.85,
-    hoverOffset: 3.2,
   },
 };
 
@@ -60,6 +59,7 @@ export function AvatarDeck({
   getAvatarMotion,
   expandOnParentHover = true,
   align = 'start',
+  interactive = true,
 }: AvatarDeckProps) {
   if (members.length === 0) return null;
 
@@ -74,19 +74,19 @@ export function AvatarDeck({
         expandOnParentHover &&
           'group-hover/graph-node:[width:var(--deck-open-width)] group-focus-within/graph-node:[width:var(--deck-open-width)]',
         sizeClassNames.container,
+        !interactive && 'pointer-events-none',
         className
       )}
       ref={(node) => setDeckSizeProperties(node, restWidth, openWidth)}
-      tabIndex={0}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
+      tabIndex={interactive ? 0 : -1}
+      onClick={interactive ? (event) => event.stopPropagation() : undefined}
+      onPointerDown={interactive ? (event) => event.stopPropagation() : undefined}
     >
       {members.map((member, index) => {
         const isEmphasis = index === 0;
         const depth = Math.max(index, 1);
         const restX = isEmphasis ? 0 : depth * restStepRem;
         const openX = isEmphasis ? 0 : depth * openStepRem;
-        const hoverX = isEmphasis ? 0 : depth * sizeClassNames.hoverOffset;
         const motion = getAvatarMotion?.(member, index);
 
         return (
@@ -108,20 +108,20 @@ export function AvatarDeck({
                 openAnchor: align === 'center' ? openWidth / 2 : 0,
                 openY: isEmphasis ? -0.2 : 0,
                 openScale: isEmphasis ? 1.08 : Math.max(1 - (depth - 1) * 0.035, 0.9),
-                hoverX,
-                hoverAnchor: align === 'center' ? openWidth / 2 : 0,
               })
             }
           >
             <button
               type="button"
               className={cn(
-                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateX(calc(var(--avatar-hover-x)_-_var(--avatar-hover-anchor)))_translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateX(calc(var(--avatar-hover-x)_-_var(--avatar-hover-anchor)))_translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl',
+                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl',
                 motion && 'map-avatar-travel'
               )}
               title={member.name}
-              onPointerDown={(event) => event.stopPropagation()}
+              tabIndex={interactive ? 0 : -1}
+              onPointerDown={interactive ? (event) => event.stopPropagation() : undefined}
               onClick={(event) => {
+                if (!interactive) return;
                 event.stopPropagation();
                 member.onClick?.();
               }}
@@ -170,8 +170,6 @@ function setAvatarItemProperties(
     openAnchor: number;
     openY: number;
     openScale: number;
-    hoverX: number;
-    hoverAnchor: number;
   }
 ) {
   if (!node) return;
@@ -184,8 +182,6 @@ function setAvatarItemProperties(
   node.style.setProperty('--avatar-open-anchor', `${properties.openAnchor}rem`);
   node.style.setProperty('--avatar-open-y', `${properties.openY}rem`);
   node.style.setProperty('--avatar-open-scale', String(properties.openScale));
-  node.style.setProperty('--avatar-hover-x', `${properties.hoverX}rem`);
-  node.style.setProperty('--avatar-hover-anchor', `${properties.hoverAnchor}rem`);
   node.style.setProperty('--avatar-hover-y', '-0.75rem');
 }
 

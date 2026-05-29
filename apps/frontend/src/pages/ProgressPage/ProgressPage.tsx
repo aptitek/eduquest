@@ -5,6 +5,7 @@ import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { PlayingCard, type PlayingCardData } from '../../components/molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid';
+import { HoldToConfirmButton } from '../../components/atoms/HoldToConfirmButton';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useGameStore } from '../../features/game/gameStore';
 import { GameRewardCardManager } from '../../components/organisms/GameRewardCardManager';
@@ -147,6 +148,34 @@ export function ProgressPage() {
 
 export default ProgressPage;
 
+function getRequiredBoostApprovals(memberCount?: number) {
+  return Math.max(1, Math.ceil(Math.max(1, memberCount || 1) / 2));
+}
+
+function getBoostApprovalState(
+  guildVote: GameBonusVoteState['voteStates'][number]['guildVote'],
+  memberCount?: number
+) {
+  const requiredFallback = getRequiredBoostApprovals(memberCount);
+  const approval = guildVote?.metadata?.boostApproval;
+  const requiredVotes =
+    typeof approval?.requiredVotes === 'number' && approval.requiredVotes > 0
+      ? approval.requiredVotes
+      : requiredFallback;
+  const receivedVotes =
+    typeof approval?.receivedVotes === 'number' && approval.receivedVotes > 0
+      ? approval.receivedVotes
+      : 0;
+  const currentProgress = Math.min(1, receivedVotes / requiredVotes);
+  const hasVoted = approval?.hasVoted === true && approval?.status !== 'complete';
+
+  return {
+    hasVoted,
+    currentProgress,
+    nextProgress: Math.min(1, (receivedVotes + (hasVoted ? 0 : 1)) / requiredVotes),
+  };
+}
+
 function BonusVotePanel({
   t,
   selectedMilestoneId,
@@ -174,10 +203,11 @@ function BonusVotePanel({
 }) {
   const guildVote = selectedVoteState?.guildVote;
   const boostCost = voteState?.boostCostPreview?.finalCost ?? 0;
+  const boostApproval = getBoostApprovalState(guildVote, voteState?.currentGuildMemberCount);
   const isVoteOpen = selectedVoteState?.isVoteOpen ?? false;
   const isVoteClosed = selectedVoteState?.isVoteClosed ?? false;
   const canCastVote = isVoteOpen && Boolean(selectedBonusCardId) && !isVoting;
-  const canBoostVote = isVoteClosed && Boolean(guildVote) && !isVoting;
+  const canBoostVote = isVoteClosed && Boolean(guildVote) && !isVoting && !boostApproval.hasVoted;
 
   return (
     <section aria-labelledby="progress-next-vote-title" className="relative z-20 space-y-5">
@@ -219,14 +249,33 @@ function BonusVotePanel({
             Voter pour cette carte
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={onBoost}
-            disabled={!canBoostVote}
-            className="btn btn-primary btn-sm ml-auto font-display text-xs font-black uppercase tracking-[0.14em]"
-          >
-            Booster +1 vote{boostCost ? ` (${boostCost} or)` : ''}
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <HoldToConfirmButton
+              onConfirm={onBoost}
+              holdDuration={1200}
+              shape="round"
+              variant="btn-primary"
+              disabled={!canBoostVote}
+              progressTarget={boostApproval.nextProgress}
+              progressValue={boostApproval.currentProgress}
+              className={
+                boostApproval.hasVoted
+                  ? 'h-16 w-16 min-h-0 border-status-completed/50 bg-gaming-card text-status-completed font-display text-[0.6rem] font-black uppercase leading-tight tracking-[0.08em] opacity-100 shadow-[0_0_18px_rgba(133,153,0,0.28)]'
+                  : 'h-16 w-16 min-h-0 border-primary/40 bg-primary text-primary-content font-display text-[0.6rem] font-black uppercase leading-tight tracking-[0.08em] shadow-glow-primary'
+              }
+              title={`Booster +1 vote${boostCost ? ` (${boostCost} or)` : ''}`}
+            >
+              <span className="flex flex-col items-center gap-0.5">
+                <Gift size={14} aria-hidden />
+                <span>{isVoting ? '...' : '+1'}</span>
+              </span>
+            </HoldToConfirmButton>
+            <div className="min-w-0 text-xs font-bold uppercase tracking-[0.12em]">
+              <p className={boostApproval.hasVoted ? 'text-status-completed' : 'text-text-primary'}>
+                {boostApproval.hasVoted ? 'En attente de la guilde' : `Booster +1 vote${boostCost ? ` (${boostCost} or)` : ''}`}
+              </p>
+            </div>
+          </div>
         )}
       </div>
 

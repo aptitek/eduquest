@@ -13,6 +13,7 @@ import {
   GameMapOccupancySegment,
   GameMapNodeOccupancy,
   GameMapRun,
+  Guild,
 } from '@eduquest/shared';
 
 interface GameState {
@@ -46,6 +47,7 @@ interface GameState {
   setMapData: (mapData: GameMapData) => void;
   setAvailableGames: (games: Game[]) => void;
   setSelectedGameId: (gameId: string | null) => void;
+  setStudentGuild: (cohortId: string, guild: Guild) => void;
   setActivityCompletions: (activityCompletions: GameActivityCompletion[]) => void;
   addActivityCompletion: (completion: GameActivityCompletion) => void;
   setCurrentMove: (move: GameCharacterMove, currentActivityId: string) => void;
@@ -130,6 +132,20 @@ export const useGameStore = create<GameState>((set) => ({
     }),
   setAvailableGames: (availableGames) => set({ availableGames }),
   setSelectedGameId: (selectedGameId) => set({ selectedGameId }),
+  setStudentGuild: (cohortId, guild) =>
+    set((state) => {
+      if (!state.student) return {};
+      return {
+        student: {
+          ...state.student,
+          cohortMemberships: state.student.cohortMemberships?.map((membership) =>
+            membership.cohortId === cohortId
+              ? { ...membership, guildId: guild.id, guild }
+              : membership
+          ),
+        },
+      };
+    }),
   setActivityCompletions: (activityCompletions) => set({ activityCompletions }),
   addActivityCompletion: (completion) =>
     set((state) => ({
@@ -178,7 +194,7 @@ function updateNodeOccupanciesForMove(
   move: GameCharacterMove,
   currentActivityId: string
 ): GameMapNodeOccupancy[] {
-  if (!state.student || !state.user || !state.character) return state.nodeOccupancies;
+  if (!state.student || !state.user) return state.nodeOccupancies;
 
   const fromActivityId = move.fromActivityId || state.currentActivityId || undefined;
   const targetActivity = state.activities.find((activity) => activity.id === currentActivityId);
@@ -189,8 +205,8 @@ function updateNodeOccupanciesForMove(
     studentId: state.student.id,
     displayName: getUserDisplayName(state.user),
     avatarUrl: state.user.avatarUrl || state.user.githubAvatarUrl,
-    characterIllustrationUrl: state.character.illustrationUrl,
-    characterClass: state.character.characterClass,
+    characterIllustrationUrl: state.character?.illustrationUrl,
+    characterClass: state.character?.characterClass,
     guildId: guild?.id,
     guildName: guild?.name,
     guildIconUrl: guild?.iconUrl,

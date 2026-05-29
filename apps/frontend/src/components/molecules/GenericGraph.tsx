@@ -791,7 +791,7 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
   const node = data.graphNode;
   const isDisabled = !data.allowLockedSelection && node.isLocked;
   const handleClassName = cn(
-    '!h-2 !w-2 !border-status-quest !bg-gaming-card',
+    '!z-[60] !h-2 !w-2 !border-status-quest !bg-gaming-card',
     !isConnectable && '!opacity-0 pointer-events-none'
   );
 
@@ -838,7 +838,7 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
         </div>
       ) : null}
       {data.deletable ? (
-        <div className="absolute bottom-4 left-1 z-30 -translate-x-1/2 translate-y-1/2">
+        <div className="nodrag nopan absolute left-1/2 top-0 z-30 -translate-x-1/2 -translate-y-full pb-1">
           <DeleteButton
             onConfirm={() => data.onDeleteNode?.(node)}
             holdDuration={800}
@@ -898,11 +898,9 @@ function AnnularNodeRing({
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute left-1/2 top-1/2 h-[5.4rem] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 overflow-visible',
+        'pointer-events-none absolute left-1/2 top-1/2 h-[5.4rem] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 overflow-visible',
         activeSegment ? 'z-50' : 'z-20'
       )}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
       onPointerEnter={clearCloseTimer}
       onPointerLeave={scheduleHoverClose}
     >
@@ -910,7 +908,7 @@ function AnnularNodeRing({
         viewBox={`0 0 ${ANNULAR_RING_SIZE} ${ANNULAR_RING_SIZE}`}
         aria-hidden="false"
         className={cn(
-          'h-full w-full overflow-visible transition-transform duration-300',
+          'pointer-events-none h-full w-full overflow-visible transition-transform duration-300',
           isExpanded
             ? 'scale-100'
             : 'scale-[0.765] group-hover/graph-node:scale-100 group-focus-within/graph-node:scale-100'
@@ -957,12 +955,10 @@ function AnnularNodeRing({
               'pointer-events-auto cursor-help opacity-90 outline-none transition-[opacity,stroke-width] duration-200 hover:opacity-100 focus:opacity-100',
             role: 'button',
             tabIndex: 0,
-            onClick: (event: React.MouseEvent) => {
-              event.stopPropagation();
+            onClick: () => {
               setPinnedSegmentId((current) => (current === segment.id ? null : segment.id));
               setHoveredSegmentId(segment.id);
             },
-            onPointerDown: (event: React.PointerEvent) => event.stopPropagation(),
             onPointerEnter: () => {
               clearCloseTimer();
               setHoveredSegmentId(segment.id);

@@ -277,6 +277,7 @@ export const fr = {
       students: 'Étudiant·e·s',
       description: 'Description',
       inviteButton: 'Maintenir pour inviter des étudiant·e·s',
+      newInvite: "Créer un lien d'inscription",
       inviteEyebrow: 'Assignation temporaire',
       inviteTitle: 'Inscrire de nouveaux·elles étudiant·e·s',
       inviteDescription:
@@ -304,6 +305,15 @@ export const fr = {
       and: 'et',
       revoke: 'Révoquer',
       revokePermanently: 'Maintenir pour révoquer définitivement',
+      registrationOpen: 'Inscription automatique ouverte',
+      registrationClosed: 'Inscription automatique fermée',
+      registrationOpenDescription:
+        'Les nouveaux comptes élèves sans lien d’invitation seront assignés automatiquement à cette cohorte.',
+      registrationClosedDescription:
+        'Ouvrez cette cohorte pour que les nouveaux comptes élèves soient assignés ici sans lien dédié. Une seule cohorte peut être ouverte à la fois.',
+      openRegistration: "Ouvrir l'inscription automatique",
+      closeRegistration: "Fermer l'inscription automatique",
+      registrationUpdating: 'Mise à jour...',
       major: 'Majeure',
       minor: 'Mineure',
       classCards: 'Cartes de classe',
@@ -375,6 +385,12 @@ export const fr = {
     title: 'Main de guilde',
     subtitle: 'Consultez la main tactique de {guildName} et ses cartes de membre.',
     emptyState: 'Aucune main de guilde à afficher.',
+    errors: {
+      illustrationUpload: "L’illustration de la guilde n'a pas pu être enregistrée. Détail : {detail}",
+      invite: "L’invitation de guilde n'a pas pu être envoyée. Détail : {detail}",
+      acceptInvitation: "L’invitation de guilde n'a pas pu être acceptée. Détail : {detail}",
+      declineInvitation: "L’invitation de guilde n'a pas pu être refusée. Détail : {detail}",
+    },
   },
   class: {
     nav: 'Classe',
@@ -459,6 +475,7 @@ export const fr = {
     errors: {
       loadClasses: 'Les définitions de classes n’ont pas pu être chargées. Les statistiques par défaut seront affichées. Détail : {detail}',
       saveClass: 'La classe de personnage n’a pas pu être enregistrée. Réessayez dans un instant. Détail : {detail}',
+      saveProfile: 'La fiche personnage n’a pas pu être enregistrée. Réessayez dans un instant. Détail : {detail}',
     },
   },
   game: {
@@ -514,6 +531,7 @@ export const fr = {
     completeQuest: 'Terminer la quête',
     resolving: 'Validation...',
     questResolved: 'Quête résolue',
+    waitingGuild: 'En attente de la guilde',
     bossSubmission: 'Soumission du boss',
     bossSubmissionHelp: 'Soumettez vos liens de réponse et fichiers de projet.',
     submitting: 'Soumission...',
@@ -639,6 +657,9 @@ export const fr = {
     bypassWarning: 'Accès de debug local activé pour cet environnement.',
     logout: 'Déconnexion',
     loginError: 'Connexion GitHub impossible. Veuillez réessayer.',
+    loginFailureTitle: 'Connexion impossible',
+    loginUnavailable:
+      'La connexion ne fonctionne pas pour le moment. Veuillez réessayer dans quelques instants ou contacter un administrateur si le problème persiste.',
     invalidSession: 'Session de jeu expirée. Veuillez vous reconnecter.',
     loreCommand: 'Accès à la quête',
     alphaRibbon: 'Alpha',

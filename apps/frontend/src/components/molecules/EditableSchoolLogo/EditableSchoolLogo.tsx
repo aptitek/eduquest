@@ -11,6 +11,7 @@ export interface EditableSchoolLogoProps {
   onReset: () => Promise<void>;
   isEditing: boolean;
   canReset?: boolean;
+  uploadErrorMessageKey?: string;
   className?: string;
 }
 
@@ -137,6 +138,7 @@ export function EditableSchoolLogo({
   onReset,
   isEditing,
   canReset,
+  uploadErrorMessageKey = 'profile.errors.schoolLogoUploadFailed',
   className,
 }: EditableSchoolLogoProps) {
   const { t } = useTranslation();
@@ -207,8 +209,8 @@ export function EditableSchoolLogo({
         previewUrlRef.current = null;
       }
       setOptimisticSrc(null);
-      console.error('Error uploading school logo:', error);
-      showOperationError(error, 'profile.errors.schoolLogoUploadFailed');
+      console.error('Error uploading image:', error);
+      showOperationError(error, uploadErrorMessageKey);
     } finally {
       setIsUploading(false);
     }

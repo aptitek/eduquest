@@ -26,6 +26,8 @@ import { UI_COLOR_TOKENS } from '../../styles/colorTokens';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface PlayerMapMarker {
+  studentId?: string;
+  guildId?: string;
   activityId: string | null;
   previousActivityId?: string;
   characterClass?: GameCharacterClass;
@@ -172,6 +174,7 @@ export function GameMap({
     const occupancy = occupancyByActivityId.get(act.id);
     const marker = buildMapNodeMarker({
       playerMarker: hasPlayerMarker ? playerMarker : undefined,
+      currentPlayerMarker: playerMarker,
       occupancy,
       activity: act,
       activityById,
@@ -444,6 +447,7 @@ function getNumberMetadata(
 
 function buildMapNodeMarker({
   playerMarker,
+  currentPlayerMarker,
   occupancy,
   activity,
   activityById,
@@ -451,6 +455,7 @@ function buildMapNodeMarker({
   t,
 }: {
   playerMarker?: PlayerMapMarker;
+  currentPlayerMarker?: PlayerMapMarker;
   occupancy?: GameMapNodeOccupancy;
   activity: Activity;
   activityById: Map<string, Activity>;
@@ -458,6 +463,14 @@ function buildMapNodeMarker({
   t: (path: string) => string;
 }) {
   const adminGuildGroups = showGuildOccupancyMarkers ? buildAdminGuildMarkerGroups(occupancy, t) : [];
+  const currentPlayerStudentId = showGuildOccupancyMarkers ? undefined : currentPlayerMarker?.studentId;
+  const currentPlayerGuildId = showGuildOccupancyMarkers ? undefined : currentPlayerMarker?.guildId;
+  const currentPlayerInOccupancy = Boolean(
+    currentPlayerStudentId &&
+      occupancy?.segments.some(
+        (segment) => segment.members?.some((member) => member.studentId === currentPlayerStudentId)
+      )
+  );
   const guildMarkers = showGuildOccupancyMarkers
     ? adminGuildGroups.length
       ? [
@@ -470,39 +483,45 @@ function buildMapNodeMarker({
           />,
         ]
       : []
-    : activity.participationMode === 'guild'
-      ? (occupancy?.segments || []).flatMap((segment) => {
-          if (segment.kind !== 'guild' || !segment.members?.length) return [];
-          return [
-            <GuildMemberMapMarker
-              key={segment.guildId || `${activity.id}-${segment.guildName || segment.color}`}
-              color={segment.color || FALLBACK_GUILD_COLOR}
-              guildName={segment.guildName}
-              members={segment.members}
-              currentActivity={activity}
-              activityById={activityById}
-            />,
-          ];
-        })
-      : [];
+    : (occupancy?.segments || []).flatMap((segment) => {
+        const visibleMembers = currentPlayerGuildId
+          ? (segment.members || []).filter((member) => member.guildId === currentPlayerGuildId)
+          : [];
+        if (!visibleMembers.length) return [];
+        return [
+          <OccupancyMemberMapMarker
+            key={segment.guildId || `${activity.id}-${segment.guildName || segment.kind}`}
+            color={segment.color || (segment.kind === 'guild' ? FALLBACK_GUILD_COLOR : SOLO_OCCUPANCY_COLOR)}
+            guildName={segment.guildName}
+            members={visibleMembers}
+            currentActivity={activity}
+            activityById={activityById}
+            currentPlayerStudentId={currentPlayerStudentId}
+          />,
+        ];
+      });
 
-  if (!playerMarker && guildMarkers.length === 0) return undefined;
+  const shouldShowStandalonePlayerMarker = Boolean(playerMarker && !currentPlayerInOccupancy);
+
+  if (!shouldShowStandalonePlayerMarker && guildMarkers.length === 0) return undefined;
 
   return (
     <div className="flex items-center justify-center gap-1.5">
-      {playerMarker ? (
+      {shouldShowStandalonePlayerMarker && playerMarker ? (
         <AvatarDeck
           members={[
             {
-              id: 'current-player',
+              id: playerMarker.studentId || 'current-player',
               name: playerMarker.label,
               avatarUrl: playerMarker.illustrationUrl,
+              color: playerMarker.characterClass ? CHARACTER_CLASS_COLORS[playerMarker.characterClass] : undefined,
               onClick: () => openClassTarget(),
             },
           ]}
           color={playerMarker.characterClass ? CHARACTER_CLASS_COLORS[playerMarker.characterClass] : SOLO_OCCUPANCY_COLOR}
           size="md"
           align="center"
+          interactive={Boolean(playerMarker.characterClass)}
           getAvatarMotion={() =>
             getTravelMotion(getTravelVector(activityById, playerMarker.previousActivityId, activity))
           }
@@ -518,28 +537,36 @@ function isSystemOnboardingActivity(activity: Activity) {
   return metadata.onboardingTask === 'institutional_profile' || metadata.onboardingTask === 'character_card';
 }
 
-function GuildMemberMapMarker({
+function OccupancyMemberMapMarker({
   color,
   guildName,
   members,
   currentActivity,
   activityById,
+  currentPlayerStudentId,
 }: {
   color: string;
   guildName?: string;
   members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>;
   currentActivity: Activity;
   activityById: Map<string, Activity>;
+  currentPlayerStudentId?: string;
 }) {
-  const avatarMembers = toAvatarMembers(members, guildName);
+  const avatarMembers = toAvatarMembers(orderCurrentPlayerFirst(members, currentPlayerStudentId), guildName);
+  const includesCurrentPlayer = Boolean(
+    currentPlayerStudentId && members.some((member) => member.studentId === currentPlayerStudentId)
+  );
 
   return (
     <AvatarDeck
       members={avatarMembers}
       color={color}
-      size="sm"
+      size={includesCurrentPlayer ? 'md' : 'sm'}
       className="shrink-0"
       align="center"
+      restStepRem={includesCurrentPlayer ? 0.55 : 0.5}
+      openStepRem={includesCurrentPlayer ? 1.35 : 1.1}
+      expandOnParentHover={false}
       getAvatarMotion={(member) => {
         const occupancyMember = members.find((candidate) => candidate.studentId === member.id);
         return getTravelMotion(
@@ -692,9 +719,23 @@ function toAvatarMembers(
     id: member.studentId,
     name: member.displayName,
     avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
+    color: member.characterClass ? CHARACTER_CLASS_COLORS[member.characterClass] : undefined,
     subtitle: member.characterClass,
     onClick: () => openClassTarget(member.guildName || guildName, member.studentId),
   }));
+}
+
+function orderCurrentPlayerFirst(
+  members: NonNullable<GameMapNodeOccupancy['segments'][number]['members']>,
+  currentPlayerStudentId?: string
+) {
+  if (!currentPlayerStudentId) return members;
+  const currentPlayer = members.find((member) => member.studentId === currentPlayerStudentId);
+  if (!currentPlayer) return members;
+  return [
+    currentPlayer,
+    ...members.filter((member) => member.studentId !== currentPlayerStudentId),
+  ];
 }
 
 function openClassTarget(guildName?: string, memberId?: string) {

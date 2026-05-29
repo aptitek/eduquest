@@ -11,6 +11,7 @@ import type {
   GameActivityEdgeStyleWindow,
   GameCharacterClass,
   GameCharacterClassDefinition,
+  GameCharacterStatConfig,
   GameMilestonePayload,
   GameStats,
   GameCharacterMove,
@@ -18,6 +19,8 @@ import type {
   GameRewardCard,
   GameRewardCardPayload,
   Guild,
+  GuildInvitation,
+  GuildRecruitmentStatus,
   RewardBalanceConfigPayload,
   RewardSystemConfig,
 } from '@eduquest/shared';
@@ -39,7 +42,16 @@ export type ActivityCardFieldsPayload = {
   mapY?: number;
 };
 
-export type GuildFieldsPayload = Partial<Pick<Guild, 'name' | 'description' | 'iconKey' | 'color'>>;
+export type GuildFieldsPayload = Partial<Pick<Guild, 'name' | 'description' | 'iconUrl' | 'iconKey' | 'color'>>;
+export type GuildCreatePayload = GuildFieldsPayload & {
+  recruitmentStatus?: GuildRecruitmentStatus;
+  recruitmentMessage?: string;
+  maxMembers?: number;
+};
+export type GuildInvitationPayload = {
+  inviteeUserId: string;
+  message?: string;
+};
 
 export type RewardBalanceConfigState = {
   version: number;
@@ -70,6 +82,7 @@ type CharacterClassesResponse =
   | {
       success: true;
       characterClasses: GameCharacterClassDefinition[];
+      statConfig?: GameCharacterStatConfig;
     }
   | {
       success: false;
@@ -101,6 +114,10 @@ type GuildsResponse =
       success: true;
       guilds: ClassRosterGuild[];
       unguildedStudents?: ClassRosterStudent[];
+      invitableStudents?: ClassRosterStudent[];
+      guildedStudents?: ClassRosterStudent[];
+      currentGuildId?: string;
+      invitations?: GuildInvitation[];
       source?: string;
     }
   | {
@@ -119,6 +136,18 @@ type GuildUpdateResponse =
       error?: string;
     };
 
+type GuildInvitationResponse =
+  | {
+      success: true;
+      invitation: GuildInvitation;
+      guild?: Guild;
+      source?: string;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
+
 export interface ClassRosterStudent {
   id: string;
   userId: string;
@@ -128,6 +157,11 @@ export interface ClassRosterStudent {
   avatarUrl?: string;
   characterIllustrationUrl?: string;
   characterClass?: GameCharacterClass;
+  guildId?: string;
+  guildName?: string;
+  guildIconUrl?: string;
+  guildIconKey?: string;
+  guildColor?: string;
   stats?: GameStats;
 }
 
@@ -138,6 +172,10 @@ export interface ClassRosterGuild extends Guild {
 export interface ClassRoster {
   guilds: ClassRosterGuild[];
   unguildedStudents: ClassRosterStudent[];
+  invitableStudents: ClassRosterStudent[];
+  guildedStudents: ClassRosterStudent[];
+  currentGuildId?: string;
+  invitations: GuildInvitation[];
 }
 
 export async function fetchSelectableGames(
@@ -158,15 +196,20 @@ export async function fetchSelectableGames(
   return { games: data.games, selectedGameId: data.selectedGameId };
 }
 
-export async function fetchCharacterClasses(): Promise<GameCharacterClassDefinition[]> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/character-classes`);
+export async function fetchCharacterClasses(
+  gameId?: string | null
+): Promise<{ characterClasses: GameCharacterClassDefinition[]; statConfig: GameCharacterStatConfig }> {
+  const response = await fetch(withGameParam('/api/auth/character-classes', gameId));
   const data = (await response.json()) as CharacterClassesResponse;
 
   if (!response.ok || !data.success) {
     throwApiResponseError(response, data, 'Character classes request failed.');
   }
 
-  return data.characterClasses;
+  return {
+    characterClasses: data.characterClasses,
+    statConfig: data.statConfig || { maxValue: 5, allocationBudget: 6 },
+  };
 }
 
 export async function fetchCohortProgressData(
@@ -248,13 +291,40 @@ export async function fetchClassRoster(token: string, gameId?: string | null): P
   return {
     guilds: data.guilds,
     unguildedStudents: data.unguildedStudents || [],
+    invitableStudents: data.invitableStudents || [],
+    guildedStudents: data.guildedStudents || [],
+    currentGuildId: data.currentGuildId,
+    invitations: data.invitations || [],
   };
+}
+
+export async function createGuild(
+  token: string,
+  payload: GuildCreatePayload,
+  gameId?: string | null
+): Promise<Guild> {
+  const response = await fetch(withGameParam('/api/guilds', gameId), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as GuildUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Guild creation failed.');
+  }
+
+  return data.guild;
 }
 
 export async function updateGuild(
   token: string,
   guildId: string,
-  payload: GuildFieldsPayload
+  payload: GuildCreatePayload
 ): Promise<Guild> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}`, {
     method: 'PATCH',
@@ -276,6 +346,80 @@ export async function updateGuild(
 
 export async function updateGuildIcon(token: string, guildId: string, iconKey: string): Promise<Guild> {
   return updateGuild(token, guildId, { iconKey });
+}
+
+export async function joinGuild(token: string, guildId: string): Promise<Guild> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}/join`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as GuildUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Guild join failed.');
+  }
+
+  return data.guild;
+}
+
+export async function inviteToGuild(
+  token: string,
+  guildId: string,
+  payload: GuildInvitationPayload
+): Promise<GuildInvitation> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}/invitations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as GuildInvitationResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Guild invitation failed.');
+  }
+
+  return data.invitation;
+}
+
+export async function acceptGuildInvitation(token: string, invitationId: string): Promise<Guild> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guild-invitations/${invitationId}/accept`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as GuildInvitationResponse;
+
+  if (!response.ok || !data.success || !data.guild) {
+    throwApiResponseError(response, data, 'Guild invitation accept failed.');
+  }
+
+  return data.guild;
+}
+
+export async function declineGuildInvitation(token: string, invitationId: string): Promise<GuildInvitation> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guild-invitations/${invitationId}/decline`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as GuildInvitationResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Guild invitation decline failed.');
+  }
+
+  return data.invitation;
 }
 
 type MapResponse =

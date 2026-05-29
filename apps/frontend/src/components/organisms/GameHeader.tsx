@@ -7,7 +7,7 @@ import { EditableFieldContext, EditableText } from '../atoms/EditableText';
 import { InfoBar } from '../molecules/InfoBar';
 import { PlayingCard } from '../molecules/PlayingCard';
 import { useAuth } from '../../features/auth/useAuth';
-import { fetchSelectableGames } from '../../features/game/api';
+import { acceptGuildInvitation, fetchClassRoster, fetchSelectableGames } from '../../features/game/api';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useGameStore } from '../../features/game/gameStore';
 import {
@@ -17,12 +17,13 @@ import {
 } from './HeaderNotificationArea';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
+import { ApiClientError } from '../../features/errors/api';
 import { useErrorReporter } from '../../features/errors/notifications';
 import {
   formatRewardNotificationDescription,
   formatRewardNotificationTitle,
 } from '../../features/game/formatRewardNotification';
-import { Check, ChevronDown, Coins, Gift, GraduationCap, Map, Megaphone, Settings, Sparkles, Users } from 'lucide-react';
+import { Check, ChevronDown, Coins, Gift, GraduationCap, Mail, Map, Megaphone, Settings, Sparkles, Users } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
@@ -42,6 +43,7 @@ export function GameHeader({
     selectedGameId,
     setAvailableGames,
     setSelectedGameId,
+    setStudentGuild,
   } = useGameStore();
   const { t } = useTranslation();
   const reportError = useErrorReporter();
@@ -70,6 +72,8 @@ export function GameHeader({
   const [adminNotificationTitle, setAdminNotificationTitle] = useState('');
   const [adminNotificationDescription, setAdminNotificationDescription] = useState('');
   const [adminCohortNotifications, setAdminCohortNotifications] = useState<HeaderNotification[]>([]);
+  const [guildInvitationNotifications, setGuildInvitationNotifications] = useState<HeaderNotification[]>([]);
+  const [guildInvitationRefreshKey, setGuildInvitationRefreshKey] = useState(0);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -135,6 +139,69 @@ export function GameHeader({
     };
   }, [user?.id, user?.isAdmin]);
 
+  useEffect(() => {
+    if (!user || user.isAdmin || !student) {
+      setGuildInvitationNotifications([]);
+      return undefined;
+    }
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return undefined;
+
+    let isMounted = true;
+    fetchClassRoster(token, selectedGameId)
+      .then((roster) => {
+        if (!isMounted) return;
+        const pendingInvitations = roster.invitations.filter(
+          (invitation) => invitation.status === 'pending' && invitation.inviteeUserId === user.id
+        );
+        setGuildInvitationNotifications(
+          pendingInvitations.map((invitation) => ({
+            id: `guild-invitation-${invitation.id}`,
+            title: 'Invitation de guilde',
+            description: `${invitation.guild?.name || 'Une guilde'} t’invite à la rejoindre.`,
+            icon: <Mail size={18} aria-hidden />,
+            tone: 'info',
+            action: {
+              label: 'Accepter',
+              onSelect: () => {
+                const token = localStorage.getItem('eduquest_token');
+                if (!token) return;
+
+                acceptGuildInvitation(token, invitation.id)
+                  .then((guild) => {
+                    if (guild.cohortId) setStudentGuild(guild.cohortId, guild);
+                    setGuildInvitationNotifications((current) =>
+                      current.filter((notification) => notification.id !== `guild-invitation-${invitation.id}`)
+                    );
+                    setDismissedNotificationIds((current) => new Set(current).add(`guild-invitation-${invitation.id}`));
+                    window.location.hash = 'guild';
+                  })
+                  .catch((error) => {
+                    if (error instanceof ApiClientError && (error.status === 404 || error.status === 409)) {
+                      setGuildInvitationNotifications((current) =>
+                        current.filter((notification) => notification.id !== `guild-invitation-${invitation.id}`)
+                      );
+                      setDismissedNotificationIds((current) => new Set(current).add(`guild-invitation-${invitation.id}`));
+                      setGuildInvitationRefreshKey((current) => current + 1);
+                      return;
+                    }
+                    showHeaderError('guild.errors.acceptInvitation', error);
+                  });
+              },
+            },
+          }))
+        );
+      })
+      .catch((error) => {
+        console.warn('Could not load guild invitations.', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.isAdmin, selectedGameId, guildInvitationRefreshKey, setStudentGuild, showHeaderError]);
+
   const dashboardNotifications: HeaderNotification[] = dashboardData?.notifications.length
     ? dashboardData.notifications.map((notification) => ({
         id: notification.id,
@@ -158,7 +225,7 @@ export function GameHeader({
           : undefined,
       }))
     : [];
-  const allNotifications = [...adminCohortNotifications, ...dashboardNotifications];
+  const allNotifications = [...adminCohortNotifications, ...guildInvitationNotifications, ...dashboardNotifications];
   const activeNotifications = allNotifications.filter(
     (notification) => !dismissedNotificationIds.has(notification.id)
   );
@@ -331,38 +398,38 @@ export function GameHeader({
 
             {navigationMode === 'mapOnly' ? null : !user?.isAdmin ? (
               <>
+                <button
+                  type="button"
+                  aria-current={currentView === 'guild' ? 'page' : undefined}
+                  onClick={() => {
+                    window.location.hash = 'guild';
+                  }}
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    currentView === 'guild' && 'bg-gaming-base text-status-quest'
+                  )}
+                >
+                  <Users size={16} aria-hidden />
+                  {t('guild.nav')}
+                </button>
+
                 {hasPlayerGuild ? (
                   <button
                     type="button"
-                    aria-current={currentView === 'guild' ? 'page' : undefined}
+                    aria-current={currentView === 'class' ? 'page' : undefined}
                     onClick={() => {
-                      window.location.hash = 'guild';
+                      window.location.hash = 'class';
                     }}
                     className={cn(
-                      'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                      currentView === 'guild' && 'bg-gaming-base text-status-quest'
+                      'flex flex-col items-center justify-center gap-1 px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                      !gameSelector && 'border-r border-gaming-border',
+                      currentView === 'class' && 'bg-gaming-base text-status-quest'
                     )}
                   >
-                    <Users size={16} aria-hidden />
-                    {t('guild.nav')}
+                    <GraduationCap size={16} aria-hidden />
+                    {t('class.nav')}
                   </button>
                 ) : null}
-
-                <button
-                  type="button"
-                  aria-current={currentView === 'class' ? 'page' : undefined}
-                  onClick={() => {
-                    window.location.hash = 'class';
-                  }}
-                  className={cn(
-                    'flex flex-col items-center justify-center gap-1 px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    !gameSelector && 'border-r border-gaming-border',
-                    currentView === 'class' && 'bg-gaming-base text-status-quest'
-                  )}
-                >
-                  <GraduationCap size={16} aria-hidden />
-                  {t('class.nav')}
-                </button>
 
                 {gameSelector}
 
@@ -480,7 +547,6 @@ export function GameHeader({
         isExpanded
         composer={adminNotificationComposer}
         onDismiss={dismissNotification}
-        onAction={dismissNotification}
         className="sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-[28rem] sm:max-w-full"
       />
     </header>
@@ -498,6 +564,9 @@ function getNotificationIcon(icon?: string) {
 function runNotificationAction(actionTarget?: string) {
   if (actionTarget === 'map') {
     window.location.hash = '';
+  }
+  if (actionTarget === 'guild') {
+    window.location.hash = 'guild';
   }
 }
 

@@ -65,6 +65,7 @@ describe('game API client', () => {
           stats: { strength: 1, dexterity: 2, constitution: 3, intelligence: 4, wisdom: 5, charisma: 6 },
         },
       ],
+      guildedStudents: [],
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -95,6 +96,10 @@ describe('game API client', () => {
           stats: { strength: 1, dexterity: 2, constitution: 3, intelligence: 4, wisdom: 5, charisma: 6 },
         },
       ],
+      invitableStudents: [],
+      guildedStudents: [],
+      currentGuildId: undefined,
+      invitations: [],
     });
     expect(fetchMock).toHaveBeenCalledWith('http://backend.test/api/guilds?gameId=cohort-1', {
       headers: { Authorization: 'Bearer token-1' },
@@ -107,6 +112,10 @@ describe('game API client', () => {
     await expect(fetchClassRoster('token-1', 'cohort-1')).resolves.toEqual({
       guilds: [],
       unguildedStudents: [],
+      invitableStudents: [],
+      guildedStudents: [],
+      currentGuildId: undefined,
+      invitations: [],
     });
   });
 

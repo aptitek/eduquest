@@ -52,6 +52,7 @@ app.use('/api/games', authMiddleware);
 app.use('/api/games/*', authMiddleware);
 app.use('/api/guilds', authMiddleware);
 app.use('/api/guilds/*', authMiddleware);
+app.use('/api/guild-invitations/*', authMiddleware);
 app.use('/api/dashboard', authMiddleware);
 app.use('/api/dashboard/*', authMiddleware);
 app.use('/api/rewards/*', authMiddleware);
