@@ -19,7 +19,7 @@ export function MapArea({ children }: { children: React.ReactNode }) {
 
 export function MapSidePanel({ children }: { children: React.ReactNode }) {
   return (
-    <aside className="min-h-[30rem] min-w-[min(100%,24rem)] flex-[1_0_24rem] lg:min-h-0">
+    <aside className="flex min-h-[30rem] min-w-[min(100%,24rem)] flex-[1_0_24rem] lg:min-h-0">
       {children}
     </aside>
   );

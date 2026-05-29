@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DragEvent, KeyboardEvent } from 'react';
-import { createPortal } from 'react-dom';
 import type {
   CohortProgressData,
   GameBonusVoteState,
   GameMilestonePayload,
   RewardSystemConfig,
 } from '@eduquest/shared';
-import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
+import type { PlayingCardFace, PlayingCardProps } from '../molecules/PlayingCard';
 import { PlayingHand } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
@@ -53,7 +52,8 @@ export interface DashboardDockProps {
   className?: string;
 }
 
-type EditableCardSideOverride = Partial<Record<PlayingCardEditableField, string>> & {
+type EditableCardField = 'title' | 'subtitle' | 'description' | 'art' | 'typeIcon';
+type EditableCardSideOverride = Partial<Record<EditableCardField, string>> & {
   stats?: Record<string, number>;
 };
 type ProgressMilestone = CohortProgressData['gauge']['milestones'][number];
@@ -76,10 +76,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
     : { layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } };
   const [route, setRoute] = useState(() => getHashRoute());
   const [usesWideGuildDeck, setUsesWideGuildDeck] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
-  const [progressBonusTarget, setProgressBonusTarget] = useState<HTMLElement | null>(null);
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const [guilds, setGuilds] = useState<DockGuild[]>([]);
-  const [rewardCards, setRewardCards] = useState<PlayingCardData[]>([]);
+  const [rewardCards, setRewardCards] = useState<PlayingCardProps[]>([]);
   const [bonusVoteState, setBonusVoteState] = useState<GameBonusVoteState | null>(null);
   const [activeRewardCardIds, setActiveRewardCardIds] = useState<Set<string>>(() => new Set());
   const [adminStep, setAdminStep] = useState(0);
@@ -118,7 +117,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
   useEffect(() => {
     const handleHashChange = () => {
-      setProgressBonusTarget(null);
       const nextRoute = getHashRoute();
       setRoute(nextRoute);
     };
@@ -130,7 +128,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   }, []);
 
   const updateEditableCardField = useCallback(
-    (sideKey: string, field: PlayingCardEditableField, value: string) => {
+    (sideKey: string, field: EditableCardField, value: string) => {
       setEditableCardSides((current) => ({
         ...current,
         [sideKey]: {
@@ -211,19 +209,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
   );
 
   useEffect(() => {
-    if (route !== 'bonus') {
-      setProgressBonusTarget(null);
-      return undefined;
-    }
-
-    const updateTarget = () => setProgressBonusTarget(getConnectedElementById('bonus-hand-target'));
-    updateTarget();
-
-    const animationFrame = window.requestAnimationFrame(updateTarget);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [route]);
-
-  useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1280px)');
     const handleMediaChange = () => setUsesWideGuildDeck(mediaQuery.matches);
 
@@ -273,15 +258,36 @@ export function DashboardDock({ className }: DashboardDockProps) {
             cards.map((card) => ({
               kind: 'reward' as const,
               id: card.id,
-              title: card.title,
-              subtitle: card.subtitle,
-              description: card.description,
-              color: card.color,
-              accentToken: card.accentToken as PlayingCardData['accentToken'],
-              illustrationUrl: card.illustrationUrl,
-              illustration: card.illustrationUrl
-                ? undefined
-                : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+              accentToken: card.accentToken,
+              model: {
+                front: {
+                  title: { value: card.title, variant: 'title' },
+                  subtitle: card.subtitle ? { value: card.subtitle, variant: 'subtitle' } : undefined,
+                  color: { value: card.color },
+                  art: {
+                    value: card.illustrationUrl,
+                    alt: card.title,
+                    node: card.illustrationUrl
+                      ? undefined
+                      : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+                  },
+                  type: {
+                    variant: 'cost',
+                    value: card.cost,
+                    text: { value: String(card.cost || 0), variant: 'ribbon' },
+                  },
+                  info: {
+                    sections: card.description
+                      ? [
+                          {
+                            id: 'description',
+                            description: { value: card.description, variant: 'description' },
+                          },
+                        ]
+                      : undefined,
+                  },
+                },
+              },
             }))
           );
           setBonusVoteState(voteState);
@@ -347,18 +353,15 @@ export function DashboardDock({ className }: DashboardDockProps) {
   }, [selectedGameId, user?.isAdmin, showDockError]);
 
   const activeRewardCards = rewardCards.filter((card) => card.id && activeRewardCardIds.has(card.id));
-  const progressBonusCards = activeRewardCards.length
-    ? withProgressBonusNewRibbonState(
-        buildProgressBonusCards(
-          t,
-          activeRewardCards as [PlayingCardData, ...PlayingCardData[]],
-          'progress-active-bonus'
-        ),
-        seenProgressBonusCardIds,
-        markProgressBonusCardSeen,
-        isProgressPage
-      )
-    : null;
+  const activeRewardSourceCards = activeRewardCards.length
+    ? (activeRewardCards as [PlayingCardProps, ...PlayingCardProps[]])
+    : ([buildActiveRewardPlaceholderCard(t)] as [PlayingCardProps, ...PlayingCardProps[]]);
+  const progressBonusCards = withProgressBonusNewRibbonState(
+    buildProgressBonusCards(t, activeRewardSourceCards, 'progress-active-bonus'),
+    seenProgressBonusCardIds,
+    markProgressBonusCardSeen,
+    isProgressPage
+  );
   const notifyMilestonesUpdated = () => {
     window.dispatchEvent(new CustomEvent('eduquest:milestones-updated'));
   };
@@ -495,15 +498,16 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const gaugeLabel = dashboardData?.gauge.labelI18nKey ? t(dashboardData.gauge.labelI18nKey) : t('dashboard.dock.milestone');
   const podiumGuilds = mergeGuilds(playerGuild ? [playerGuild] : [], guilds);
   const podiumCards = buildPodiumCards(t, podiumGuilds);
-  const podiumSentinelCard: PlayingCardData = {
+  const podiumSentinelCard: PlayingCardProps = {
     id: 'directory-remaining-guilds-list',
     layoutId: 'directory-remaining-guilds-list',
     kind: 'guild',
-    title: t('class.remaining'),
-    subtitle: latestMembership?.cohort?.name || t('dashboard.dock.cohortDeck'),
     accentToken: 'neutral',
-    ribbonLabel: t('class.guilds'),
-    faceDown: true,
+    model: {
+      front: {
+        back: { mode: 'icon', icon: { value: 'Trophy' } },
+      },
+    },
   };
   const podiumDeckCards = buildPodiumDeckCards(podiumCards, podiumGuilds.length, podiumSentinelCard);
   const openProgressPage = () => {
@@ -686,7 +690,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           <div className="absolute inset-x-0 bottom-0 flex h-56 w-full items-end justify-center gap-2 overflow-visible px-2 sm:gap-3 lg:h-60 lg:gap-4 lg:px-3 xl:gap-5 2xl:gap-6">
             {!isProgressPage ? adminBonusContent : null}
 
-            {adminPodiumContent}
+            {!isProgressPage ? adminPodiumContent : null}
 
             {adminGaugeContent('h-36 w-36 shrink sm:h-40 sm:w-40 lg:h-44 lg:w-auto lg:min-w-[20rem] lg:max-w-[42rem] lg:flex-1 xl:min-w-[22rem] 2xl:min-w-[24rem]')}
 
@@ -769,18 +773,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
         return {
           ...playerCard,
-          onRibbonClick: openCharacterPage,
-          front: playerCard.front
-            ? {
-                ...playerCard.front,
-                onRibbonClick: openCharacterPage,
-              }
-            : playerCard.front,
+          onClick: openCharacterPage,
         };
       }
 
       return card;
-    }) as [PlayingCardData, ...PlayingCardData[]],
+    }) as [PlayingCardProps, ...PlayingCardProps[]],
   };
   const openDirectoryPage = () => {
     window.location.hash = 'annuaire';
@@ -938,7 +936,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         >
           {!isProgressPage ? bonusContent : null}
 
-          {!isDirectoryPage ? podiumContent : null}
+          {!isProgressPage && !isDirectoryPage ? podiumContent : null}
 
           {hasPlayerGuild ? (
             <GlobalProgressGauge
@@ -962,9 +960,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
         </div>
       </aside>
 
-      {isProgressPage && !user?.isAdmin && isConnectedElement(progressBonusTarget)
-        ? createPortal(bonusContent, progressBonusTarget)
-        : null}
     </>
   );
 }
@@ -973,15 +968,6 @@ export default DashboardDock;
 
 function getProgressBonusSeenStorageKey(userId: string | undefined, gameId: string | null) {
   return `${PROGRESS_BONUS_SEEN_STORAGE_PREFIX}:${userId || 'anonymous'}:${gameId || 'default'}`;
-}
-
-function getConnectedElementById(id: string) {
-  const element = document.getElementById(id);
-  return isConnectedElement(element) ? element : null;
-}
-
-function isConnectedElement(element: HTMLElement | null): element is HTMLElement {
-  return Boolean(element?.isConnected && document.body.contains(element));
 }
 
 function readSeenProgressBonusCardIds(storageKey: string) {
@@ -1008,29 +994,55 @@ function writeSeenProgressBonusCardIds(storageKey: string, seenCardIds: Readonly
   }
 }
 
+function buildActiveRewardPlaceholderCard(t: (path: string) => string): PlayingCardProps {
+  return {
+    kind: 'reward',
+    id: 'empty-active-reward-dashboard',
+    accentToken: 'neutral',
+    model: {
+      front: {
+        title: { value: t('bonus.activeBonuses'), variant: 'title' },
+        back: { mode: 'icon', icon: { value: 'Gift' } },
+      },
+    },
+  };
+}
+
 function withProgressBonusNewRibbonState(
-  cards: [PlayingCardData, ...PlayingCardData[]],
+  cards: [PlayingCardProps, ...PlayingCardProps[]],
   seenCardIds: ReadonlySet<string>,
   markCardSeen: (cardId: string | undefined) => void,
   isProgressPage: boolean
-): [PlayingCardData, ...PlayingCardData[]] {
+): [PlayingCardProps, ...PlayingCardProps[]] {
   return cards.map((card) => {
-    const shouldMarkSeen = Boolean(isProgressPage && card.id && !card.faceDown && !seenCardIds.has(card.id));
-    const ribbonText = card.front?.ribbonText || card.ribbonLabel || card.ribbonText;
+    const front = card.model.front && card.model.front !== 'none' ? card.model.front : undefined;
+    const isFaceDown = Boolean(front?.back);
+    const shouldMarkSeen = Boolean(
+      isProgressPage && card.id && front && !isFaceDown && !seenCardIds.has(card.id)
+    );
+    const type = front?.type;
 
     return {
       ...card,
-      ribbonLabel: ribbonText,
-      ribbonText,
-      front: card.front
-        ? {
-            ...card.front,
-            ribbonText,
-          }
-        : card.front,
+      model: {
+        ...card.model,
+        front: front
+          ? {
+              ...front,
+              type:
+                type ||
+                (isFaceDown
+                  ? undefined
+                  : {
+                      variant: 'new',
+                      text: { value: 'New', variant: 'ribbon' },
+                    }),
+            }
+          : card.model.front,
+      },
       onPointerEnter: shouldMarkSeen ? () => markCardSeen(card.id) : undefined,
     };
-  }) as [PlayingCardData, ...PlayingCardData[]];
+  }) as [PlayingCardProps, ...PlayingCardProps[]];
 }
 
 function mergeGuilds(primaryGuilds: readonly DockGuild[], secondaryGuilds: readonly DockGuild[]) {
@@ -1061,10 +1073,10 @@ function upsertGuild(guilds: readonly DockGuild[], guild: DockGuild) {
   ];
 }
 
-function getGuildFieldPayload(field: PlayingCardEditableField, value: string): GuildFieldsPayload | null {
+function getGuildFieldPayload(field: EditableCardField, value: string): GuildFieldsPayload | null {
   if (field === 'title') return { name: value };
   if (field === 'description') return { description: value };
-  if (field === 'ribbonIcon') return { iconKey: value };
+  if (field === 'typeIcon') return { iconKey: value };
   return null;
 }
 
@@ -1083,9 +1095,9 @@ function getBoostableGuildVoteState(voteState: GameBonusVoteState | null) {
 }
 
 function buildPodiumDeckCards(
-  podiumCards: PlayingCardData[],
+  podiumCards: PlayingCardProps[],
   guildCount: number,
-  sentinelCard: PlayingCardData
+  sentinelCard: PlayingCardProps
 ) {
   const topPodiumCards = podiumCards.slice(0, 3);
   const shouldShowSentinel =
@@ -1094,12 +1106,12 @@ function buildPodiumDeckCards(
   return toNonEmptyCards(shouldShowSentinel ? [...topPodiumCards, sentinelCard] : topPodiumCards);
 }
 
-function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...PlayingCardData[]] {
+function toNonEmptyCards(cards: PlayingCardProps[]): [PlayingCardProps, ...PlayingCardProps[]] {
   if (cards.length === 0) {
     throw new Error('Expected at least one card.');
   }
 
-  return cards as [PlayingCardData, ...PlayingCardData[]];
+  return cards as [PlayingCardProps, ...PlayingCardProps[]];
 }
 
 function getHashRoute() {
@@ -1391,29 +1403,18 @@ function makeEditableDashboardCard({
   onColorChange,
   onStatChange,
 }: {
-  card: PlayingCardData;
+  card: PlayingCardProps;
   cardKey: string;
   sideOverrides: Record<string, EditableCardSideOverride>;
-  onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
+  onFieldChange: (sideKey: string, field: EditableCardField, value: string) => void;
   onColorChange?: (color: string) => void;
   onStatChange: (sideKey: string, statId: string, value: number) => void;
-}): PlayingCardData {
+}): PlayingCardProps {
   const frontSideKey = `${cardKey}:front`;
   const backSideKey = `${cardKey}:back`;
   const canEditStats = card.kind !== 'guild';
-  const front = applyEditableSide({
-    side: card.front || {
-      title: card.title || 'Card',
-      subtitle: card.subtitle,
-      description: card.description,
-      illustrationUrl: card.illustrationUrl,
-      illustrationAlt: card.illustrationAlt,
-      ribbonText: card.ribbonLabel || card.ribbonText,
-      ribbonPosition: card.ribbonPosition,
-      stats: card.stats,
-      statsLabel: card.statsLabel,
-      footer: card.footer,
-    },
+  const front = applyEditableFace({
+    face: card.model.front,
     sideKey: frontSideKey,
     override: sideOverrides[frontSideKey],
     onFieldChange,
@@ -1421,9 +1422,10 @@ function makeEditableDashboardCard({
     onStatChange,
     canEditStats,
   });
-  const back = isEditablePlayingCardSide(card.back)
-    ? applyEditableSide({
-        side: card.back,
+  const back =
+    card.model.back && card.model.back !== 'none'
+      ? applyEditableFace({
+        face: card.model.back,
         sideKey: backSideKey,
         override: sideOverrides[backSideKey],
         onFieldChange,
@@ -1431,22 +1433,20 @@ function makeEditableDashboardCard({
         onStatChange,
         canEditStats,
       })
-    : card.back;
+      : card.model.back;
 
   return {
     ...card,
-    title: front.title,
-    subtitle: front.subtitle,
-    illustrationUrl: front.illustrationUrl,
-    ribbonLabel: front.ribbonText,
-    front,
-    back,
-    editable: true,
+    model: {
+      ...card.model,
+      front,
+      back,
+    },
   };
 }
 
-function applyEditableSide({
-  side,
+function applyEditableFace({
+  face,
   sideKey,
   override,
   onFieldChange,
@@ -1454,33 +1454,87 @@ function applyEditableSide({
   onStatChange,
   canEditStats,
 }: {
-  side: PlayingCardSide;
+  face: PlayingCardFace;
   sideKey: string;
   override?: EditableCardSideOverride;
-  onFieldChange: (sideKey: string, field: PlayingCardEditableField, value: string) => void;
+  onFieldChange: (sideKey: string, field: EditableCardField, value: string) => void;
   onColorChange?: (color: string) => void;
   onStatChange: (sideKey: string, statId: string, value: number) => void;
   canEditStats: boolean;
-}): PlayingCardSide {
-  return {
-    ...side,
-    title: override?.title ?? side.title,
-    subtitle: override?.subtitle ?? side.subtitle,
-    description: override?.description ?? side.description,
-    illustrationUrl: override?.illustrationUrl ?? side.illustrationUrl,
-    ribbonText: override?.ribbonText ?? side.ribbonText,
-    stats: side.stats?.map((stat) => ({
-      ...stat,
-      value: canEditStats ? override?.stats?.[stat.id] ?? stat.value : stat.value,
-    })),
-    editable: true,
-    onFieldChange: (field, value) => onFieldChange(sideKey, field, value),
-    onColorChange,
-    onStatChange: canEditStats ? (statId, value) => onStatChange(sideKey, statId, value) : undefined,
-  };
-}
+}): PlayingCardFace {
+  if (!face || face === 'none') return face;
+  const descriptionSection = face.info?.sections?.find((section) => section.id === 'description');
 
-function isEditablePlayingCardSide(value: PlayingCardData['back']): value is PlayingCardSide {
-  return Boolean(value && typeof value === 'object' && !('type' in value) && 'title' in value);
+  return {
+    ...face,
+    title: {
+      ...face.title,
+      value: override?.title ?? face.title?.value,
+      editable: true,
+      onChange: (value) => onFieldChange(sideKey, 'title', value),
+    },
+    subtitle: face.subtitle
+      ? {
+          ...face.subtitle,
+          value: override?.subtitle ?? face.subtitle.value,
+          editable: true,
+          onChange: (value) => onFieldChange(sideKey, 'subtitle', value),
+        }
+      : undefined,
+    art: {
+      ...face.art,
+      value: override?.art ?? face.art?.value,
+      editable: true,
+      onChange: (value) => onFieldChange(sideKey, 'art', value),
+    },
+    color: {
+      ...face.color,
+      editable: Boolean(onColorChange),
+      onChange: onColorChange,
+    },
+    type: face.type
+      ? {
+          ...face.type,
+          icon: face.type.icon
+            ? {
+                ...face.type.icon,
+                value: override?.typeIcon ?? face.type.icon.value,
+                editable: Boolean(onColorChange),
+                onChange: (value) => onFieldChange(sideKey, 'typeIcon', value),
+              }
+            : face.type.icon,
+        }
+      : face.type,
+    info: {
+      ...face.info,
+      sections: [
+        ...(descriptionSection
+          ? [
+              {
+                ...descriptionSection,
+                description: {
+                  ...descriptionSection.description,
+                  value: override?.description ?? descriptionSection.description?.value,
+                  editable: true,
+                  onChange: (value: string) => onFieldChange(sideKey, 'description', value),
+                },
+              },
+            ]
+          : []),
+        ...(face.info?.sections || []).filter((section) => section.id !== 'description'),
+      ],
+      stats: face.info?.stats
+        ? {
+            ...face.info.stats,
+            values: face.info.stats.values?.map((stat) => ({
+              ...stat,
+              value: canEditStats ? override?.stats?.[stat.id] ?? stat.value : stat.value,
+            })),
+            editable: canEditStats,
+            onChange: canEditStats ? (statId, value) => onStatChange(sideKey, statId, value) : undefined,
+          }
+        : undefined,
+    },
+  };
 }
 

@@ -12,8 +12,7 @@ import { GameLayout } from '../../components/templates/GameLayout';
 import {
   PlayingCard,
   PlayingHand,
-  type PlayingCardData,
-  type PlayingCardEditableField,
+  type PlayingCardProps,
   type PlayingHandData,
 } from '../../components/molecules/PlayingCard';
 import { useGameStore } from '../../features/game/gameStore';
@@ -28,10 +27,13 @@ import {
   CHARACTER_CLASS_BASE_STATS,
   GAME_STAT_FIELDS,
   createEmptyGameStats,
+  getCharacterClassIconKey,
   type GameStatKey,
 } from '../../features/game/characterStats';
 
-type EditablePlayerCardOverride = Partial<Record<PlayingCardEditableField, string>> & {
+type CharacterCardEditableField = 'title' | 'description' | 'art';
+
+type EditablePlayerCardOverride = Partial<Record<CharacterCardEditableField, string>> & {
   stats?: Record<string, number>;
 };
 
@@ -169,8 +171,7 @@ export function CharacterPage() {
       setIsSavingCharacterClass(false);
     }
   };
-  const updatePlayerCardField = (field: PlayingCardEditableField, value: string) => {
-    if (field === 'ribbonText' || field === 'ribbonIcon' || field === 'subtitle') return;
+  const updatePlayerCardField = (field: CharacterCardEditableField, value: string) => {
     setPlayerCardOverride((current) => ({
       ...current,
       [field]: value,
@@ -181,7 +182,7 @@ export function CharacterPage() {
       void savePlayerCardProfileUpdate({ displayName: trimmedValue });
     } else if (field === 'description') {
       void savePlayerCardProfileUpdate({ bio: value });
-    } else if (field === 'illustrationUrl') {
+    } else if (field === 'art') {
       void savePlayerCardProfileUpdate({ characterIllustrationUrl: trimmedValue });
     }
   };
@@ -268,10 +269,10 @@ export function CharacterPage() {
       characterClass,
       label,
       description: t(`game.classDescriptions.${characterClass}`),
-      ribbonText: label,
+      typeText: label,
       baseStats: getCharacterClassBaseStats(characterClass, classDefinitions),
     });
-  }) as [PlayingCardData, ...PlayingCardData[]];
+  }) as [PlayingCardProps, ...PlayingCardProps[]];
   const classHand: PlayingHandData = {
     id: 'character-class-hand',
     title: t('character.chooseClass'),
@@ -318,7 +319,8 @@ export function CharacterPage() {
               visibleCardCount={classCards.length}
               expandOnHover={false}
               onCardSelect={(card) => {
-                if (card.characterClass) void saveCharacterClass(card.characterClass);
+                const characterClass = getCharacterClassFromCardId(card.id);
+                if (characterClass) void saveCharacterClass(characterClass);
               }}
               className="mx-auto h-[30rem] min-h-0 max-w-5xl"
             />
@@ -344,9 +346,11 @@ export function CharacterPage() {
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] xl:items-center">
-            <div className="mx-auto w-full max-w-sm">
-              <PlayingCard {...playerCard} size="full" presentation={{ fit: 'fillWidth' }} />
-            </div>
+            {playerCard ? (
+              <div className="mx-auto w-full max-w-sm">
+                <PlayingCard {...playerCard} size="full" presentation={{ fit: 'fillWidth' }} />
+              </div>
+            ) : null}
             <div className="min-w-0 overflow-visible rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="text-xl font-bold">{t('character.chooseClass')}</h3>
@@ -360,7 +364,8 @@ export function CharacterPage() {
                 visibleCardCount={classCards.length}
                 expandOnHover={false}
                 onCardSelect={(card) => {
-                  if (card.characterClass) void saveCharacterClass(card.characterClass);
+                  const characterClass = getCharacterClassFromCardId(card.id);
+                  if (characterClass) void saveCharacterClass(characterClass);
                 }}
                 className="mx-auto h-[30rem] min-h-0 max-w-5xl"
               />
@@ -373,37 +378,61 @@ export function CharacterPage() {
 }
 
 function applyPlayerCardOverrides(
-  card: PlayingCardData,
+  card: PlayingCardProps,
   override: EditablePlayerCardOverride,
-  onFieldChange: (field: PlayingCardEditableField, value: string) => void,
+  onFieldChange: (field: CharacterCardEditableField, value: string) => void,
   onStatChange: (statId: string, value: number) => void,
   onIllustrationUpload: (file: File) => Promise<string | void>
-): PlayingCardData {
-  const front = card.front;
+): PlayingCardProps {
+  const front = card.model.front && card.model.front !== 'none' ? card.model.front : undefined;
 
   return {
     ...card,
-    title: override.title ?? card.title,
-    subtitle: override.subtitle ?? card.subtitle,
-    illustrationUrl: override.illustrationUrl ?? card.illustrationUrl,
-    editable: true,
-    ribbonEditable: false,
-    onFieldChange,
-    onStatChange,
-    front: front
-      ? {
-          ...front,
-          title: override.title ?? front.title,
-          subtitle: override.subtitle ?? front.subtitle,
-          description: override.description ?? front.description,
-          illustrationUrl: override.illustrationUrl ?? front.illustrationUrl,
-          editable: true,
-          ribbonEditable: false,
-          onFieldChange,
-          onIllustrationUpload,
-          onStatChange,
-        }
-      : front,
+    model: {
+      ...card.model,
+      front: front
+        ? {
+            ...front,
+            title: {
+              ...front.title,
+              value: override.title ?? front.title?.value,
+              editable: true,
+              onChange: (value) => onFieldChange('title', value),
+            },
+            art: {
+              ...front.art,
+              value: override.art ?? front.art?.value,
+              editable: true,
+              upload: onIllustrationUpload,
+              onChange: (value) => onFieldChange('art', value),
+            },
+            info: {
+              ...front.info,
+              sections: [
+                {
+                  id: 'description',
+                  description: {
+                    value:
+                      override.description ??
+                      front.info?.sections?.find((section) => section.id === 'description')?.description?.value,
+                    variant: 'description',
+                    editable: true,
+                    onChange: (value) => onFieldChange('description', value),
+                  },
+                },
+                ...(front.info?.sections || []).filter((section) => section.id !== 'description'),
+              ],
+              stats: front.info?.stats
+                ? {
+                    ...front.info.stats,
+                    editable: true,
+                    onChange: onStatChange,
+                  }
+                : undefined,
+            },
+          }
+        : card.model.front,
+    },
   };
 }
 
@@ -433,34 +462,40 @@ function buildPlayerCharacterCard({
   getStatEditableRange: (statId: string, currentValue: number) => { min: number; max: number };
   bio?: string;
   fallbackDescription: string;
-}): PlayingCardData {
+}): PlayingCardProps {
   return {
     id: 'character-page-player',
     kind: 'character',
-    title: name,
-    subtitle: classLabel,
-    characterClass,
-    illustrationUrl: avatarUrl,
-    illustrationAlt: name,
-    ribbonLabel: classLabel,
-    front: {
-      title: name,
-      subtitle: classLabel,
-      description: bio || fallbackDescription,
-      illustrationUrl: avatarUrl,
-      illustrationAlt: name,
-      ribbonText: classLabel,
-      ribbonEditable: false,
-      statPointsRemaining: remainingStatPoints,
-      statPointsRemainingLabel: remainingStatPointsLabel,
-      getStatEditableRange,
-      stats: GAME_STAT_FIELDS.map(({ id, label }) => ({
-        id,
-        label,
-        value: Math.min(statMaxValue, baseStats[id] + statAllocations[id]),
-        min: baseStats[id],
-        max: statMaxValue,
-      })),
+    accentToken: characterClass,
+    model: {
+      front: {
+        title: { value: name, variant: 'title' },
+        subtitle: { value: classLabel, variant: 'subtitle' },
+        art: { value: avatarUrl, alt: name },
+        icon: { value: getCharacterClassIconKey(characterClass), colored: true },
+        type: { variant: 'class', text: { value: classLabel, variant: 'ribbon' } },
+        info: {
+          sections: [
+            {
+              id: 'description',
+              description: { value: bio || fallbackDescription, variant: 'description' },
+            },
+          ],
+          stats: {
+            remainingValue: remainingStatPoints,
+            remainingValueLabel: remainingStatPointsLabel,
+            getEditableRange: getStatEditableRange,
+            values: GAME_STAT_FIELDS.map(({ id, label }) => ({
+              id,
+              label,
+              value: Math.min(statMaxValue, baseStats[id] + statAllocations[id]),
+              min: baseStats[id],
+              max: statMaxValue,
+            })),
+            label: name,
+          },
+        },
+      },
     },
   };
 }
@@ -528,36 +563,53 @@ function buildClassCard({
   characterClass,
   label,
   description,
-  ribbonText,
+  typeText,
   baseStats,
 }: {
   characterClass: GameCharacterClass;
   label: string;
   description: string;
-  ribbonText: string;
+  typeText: string;
   baseStats: GameStats;
-}): PlayingCardData {
+}): PlayingCardProps {
   return {
     id: `character-class-${characterClass}`,
     disableLayoutAnimation: true,
     kind: 'character',
-    title: label,
-    subtitle: characterClass,
-    characterClass,
-    ribbonLabel: ribbonText,
-    front: {
-      title: label,
-      subtitle: characterClass,
-      description,
-      ribbonText,
-      stats: GAME_STAT_FIELDS.map(({ id, label: statLabel }) => ({
-        id,
-        label: statLabel,
-        value: baseStats[id],
-        displayValue: formatClassStatBonus(baseStats[id]),
-      })),
+    accentToken: characterClass,
+    model: {
+      front: {
+        title: { value: label, variant: 'title' },
+        subtitle: { value: characterClass, variant: 'subtitle' },
+        icon: { value: getCharacterClassIconKey(characterClass), colored: true },
+        type: { variant: 'class', text: { value: typeText, variant: 'ribbon' } },
+        info: {
+          sections: [
+            {
+              id: 'description',
+              description: { value: description, variant: 'description' },
+            },
+          ],
+          stats: {
+            values: GAME_STAT_FIELDS.map(({ id, label: statLabel }) => ({
+              id,
+              label: statLabel,
+              value: baseStats[id],
+              displayValue: formatClassStatBonus(baseStats[id]),
+            })),
+            label,
+          },
+        },
+      },
     },
   };
+}
+
+function getCharacterClassFromCardId(cardId: string | undefined): GameCharacterClass | undefined {
+  const suffix = cardId?.replace('character-class-', '');
+  return GAME_CHARACTER_CLASSES.includes(suffix as GameCharacterClass)
+    ? (suffix as GameCharacterClass)
+    : undefined;
 }
 
 function formatClassStatBonus(value: number) {

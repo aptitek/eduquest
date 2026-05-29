@@ -978,93 +978,111 @@ export function MapPage() {
               error={edgeStyleError}
               onChange={handleChangeEdgeStyles}
             />
-          ) : selectedActivity ? (
+          ) : (
             <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overflow-x-visible pb-4">
               <ActivityCard
-                activity={toActivityCardData(selectedActivity, activities, activityEdges, t)}
+                activity={
+                  selectedActivity
+                    ? toActivityCardData(selectedActivity, activities, activityEdges, t)
+                    : undefined
+                }
                 canEdit={Boolean(user?.isAdmin)}
                 showCompletionAction={!user?.isAdmin}
-                isCompleted={completedActivityIds.includes(selectedActivity.id)}
-                isResolving={completingActivityId === selectedActivity.id}
+                isCompleted={selectedActivity ? completedActivityIds.includes(selectedActivity.id) : false}
+                isResolving={selectedActivity ? completingActivityId === selectedActivity.id : false}
                 resolveError={completionError}
                 completionProgressTarget={
-                  selectedActivity.participationMode === 'guild'
+                  selectedActivity?.participationMode === 'guild'
                     ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
                     : undefined
                 }
                 completionProgressValue={
-                  pendingGuildVoteActivityIds.has(selectedActivity.id)
+                  selectedActivity && pendingGuildVoteActivityIds.has(selectedActivity.id)
                     ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
-                    : getGuildVoteProgressValue(selectedActivity)
+                    : selectedActivity
+                      ? getGuildVoteProgressValue(selectedActivity)
+                      : undefined
                 }
                 isCompletionPending={
-                  pendingGuildVoteActivityIds.has(selectedActivity.id) ||
-                  hasCurrentStudentVotedForGuildActivity(selectedActivity)
+                  selectedActivity
+                    ? pendingGuildVoteActivityIds.has(selectedActivity.id) ||
+                      hasCurrentStudentVotedForGuildActivity(selectedActivity)
+                    : false
                 }
                 completionPendingLabel={t('activityCard.waitingGuild')}
                 onResolve={
-                  user?.isAdmin || selectedActivity.isLocked
+                  !selectedActivity || user?.isAdmin || selectedActivity.isLocked
                     ? undefined
                     : (draft) => handleCompleteActivity(selectedActivity, draft)
                 }
                 onIconChange={
-                  user?.isAdmin ? (iconKey) => handleActivityIconChange(selectedActivity, iconKey) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (iconKey) => handleActivityIconChange(selectedActivity, iconKey)
+                    : undefined
                 }
                 onTitleChange={
-                  user?.isAdmin ? (title) => handleActivityTitleChange(selectedActivity, title) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (title) => handleActivityTitleChange(selectedActivity, title)
+                    : undefined
                 }
                 onSubtitleChange={
-                  user?.isAdmin ? (subtitle) => handleActivitySubtitleChange(selectedActivity, subtitle) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (subtitle) => handleActivitySubtitleChange(selectedActivity, subtitle)
+                    : undefined
                 }
                 onDescriptionChange={
-                  user?.isAdmin
+                  user?.isAdmin && selectedActivity
                     ? (description) => handleActivityDescriptionChange(selectedActivity, description)
                     : undefined
                 }
                 onGoldRewardChange={
-                  user?.isAdmin ? (goldReward) => handleActivityGoldRewardChange(selectedActivity, goldReward) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (goldReward) => handleActivityGoldRewardChange(selectedActivity, goldReward)
+                    : undefined
                 }
                 onResourcesChange={
-                  user?.isAdmin ? (resources) => handleActivityResourcesChange(selectedActivity, resources) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (resources) => handleActivityResourcesChange(selectedActivity, resources)
+                    : undefined
                 }
                 onPositionChange={
-                  user?.isAdmin ? (position) => handleActivityCardPositionChange(selectedActivity, position) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (position) => handleActivityCardPositionChange(selectedActivity, position)
+                    : undefined
                 }
                 onParticipationModeChange={
-                  user?.isAdmin
+                  user?.isAdmin && selectedActivity
                     ? (participationMode) => handleActivityParticipationModeChange(selectedActivity, participationMode)
                     : undefined
                 }
                 onCardColorChange={
-                  user?.isAdmin
+                  user?.isAdmin && selectedActivity
                     ? (cardColor) => handleActivityCardColorChange(selectedActivity, cardColor)
                     : undefined
                 }
                 onIllustrationUrlChange={
-                  user?.isAdmin
+                  user?.isAdmin && selectedActivity
                     ? (illustrationUrl) => handleActivityIllustrationChange(selectedActivity, illustrationUrl)
                     : undefined
                 }
                 onIllustrationUpload={
-                  user?.isAdmin ? (file) => uploadActivityIllustration(selectedActivity, file) : undefined
+                  user?.isAdmin && selectedActivity
+                    ? (file) => uploadActivityIllustration(selectedActivity, file)
+                    : undefined
                 }
                 onStepRangesChange={
-                  user?.isAdmin
+                  user?.isAdmin && selectedActivity
                     ? (stepRanges) => handleActivityStepRangesChange(selectedActivity, stepRanges)
                     : undefined
                 }
-                className="min-h-[28rem] w-full max-w-none shrink-0"
+                emptyCardLabel={user?.isAdmin ? t('map.addActivity') : undefined}
+                onEmptyCardClick={user?.isAdmin && !selectedActivity && !isCreatingActivity ? handleCreateActivity : undefined}
+                className={cn(
+                  'min-h-[28rem] w-full max-w-none shrink-0',
+                  isCreatingActivity && 'cursor-wait opacity-70'
+                )}
               />
             </div>
-          ) : (
-            <ActivityCard
-              emptyCardLabel={user?.isAdmin ? t('map.addActivity') : undefined}
-              onEmptyCardClick={user?.isAdmin && !isCreatingActivity ? handleCreateActivity : undefined}
-              className={cn(
-                'h-full min-h-0 w-full max-w-none',
-                isCreatingActivity && 'cursor-wait opacity-70'
-              )}
-            />
           )}
         </MapSidePanel>
       </MapContainer>

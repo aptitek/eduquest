@@ -11,9 +11,13 @@ describe('dashboard dock data builders', () => {
       { id: 'guild-mid', name: 'Mid Guild', gold: 100, boostPointsSpent: 25 },
     ]);
 
-    expect(cards.map((card) => card.title)).toEqual(['High Guild', 'Mid Guild', 'Low Guild']);
-    expect(cards.map((card) => card.guild?.id)).toEqual(['guild-high', 'guild-mid', 'guild-low']);
-    expect(cards.map((card) => card.subtitle)).toEqual([
+    expect(cards.map((card) => getFront(card)?.title?.value)).toEqual(['High Guild', 'Mid Guild', 'Low Guild']);
+    expect(cards.map((card) => card.id)).toEqual([
+      'class-guild-high-guild-guild',
+      'class-guild-mid-guild-guild',
+      'class-guild-low-guild-guild',
+    ]);
+    expect(cards.map((card) => getFront(card)?.subtitle?.value)).toEqual([
       'dashboard.dock.boostPointsSpent',
       'dashboard.dock.boostPointsSpent',
       'dashboard.dock.boostPointsSpent',
@@ -26,8 +30,8 @@ describe('dashboard dock data builders', () => {
     ]);
 
     expect(cards).toHaveLength(1);
-    expect(cards[0].title).toBe('Solarized Sentinels');
-    expect(cards[0].ribbonLabel).toBe('#1');
+    expect(getFront(cards[0])?.title?.value).toBe('Solarized Sentinels');
+    expect(getFront(cards[0])?.type?.text?.value).toBe('#1');
   });
 
   it('uses real character stats in the player guild hand', () => {
@@ -50,7 +54,7 @@ describe('dashboard dock data builders', () => {
     });
 
     const playerCard = hand.cards.find((card) => card.id === 'player');
-    expect(playerCard?.front && 'stats' in playerCard.front ? playerCard.front.stats : []).toEqual([
+    expect(getFront(playerCard)?.info?.stats?.values).toEqual([
       { id: 'strength', label: 'STR', value: 7 },
       { id: 'dexterity', label: 'DEX', value: 16 },
       { id: 'intelligence', label: 'INT', value: 13 },
@@ -58,3 +62,7 @@ describe('dashboard dock data builders', () => {
     ]);
   });
 });
+
+function getFront(card: ReturnType<typeof buildPodiumCards>[number] | undefined) {
+  return card?.model.front && card.model.front !== 'none' ? card.model.front : undefined;
+}

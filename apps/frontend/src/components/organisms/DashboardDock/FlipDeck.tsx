@@ -1,10 +1,10 @@
 import { Gift, Trophy } from 'lucide-react';
 import { PlayingHand } from '../../molecules/PlayingCard';
-import type { PlayingCardData, PlayingHandMode, PlayingHandVariant } from '../../molecules/PlayingCard';
+import type { PlayingCardProps, PlayingHandMode, PlayingHandVariant } from '../../molecules/PlayingCard';
 import type { StackLayoutSide } from '../../molecules/StackLayout';
 import { cn } from '../../../utils/cn';
 
-type DeckCards = readonly [PlayingCardData, ...PlayingCardData[]];
+type DeckCards = readonly [PlayingCardProps, ...PlayingCardProps[]];
 
 export interface FlipDeckProps {
   frontCards: DeckCards;
@@ -22,7 +22,7 @@ export interface FlipDeckProps {
   className?: string;
   cardClassName?: string;
   stackCardClassName?: string;
-  onCardSelect?: (card: PlayingCardData, index: number) => void;
+  onCardSelect?: (card: PlayingCardProps, index: number) => void;
   wrapperClassName?: string;
 }
 

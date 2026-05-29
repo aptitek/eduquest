@@ -24,6 +24,7 @@ const DEFAULT_ICON_IDS = [
   'Flame',
   'Compass',
   'BookOpen',
+  'Gift',
   'Shield',
   'Hammer',
   'Sparkles',

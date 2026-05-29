@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { CornerRibbonPosition } from '../../atoms/CornerRibbon';
 import type { RadarGraphAxis, RadarGraphDataset } from '../RadarGraph';
 
-export type PlayingCardSize = 'nano' | 'mini' | 'full';
+export type PlayingCardSize = 'nano' | 'mini' | 'full' | 'page';
 
 export type PlayingCardFit = 'intrinsic' | 'fillWidth' | 'fillHeight' | 'contain';
 
@@ -65,8 +65,6 @@ export type CardTone =
   | 'student'
   | 'reward';
 
-export type CardFaceMode = 'content' | 'genericBack';
-
 export interface CardSlot<TValue> {
   value?: TValue;
   fallback?: TValue;
@@ -83,7 +81,8 @@ export interface CardTextSlot extends CardSlot<string> {
 export interface CardIconSlot extends CardSlot<string> {
   icon?: ReactNode;
   label?: string;
-  position?: 'top-left' | 'top-right' | 'center';
+  color?: CSSProperties['color'];
+  colored?: boolean;
   searchPlaceholder?: string;
   defaultIconIds?: string[];
   limit?: number;
@@ -111,7 +110,7 @@ export interface CardStatValue {
   max?: number;
 }
 
-export interface CardStatsSlot {
+export interface PlayingCardStatsSlot {
   values?: CardStatValue[];
   label?: string;
   editable?: boolean;
@@ -127,9 +126,13 @@ export interface CardStatsSlot {
   };
 }
 
-export interface CardRibbonSlot {
+export type PlayingCardTypeVariant = 'class' | 'rank' | 'cost' | 'votes' | 'new' | 'custom';
+
+export interface PlayingCardTypeSlot {
+  variant: PlayingCardTypeVariant;
   text?: CardTextSlot;
   icon?: CardIconSlot;
+  value?: string | number;
   position?: CornerRibbonPosition;
   hidden?: boolean;
   className?: string;
@@ -157,6 +160,13 @@ export interface CardMetadataSlot {
   sections?: CardSection[];
 }
 
+export interface PlayingCardInfoSlot {
+  stats?: PlayingCardStatsSlot;
+  sections?: CardSection[];
+  content?: ReactNode;
+  placement?: 'body' | 'aside';
+}
+
 export interface CardInstitutionalSlot {
   sections?: CardSection[];
 }
@@ -170,28 +180,24 @@ export interface CardGenericBackSlot {
   tone?: CardTone;
 }
 
-export interface CardFaceModel {
-  mode?: CardFaceMode;
+export interface PlayingCardFaceSlots {
   title?: CardTextSlot;
   subtitle?: CardTextSlot;
-  description?: CardTextSlot;
-  icon?: CardIconSlot;
-  color?: CardColorSlot;
   art?: CardImageSlot;
-  ribbon?: CardRibbonSlot;
-  stats?: CardStatsSlot;
-  metadata?: CardMetadataSlot;
-  institutional?: CardInstitutionalSlot;
-  genericBack?: CardGenericBackSlot;
+  type?: PlayingCardTypeSlot;
+  color?: CardColorSlot;
+  icon?: CardIconSlot;
+  info?: PlayingCardInfoSlot;
   actions?: ReactNode;
-  footer?: ReactNode;
-  footerPlacement?: 'body' | 'aside';
+  back?: CardGenericBackSlot;
   className?: string;
 }
 
+export type PlayingCardFace = PlayingCardFaceSlots | null | 'none';
+
 export interface PlayingCardModel {
-  front: CardFaceModel;
-  back?: CardFaceModel;
+  front: PlayingCardFace;
+  back?: PlayingCardFace;
 }
 
 export interface PlayingCardVariantOptions {

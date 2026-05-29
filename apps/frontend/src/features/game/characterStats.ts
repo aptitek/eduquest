@@ -1,5 +1,5 @@
 import type { GameCharacterClass, GameStats } from '@eduquest/shared';
-import type { PlayingCardStat } from '../../components/molecules/PlayingCard';
+import type { CardStatValue } from '../../components/molecules/PlayingCard';
 
 export type GameStatKey = keyof GameStats;
 
@@ -47,6 +47,17 @@ export const CHARACTER_CLASS_BASE_STATS: Record<GameCharacterClass, GameStats> =
   },
 };
 
+export const CHARACTER_CLASS_ICON_KEYS: Record<GameCharacterClass, string> = {
+  scholar: 'BookOpen',
+  champion: 'Trophy',
+  guide: 'Users',
+  specialist: 'Sparkles',
+};
+
+export function getCharacterClassIconKey(characterClass: GameCharacterClass) {
+  return CHARACTER_CLASS_ICON_KEYS[characterClass];
+}
+
 export function createEmptyGameStats(): GameStats {
   return {
     strength: 0,
@@ -58,7 +69,7 @@ export function createEmptyGameStats(): GameStats {
   };
 }
 
-export function toPlayingCardStats(stats?: GameStats, max = 5): PlayingCardStat[] | undefined {
+export function toPlayingCardStats(stats?: GameStats, max = 5): CardStatValue[] | undefined {
   if (!stats) return undefined;
   return GAME_STAT_FIELDS.map((field) => ({
     id: field.id,

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { GameBonusVoteState, GameRewardCard } from '@eduquest/shared';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
-import { PlayingCard, type PlayingCardData } from '../../components/molecules/PlayingCard';
+import { PlayingCard, type PlayingCardProps } from '../../components/molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../components/molecules/ResponsiveCardGrid';
 import { HoldToConfirmButton } from '../../components/atoms/HoldToConfirmButton';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -193,7 +193,7 @@ function BonusVotePanel({
   selectedMilestoneId: string | null;
   voteState: GameBonusVoteState | null;
   selectedVoteState?: GameBonusVoteState['voteStates'][number];
-  voteCards: PlayingCardData[];
+  voteCards: PlayingCardProps[];
   selectedBonusCardId: string | null;
   isVoting: boolean;
   onSelectMilestone: (milestoneId: string) => void;
@@ -298,11 +298,13 @@ function BonusVotePanel({
           const result = selectedVoteState?.results.find((item) => item.bonusCardId === card.id);
           const isSelected = selectedBonusCardId === card.id;
           const isGuildVote = guildVote?.bonusCardId === card.id;
+          const isFaceDown = isFaceDownCard(card);
+          const showVoteOverlays = isVoteOpen && !isFaceDown;
           return (
             <button
               type="button"
               onClick={() => card.id && isVoteOpen && onSelectCard(card.id)}
-              disabled={isVoting || !card.id || card.faceDown || !isVoteOpen}
+              disabled={isVoting || !card.id || isFaceDown || !isVoteOpen}
               className={`group relative w-full text-left transition ${
                 isSelected ? 'rounded-[1.4rem] ring-4 ring-status-quest ring-offset-4 ring-offset-gaming-base' : ''
               }`}
@@ -311,43 +313,47 @@ function BonusVotePanel({
                 {...card}
                 size="full"
                 presentation={{ fit: 'fillWidth' }}
-                overlays={[
-                  {
-                    id: 'vote-count',
-                    placement: 'top-right-inside',
-                    content: (
-                      <span className="rounded-full border border-gaming-border bg-gaming-base/95 px-3 py-1 text-sm font-black text-text-primary shadow-card">
-                        {result?.voteCount || 0} vote{(result?.voteCount || 0) > 1 ? 's' : ''}
-                      </span>
-                    ),
-                  },
-                  ...(result?.isLeader
+                overlays={
+                  showVoteOverlays
                     ? [
                         {
-                          id: 'leader',
-                          placement: 'top-left-inside' as const,
+                          id: 'vote-count',
+                          placement: 'top-right-inside',
                           content: (
-                            <span className="rounded-full bg-status-completed px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-gaming-base shadow-card">
-                              Leader
+                            <span className="rounded-full border border-gaming-border bg-gaming-base/95 px-3 py-1 text-sm font-black text-text-primary shadow-card">
+                              {result?.voteCount || 0} vote{(result?.voteCount || 0) > 1 ? 's' : ''}
                             </span>
                           ),
                         },
+                        ...(result?.isLeader
+                          ? [
+                              {
+                                id: 'leader',
+                                placement: 'top-left-inside' as const,
+                                content: (
+                                  <span className="rounded-full bg-status-completed px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-gaming-base shadow-card">
+                                    Leader
+                                  </span>
+                                ),
+                              },
+                            ]
+                          : []),
+                        ...(isGuildVote
+                          ? [
+                              {
+                                id: 'guild-vote',
+                                placement: 'bottom-left-inside' as const,
+                                content: (
+                                  <span className="rounded-full border border-status-quest/60 bg-gaming-base/95 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-status-quest shadow-card">
+                                    Vote de guilde
+                                  </span>
+                                ),
+                              },
+                            ]
+                          : []),
                       ]
-                    : []),
-                  ...(isGuildVote
-                    ? [
-                        {
-                          id: 'guild-vote',
-                          placement: 'bottom-left-inside' as const,
-                          content: (
-                            <span className="rounded-full border border-status-quest/60 bg-gaming-base/95 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-status-quest shadow-card">
-                              Vote de guilde
-                            </span>
-                          ),
-                        },
-                      ]
-                    : []),
-                ]}
+                    : undefined
+                }
               />
             </button>
           );
@@ -358,44 +364,63 @@ function BonusVotePanel({
   );
 }
 
+function isFaceDownCard(card: PlayingCardProps) {
+  const front = card.model.front;
+  return !front || front === 'none' || Boolean(front.back);
+}
+
 function buildVoteCards(t: (path: string) => string, bonusCards: GameRewardCard[]) {
-  const cards: PlayingCardData[] = bonusCards.length
+  const cards: PlayingCardProps[] = bonusCards.length
     ? bonusCards.map((card) => ({
         kind: 'reward' as const,
         id: card.id,
-        title: card.title,
-        subtitle: card.subtitle,
-        description: card.description,
-        color: card.color,
-        accentToken: card.accentToken as PlayingCardData['accentToken'],
-        illustrationUrl: card.illustrationUrl,
-        illustration: card.illustrationUrl
-          ? undefined
-          : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+        accentToken: card.accentToken,
+        model: {
+          front: {
+            title: { value: card.title, variant: 'title' },
+            subtitle: card.subtitle ? { value: card.subtitle, variant: 'subtitle' } : undefined,
+            color: { value: card.color },
+            art: {
+              value: card.illustrationUrl,
+              alt: card.title,
+              node: card.illustrationUrl
+                ? undefined
+                : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
+            },
+            type: {
+              variant: 'cost',
+              value: card.cost,
+              text: { value: String(card.cost || 0), variant: 'ribbon' },
+            },
+            info: {
+              sections: [
+                {
+                  id: 'description',
+                  description: {
+                    value: card.description || card.subtitle || t('dashboard.rewards.fallbackDescription'),
+                    variant: 'description',
+                  },
+                },
+              ],
+            },
+          },
+        },
       }))
     : [
         {
           kind: 'reward' as const,
           id: 'empty-progress-reward',
-          title: t('dashboard.rewards.empty.title'),
-          subtitle: t('dashboard.rewards.empty.subtitle'),
-          description: t('dashboard.rewards.fallbackDescription'),
           accentToken: 'neutral' as const,
-          faceDown: true,
+          model: {
+            front: {
+              back: { mode: 'icon', icon: { value: 'Gift' } },
+            },
+          },
         },
       ];
 
   return cards.map((card) => ({
     ...card,
     layoutId: `progress-next-vote-${card.id}`,
-    front: {
-      title: card.title || t('dashboard.rewards.fallbackTitle').replace('{index}', '1'),
-      subtitle: card.subtitle,
-      description: card.description || card.subtitle || t('dashboard.rewards.fallbackDescription'),
-      color: card.color,
-      illustrationUrl: card.illustrationUrl,
-      illustrationAlt: card.title,
-      illustration: card.illustration,
-    },
-  })) as PlayingCardData[];
+  }));
 }

@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import {
+  Activity as ActivityGlyph,
   Anvil,
   BookOpen,
   Castle,
@@ -25,11 +26,7 @@ import type {
   BossActivitySubmissionField,
 } from '@eduquest/shared';
 import type { ActivityCompletionDraft } from '../../features/game/api';
-import {
-  PlayingCard,
-  type PlayingCardEditableField,
-  type PlayingCardSide,
-} from '../molecules/PlayingCard';
+import { PlayingCard, type PlayingCardFaceSlots } from '../molecules/PlayingCard';
 import { EditableList } from '../molecules/EditableList';
 import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
 import { ColorSwatchPicker } from '../molecules/ColorSwatchPicker';
@@ -40,6 +37,7 @@ import { resolveColorTextClassName } from '../../styles/colorTokens';
 import { cn } from '../../utils/cn';
 
 const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
+  Activity: ActivityGlyph,
   Anvil,
   TreePine,
   ScrollText,
@@ -66,7 +64,10 @@ const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
   practical: Hammer,
   mini_boss: Shield,
   boss: Swords,
+  activity: ActivityGlyph,
 };
+
+type ActivityCardEditableField = 'title' | 'subtitle' | 'description' | 'art' | 'type';
 
 export interface ActivityResourceLink {
   title?: string;
@@ -150,11 +151,22 @@ export function ActivityCard({
 }: ActivityCardProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<ActivityCardData | undefined>(activity);
+  const wasEmptyActivityRef = useRef(!activity);
+  const [isRevealingSelectedActivity, setIsRevealingSelectedActivity] = useState(false);
   const hasBossAnswerFields = Boolean(
     showCompletionAction && !isCompleted && draft?.answerFields?.length
   );
 
   useEffect(() => {
+    if (activity && wasEmptyActivityRef.current) {
+      setIsRevealingSelectedActivity(true);
+      wasEmptyActivityRef.current = false;
+      setDraft(activity);
+      return;
+    }
+
+    wasEmptyActivityRef.current = !activity;
+    if (!activity) setIsRevealingSelectedActivity(false);
     setDraft(activity);
   }, [activity]);
 
@@ -162,19 +174,24 @@ export function ActivityCard({
     return (
       <div
         className={cn(
-          'flex min-h-0 justify-center',
+          'flex h-full min-h-0 justify-center',
+          showCompletionAction && 'pb-28 pr-24',
           className
         )}
       >
         <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
           <PlayingCard
-            size="full"
+            size="page"
             presentation={{ fit: 'contain' }}
             kind="activity"
             accentToken="quest"
-            title={emptyCardLabel || t('activityCard.emptyState')}
-            faceDown
-            editable={Boolean(onEmptyCardClick)}
+            model={{
+              front: {
+                title: { value: emptyCardLabel || t('activityCard.emptyState') },
+                icon: { value: 'Activity' },
+                back: {},
+              },
+            }}
             interactive={Boolean(onEmptyCardClick)}
             onClick={onEmptyCardClick}
           />
@@ -209,10 +226,10 @@ export function ActivityCard({
     void onIconChange?.(selectedIcon);
   };
 
-  const updateCardField = (field: PlayingCardEditableField, value: string) => {
+  const updateCardField = (field: ActivityCardEditableField, value: string) => {
     updateDraft((current) => {
-      if (field === 'ribbonText') return { ...current, goldReward: Number(value) || 0 };
-      if (field === 'illustrationUrl') return { ...current, illustrationUrl: value || undefined };
+      if (field === 'type') return { ...current, goldReward: Number(value) || 0 };
+      if (field === 'art') return { ...current, illustrationUrl: value || undefined };
       if (field === 'title' || field === 'subtitle' || field === 'description') {
         return { ...current, [field]: value };
       }
@@ -227,10 +244,10 @@ export function ActivityCard({
     if (field === 'description') {
       void onDescriptionChange?.(value);
     }
-    if (field === 'ribbonText') {
+    if (field === 'type') {
       void onGoldRewardChange?.(Number(value) || 0);
     }
-    if (field === 'illustrationUrl') {
+    if (field === 'art') {
       void onIllustrationUrlChange?.(value);
     }
   };
@@ -266,19 +283,41 @@ export function ActivityCard({
   const removeStepRange = (index: number) => {
     applyStepRanges(draft.stepRanges.filter((_, rangeIndex) => rangeIndex !== index));
   };
-  const activityFront = buildActivityFrontSide({
+  const completionAction =
+    showCompletionAction && !hasBossAnswerFields ? (
+      <QuestCompletionAction
+        isCompleted={isCompleted}
+        isResolving={isResolving}
+        error={resolveError}
+        onComplete={onResolve}
+        mode={draft.participationMode}
+        progressTarget={completionProgressTarget}
+        progressValue={completionProgressValue}
+        isPending={isCompletionPending}
+        pendingLabel={completionPendingLabel}
+        completeLabel={
+          draft.participationMode === 'guild'
+            ? t('activityCard.vote')
+            : t('activityCard.complete')
+        }
+        completedLabel={t('activityCard.questResolved')}
+      />
+    ) : undefined;
+  const activityFront = buildActivityFace({
     activity: draft,
     canEdit,
     onResourcesChange: applyResources,
     onIconSelect: updateIcon,
+    onColorChange: updateCardColor,
     onFieldChange: updateCardField,
     onIllustrationUpload,
+    actions: completionAction,
   });
 
   return (
     <div
       className={cn(
-        'flex min-h-0 justify-center',
+        'flex h-full min-h-0 justify-center',
         hasBossAnswerFields
           ? 'flex-col items-center gap-4 overflow-y-auto pb-4'
           : showCompletionAction && 'pb-28 pr-24',
@@ -287,65 +326,38 @@ export function ActivityCard({
     >
       <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
         <PlayingCard
-          size="full"
+          size="page"
           accentToken="quest"
-          color={draft.cardColor}
-          title={draft.title}
-          subtitle={draft.subtitle}
-          illustrationUrl={draft.illustrationUrl}
-          illustrationAlt={draft.illustrationAlt}
-          ribbonText={String(draft.goldReward)}
-          ribbonIcon={<Coins size={18} aria-hidden />}
-          ribbonClassName="bg-status-campfire text-solarized-base3"
-          ribbonEditable={canEdit}
-          front={activityFront}
-          back={
-            canEdit ? (
-              <ActivityCardBack
-                activity={draft}
-                onNumberChange={updateNumber}
-                onIllustrationUrlChange={(value) => updateCardField('illustrationUrl', value)}
-                onCardColorChange={updateCardColor}
-                onParticipationModeChange={updateParticipationMode}
-                onStepRangeChange={updateStepRange}
-                onStepRangeAdd={addStepRange}
-                onStepRangeRemove={removeStepRange}
-                t={t}
-              />
-            ) : undefined
-          }
+          model={{
+            front: isRevealingSelectedActivity ? 'none' : activityFront,
+            back: isRevealingSelectedActivity
+              ? activityFront
+              : canEdit
+                ? {
+                    title: { value: t('activityCard.flipAdminView'), variant: 'title' },
+                    art: {
+                      node: (
+                        <ActivityCardBack
+                          activity={draft}
+                          onNumberChange={updateNumber}
+                          onIllustrationUrlChange={(value) => updateCardField('art', value)}
+                          onCardColorChange={updateCardColor}
+                          onParticipationModeChange={updateParticipationMode}
+                          onStepRangeChange={updateStepRange}
+                          onStepRangeAdd={addStepRange}
+                          onStepRangeRemove={removeStepRange}
+                          t={t}
+                        />
+                      ),
+                      alt: t('activityCard.flipAdminView'),
+                    },
+                  }
+                : undefined,
+          }}
+          autoFlipToBack={isRevealingSelectedActivity}
+          onAutoFlipComplete={() => setIsRevealingSelectedActivity(false)}
           flipLabel={t('activityCard.flipAdminView')}
           presentation={{ fit: 'contain' }}
-          overlays={
-            showCompletionAction && !hasBossAnswerFields
-              ? [
-                  {
-                    id: 'quest-completion',
-                    placement: 'bottom-right-outside',
-                    interactive: true,
-                    content: (
-                      <QuestCompletionAction
-                        isCompleted={isCompleted}
-                        isResolving={isResolving}
-                        error={resolveError}
-                        onComplete={onResolve}
-                        mode={draft.participationMode}
-                        progressTarget={completionProgressTarget}
-                        progressValue={completionProgressValue}
-                        isPending={isCompletionPending}
-                        pendingLabel={completionPendingLabel}
-                        completeLabel={
-                          draft.participationMode === 'guild'
-                            ? t('activityCard.vote')
-                            : t('activityCard.complete')
-                        }
-                        completedLabel={t('activityCard.questResolved')}
-                      />
-                    ),
-                  },
-                ]
-              : undefined
-          }
         />
       </div>
       {hasBossAnswerFields ? (
@@ -499,53 +511,102 @@ function formatBytes(bytes: number) {
   return `${bytes} B`;
 }
 
-function buildActivityFrontSide({
+function buildActivityFace({
   activity,
   canEdit,
   onResourcesChange,
   onIconSelect,
+  onColorChange,
   onFieldChange,
   onIllustrationUpload,
+  actions,
 }: {
   activity: ActivityCardData;
   canEdit: boolean;
   onResourcesChange: (resources: ActivityResourceLink[]) => void;
   onIconSelect: (iconName: string) => void;
-  onFieldChange: (field: PlayingCardEditableField, value: string) => void;
+  onColorChange: (cardColor: string) => void;
+  onFieldChange: (field: ActivityCardEditableField, value: string) => void;
   onIllustrationUpload?: (file: File) => Promise<string | void>;
-}): PlayingCardSide {
+  actions?: ReactNode;
+}): PlayingCardFaceSlots {
   const showUploadTarget = canEdit && Boolean(onIllustrationUpload);
 
   return {
-    title: activity.title,
-    subtitle: activity.subtitle,
-    description: activity.description,
-    color: activity.cardColor,
-    illustrationUrl: activity.illustrationUrl,
-    illustrationAlt: activity.illustrationAlt,
-    illustration: activity.illustrationUrl || showUploadTarget ? undefined : (
-      <ActivityIcon
-        iconId={activity.selectedIcon}
-        size={72}
-        color={activity.cardColor}
-        canEdit={canEdit}
-        onChange={onIconSelect}
-      />
-    ),
-    ribbonText: String(activity.goldReward),
-    ribbonIcon: <Coins size={18} aria-hidden />,
-    ribbonPosition: 'top-right',
-    editable: canEdit,
-    ribbonEditable: canEdit,
-    onFieldChange,
-    onIllustrationUpload,
-    footer: (
-      <ActivityCardFooter
-        activity={activity}
-        canEdit={canEdit}
-        onResourcesChange={onResourcesChange}
-      />
-    ),
+    title: {
+      value: activity.title,
+      variant: 'title',
+      editable: canEdit,
+      onChange: (value) => onFieldChange('title', value),
+      placeholder: 'Activity title',
+    },
+    subtitle: {
+      value: activity.subtitle,
+      variant: 'subtitle',
+      editable: canEdit,
+      onChange: (value) => onFieldChange('subtitle', value),
+      placeholder: 'Activity subtitle',
+    },
+    color: {
+      value: activity.cardColor,
+      editable: canEdit,
+      onChange: onColorChange,
+    },
+    art: {
+      value: activity.illustrationUrl,
+      alt: activity.illustrationAlt,
+      node: activity.illustrationUrl || showUploadTarget ? undefined : null,
+      editable: canEdit,
+      upload: onIllustrationUpload,
+      onChange: (value) => onFieldChange('art', value),
+    },
+    icon: {
+      value: activity.selectedIcon,
+      icon: (
+        <ActivityIcon
+          iconId={activity.selectedIcon}
+          size={52}
+          color={activity.cardColor}
+          canEdit={canEdit}
+          onChange={onIconSelect}
+        />
+      ),
+      colored: true,
+    },
+    type: {
+      variant: 'cost',
+      text: {
+        value: String(activity.goldReward),
+        variant: 'ribbon',
+        editable: canEdit,
+        onChange: (value) => onFieldChange('type', value),
+      },
+      icon: { icon: <Coins size={18} aria-hidden /> },
+      position: 'top-right',
+      className: 'bg-status-campfire text-solarized-base3',
+      contentInteractive: canEdit,
+    },
+    info: {
+      sections: [
+        {
+          id: 'description',
+          description: {
+            value: activity.description,
+            variant: 'description',
+            editable: canEdit,
+            onChange: (value) => onFieldChange('description', value),
+          },
+        },
+      ],
+      content: (
+        <ActivityCardFooter
+          activity={activity}
+          canEdit={canEdit}
+          onResourcesChange={onResourcesChange}
+        />
+      ),
+    },
+    actions,
     className: 'bg-gaming-card text-text-primary',
   };
 }

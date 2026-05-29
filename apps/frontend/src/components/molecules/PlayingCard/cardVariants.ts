@@ -25,6 +25,16 @@ export interface PlayingCardSizeLayout {
 }
 
 export const PLAYING_CARD_SIZE_LAYOUTS: Record<PlayingCardSize, PlayingCardSizeLayout> = {
+  page: {
+    size: 'page',
+    artFrameSize: 'full',
+    ribbonSize: 'md',
+    titleSize: 'full',
+    illustrationIconSize: 'full',
+    showDetailPanel: true,
+    revealCompactDetailsOnHover: false,
+    shellClassName: 'relative flex h-full min-h-0 flex-col overflow-visible rounded-[1.1rem] border border-gaming-border bg-gaming-card/95',
+  },
   full: {
     size: 'full',
     artFrameSize: 'full',
@@ -83,13 +93,14 @@ export function playingCardRootClassName({
   emphasis = 'none',
 }: PlayingCardVariantOptions = {}) {
   return cn(
-    'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl outline-none',
+    'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] outline-none [perspective:1600px]',
     'transition-[filter,box-shadow,width,transform,border-radius] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-[color:var(--playing-card-accent)]',
+    size === 'page' && 'h-full max-h-full w-auto max-w-[min(26rem,calc((100vh-8rem)*5/7))] p-2',
     size === 'full' && 'w-full max-w-sm p-2',
     size === 'mini' && 'w-32 sm:w-36',
     size === 'nano' &&
       'w-[2.15rem] rounded-lg p-0.5 shadow-lg hover:z-50 hover:w-32 hover:translate-y-1 hover:rounded-[1.4rem] hover:shadow-2xl focus-within:z-50 focus-within:w-32 focus-within:translate-y-1 focus-within:rounded-[1.4rem] focus-within:shadow-2xl sm:hover:w-36 sm:focus-within:w-36',
-    state === 'faceDown' && size !== 'full' && 'bg-gaming-base',
+    state === 'faceDown' && size !== 'full' && size !== 'page' && 'bg-gaming-base',
     state === 'disabled' && 'pointer-events-none opacity-60',
     state === 'editable' && 'ring-1 ring-[color:var(--playing-card-accent)]/20',
     playingCardFitClassName(fit),
@@ -153,16 +164,13 @@ export function playingCardOverlayClassName(placement: PlayingCardOverlayPlaceme
 
 export function playingCardInnerClassName(size: PlayingCardVariantOptions['size']) {
   return cn(
-    'relative h-full min-h-0 w-full rounded-[1.1rem] [transform-style:preserve-3d]',
+    'relative h-full min-h-0 w-full overflow-visible rounded-[1.1rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl [transform-style:preserve-3d]',
     size === 'nano' && 'rounded-lg group-hover:rounded-[1.1rem] group-focus-within:rounded-[1.1rem]'
   );
 }
 
-export function playingCardFaceClassName(size: PlayingCardVariantOptions['size']) {
-  return cn(
-    'absolute inset-0 [backface-visibility:hidden]',
-    size === 'full' && 'overflow-visible'
-  );
+export function playingCardFaceClassName() {
+  return 'absolute inset-0 [backface-visibility:hidden]';
 }
 
 export function playingCardBackClassName() {

@@ -1,6 +1,6 @@
 import type { GameCharacterClass, GameStats } from '@eduquest/shared';
-import type { PlayingCardData } from '../../../components/molecules/PlayingCard';
-import { toPlayingCardStats } from '../characterStats';
+import type { PlayingCardProps } from '../../../components/molecules/PlayingCard';
+import { getCharacterClassIconKey, toPlayingCardStats } from '../characterStats';
 
 export interface CharacterCardAdapterInput {
   id?: string;
@@ -12,7 +12,7 @@ export interface CharacterCardAdapterInput {
   classLabel: string;
   illustrationUrl?: string;
   stats?: GameStats;
-  ribbonText?: string;
+  typeText?: string;
   editable?: boolean;
 }
 
@@ -26,46 +26,42 @@ export function buildCharacterPlayingCardData({
   classLabel,
   illustrationUrl,
   stats,
-  ribbonText = classLabel,
+  typeText = classLabel,
   editable,
-}: CharacterCardAdapterInput): PlayingCardData {
+}: CharacterCardAdapterInput): PlayingCardProps {
   const resolvedSubtitle = subtitle || classLabel;
 
   return {
     id,
     layoutId,
     kind: 'character',
-    characterClass,
     accentToken: characterClass,
-    title: displayName,
-    subtitle: resolvedSubtitle,
-    illustrationUrl,
-    illustrationAlt: displayName,
-    ribbonText,
-    editable,
     model: {
       front: {
         title: { value: displayName, variant: 'title' },
         subtitle: { value: resolvedSubtitle, variant: 'subtitle' },
-        description: description ? { value: description, variant: 'description' } : undefined,
         art: { value: illustrationUrl, alt: displayName },
-        ribbon: {
-          text: { value: ribbonText, variant: 'ribbon' },
+        icon: { value: getCharacterClassIconKey(characterClass), colored: true },
+        type: {
+          variant: 'class',
+          text: { value: typeText, variant: 'ribbon' },
         },
-        stats: {
-          values: toPlayingCardStats(stats),
-          label: displayName,
+        info: {
+          sections: description
+            ? [
+                {
+                  id: 'description',
+                  description: { value: description, variant: 'description' },
+                },
+              ]
+            : undefined,
+          stats: {
+            values: toPlayingCardStats(stats),
+            label: displayName,
+            editable,
+          },
         },
       },
-    },
-    front: {
-      title: displayName,
-      subtitle: resolvedSubtitle,
-      description,
-      illustrationUrl,
-      illustrationAlt: displayName,
-      ribbonText,
-      stats: toPlayingCardStats(stats),
     },
   };
 }

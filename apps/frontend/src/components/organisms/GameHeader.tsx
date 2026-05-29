@@ -23,6 +23,7 @@ import {
   formatRewardNotificationDescription,
   formatRewardNotificationTitle,
 } from '../../features/game/formatRewardNotification';
+import { getCharacterClassIconKey } from '../../features/game/characterStats';
 import { Check, ChevronDown, Coins, Gift, GraduationCap, Mail, Map, Megaphone, Settings, Sparkles } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
@@ -496,11 +497,21 @@ export function GameHeader({
               <PlayingCard
                 size="nano"
                 kind="character"
-                title={formatUserDisplayName(user)}
-                ribbonLabel={t(`game.classes.${character.characterClass}`)}
-                characterClass={character.characterClass}
-                illustrationUrl={character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl}
-                illustrationAlt={formatUserDisplayName(user)}
+                accentToken={character.characterClass}
+                model={{
+                  front: {
+                    title: { value: formatUserDisplayName(user), variant: 'title' },
+                    art: {
+                      value: character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl,
+                      alt: formatUserDisplayName(user),
+                    },
+                    icon: { value: getCharacterClassIconKey(character.characterClass), colored: true },
+                    type: {
+                      variant: 'class',
+                      text: { value: t(`game.classes.${character.characterClass}`), variant: 'ribbon' },
+                    },
+                  },
+                }}
                 interactive
                 onClick={() => {
                   window.location.hash = 'character';

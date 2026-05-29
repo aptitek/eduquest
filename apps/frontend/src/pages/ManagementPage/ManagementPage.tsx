@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
-import { PlayingCard, type PlayingCardSide } from '../../components/molecules/PlayingCard';
+import { PlayingCard, type PlayingCardFaceSlots } from '../../components/molecules/PlayingCard';
 import { ManagementTable } from '../../components/organisms/ManagementTable';
 import {
   CardSkeleton,
@@ -44,7 +44,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
-import { toPlayingCardStats } from '../../features/game/characterStats';
+import { getCharacterClassIconKey, toPlayingCardStats } from '../../features/game/characterStats';
 import { useErrorReporter } from '../../features/errors/notifications';
 
 function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: string) {
@@ -639,13 +639,17 @@ export function ManagementPage() {
 
         {hasSelectedCard ? (
           <PlayingCard
-            size="full"
-            title={t('management.title')}
+            size="page"
             flipLabel={selectedStudentCharacterBack ? t('management.card.flip') : undefined}
-            frontContent={selectedCardContent}
-            back={selectedStudentCharacterBack}
+            model={{
+              front: {
+                title: { value: t('management.title'), variant: 'title' },
+                art: { node: selectedCardContent, alt: t('management.title') },
+              },
+              back: selectedStudentCharacterBack,
+            }}
             kind={selectedStudentRow?.character ? 'character' : undefined}
-            characterClass={selectedStudentRow?.character?.characterClass}
+            accentToken={selectedStudentRow?.character?.characterClass}
             presentation={
               selectedStudentRow
                 ? { fit: 'contain', width: 'viewportConstrained' }
@@ -660,13 +664,16 @@ export function ManagementPage() {
           />
         ) : (
           <PlayingCard
-            size="full"
+            size="page"
             kind={activeCardSkeletonVariant}
             accentToken="neutral"
-            title={activeCardCreateLabel}
-            subtitle={activeCardCreateHint}
-            faceDown
-            editable
+            model={{
+              front: {
+                title: { value: activeCardCreateLabel },
+                subtitle: activeCardCreateHint ? { value: activeCardCreateHint } : undefined,
+                back: {},
+              },
+            }}
             onClick={canCreateManagementRow ? createManagementRow : undefined}
             interactive={canCreateManagementRow}
             presentation={{ fit: 'fillHeight' }}
@@ -684,43 +691,50 @@ function buildStudentCharacterBackSide(
   row: StudentRow,
   t: (key: string) => string,
   updateSelectedStudent: (update: ManagementStudentUpdate, shouldThrow?: boolean) => Promise<void>
-): PlayingCardSide {
+): PlayingCardFaceSlots {
   const character = row.character;
   const classLabel = character ? t(`game.classes.${character.characterClass}`) : '';
   const illustrationUrl = character?.illustrationUrl || row.user.avatarUrl || row.user.githubAvatarUrl;
 
   return {
-    title: row.displayName,
-    subtitle: classLabel,
-    description: row.user.bio || '',
-    illustrationUrl,
-    illustrationAlt: row.displayName,
-    ribbonText: classLabel,
-    ribbonEditable: false,
-    editable: true,
-    onIllustrationUpload: async (file) => {
-      const token = localStorage.getItem('eduquest_token');
-      if (!token) throw new Error('management.errors.missingSession');
-
-      const asset = await uploadAsset(token, 'character-illustration', file, row.id);
-      return asset.url;
+    title: {
+      value: row.displayName,
+      variant: 'title',
+      editable: true,
+      onChange: (value) => void updateSelectedStudent({ user: { displayName: value } }),
     },
-    statsEditable: false,
-    stats: toPlayingCardStats(character?.stats),
-    onFieldChange: (field, value) => {
-      if (field === 'title') {
-        void updateSelectedStudent({ user: { displayName: value } });
-        return;
-      }
+    subtitle: { value: classLabel, variant: 'subtitle' },
+    art: {
+      value: illustrationUrl,
+      alt: row.displayName,
+      editable: true,
+      upload: async (file) => {
+        const token = localStorage.getItem('eduquest_token');
+        if (!token) throw new Error('management.errors.missingSession');
 
-      if (field === 'description') {
-        void updateSelectedStudent({ user: { bio: value } });
-        return;
-      }
-
-      if (field === 'illustrationUrl') {
-        void updateSelectedStudent({ characterIllustrationUrl: value });
-      }
+        const asset = await uploadAsset(token, 'character-illustration', file, row.id);
+        return asset.url;
+      },
+      onChange: (value) => void updateSelectedStudent({ characterIllustrationUrl: value }),
+    },
+    icon: character ? { value: getCharacterClassIconKey(character.characterClass), colored: true } : undefined,
+    type: { variant: 'class', text: { value: classLabel, variant: 'ribbon' } },
+    info: {
+      sections: [
+        {
+          id: 'description',
+          description: {
+            value: row.user.bio || '',
+            variant: 'description',
+            editable: true,
+            onChange: (value) => void updateSelectedStudent({ user: { bio: value } }),
+          },
+        },
+      ],
+      stats: {
+        values: toPlayingCardStats(character?.stats),
+        label: row.displayName,
+      },
     },
   };
 }

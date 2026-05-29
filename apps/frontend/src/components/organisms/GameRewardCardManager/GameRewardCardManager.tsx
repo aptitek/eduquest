@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { GameBonusVoteState, GameRewardCard, GameRewardCardPayload } from '@eduquest/shared';
-import { PlayingCard, PlayingHand, type PlayingCardData, type PlayingCardEditableField } from '../../molecules/PlayingCard';
-import { ColorSwatchPicker } from '../../molecules/ColorSwatchPicker';
+import { PlayingCard, PlayingHand, type PlayingCardProps } from '../../molecules/PlayingCard';
 import { ResponsiveCardGrid } from '../../molecules/ResponsiveCardGrid';
 import { DeleteButton } from '../../atoms/DeleteButton';
 import {
@@ -26,6 +25,7 @@ import { EditableIcon } from '../../atoms/EditableIcon';
 import { uploadAsset } from '../../../features/assets/api';
 
 const DEFAULT_BONUS_COLOR = SOLARIZED_SWATCH_OPTIONS[5].value;
+type RewardCardEditableField = 'title' | 'subtitle' | 'description' | 'art';
 
 const EMPTY_REWARD_CARD: GameRewardCardPayload = {
   title: '',
@@ -46,6 +46,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   const { t } = useTranslation();
   const reportError = useErrorReporter();
   const [rewardCards, setRewardCards] = useState<GameRewardCard[]>([]);
+  const [revealingRewardCardIds, setRevealingRewardCardIds] = useState<Set<string>>(() => new Set());
   const [activeRewardCardIds, setActiveRewardCardIds] = useState<Set<string>>(() => new Set());
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [activeCardTarget, setActiveCardTarget] = useState<HTMLElement | null>(null);
@@ -118,6 +119,14 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     try {
       const created = await createGameRewardCard(token, gameId, EMPTY_REWARD_CARD);
       setRewardCards((current) => [...current, created].sort((a, b) => a.sortOrder - b.sortOrder));
+      setRevealingRewardCardIds((current) => new Set(current).add(created.id));
+      window.setTimeout(() => {
+        setRevealingRewardCardIds((current) => {
+          const next = new Set(current);
+          next.delete(created.id);
+          return next;
+        });
+      }, 80);
       setEditingCardId(created.id);
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (saveError) {
@@ -141,20 +150,24 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
           {
             kind: 'reward' as const,
             id: 'empty-active-reward-card-manager',
-            title: 'Aucun bonus actif',
-            subtitle: 'Les bonus deviennent actifs après un vote gagné.',
             accentToken: 'neutral' as const,
-            faceDown: true,
+            model: {
+              front: {
+                back: { mode: 'icon', icon: { value: 'Gift' } },
+              },
+            },
           },
         ]
   );
-  const spareRewardCard: PlayingCardData = {
+  const spareRewardCard: PlayingCardProps = {
     kind: 'reward',
     id: 'spare-create-reward-card',
-    title: t('rewardCards.createReward'),
-    subtitle: t('rewardCards.previewSubtitle'),
     accentToken: 'neutral',
-    faceDown: true,
+    model: {
+      front: {
+        back: { mode: 'icon', icon: { value: 'Gift' } },
+      },
+    },
     interactive: true,
     onClick: createRewardCard,
     className: isSaving ? 'cursor-wait opacity-60' : undefined,
@@ -180,23 +193,34 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     />
   );
 
-  function toEditablePlayingCard(card: GameRewardCard): PlayingCardData {
-    return toPlayingCard(t, card, {
+  function toEditablePlayingCard(card: GameRewardCard): PlayingCardProps {
+    const playingCard = toPlayingCard(t, card, {
       editable: true,
       onFieldChange: (field, value) => updateCardField(field, value, (patch) => updateRewardCard(card, patch)),
       onIconChange: (iconKey) => updateRewardCard(card, { iconKey }),
       onIllustrationUpload: (file) => uploadRewardIllustration(card, file),
       isEditing: editingCardId === card.id,
-      footer: (
+      onColorChange: (color) => updateRewardCard(card, { color, accentToken: resolveUiColorTokenName(color) }),
+      actions: (
         <RewardCardControls
-          color={card.color || DEFAULT_BONUS_COLOR}
           isSaving={isSaving}
           onFocus={() => setEditingCardId(card.id)}
-          onColorChange={(color) => updateRewardCard(card, { color, accentToken: resolveUiColorTokenName(color) })}
           onDelete={() => removeRewardCard(card)}
         />
       ),
     });
+    if (!revealingRewardCardIds.has(card.id)) return playingCard;
+
+    return {
+      ...playingCard,
+      model: {
+        ...playingCard.model,
+        front: {
+          title: { value: card.title },
+          back: { mode: 'icon', icon: { value: card.iconKey || 'Gift' } },
+        },
+      },
+    };
   }
 
   const updateRewardCard = async (card: GameRewardCard, patch: Partial<GameRewardCardPayload>) => {
@@ -281,7 +305,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       {candidateCardData.length > 0 ? (
         <ResponsiveCardGrid
           items={candidateCardData}
-          getKey={(card) => card.id || card.title || 'candidate-reward-card'}
+          getKey={(card) => card.id || 'candidate-reward-card'}
           className="xl:grid-cols-3 2xl:grid-cols-4"
           renderItem={(card) => (
             <PlayingCard
@@ -321,13 +345,14 @@ function toPlayingCard(
   card: Partial<GameRewardCardPayload & GameRewardCard>,
   options: {
     editable: boolean;
-    onFieldChange: (field: PlayingCardEditableField, value: string) => void;
+    onFieldChange: (field: RewardCardEditableField, value: string) => void;
     onIconChange: (iconKey: string) => void;
     onIllustrationUpload: (file: File) => Promise<string | void>;
-    footer?: ReactNode;
+    onColorChange?: (color: string) => void;
+    actions?: ReactNode;
     isEditing?: boolean;
   }
-): PlayingCardData {
+): PlayingCardProps {
   const color = card.color || DEFAULT_BONUS_COLOR;
   const iconKey = card.iconKey || 'Gift';
   const illustrationUrl = card.illustrationUrl || undefined;
@@ -336,16 +361,7 @@ function toPlayingCard(
   return {
     id: card.id,
     kind: 'reward',
-    title: fallbackTitle,
-    subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
-    description: card.description,
-    color,
     accentToken: resolveUiColorTokenName(card.accentToken || color),
-    illustrationUrl,
-    illustrationAlt: fallbackTitle,
-    illustration: illustrationUrl
-      ? undefined
-      : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
     className: options.isEditing ? 'ring-2 ring-status-quest ring-offset-2 ring-offset-gaming-base' : undefined,
     model: {
       front: {
@@ -363,15 +379,10 @@ function toPlayingCard(
           onChange: (value) => options.onFieldChange('subtitle', value),
           placeholder: t('playingCard.placeholders.subtitle'),
         },
-        description: {
-          value: card.description || t('rewardCards.previewDescription'),
-          variant: 'description',
-          editable: options.editable,
-          onChange: (value) => options.onFieldChange('description', value),
-          placeholder: t('playingCard.placeholders.description'),
-        },
         color: {
           value: color,
+          editable: options.editable,
+          onChange: options.onColorChange,
         },
         art: {
           value: illustrationUrl,
@@ -379,37 +390,39 @@ function toPlayingCard(
           node: illustrationUrl ? undefined : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
           editable: options.editable,
           upload: options.onIllustrationUpload,
-          onChange: (value) => options.onFieldChange('illustrationUrl', value),
+          onChange: (value) => options.onFieldChange('art', value),
         },
-        footer: options.footer,
+        type: {
+          variant: 'cost',
+          value: card.cost ?? 0,
+          text: { value: String(card.cost ?? 0), variant: 'ribbon' },
+        },
+        info: {
+          sections: [
+            {
+              id: 'description',
+              description: {
+                value: card.description || t('rewardCards.previewDescription'),
+                variant: 'description',
+                editable: options.editable,
+                onChange: (value) => options.onFieldChange('description', value),
+                placeholder: t('playingCard.placeholders.description'),
+              },
+            },
+          ],
+        },
+        actions: options.actions,
       },
-    },
-    front: {
-      title: fallbackTitle,
-      subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
-      description: card.description || t('rewardCards.previewDescription'),
-      color,
-      illustrationUrl,
-      illustrationAlt: fallbackTitle,
-      illustration: illustrationUrl
-        ? undefined
-        : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
-      ribbonHidden: true,
-      editable: options.editable,
-      ribbonEditable: false,
-      footer: options.footer,
-      onFieldChange: options.onFieldChange,
-      onIllustrationUpload: options.onIllustrationUpload,
     },
   };
 }
 
 function updateCardField(
-  field: PlayingCardEditableField,
+  field: RewardCardEditableField,
   value: string,
   onUpdate: (patch: Partial<GameRewardCardPayload>) => void
 ) {
-  if (field === 'illustrationUrl') {
+  if (field === 'art') {
     onUpdate({ illustrationUrl: value || undefined });
   }
   if (field === 'title' || field === 'subtitle' || field === 'description') {
@@ -418,30 +431,18 @@ function updateCardField(
 }
 
 function RewardCardControls({
-  color,
   isSaving,
   onFocus,
-  onColorChange,
   onDelete,
 }: {
-  color: string;
   isSaving: boolean;
   onFocus: () => void;
-  onColorChange: (color: string) => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
     <div className="relative flex flex-wrap items-center gap-2" onFocus={onFocus} onClick={(event) => event.stopPropagation()}>
-      <ColorSwatchPicker
-        value={color}
-        onChange={onColorChange}
-        variant="popover"
-        buttonClassName="h-8 w-8 rounded-lg"
-        ariaLabel={t('rewardCards.fields.color')}
-        useColorLabelKey="rewardCards.useCardColor"
-      />
       <DeleteButton
         onConfirm={onDelete}
         holdDuration={1200}
@@ -487,12 +488,12 @@ function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
   );
 }
 
-function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...PlayingCardData[]] {
+function toNonEmptyCards(cards: PlayingCardProps[]): [PlayingCardProps, ...PlayingCardProps[]] {
   if (cards.length === 0) {
     throw new Error('Expected at least one card.');
   }
 
-  return cards as [PlayingCardData, ...PlayingCardData[]];
+  return cards as [PlayingCardProps, ...PlayingCardProps[]];
 }
 
 export default GameRewardCardManager;

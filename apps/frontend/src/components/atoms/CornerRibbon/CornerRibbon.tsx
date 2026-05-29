@@ -89,21 +89,21 @@ const iconSizeClassMap: Record<CornerRibbonSize, string> = {
 };
 
 const iconOnlySizeClassMap: Record<CornerRibbonSize, string> = {
-  sm: '[&>svg]:h-6 [&>svg]:w-6',
-  md: '[&>svg]:h-8 [&>svg]:w-8',
-  lg: '[&>svg]:h-10 [&>svg]:w-10',
+  sm: '[&>svg]:h-8 [&>svg]:w-8',
+  md: '[&>svg]:h-10 [&>svg]:w-10',
+  lg: '[&>svg]:h-12 [&>svg]:w-12',
 };
 
 const iconOnlyButtonClassMap: Record<CornerRibbonSize, string> = {
-  sm: 'h-9 w-9',
-  md: 'h-11 w-11',
-  lg: 'h-14 w-14',
+  sm: 'h-10 w-10',
+  md: 'h-12 w-12',
+  lg: 'h-16 w-16',
 };
 
 const iconOnlyPixelSizeMap: Record<CornerRibbonSize, number> = {
-  sm: 24,
-  md: 32,
-  lg: 40,
+  sm: 32,
+  md: 40,
+  lg: 48,
 };
 
 const textSlotClassMap: Record<CornerRibbonSize, { withIcon: string; withoutIcon: string }> = {
@@ -173,6 +173,7 @@ export function CornerRibbon({
         hasIcon && 'drop-shadow-md',
         isInteractive ? 'pointer-events-auto' : 'pointer-events-none',
         onClick && 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+        isIconOnly && 'gap-0 !p-0',
         containerClassMap[size],
         ribbonPositionClassMap[size][position],
         backgroundClassName,
@@ -185,7 +186,7 @@ export function CornerRibbon({
         <span
           className={cn(
             'flex shrink-0 items-center justify-center overflow-visible text-current drop-shadow-sm',
-            isIconOnly ? iconOnlyButtonClassMap[size] : 'h-6',
+            isIconOnly ? `absolute inset-0 m-auto ${iconOnlyButtonClassMap[size]}` : 'h-6',
             isIconOnly ? iconOnlySizeClassMap[size] : iconSizeClassMap[size]
           )}
         >
@@ -210,7 +211,7 @@ export function CornerRibbon({
         <span
           className={cn(
             'flex shrink-0 items-center justify-center overflow-visible text-current drop-shadow-sm',
-            isIconOnly ? iconOnlyButtonClassMap[size] : 'h-6',
+            isIconOnly ? `absolute inset-0 m-auto ${iconOnlyButtonClassMap[size]}` : 'h-6',
             isIconOnly ? iconOnlySizeClassMap[size] : iconSizeClassMap[size]
           )}
           aria-hidden

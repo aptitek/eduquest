@@ -4,7 +4,7 @@ import { StackLayout } from '../StackLayout';
 import type { StackLayoutOrder, StackLayoutOrientation, StackLayoutSide } from '../StackLayout';
 import { cn } from '../../../utils/cn';
 import { PlayingCard } from './PlayingCard';
-import type { PlayingCardData } from './PlayingCard';
+import type { PlayingCardProps } from './PlayingCard';
 import type { PlayingCardPresentation } from './types';
 
 export type PlayingHandMode = 'mini' | 'full';
@@ -14,7 +14,7 @@ export interface PlayingHandData {
   id: string;
   title?: string;
   description?: string;
-  cards: readonly [PlayingCardData, ...PlayingCardData[]];
+  cards: readonly [PlayingCardProps, ...PlayingCardProps[]];
   activeCardIndex?: number;
   mainCardIndex?: number;
   variant?: PlayingHandVariant;
@@ -38,7 +38,7 @@ export interface PlayingHandProps {
   cardPresentation?: PlayingCardPresentation;
   stackCardPresentation?: PlayingCardPresentation;
   mainCardPresentation?: PlayingCardPresentation;
-  onCardSelect?: (card: PlayingCardData, index: number) => void;
+  onCardSelect?: (card: PlayingCardProps, index: number) => void;
 }
 
 export interface PlayingHandPanelProps {
@@ -51,7 +51,7 @@ export interface PlayingHandPanelProps {
   handClassName?: string;
   cardClassName?: string;
   cardPresentation?: PlayingCardPresentation;
-  onCardSelect?: (card: PlayingCardData, index: number) => void;
+  onCardSelect?: (card: PlayingCardProps, index: number) => void;
 }
 
 const MAX_DEFAULT_VISIBLE_CARDS = 5;
@@ -78,8 +78,8 @@ export function PlayingHand({
   onCardSelect,
 }: PlayingHandProps) {
   const visibleCards = hand.cards.slice(0, Math.max(1, visibleCardCount)) as [
-    PlayingCardData,
-    ...PlayingCardData[],
+    PlayingCardProps,
+    ...PlayingCardProps[],
   ];
   const expanded = mode === 'full';
   const stackOrientation = resolveStackOrientation(variant);
@@ -188,10 +188,10 @@ export function PlayingHandPanel({
 }
 
 function resolveCardSelectHandler(
-  card: PlayingCardData,
+  card: PlayingCardProps,
   index: number,
   isEmphasis: boolean,
-  onCardSelect?: (card: PlayingCardData, index: number) => void
+  onCardSelect?: (card: PlayingCardProps, index: number) => void
 ) {
   if (onCardSelect) return () => onCardSelect(card, index);
   if (isEmphasis) return card.onClick;

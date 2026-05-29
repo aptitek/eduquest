@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Handshake, Search, UserPlus, Users } from 'lucide-react';
+import { Handshake, Search, Users } from 'lucide-react';
 import { GameHeader } from '../components/organisms/GameHeader';
 import { GameLayout } from '../components/templates/GameLayout';
 import { CompoundBadge } from '../components/atoms/CompoundBadge';
 import { HoldToConfirmButton } from '../components/atoms/HoldToConfirmButton';
 import {
   PlayingHandPanel,
-  type PlayingCardData,
+  type PlayingCardProps,
   type PlayingHandData,
 } from '../components/molecules/PlayingCard';
 import { fetchClassRoster, joinGuild, type ClassRosterGuild } from '../features/game/api';
@@ -32,6 +32,7 @@ export function AnnuairePage() {
   const [currentGuildId, setCurrentGuildId] = useState<string | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
   const [revealedJoinGuildId, setRevealedJoinGuildId] = useState<string | null>(null);
+  const [completedJoinGuildRevealId, setCompletedJoinGuildRevealId] = useState<string | null>(null);
   const [joiningGuildId, setJoiningGuildId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const currentGuildSectionRef = useRef<HTMLElement | null>(null);
@@ -116,6 +117,7 @@ export function AnnuairePage() {
       setCurrentGuildId(nextGuild.id);
       setGuilds((current) => upsertGuild(current, nextGuild));
       setRevealedJoinGuildId(null);
+      setCompletedJoinGuildRevealId(null);
       window.requestAnimationFrame(() => {
         currentGuildSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -240,8 +242,13 @@ export function AnnuairePage() {
                         user,
                         character,
                         isRevealed: revealedJoinGuildId === guild.id,
+                        isRevealComplete: completedJoinGuildRevealId === guild.id,
                         isJoining: joiningGuildId === guild.id,
-                        onReveal: () => setRevealedJoinGuildId(guild.id),
+                        onReveal: () => {
+                          setRevealedJoinGuildId(guild.id);
+                          setCompletedJoinGuildRevealId(null);
+                        },
+                        onRevealComplete: () => setCompletedJoinGuildRevealId(guild.id),
                         onJoin: () => void handleJoinGuild(guild),
                       });
 
@@ -269,8 +276,10 @@ function buildJoinableGuildHand({
   user,
   character,
   isRevealed,
+  isRevealComplete,
   isJoining,
   onReveal,
+  onRevealComplete,
   onJoin,
 }: {
   t: (path: string) => string;
@@ -279,8 +288,10 @@ function buildJoinableGuildHand({
   user: ReturnType<typeof useGameStore.getState>['user'];
   character: ReturnType<typeof useGameStore.getState>['character'];
   isRevealed: boolean;
+  isRevealComplete: boolean;
   isJoining: boolean;
   onReveal: () => void;
+  onRevealComplete: () => void;
   onJoin: () => void;
 }): PlayingHandData {
   const hand = buildClassGuildHand(t, { guild });
@@ -293,10 +304,12 @@ function buildJoinableGuildHand({
       user,
       character,
       isRevealed,
+      isRevealComplete,
       isJoining,
       onReveal,
+      onRevealComplete,
       onJoin,
-    })] as [PlayingCardData, ...PlayingCardData[]],
+    })] as [PlayingCardProps, ...PlayingCardProps[]],
   };
 }
 
@@ -307,8 +320,10 @@ function buildJoinGuildCard({
   user,
   character,
   isRevealed,
+  isRevealComplete,
   isJoining,
   onReveal,
+  onRevealComplete,
   onJoin,
 }: {
   t: (path: string) => string;
@@ -317,10 +332,12 @@ function buildJoinGuildCard({
   user: ReturnType<typeof useGameStore.getState>['user'];
   character: ReturnType<typeof useGameStore.getState>['character'];
   isRevealed: boolean;
+  isRevealComplete: boolean;
   isJoining: boolean;
   onReveal: () => void;
+  onRevealComplete: () => void;
   onJoin: () => void;
-}): PlayingCardData {
+}): PlayingCardProps {
   const guildName = guild.name || t('dashboard.dock.playerGuild');
 
   if (!isRevealed || !user || !character) {
@@ -328,11 +345,8 @@ function buildJoinGuildCard({
       id: `join-${guild.id}`,
       layoutId: `join-${guild.id}`,
       kind: 'student',
-      faceDown: true,
       accentToken: 'neutral',
-      title: t('directory.revealJoinCard'),
-      subtitle: guildName,
-      ribbonIcon: <UserPlus size={18} aria-hidden />,
+      model: { front: 'none' },
       interactive: Boolean(user && character),
       onClick: user && character ? onReveal : undefined,
     };
@@ -356,7 +370,7 @@ function buildJoinGuildCard({
     characterClass: character.characterClass,
     classLabel,
     illustrationUrl: character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl || mascotUrl,
-    ribbonText: classLabel,
+    typeText: classLabel,
   });
   const joinButton = (
     <div className="flex w-full items-center justify-center">
@@ -375,26 +389,29 @@ function buildJoinGuildCard({
     </div>
   );
 
+  const front =
+    card.model.front && card.model.front !== 'none'
+      ? {
+          ...card.model.front,
+          title: card.model.front.title || { value: playerName, variant: 'title' },
+          info: { ...card.model.front.info, stats: undefined },
+          actions: joinButton,
+        }
+      : card.model.front;
+
   return {
     ...card,
-    model: card.model
+    model: isRevealComplete
       ? {
           ...card.model,
-          front: {
-            ...card.model.front,
-            stats: undefined,
-            footer: joinButton,
-            footerPlacement: 'aside',
-          },
+          front,
         }
-      : card.model,
-    front: {
-      ...card.front,
-      title: card.front?.title || playerName,
-      stats: undefined,
-      footer: joinButton,
-      footerPlacement: 'aside',
-    },
+      : {
+          front: 'none',
+          back: front,
+        },
+    autoFlipToBack: !isRevealComplete,
+    onAutoFlipComplete: onRevealComplete,
   };
 }
 

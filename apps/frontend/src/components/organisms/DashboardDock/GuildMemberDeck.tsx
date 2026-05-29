@@ -1,15 +1,15 @@
 import { PlayingHand } from '../../molecules/PlayingCard';
-import type { PlayingCardData } from '../../molecules/PlayingCard';
+import type { PlayingCardProps } from '../../molecules/PlayingCard';
 import { cn } from '../../../utils/cn';
 import type { DockGuild } from './types';
 
 export interface GuildMemberDeckProps {
   guild: DockGuild;
-  memberCards: readonly [PlayingCardData, PlayingCardData, PlayingCardData];
+  memberCards: readonly [PlayingCardProps, PlayingCardProps, PlayingCardProps];
   fallbackGuildName: string;
   goldLabel: string;
   compact?: boolean;
-  onCardSelect?: (card: PlayingCardData, index: number) => void;
+  onCardSelect?: (card: PlayingCardProps, index: number) => void;
 }
 
 export function GuildMemberDeck({
@@ -20,13 +20,19 @@ export function GuildMemberDeck({
   compact = false,
   onCardSelect,
 }: GuildMemberDeckProps) {
-  const guildCard: PlayingCardData = {
+  const guildCard: PlayingCardProps = {
     id: 'guild-hand-guild',
     layoutId: 'guild-hand-guild',
     kind: 'guild',
-    guild,
-    title: guild.name || fallbackGuildName,
-    subtitle: `${guild.gold || 0} ${goldLabel}`,
+    model: {
+      front: {
+        title: { value: guild.name || fallbackGuildName, variant: 'title' },
+        subtitle: { value: `${guild.gold || 0} ${goldLabel}`, variant: 'subtitle' },
+        color: { value: guild.color },
+        art: { value: guild.iconUrl, alt: guild.name || fallbackGuildName },
+        icon: { value: guild.iconKey || 'Shield', colored: true },
+      },
+    },
   };
 
   return (
