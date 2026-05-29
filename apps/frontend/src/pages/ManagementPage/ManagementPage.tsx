@@ -44,6 +44,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
+import { toPlayingCardStats } from '../../features/game/characterStats';
 import { useErrorReporter } from '../../features/errors/notifications';
 
 function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: string) {
@@ -699,16 +700,7 @@ function buildStudentCharacterBackSide(
       return asset.url;
     },
     statsEditable: false,
-    stats: character
-      ? [
-          { id: 'strength', label: 'STR', value: character.stats.strength },
-          { id: 'dexterity', label: 'DEX', value: character.stats.dexterity },
-          { id: 'constitution', label: 'CON', value: character.stats.constitution },
-          { id: 'intelligence', label: 'INT', value: character.stats.intelligence },
-          { id: 'wisdom', label: 'WIS', value: character.stats.wisdom },
-          { id: 'charisma', label: 'CHA', value: character.stats.charisma },
-        ]
-      : undefined,
+    stats: toPlayingCardStats(character?.stats),
     onFieldChange: (field, value) => {
       if (field === 'title') {
         void updateSelectedStudent({ user: { displayName: value } });

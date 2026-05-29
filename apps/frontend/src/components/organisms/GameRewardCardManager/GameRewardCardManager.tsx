@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { GameBonusVoteState, GameRewardCard, GameRewardCardPayload } from '@eduquest/shared';
 import { PlayingCard, PlayingHand, type PlayingCardData, type PlayingCardEditableField } from '../../molecules/PlayingCard';
+import { ColorSwatchPicker } from '../../molecules/ColorSwatchPicker';
 import { ResponsiveCardGrid } from '../../molecules/ResponsiveCardGrid';
 import { DeleteButton } from '../../atoms/DeleteButton';
 import {
@@ -18,7 +19,6 @@ import { getUserErrorMessage } from '../../../features/errors/api';
 import { useErrorReporter } from '../../../features/errors/notifications';
 import {
   SOLARIZED_SWATCH_OPTIONS,
-  resolveColorBackgroundClassName,
   resolveUiColorTokenName,
 } from '../../../styles/colorTokens';
 import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
@@ -48,7 +48,6 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   const [rewardCards, setRewardCards] = useState<GameRewardCard[]>([]);
   const [activeRewardCardIds, setActiveRewardCardIds] = useState<Set<string>>(() => new Set());
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [openColorCardId, setOpenColorCardId] = useState<string | null>(null);
   const [activeCardTarget, setActiveCardTarget] = useState<HTMLElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -192,13 +191,10 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       footer: (
         <RewardCardControls
           color={card.color || DEFAULT_BONUS_COLOR}
-          isColorPickerOpen={openColorCardId === card.id}
           isSaving={isSaving}
           onFocus={() => setEditingCardId(card.id)}
-          onColorPickerOpenChange={(isOpen) => setOpenColorCardId(isOpen ? card.id : null)}
           onColorChange={(color) => updateRewardCard(card, { color, accentToken: resolveUiColorTokenName(color) })}
           onDelete={() => removeRewardCard(card)}
-          t={t}
         />
       ),
     });
@@ -252,7 +248,6 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       await deleteGameRewardCard(token, gameId, card.id);
       setRewardCards((current) => current.filter((item) => item.id !== card.id));
       if (editingCardId === card.id) setEditingCardId(null);
-      if (openColorCardId === card.id) setOpenColorCardId(null);
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
     } catch (deleteError) {
       reportError(deleteError, {
@@ -353,6 +348,43 @@ function toPlayingCard(
       ? undefined
       : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
     className: options.isEditing ? 'ring-2 ring-status-quest ring-offset-2 ring-offset-gaming-base' : undefined,
+    model: {
+      front: {
+        title: {
+          value: fallbackTitle,
+          variant: 'title',
+          editable: options.editable,
+          onChange: (value) => options.onFieldChange('title', value),
+          placeholder: t('playingCard.placeholders.title'),
+        },
+        subtitle: {
+          value: card.subtitle || t('rewardCards.previewSubtitle'),
+          variant: 'subtitle',
+          editable: options.editable,
+          onChange: (value) => options.onFieldChange('subtitle', value),
+          placeholder: t('playingCard.placeholders.subtitle'),
+        },
+        description: {
+          value: card.description || t('rewardCards.previewDescription'),
+          variant: 'description',
+          editable: options.editable,
+          onChange: (value) => options.onFieldChange('description', value),
+          placeholder: t('playingCard.placeholders.description'),
+        },
+        color: {
+          value: color,
+        },
+        art: {
+          value: illustrationUrl,
+          alt: fallbackTitle,
+          node: illustrationUrl ? undefined : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
+          editable: options.editable,
+          upload: options.onIllustrationUpload,
+          onChange: (value) => options.onFieldChange('illustrationUrl', value),
+        },
+        footer: options.footer,
+      },
+    },
     front: {
       title: fallbackTitle,
       subtitle: card.subtitle || t('rewardCards.previewSubtitle'),
@@ -388,35 +420,28 @@ function updateCardField(
 
 function RewardCardControls({
   color,
-  isColorPickerOpen,
   isSaving,
   onFocus,
-  onColorPickerOpenChange,
   onColorChange,
   onDelete,
-  t,
 }: {
   color: string;
-  isColorPickerOpen: boolean;
   isSaving: boolean;
   onFocus: () => void;
-  onColorPickerOpenChange: (isOpen: boolean) => void;
   onColorChange: (color: string) => void;
   onDelete: () => void;
-  t: (path: string) => string;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="relative flex flex-wrap items-center gap-2" onFocus={onFocus} onClick={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        onClick={() => onColorPickerOpenChange(!isColorPickerOpen)}
-        className={cn(
-          'h-8 w-8 rounded-lg border border-gaming-border shadow-sm transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest',
-          resolveColorBackgroundClassName(color)
-        )}
-        aria-label={t('rewardCards.fields.color')}
-        aria-expanded={isColorPickerOpen}
-        title={t('rewardCards.fields.color')}
+      <ColorSwatchPicker
+        value={color}
+        onChange={onColorChange}
+        variant="popover"
+        buttonClassName="h-8 w-8 rounded-lg"
+        ariaLabel={t('rewardCards.fields.color')}
+        useColorLabelKey="rewardCards.useCardColor"
       />
       <DeleteButton
         onConfirm={onDelete}
@@ -426,36 +451,6 @@ function RewardCardControls({
         className="h-8 w-8 shadow-md"
       />
 
-      {isColorPickerOpen ? (
-        <div className="absolute bottom-10 left-0 z-[100] grid w-40 grid-cols-3 gap-2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 shadow-2xl backdrop-blur">
-          {SOLARIZED_SWATCH_OPTIONS.map((option) => {
-            const isSelected = color === option.value;
-            const label = t(option.labelKey);
-
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onColorChange(option.value);
-                  onColorPickerOpenChange(false);
-                }}
-                className={cn(
-                  'h-8 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
-                  isSelected
-                    ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
-                    : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
-                )}
-                aria-label={t('rewardCards.useCardColor').replace('{color}', label)}
-                aria-pressed={isSelected}
-                title={label}
-              >
-                <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
     </div>
   );
 }

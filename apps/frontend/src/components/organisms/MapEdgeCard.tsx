@@ -8,7 +8,7 @@ import type {
 import { Route } from 'lucide-react';
 import { EdgeAnimationSelector } from '../atoms/EdgeAnimationSelector';
 import { EditableList } from '../molecules/EditableList';
-import { SOLARIZED_SWATCH_OPTIONS } from '../../styles/colorTokens';
+import { ColorSwatchPicker } from '../molecules/ColorSwatchPicker';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 
@@ -21,7 +21,6 @@ interface MapEdgeCardProps {
   onChange: (edge: GameActivityEdge, styleWindows: GameActivityEdgeStyleWindow[]) => void | Promise<void>;
 }
 
-const COLOR_OPTIONS = SOLARIZED_SWATCH_OPTIONS;
 type TranslateFn = (path: string) => string;
 
 export function MapEdgeCard({ edge, activities, currentStep, isSaving, error, onChange }: MapEdgeCardProps) {
@@ -219,31 +218,12 @@ function ColorSelector({
           {t('mapEdgeCard.defaultColor')}
         </button>
       </div>
-      <div className="grid grid-cols-9 gap-1.5">
-        {COLOR_OPTIONS.map((option) => {
-          const isSelected = value === option.value;
-          const label = t(option.labelKey);
-
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className={cn(
-                'h-7 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
-                isSelected
-                  ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
-                  : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
-              )}
-              aria-label={formatTranslation(t('mapEdgeCard.useColor'), { color: label })}
-              aria-pressed={isSelected}
-              title={label}
-            >
-              <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
-            </button>
-          );
-        })}
-      </div>
+      <ColorSwatchPicker
+        value={value}
+        onChange={onChange}
+        variant="grid"
+        useColorLabelKey="mapEdgeCard.useColor"
+      />
     </fieldset>
   );
 }

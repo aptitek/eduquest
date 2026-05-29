@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AvatarBadge } from '../../atoms/AvatarBadge';
+import { StackLayout } from '../StackLayout';
 import { cn } from '../../../utils/cn';
 
 export interface AvatarDeckMember {
@@ -23,6 +24,9 @@ interface AvatarDeckProps {
   size?: 'sm' | 'md';
   restStepRem?: number;
   openStepRem?: number;
+  arcRadius?: number;
+  messiness?: number;
+  orientation?: 'horizontal' | 'vertical';
   className?: string;
   avatarClassName?: string;
   labelClassName?: string;
@@ -53,6 +57,9 @@ export function AvatarDeck({
   size = 'md',
   restStepRem = SIZE_CLASS_NAMES[size].restOffset,
   openStepRem = SIZE_CLASS_NAMES[size].openOffset,
+  arcRadius = 0,
+  messiness = 0,
+  orientation = 'horizontal',
   className,
   avatarClassName,
   labelClassName,
@@ -82,39 +89,32 @@ export function AvatarDeck({
       onClick={interactive ? (event) => event.stopPropagation() : undefined}
       onPointerDown={interactive ? (event) => event.stopPropagation() : undefined}
     >
-      {members.map((member, index) => {
-        const isEmphasis = index === 0;
-        const depth = Math.max(index, 1);
-        const restX = isEmphasis ? 0 : depth * restStepRem;
-        const openX = isEmphasis ? 0 : depth * openStepRem;
-        const motion = getAvatarMotion?.(member, index);
+      <StackLayout
+        items={members as [AvatarDeckMember, ...AvatarDeckMember[]]}
+        orientation={orientation}
+        arcRadius={arcRadius}
+        messiness={messiness}
+        restStepRem={restStepRem}
+        openStepRem={openStepRem}
+        emphasisIndex={0}
+        visibleStackCount={members.length}
+        expandOnHover={false}
+        expanded
+        className={cn('absolute inset-0', align === 'center' && 'left-1/2 -translate-x-1/2')}
+        emphasisClassName="shadow-none"
+        stackItemClassName={cn(
+          'shadow-none',
+          expandOnParentHover &&
+            'group-hover/graph-node:[--stack-x:var(--stack-open-x)] group-hover/graph-node:[--stack-y:var(--stack-open-y)] group-hover/graph-node:[--stack-rotation:var(--stack-open-rotation)] group-hover/graph-node:[--stack-scale:var(--stack-open-scale)] group-focus-within/graph-node:[--stack-x:var(--stack-open-x)] group-focus-within/graph-node:[--stack-y:var(--stack-open-y)] group-focus-within/graph-node:[--stack-rotation:var(--stack-open-rotation)] group-focus-within/graph-node:[--stack-scale:var(--stack-open-scale)]'
+        )}
+        renderItem={({ item: member, index }) => {
+          const motion = getAvatarMotion?.(member, index);
 
-        return (
-          <div
-            key={member.id}
-            className={cn(
-              'absolute bottom-0 origin-bottom transition-[filter,transform] duration-300 [transform:translateX(calc(var(--avatar-rest-x)_-_var(--avatar-rest-anchor)))_translateY(var(--avatar-rest-y))_scale(var(--avatar-rest-scale))] group-hover/avatar-deck:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/avatar-deck:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))]',
-              expandOnParentHover &&
-                'group-hover/graph-node:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))] group-focus-within/graph-node:[transform:translateX(calc(var(--avatar-open-x)_-_var(--avatar-open-anchor)))_translateY(var(--avatar-open-y))_scale(var(--avatar-open-scale))]'
-            )}
-            ref={(node) =>
-              setAvatarItemProperties(node, {
-                zIndex: members.length - index,
-                restX,
-                restAnchor: align === 'center' ? restWidth / 2 : 0,
-                restY: isEmphasis ? 0 : 0.12,
-                restScale: isEmphasis ? 1 : Math.max(1 - depth * 0.05, 0.84),
-                openX,
-                openAnchor: align === 'center' ? openWidth / 2 : 0,
-                openY: isEmphasis ? -0.2 : 0,
-                openScale: isEmphasis ? 1.08 : Math.max(1 - (depth - 1) * 0.035, 0.9),
-              })
-            }
-          >
+          return (
             <button
               type="button"
               className={cn(
-                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateY(var(--avatar-hover-y))_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateY(var(--avatar-hover-y))_scale(1.12)] focus:drop-shadow-2xl',
+                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateY(-0.75rem)_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateY(-0.75rem)_scale(1.12)] focus:drop-shadow-2xl',
                 motion && 'map-avatar-travel'
               )}
               title={member.name}
@@ -145,9 +145,9 @@ export function AvatarDeck({
                 {member.name}
               </span>
             </button>
-          </div>
-        );
-      })}
+          );
+        }}
+      />
     </div>
   );
 }
@@ -156,33 +156,6 @@ function setDeckSizeProperties(node: HTMLDivElement | null, restWidth: number, o
   if (!node) return;
   node.style.setProperty('--deck-rest-width', `${restWidth}rem`);
   node.style.setProperty('--deck-open-width', `${openWidth}rem`);
-}
-
-function setAvatarItemProperties(
-  node: HTMLDivElement | null,
-  properties: {
-    zIndex: number;
-    restX: number;
-    restAnchor: number;
-    restY: number;
-    restScale: number;
-    openX: number;
-    openAnchor: number;
-    openY: number;
-    openScale: number;
-  }
-) {
-  if (!node) return;
-  node.style.zIndex = String(properties.zIndex);
-  node.style.setProperty('--avatar-rest-x', `${properties.restX}rem`);
-  node.style.setProperty('--avatar-rest-anchor', `${properties.restAnchor}rem`);
-  node.style.setProperty('--avatar-rest-y', `${properties.restY}rem`);
-  node.style.setProperty('--avatar-rest-scale', String(properties.restScale));
-  node.style.setProperty('--avatar-open-x', `${properties.openX}rem`);
-  node.style.setProperty('--avatar-open-anchor', `${properties.openAnchor}rem`);
-  node.style.setProperty('--avatar-open-y', `${properties.openY}rem`);
-  node.style.setProperty('--avatar-open-scale', String(properties.openScale));
-  node.style.setProperty('--avatar-hover-y', '-0.75rem');
 }
 
 function setAvatarMotionProperties(node: HTMLButtonElement | null, motion?: AvatarDeckMotion) {

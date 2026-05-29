@@ -1,18 +1,28 @@
 import { Gift, Trophy } from 'lucide-react';
-import { DashboardMiniDeck } from '../../molecules/DashboardMiniCard';
-import type { DashboardMiniDeckProps } from '../../molecules/DashboardMiniCard';
-import type { PlayingCardData } from '../../molecules/PlayingCard';
+import { PlayingHand } from '../../molecules/PlayingCard';
+import type { PlayingCardData, PlayingHandMode, PlayingHandVariant } from '../../molecules/PlayingCard';
+import type { StackLayoutSide } from '../../molecules/StackLayout';
 import { cn } from '../../../utils/cn';
 
 type DeckCards = readonly [PlayingCardData, ...PlayingCardData[]];
 
-export interface FlipDeckProps extends Omit<DashboardMiniDeckProps, 'cards'> {
+export interface FlipDeckProps {
   frontCards: DeckCards;
   backCards: DeckCards;
   flipped: boolean;
   onFlip: () => void;
   frontLabel: string;
   backLabel: string;
+  variant?: 'horizontal' | 'vertical';
+  stackSide?: StackLayoutSide;
+  revealedCardCount?: number;
+  expandOnHover?: boolean;
+  visibleStackCount?: number;
+  mode?: PlayingHandMode;
+  className?: string;
+  cardClassName?: string;
+  stackCardClassName?: string;
+  onCardSelect?: (card: PlayingCardData, index: number) => void;
   wrapperClassName?: string;
 }
 
@@ -24,11 +34,37 @@ export function FlipDeck({
   frontLabel,
   backLabel,
   wrapperClassName,
-  ...deckProps
+  variant = 'horizontal',
+  stackSide = 'right',
+  revealedCardCount,
+  expandOnHover = false,
+  visibleStackCount = 3,
+  mode = 'mini',
+  className,
+  cardClassName,
+  stackCardClassName,
+  onCardSelect,
 }: FlipDeckProps) {
+  const cards = flipped ? backCards : frontCards;
+
   return (
     <div className={cn('relative shrink-0 overflow-visible', wrapperClassName)}>
-      <DashboardMiniDeck cards={flipped ? backCards : frontCards} {...deckProps} />
+      <PlayingHand
+        hand={{
+          id: 'dashboard-flip-deck',
+          cards,
+          mainCardIndex: 0,
+          variant: variant as PlayingHandVariant,
+        }}
+        mode={mode}
+        stackSide={stackSide}
+        visibleCardCount={revealedCardCount ?? visibleStackCount}
+        expandOnHover={expandOnHover}
+        className={cn('h-56 w-56', className)}
+        cardClassName={cardClassName}
+        stackCardClassName={stackCardClassName}
+        onCardSelect={onCardSelect}
+      />
       <button
         type="button"
         aria-pressed={flipped}

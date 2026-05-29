@@ -22,6 +22,7 @@ import {
 import { uploadAsset } from '../../features/assets/api';
 import { ApiClientError } from '../../features/errors/api';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { buildCharacterPlayingCardData } from '../../features/game/cards/characterCardAdapter';
 
 export function GuildPage() {
   const { t } = useTranslation();
@@ -460,34 +461,16 @@ function buildInviteStudentCard(
       ? 'Invitation déjà envoyée.'
       : 'Cliquer pour inviter dans la guilde.';
 
-  return {
-    kind: 'character' as const,
+  return buildCharacterPlayingCardData({
     characterClass,
-    accentToken: characterClass,
-    title: candidate.displayName,
+    displayName: candidate.displayName,
     subtitle,
+    description,
     illustrationUrl: candidate.characterIllustrationUrl || candidate.avatarUrl,
-    illustrationAlt: candidate.displayName,
+    classLabel,
     ribbonText: classLabel,
-    front: {
-      title: candidate.displayName,
-      subtitle,
-      description,
-      illustrationUrl: candidate.characterIllustrationUrl || candidate.avatarUrl,
-      illustrationAlt: candidate.displayName,
-      ribbonText: classLabel,
-      stats: stats
-        ? [
-            { id: 'strength', label: 'STR', value: stats.strength, max: 5 },
-            { id: 'dexterity', label: 'DEX', value: stats.dexterity, max: 5 },
-            { id: 'constitution', label: 'CON', value: stats.constitution, max: 5 },
-            { id: 'intelligence', label: 'INT', value: stats.intelligence, max: 5 },
-            { id: 'wisdom', label: 'WIS', value: stats.wisdom, max: 5 },
-            { id: 'charisma', label: 'CHA', value: stats.charisma, max: 5 },
-          ]
-        : undefined,
-    },
-  };
+    stats,
+  });
 }
 
 export default GuildPage;

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { CardSpread } from '../CardSpread';
-import type { CardSpreadShape, CardSpreadSide } from '../CardSpread';
+import { StackLayout } from '../StackLayout';
+import type { StackLayoutOrder, StackLayoutOrientation, StackLayoutSide } from '../StackLayout';
 import { cn } from '../../../utils/cn';
 import { PlayingCard } from './PlayingCard';
 import type { PlayingCardData } from './PlayingCard';
@@ -24,7 +24,10 @@ export interface PlayingHandProps {
   mode?: PlayingHandMode;
   visibleCardCount?: number;
   variant?: PlayingHandVariant;
-  stackSide?: CardSpreadSide;
+  stackSide?: StackLayoutSide;
+  arcRadius?: number;
+  messiness?: number;
+  order?: StackLayoutOrder;
   expandOnHover?: boolean;
   ariaLabel?: string;
   className?: string;
@@ -54,6 +57,9 @@ export function PlayingHand({
   visibleCardCount = mode === 'full' ? hand.cards.length : MAX_DEFAULT_VISIBLE_CARDS,
   variant = hand.variant || (mode === 'full' ? 'fan' : 'horizontal'),
   stackSide = 'right',
+  arcRadius,
+  messiness = 0,
+  order,
   expandOnHover = mode === 'mini',
   ariaLabel = hand.title || 'Playing card hand',
   className,
@@ -67,17 +73,21 @@ export function PlayingHand({
     ...PlayingCardData[],
   ];
   const expanded = mode === 'full';
-  const spreadShape = expanded ? 'horizontal' : resolveSpreadShape(variant);
+  const stackOrientation = resolveStackOrientation(variant);
+  const resolvedArcRadius = arcRadius ?? (!expanded && (variant === 'arc' || variant === 'fan') ? 1 : 0);
 
   return (
-    <CardSpread
+    <StackLayout
       items={visibleCards}
-      shape={spreadShape}
+      orientation={expanded ? 'horizontal' : stackOrientation}
       side={stackSide}
+      order={order}
+      arcRadius={resolvedArcRadius}
+      messiness={messiness}
       spacing={expanded ? 'wide' : 'default'}
       emphasisIndex={hand.mainCardIndex || 0}
       activeIndex={hand.activeCardIndex}
-      visibleSpreadCount={visibleCards.length}
+      visibleStackCount={visibleCards.length}
       expanded={expanded}
       expandOnHover={expandOnHover}
       deferHoverForeground={mode === 'mini'}
@@ -94,9 +104,8 @@ export function PlayingHand({
           : 'duration-500 hover:!z-50 hover:-translate-y-2 hover:scale-110 hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-2 focus-within:scale-110 focus-within:drop-shadow-2xl',
         mainCardClassName || cardClassName
       )}
-      spreadCardClassName={cn(
+      stackItemClassName={cn(
         mode === 'full' ? 'w-72 rounded-[1.4rem] duration-500 md:w-80' : 'duration-500',
-        hand.mainCardIndex !== undefined && spreadShape === 'arc' && mode === 'full' && 'left-[62%]',
         stackCardClassName || cardClassName
       )}
       renderItem={({ item: card, index, isEmphasis }) => (
@@ -172,9 +181,9 @@ function resolveCardSelectHandler(
   return undefined;
 }
 
-function resolveSpreadShape(variant: PlayingHandVariant): CardSpreadShape {
-  if (variant === 'fan') return 'arc';
-  return variant;
+function resolveStackOrientation(variant: PlayingHandVariant): StackLayoutOrientation {
+  if (variant === 'vertical') return 'vertical';
+  return 'horizontal';
 }
 
 export default PlayingHand;

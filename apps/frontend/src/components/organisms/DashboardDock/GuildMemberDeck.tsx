@@ -1,4 +1,4 @@
-import { DashboardMiniDeck } from '../../molecules/DashboardMiniCard';
+import { PlayingHand } from '../../molecules/PlayingCard';
 import type { PlayingCardData } from '../../molecules/PlayingCard';
 import { cn } from '../../../utils/cn';
 import type { DockGuild } from './types';
@@ -30,11 +30,16 @@ export function GuildMemberDeck({
   };
 
   return (
-    <DashboardMiniDeck
-      cards={[guildCard, ...memberCards]}
-      variant={compact ? 'vertical' : 'horizontal'}
+    <PlayingHand
+      hand={{
+        id: 'guild-member-deck',
+        cards: [guildCard, ...memberCards],
+        mainCardIndex: 0,
+        variant: compact ? 'vertical' : 'horizontal',
+      }}
+      mode="mini"
       stackSide="right"
-      revealedCardCount={memberCards.length}
+      visibleCardCount={memberCards.length}
       expandOnHover
       onCardSelect={onCardSelect}
       className={cn(

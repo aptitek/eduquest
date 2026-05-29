@@ -15,6 +15,7 @@ import {
   getLatestCohortMembership,
 } from '../../components/organisms/DashboardDock/dashboardDockData';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { buildCharacterPlayingCardData } from '../../features/game/cards/characterCardAdapter';
 
 const ALPHABET_SCROLL_MIN_GUILDS = 12;
 const ALPHABET_SCROLL_MIN_LETTERS = 5;
@@ -231,35 +232,18 @@ function buildUnguildedStudentCard(
   const stats = rosterStudent.stats;
   const illustrationUrl = rosterStudent.characterIllustrationUrl || rosterStudent.avatarUrl;
 
-  return {
+  return buildCharacterPlayingCardData({
     id: `class-unguilded-${rosterStudent.id}`,
     layoutId: `class-unguilded-${rosterStudent.id}`,
-    kind: 'character',
     characterClass,
-    title: rosterStudent.displayName,
-    subtitle: classLabel,
+    displayName: rosterStudent.displayName,
+    subtitle: rosterStudent.institutionalEmail || rosterStudent.email || classLabel,
+    description: t('class.unguildedDescription'),
     illustrationUrl,
-    illustrationAlt: rosterStudent.displayName,
+    classLabel,
     ribbonText: t('class.unguildedRibbon'),
-    front: {
-      title: rosterStudent.displayName,
-      subtitle: rosterStudent.institutionalEmail || rosterStudent.email || classLabel,
-      description: t('class.unguildedDescription'),
-      illustrationUrl,
-      illustrationAlt: rosterStudent.displayName,
-      ribbonText: t('class.unguildedRibbon'),
-      stats: stats
-        ? [
-            { id: 'strength', label: 'STR', value: stats.strength, max: 5 },
-            { id: 'dexterity', label: 'DEX', value: stats.dexterity, max: 5 },
-            { id: 'constitution', label: 'CON', value: stats.constitution, max: 5 },
-            { id: 'intelligence', label: 'INT', value: stats.intelligence, max: 5 },
-            { id: 'wisdom', label: 'WIS', value: stats.wisdom, max: 5 },
-            { id: 'charisma', label: 'CHA', value: stats.charisma, max: 5 },
-          ]
-        : undefined,
-    },
-  };
+    stats,
+  });
 }
 
 function ClassHandSection({

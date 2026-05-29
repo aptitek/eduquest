@@ -32,10 +32,11 @@ import {
 } from '../molecules/PlayingCard';
 import { EditableList } from '../molecules/EditableList';
 import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
+import { ColorSwatchPicker } from '../molecules/ColorSwatchPicker';
 import { EditableIcon } from '../atoms/EditableIcon';
 import { EditableText } from '../atoms/EditableText';
 import { useTranslation } from '../../hooks/useTranslation';
-import { SOLARIZED_SWATCH_OPTIONS, resolveColorTextClassName } from '../../styles/colorTokens';
+import { resolveColorTextClassName } from '../../styles/colorTokens';
 import { cn } from '../../utils/cn';
 
 const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
@@ -66,8 +67,6 @@ const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
   mini_boss: Shield,
   boss: Swords,
 };
-
-const CARD_COLOR_OPTIONS = SOLARIZED_SWATCH_OPTIONS;
 
 export interface ActivityResourceLink {
   title?: string;
@@ -818,39 +817,16 @@ function ActivityColorSelector({
   onChange: (cardColor: string) => void;
 }) {
   const { t } = useTranslation();
-  const selectedValue = value || CARD_COLOR_OPTIONS[5].value;
 
   return (
     <fieldset className="space-y-1.5">
       <legend className="font-bold text-text-secondary">{t('activityCard.cardColor')}</legend>
-      <div className="grid grid-cols-9 gap-1.5">
-        {CARD_COLOR_OPTIONS.map((option) => {
-          const isSelected = selectedValue === option.value;
-          const label = t(option.labelKey);
-
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className={cn(
-                'h-7 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
-                isSelected
-                  ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
-                  : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
-              )}
-              aria-label={t('activityCard.useCardColor').replace('{color}', label)}
-              aria-pressed={isSelected}
-              title={label}
-            >
-              <span
-                className={cn('block h-full w-full rounded-md shadow-sm', option.className)}
-                aria-hidden
-              />
-            </button>
-          );
-        })}
-      </div>
+      <ColorSwatchPicker
+        value={value}
+        onChange={onChange}
+        variant="grid"
+        useColorLabelKey="activityCard.useCardColor"
+      />
     </fieldset>
   );
 }

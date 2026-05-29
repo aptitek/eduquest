@@ -1,6 +1,5 @@
-import { isValidElement, useEffect, useRef, useState } from 'react';
+import { isValidElement, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import type { GameCharacterClass, Guild } from '@eduquest/shared';
 import { motion } from 'framer-motion';
 import {
@@ -26,15 +25,14 @@ import { readFileAsDataUrl } from '../../../utils/readFileAsDataUrl';
 import { useTranslation } from '../../../hooks/useTranslation';
 import {
   DEFAULT_UI_COLOR_TOKEN,
-  SOLARIZED_SWATCH_OPTIONS,
   UI_COLOR_TOKENS,
-  resolveColorBackgroundClassName,
   resolvePlayingCardAccentClassName,
   resolveUiColorTokenName,
   resolveUiColorTokenValue,
   type UiColorTokenName,
 } from '../../../styles/colorTokens';
 import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
+import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import {
   PLAYING_CARD_TRANSITION,
   PlayingCardArtFrame,
@@ -43,6 +41,31 @@ import {
   PlayingCardStatPanel,
   PlayingCardTitleBlock,
 } from './PlayingCardParts';
+import {
+  PLAYING_CARD_SIZE_LAYOUTS,
+  playingCardBackClassName,
+  playingCardDetailPanelClassName,
+  playingCardFaceClassName,
+  playingCardInnerClassName,
+  playingCardRootClassName,
+} from './cardVariants';
+import { CardSection } from './slots';
+import type {
+  CardFaceMode,
+  CardFaceModel,
+  CardGenericBackSlot,
+  CardInstitutionalSlot,
+  CardMetadataSlot,
+  PlayingCardModel,
+} from './types';
+
+export type {
+  CardFaceModel,
+  CardGenericBackSlot,
+  CardInstitutionalSlot,
+  CardMetadataSlot,
+  PlayingCardModel,
+} from './types';
 
 export type PlayingCardSize = 'nano' | 'mini' | 'full';
 
@@ -66,6 +89,7 @@ export type PlayingCardEditableField =
   | 'ribbonIcon';
 
 export interface PlayingCardSide {
+  mode?: CardFaceMode;
   title: string;
   description?: string;
   subtitle?: string;
@@ -90,6 +114,9 @@ export interface PlayingCardSide {
   colorEditable?: boolean;
   editable?: boolean;
   ribbonEditable?: boolean;
+  metadata?: CardMetadataSlot;
+  institutional?: CardInstitutionalSlot;
+  genericBack?: CardGenericBackSlot;
   onFieldChange?: (field: PlayingCardEditableField, value: string) => void;
   onIllustrationUpload?: (file: File) => Promise<string | void>;
   illustrationUploadErrorMessageKey?: string;
@@ -134,10 +161,9 @@ export interface PlayingCardData {
   titleAccessory?: ReactNode;
   colorEditable?: boolean;
   frontContent?: ReactNode;
+  model?: PlayingCardModel;
   front?: PlayingCardSide;
   back?: PlayingCardBack;
-  backSvgUrl?: string;
-  backSvgAlt?: string;
   flipLabel?: string;
   interactive?: boolean;
   editable?: boolean;
@@ -180,13 +206,12 @@ export function PlayingCard({
 }: PlayingCardProps) {
   const { t } = useTranslation();
   const [isFlipped, setIsFlipped] = useState(false);
-  const front = resolveFrontSide(card);
+  const front = card.model?.front ? resolveModelSide(card.model.front, card) : resolveFrontSide(card);
   const accent = resolveCardAccent(card, front);
   const color = resolveCardColor(card, front, accent);
   const layoutId = card.disableLayoutAnimation ? undefined : card.layoutId || card.id;
   const isFull = size === 'full';
-  const isNano = size === 'nano';
-  const hasBack = Boolean(isFull && (card.back || card.backSvgUrl));
+  const hasBack = Boolean(isFull && (card.model?.back || card.back));
   const isActionable = Boolean(onClick);
 
   return (
@@ -204,14 +229,12 @@ export function PlayingCard({
       }}
       transition={PLAYING_CARD_TRANSITION}
       className={cn(
-        'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl outline-none',
-        'transition-[filter,box-shadow,width,transform,border-radius] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-[color:var(--playing-card-accent)]',
+        playingCardRootClassName({
+          size,
+          tone: resolveCardTone(card),
+          state: card.faceDown || front.mode === 'genericBack' ? 'faceDown' : card.editable ? 'editable' : 'readonly',
+        }),
         resolvePlayingCardAccentClassName(color, accent),
-        isFull && 'w-full max-w-sm p-2',
-        !isFull && !isNano && 'w-32 sm:w-36',
-        isNano &&
-          'w-[2.15rem] rounded-lg p-0.5 shadow-lg hover:z-50 hover:w-32 hover:translate-y-1 hover:rounded-[1.4rem] hover:shadow-2xl focus-within:z-50 focus-within:w-32 focus-within:translate-y-1 focus-within:rounded-[1.4rem] focus-within:shadow-2xl sm:hover:w-36 sm:focus-within:w-36',
-        card.faceDown && !isFull && 'bg-gaming-base',
         className
       )}
     >
@@ -221,22 +244,20 @@ export function PlayingCard({
         animate={{ rotateY: isFull && isFlipped ? 180 : 0 }}
         transition={{ duration: 0.5 }}
         className={cn(
-          'relative h-full min-h-0 w-full rounded-[1.1rem] [transform-style:preserve-3d]',
-          isNano && 'rounded-lg group-hover:rounded-[1.1rem] group-focus-within:rounded-[1.1rem]',
+          playingCardInnerClassName(size),
           auraClassName,
           innerClassName
         )}
       >
         <CardFace
           className={cn(
-            'absolute inset-0 [backface-visibility:hidden]',
-            isFull && 'overflow-visible'
+            playingCardFaceClassName(size)
           )}
         >
-          {card.frontContent ? (
+          {card.frontContent && !card.model ? (
             card.frontContent
           ) : (
-            <PlayingCardFront
+            <PlayingCardFace
               card={card}
               side={front}
               size={size}
@@ -251,7 +272,7 @@ export function PlayingCard({
         {hasBack ? (
           <CardFace
             className={cn(
-              'absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]',
+              playingCardBackClassName(),
               isFull && 'overflow-visible'
             )}
           >
@@ -278,7 +299,7 @@ export function PlayingCard({
   );
 }
 
-interface PlayingCardFrontProps {
+interface PlayingCardFaceProps {
   card: PlayingCardData;
   side: PlayingCardSide;
   size: PlayingCardSize;
@@ -288,7 +309,7 @@ interface PlayingCardFrontProps {
   className?: string;
 }
 
-function PlayingCardFront({
+function PlayingCardFace({
   card,
   side,
   size,
@@ -296,184 +317,47 @@ function PlayingCardFront({
   ribbonClassName,
   layoutId,
   className,
-}: PlayingCardFrontProps) {
-  if (card.faceDown) {
+}: PlayingCardFaceProps) {
+  const layout = PLAYING_CARD_SIZE_LAYOUTS[size];
+  const { t } = useTranslation();
+  const canEdit = Boolean(side.editable);
+  const canEditRibbon = canEdit && side.ribbonEditable !== false;
+
+  if (card.faceDown || side.mode === 'genericBack') {
     return (
       <FaceDownCard
         kind={card.kind}
         color={color}
         size={size}
         editable={Boolean(card.editable)}
+        genericBack={side.genericBack}
+        fallbackTitle={side.title}
         className={className}
       />
     );
   }
-
-  if (size === 'full') {
-    return (
-      <FullCardSide
-        kind={card.kind}
-        side={side}
-        color={color}
-        ribbonClassName={ribbonClassName}
-        layoutId={layoutId}
-        className={className}
-      />
-    );
-  }
-
-  if (size === 'nano') {
-    return (
-      <div
-        className={cn(
-          'relative h-full min-h-0 overflow-hidden rounded-[0.45rem] transition-[border-radius] duration-300 group-hover:rounded-[1.25rem] group-focus-within:rounded-[1.25rem]',
-          className
-        )}
-      >
-        {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon) ? (
-          <div className="absolute inset-0 z-30 origin-top-right scale-50 opacity-0 transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100">
-            <PlayingCardRibbon
-              layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
-              position={side.ribbonPosition || 'top-right'}
-              size="sm"
-              color={color}
-              icon={resolveRibbonIcon(card, side)}
-              ribbonClassName={ribbonClassName}
-              onClick={side.onRibbonClick}
-              ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
-            >
-              {side.ribbonText}
-            </PlayingCardRibbon>
-          </div>
-        ) : null}
-
-        <PlayingCardArtFrame
-          size="mini"
-          layoutId={layoutId ? `${layoutId}-art-frame` : undefined}
-          className="absolute inset-0 rounded-[0.45rem] border-0 bg-transparent transition-all duration-300 group-hover:inset-x-3 group-hover:bottom-12 group-hover:top-3 group-hover:rounded-[1.05rem] group-hover:border group-hover:border-gaming-border group-hover:bg-gaming-base group-focus-within:inset-x-3 group-focus-within:bottom-12 group-focus-within:top-3 group-focus-within:rounded-[1.05rem] group-focus-within:border group-focus-within:border-gaming-border group-focus-within:bg-gaming-base"
-          gradientClassName="opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100"
-        >
-          {side.illustrationHidden ? null : (
-            <PlayingCardIllustration
-              title={side.title}
-              illustrationUrl={side.illustrationUrl}
-              illustrationAlt={side.illustrationAlt}
-              illustration={side.illustration}
-              iconSize={getIllustrationIconSize(card.kind, 'nano')}
-              layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-            />
-          )}
-        </PlayingCardArtFrame>
-
-        <PlayingCardTitleBlock
-          title={side.title}
-          subtitle={side.subtitle}
-          size="mini"
-          layoutId={layoutId ? `${layoutId}-title` : undefined}
-          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn('relative h-full min-h-0 overflow-hidden rounded-[1.25rem]', className)}>
-      {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon) ? (
-        <PlayingCardRibbon
-          layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
-          position={side.ribbonPosition || 'top-right'}
-          size="sm"
-          color={color}
-          icon={resolveRibbonIcon(card, side)}
-          ribbonClassName={ribbonClassName}
-          onClick={side.onRibbonClick}
-          ariaLabel={side.onRibbonClick ? side.ribbonText : undefined}
-        >
-          {side.ribbonText}
-        </PlayingCardRibbon>
-      ) : null}
-
-      <PlayingCardArtFrame size="mini" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
-        {side.illustrationHidden ? null : (
-          <PlayingCardIllustration
-            title={side.title}
-            illustrationUrl={side.illustrationUrl}
-            illustrationAlt={side.illustrationAlt}
-            illustration={side.illustration}
-            iconSize={getIllustrationIconSize(card.kind, 'mini')}
-            layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-          />
-        )}
-      </PlayingCardArtFrame>
-
-      <PlayingCardTitleBlock
-        title={side.title}
-        subtitle={side.subtitle}
-        size="mini"
-        layoutId={layoutId ? `${layoutId}-title` : undefined}
-      />
-    </div>
-  );
-}
-
-function FullCardSide({
-  kind,
-  side,
-  color,
-  ribbonClassName,
-  layoutId,
-  className,
-}: {
-  kind?: PlayingCardData['kind'];
-  side: PlayingCardSide;
-  color: string;
-  ribbonClassName?: string;
-  layoutId?: string;
-  className?: string;
-}) {
-  const { t } = useTranslation();
-  const radarGraph = buildRadarGraph(side.stats, side.statsLabel || side.title, color);
-  const canEdit = Boolean(side.editable);
-  const canEditStats = canEdit && side.statsEditable !== false && Boolean(side.onStatChange);
-  const canEditRibbon = canEdit && side.ribbonEditable !== false;
-  const canEditColor = canEdit && kind === 'guild' && side.colorEditable !== false && Boolean(side.onColorChange);
-  const updateField = (field: PlayingCardEditableField, value: string) => {
-    side.onFieldChange?.(field, value);
-  };
-  const updateIllustrationFromFile = async (file: File) => {
-    if (side.onIllustrationUpload) {
-      const uploadedUrl = await side.onIllustrationUpload(file);
-      if (uploadedUrl) {
-        updateField('illustrationUrl', uploadedUrl);
-      }
-      return;
-    }
-
-    updateField('illustrationUrl', await readFileAsDataUrl(file));
-  };
 
   return (
     <EditableFieldContext.Provider value={{ showPencil: canEdit }}>
-      <div
-        aria-label={side.title}
-        className={cn(
-          'relative flex h-full min-h-0 flex-col overflow-visible rounded-[1.1rem] border border-gaming-border bg-gaming-card/95',
-          className,
-          side.className
-        )}
-      >
-        {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon || canEdit) ? (
+      <div className={cn(layout.shellClassName, className, side.className)} aria-label={side.title}>
+      {!side.ribbonHidden && (side.ribbonText || side.ribbonIconKey || side.ribbonIcon) ? (
+        <div
+          className={cn(
+            layout.revealCompactDetailsOnHover &&
+              'absolute inset-0 z-30 origin-top-right scale-50 opacity-0 transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100'
+          )}
+        >
           <PlayingCardRibbon
             layoutId={layoutId ? `${layoutId}-ribbon` : undefined}
             position={side.ribbonPosition || 'top-right'}
-            size="md"
+            size={layout.ribbonSize}
             color={color}
-            icon={resolveRibbonIcon(undefined, side)}
+            icon={canEditRibbon && side.ribbonIconKey ? undefined : resolveRibbonIcon(card, side)}
             editableText={
               canEditRibbon && side.ribbonText
                 ? {
                     value: side.ribbonText || '',
-                    onChange: (value) => updateField('ribbonText', value),
+                    onChange: (value) => side.onFieldChange?.('ribbonText', value),
                     placeholder: t('playingCard.placeholders.ribbon'),
                     className: 'text-inherit',
                   }
@@ -483,7 +367,7 @@ function FullCardSide({
               canEditRibbon && side.ribbonIconKey
                 ? {
                     value: side.ribbonIconKey,
-                    onChange: (value) => updateField('ribbonIcon', value),
+                    onChange: (value) => side.onFieldChange?.('ribbonIcon', value),
                   }
                 : undefined
             }
@@ -494,231 +378,212 @@ function FullCardSide({
           >
             {canEditRibbon ? null : side.ribbonText}
           </PlayingCardRibbon>
-        ) : null}
+        </div>
+      ) : null}
 
-        <PlayingCardArtFrame size="full" layoutId={layoutId ? `${layoutId}-art-frame` : undefined}>
-          {side.illustrationHidden ? null : canEdit && (!side.illustration || side.illustrationUrl) ? (
-            <motion.div
-              layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-              transition={PLAYING_CARD_TRANSITION}
-              className="absolute inset-0"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <EditableSchoolLogo
-                src={side.illustrationUrl}
-                name={side.illustrationAlt || side.title}
-                isEditing
-                canReset={Boolean(side.illustrationUrl)}
-                uploadErrorMessageKey={side.illustrationUploadErrorMessageKey}
-                onUpload={updateIllustrationFromFile}
-                onReset={() => {
-                  updateField('illustrationUrl', '');
-                  return Promise.resolve();
-                }}
-                className="h-full rounded-none border-0 bg-transparent p-0"
-              />
-            </motion.div>
-          ) : (
-            <PlayingCardIllustration
-              title={side.title}
-              illustrationUrl={side.illustrationUrl}
-              illustrationAlt={side.illustrationAlt}
-              illustration={side.illustration}
-              iconSize={getIllustrationIconSize(kind, 'full')}
-              layoutId={layoutId ? `${layoutId}-illustration` : undefined}
-            />
-          )}
-          <PlayingCardTitleBlock
-            title={side.title}
-            subtitle={side.subtitle}
-            size="full"
-            layoutId={layoutId ? `${layoutId}-title` : undefined}
-            editable={canEdit}
-            onTitleChange={(value) => updateField('title', value)}
-            titleAccessory={
-              canEditColor ? (
-                <>
-                  <GuildColorPicker color={color} onColorChange={(value) => side.onColorChange?.(value)} />
-                  {side.titleAccessory}
-                </>
-              ) : (
-                side.titleAccessory
-              )
-            }
+      <PlayingCardArtFrame
+        size={layout.artFrameSize}
+        layoutId={layoutId ? `${layoutId}-art-frame` : undefined}
+        className={layout.artFrameClassName}
+        gradientClassName={layout.artFrameGradientClassName}
+      >
+        {side.illustrationHidden ? null : (
+          <CardIllustrationSlot
+            kind={card.kind}
+            side={side}
+            size={layout.illustrationIconSize}
+            canEdit={layout.showDetailPanel && Boolean(side.editable)}
+            layoutId={layoutId}
           />
-        </PlayingCardArtFrame>
-
-        <section className="relative flex max-h-[43%] shrink-0 gap-3 border-t border-gaming-border bg-gaming-card/95 p-4">
-          <div className="min-w-0 flex-1 text-left">
-            {side.subtitle || canEdit ? (
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                {canEdit ? (
-                  <EditableText
-                    value={side.subtitle || ''}
-                    onChange={(value) => updateField('subtitle', value)}
-                    placeholder={t('playingCard.placeholders.subtitle')}
-                    className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted"
-                    truncate={false}
-                  />
-                ) : (
-                  side.subtitle
-                )}
-              </div>
-            ) : null}
-            {side.description || canEdit ? (
-              canEdit ? (
-                <EditableText
-                  multiline
-                  value={side.description || ''}
-                  onChange={(value) => updateField('description', value)}
-                  placeholder={t('playingCard.placeholders.description')}
-                  truncate={false}
-                  className="text-sm leading-relaxed text-text-secondary"
+        )}
+        <PlayingCardTitleBlock
+          title={side.title}
+          subtitle={side.subtitle}
+          size={layout.titleSize}
+          layoutId={layoutId ? `${layoutId}-title` : undefined}
+          editable={layout.showDetailPanel && canEdit}
+          onTitleChange={(value) => side.onFieldChange?.('title', value)}
+          titleAccessory={
+            layout.showDetailPanel && canEdit && side.colorEditable !== false && side.onColorChange ? (
+              <>
+                <ColorSwatchPicker
+                  value={color}
+                  onChange={(value) => side.onColorChange?.(value)}
+                  variant="popover"
+                  ariaLabel={t('activityCard.cardColor')}
+                  useColorLabelKey="activityCard.useCardColor"
                 />
-              ) : (
-                <p className="line-clamp-6 text-sm leading-relaxed text-text-secondary">
-                  {side.description}
-                </p>
-              )
-            ) : null}
-            {side.footer ? (
-              <div className="mt-3 text-sm text-text-secondary">{side.footer}</div>
-            ) : null}
-          </div>
+                {side.titleAccessory}
+              </>
+            ) : (
+              side.titleAccessory
+            )
+          }
+          className={layout.titleClassName}
+        />
+      </PlayingCardArtFrame>
 
-          {radarGraph ? (
-            <PlayingCardStatPanel
-              axes={radarGraph.axes}
-              datasets={radarGraph.datasets}
-              maxValue={radarGraph.maxValue}
-              levels={radarGraph.levels}
-              layoutId={layoutId ? `${layoutId}-stats` : undefined}
-              editable={canEditStats}
-              editableDatasetId={radarGraph.editableDatasetId}
-              remainingValue={side.statPointsRemaining}
-              remainingValueLabel={side.statPointsRemainingLabel}
-              getEditableRange={side.getStatEditableRange}
-              onValueChange={side.onStatChange}
-            />
-          ) : null}
-        </section>
+      {layout.showDetailPanel ? (
+        <PlayingCardDetailPanel side={side} color={color} layoutId={layoutId} />
+      ) : null}
       </div>
     </EditableFieldContext.Provider>
   );
 }
 
-function GuildColorPicker({
-  color,
-  onColorChange,
+function CardIllustrationSlot({
+  kind,
+  side,
+  size,
+  canEdit,
+  layoutId,
 }: {
-  color: string;
-  onColorChange: (color: string) => void;
+  kind?: PlayingCardData['kind'];
+  side: PlayingCardSide;
+  size: PlayingCardSize;
+  canEdit: boolean;
+  layoutId?: string;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 16 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLSpanElement>(null);
+  const updateField = (field: PlayingCardEditableField, value: string) => {
+    side.onFieldChange?.(field, value);
+  };
+  const updateIllustrationFromFile = async (file: File) => {
+    if (side.onIllustrationUpload) {
+      const uploadedUrl = await side.onIllustrationUpload(file);
+      if (uploadedUrl) updateField('illustrationUrl', uploadedUrl);
+      return;
+    }
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
+    updateField('illustrationUrl', await readFileAsDataUrl(file));
+  };
 
-    const updatePosition = () => {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const panelWidth = 160;
-      const margin = 16;
-      setPanelPosition({
-        top: rect.bottom + 8,
-        left: Math.min(window.innerWidth - panelWidth - margin, Math.max(margin, rect.left + rect.width / 2 - panelWidth / 2)),
-      });
-    };
-
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
-      setIsOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen]);
+  if (canEdit && (!side.illustration || side.illustrationUrl)) {
+    return (
+      <motion.div
+        layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+        transition={PLAYING_CARD_TRANSITION}
+        className="absolute inset-0"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <EditableSchoolLogo
+          src={side.illustrationUrl}
+          name={side.illustrationAlt || side.title}
+          isEditing
+          canReset={Boolean(side.illustrationUrl)}
+          uploadErrorMessageKey={side.illustrationUploadErrorMessageKey}
+          onUpload={updateIllustrationFromFile}
+          onReset={() => {
+            updateField('illustrationUrl', '');
+            return Promise.resolve();
+          }}
+          className="h-full rounded-none border-0 bg-transparent p-0"
+        />
+      </motion.div>
+    );
+  }
 
   return (
-    <span className="relative inline-flex">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setIsOpen((current) => !current);
-        }}
-        className={cn(
-          'h-7 w-7 rounded-full border border-gaming-border shadow-lg transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest',
-          resolveColorBackgroundClassName(color)
-        )}
-        aria-label="Changer la couleur de la guilde"
-        aria-expanded={isOpen}
-        title="Changer la couleur"
-      />
+    <PlayingCardIllustration
+      title={side.title}
+      illustrationUrl={side.illustrationUrl}
+      illustrationAlt={side.illustrationAlt}
+      illustration={side.illustration}
+      iconSize={getIllustrationIconSize(kind, size)}
+      layoutId={layoutId ? `${layoutId}-illustration` : undefined}
+    />
+  );
+}
 
-      {isOpen
-        ? createPortal(
-            <span
-              ref={panelRef}
-              className="fixed z-[120] grid w-40 grid-cols-3 gap-2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 shadow-2xl backdrop-blur"
-              style={{ top: panelPosition.top, left: panelPosition.left }}
-            >
-              {SOLARIZED_SWATCH_OPTIONS.map((option) => {
-                const isSelected = color === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onColorChange(option.value);
-                      setIsOpen(false);
-                    }}
-                    className={cn(
-                      'h-8 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-status-quest',
-                      isSelected
-                        ? 'border-text-primary bg-gaming-card p-0.5 shadow-glow-primary'
-                        : 'border-gaming-border bg-gaming-base p-1 hover:border-status-quest'
-                    )}
-                    aria-label={`Utiliser la couleur ${option.label}`}
-                    aria-pressed={isSelected}
-                    title={option.label}
-                  >
-                    <span className={cn('block h-full w-full rounded-md shadow-sm', option.className)} aria-hidden />
-                  </button>
-                );
-              })}
-            </span>,
-            document.body
+function PlayingCardDetailPanel({
+  side,
+  color,
+  layoutId,
+}: {
+  side: PlayingCardSide;
+  color: string;
+  layoutId?: string;
+}) {
+  const { t } = useTranslation();
+  const radarGraph = buildRadarGraph(side.stats, side.statsLabel || side.title, color);
+  const canEdit = Boolean(side.editable);
+  const canEditStats = canEdit && side.statsEditable !== false && Boolean(side.onStatChange);
+  const updateField = (field: PlayingCardEditableField, value: string) => {
+    side.onFieldChange?.(field, value);
+  };
+
+  return (
+    <section className={playingCardDetailPanelClassName()}>
+      <div className="min-w-0 flex-1 space-y-3 text-left">
+        {side.subtitle || canEdit ? (
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+            {canEdit ? (
+              <EditableText
+                value={side.subtitle || ''}
+                onChange={(value) => updateField('subtitle', value)}
+                placeholder={t('playingCard.placeholders.subtitle')}
+                className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted"
+                truncate={false}
+              />
+            ) : (
+              side.subtitle
+            )}
+          </div>
+        ) : null}
+        {side.description || canEdit ? (
+          canEdit ? (
+            <EditableText
+              multiline
+              value={side.description || ''}
+              onChange={(value) => updateField('description', value)}
+              placeholder={t('playingCard.placeholders.description')}
+              truncate={false}
+              className="text-sm leading-relaxed text-text-secondary"
+            />
+          ) : (
+            <p className="line-clamp-6 text-sm leading-relaxed text-text-secondary">
+              {side.description}
+            </p>
           )
-        : null}
-    </span>
+        ) : null}
+        {side.footer ? <div className="mt-3 text-sm text-text-secondary">{side.footer}</div> : null}
+        <CardSections metadata={side.metadata} institutional={side.institutional} />
+      </div>
+
+      {radarGraph ? (
+        <PlayingCardStatPanel
+          axes={radarGraph.axes}
+          datasets={radarGraph.datasets}
+          maxValue={radarGraph.maxValue}
+          levels={radarGraph.levels}
+          layoutId={layoutId ? `${layoutId}-stats` : undefined}
+          editable={canEditStats}
+          editableDatasetId={radarGraph.editableDatasetId}
+          remainingValue={side.statPointsRemaining}
+          remainingValueLabel={side.statPointsRemainingLabel}
+          getEditableRange={side.getStatEditableRange}
+          onValueChange={side.onStatChange}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function CardSections({
+  metadata,
+  institutional,
+}: {
+  metadata?: CardMetadataSlot;
+  institutional?: CardInstitutionalSlot;
+}) {
+  const sections = [...(metadata?.sections || []), ...(institutional?.sections || [])];
+  if (!sections.length) return null;
+
+  return (
+    <div className="grid gap-2">
+      {sections.map((section) => (
+        <CardSection key={section.id} section={section} />
+      ))}
+    </div>
   );
 }
 
@@ -727,23 +592,42 @@ function FaceDownCard({
   color,
   size,
   editable,
+  genericBack,
+  fallbackTitle,
   className,
 }: {
   kind?: PlayingCardData['kind'];
   color: string;
   size: PlayingCardSize;
   editable?: boolean;
+  genericBack?: CardGenericBackSlot;
+  fallbackTitle?: string;
   className?: string;
 }) {
   const Icon = getFaceDownIcon(kind);
   const iconSize = size === 'full' ? 72 : 38;
   const plusSize = size === 'full' ? 38 : 22;
+  const iconKey = genericBack?.icon?.value || genericBack?.icon?.fallback;
+  const icon = genericBack?.icon?.icon || (iconKey ? renderLucideIcon(iconKey, iconSize) : null);
+  const svgAlt = genericBack?.svgAlt || fallbackTitle || 'Card back';
 
   return (
     <div className={cn('relative h-full min-h-0 overflow-hidden rounded-[1.1rem] p-2', className)}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--playing-card-accent)_0,transparent_62%)] opacity-20" />
       <div className="relative flex h-full w-full items-center justify-center rounded-[0.9rem] border border-dashed border-[color:var(--playing-card-accent)] bg-gaming-base/80 text-[color:var(--playing-card-accent)]">
-        <Icon size={iconSize} aria-hidden color={color} className={cn(editable && 'opacity-35')} />
+        {genericBack?.svgUrl ? (
+          <img
+            src={genericBack.svgUrl}
+            alt={svgAlt}
+            className={cn('h-full max-h-full w-auto max-w-full object-contain', editable && 'opacity-35')}
+          />
+        ) : icon ? (
+          <span className={cn('text-[color:var(--playing-card-accent)]', editable && 'opacity-35')} aria-hidden>
+            {icon}
+          </span>
+        ) : (
+          <Icon size={iconSize} aria-hidden color={color} className={cn(editable && 'opacity-35')} />
+        )}
         {editable ? (
           <div className={cn('absolute flex', size === 'full' ? 'bottom-5 right-5' : 'bottom-2 right-2')}>
             <span
@@ -871,16 +755,31 @@ function resolveBackContent(
   card: PlayingCardData,
   color: string,
   className: string | undefined,
-  fallbackAlt: string
+  _fallbackAlt: string
 ) {
+  if (card.model?.back) {
+    const side = resolveModelSide(card.model.back, card);
+    return (
+      <PlayingCardFace
+        card={{ ...card, faceDown: false }}
+        side={side}
+        size="full"
+        color={side.color ? String(side.color) : color}
+        ribbonClassName={card.ribbonClassName}
+        className={className}
+      />
+    );
+  }
+
   if (isPlayingCardSide(card.back)) {
     return (
-      <FullCardSide
-        kind={card.kind}
+      <PlayingCardFace
+        card={{ ...card, faceDown: false }}
         side={{
           ...card.back,
           statsEditable: card.back.statsEditable ?? card.statsEditable ?? card.kind !== 'guild',
         }}
+        size="full"
         color={card.back.color || color}
         className={className}
       />
@@ -891,45 +790,69 @@ function resolveBackContent(
     return card.back;
   }
 
-  return (
-    <DefaultCardBack
-      svgUrl={card.backSvgUrl}
-      svgAlt={card.backSvgAlt || fallbackAlt}
-      className={className}
-    />
-  );
+  return null;
 }
 
-function DefaultCardBack({
-  svgUrl,
-  svgAlt,
-  className,
-}: {
-  svgUrl?: string;
-  svgAlt: string;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        'relative flex h-full min-h-0 items-center justify-center rounded-[1.1rem] bg-gaming-card p-4',
-        className
-      )}
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-status-quest)_0,transparent_62%)] opacity-20" />
-      <div className="relative flex h-full w-full items-center justify-center rounded-[1rem] border border-gaming-border bg-gaming-base/90 p-4">
-        {svgUrl ? (
-          <img
-            src={svgUrl}
-            alt={svgAlt}
-            className="h-full max-h-full w-auto max-w-full object-contain"
-          />
-        ) : (
-          <Shield size={84} aria-label={svgAlt} className="text-status-quest" />
-        )}
-      </div>
-    </div>
-  );
+function resolveModelSide(model: CardFaceModel, card: PlayingCardData): PlayingCardSide {
+  const title = model.title?.value || model.title?.fallback || card.title || card.kind || 'Card';
+  const subtitle = model.subtitle?.value || model.subtitle?.fallback;
+  const description = model.description?.value || model.description?.fallback;
+  const ribbonText = model.ribbon?.text?.value || model.ribbon?.text?.fallback;
+  const ribbonIconKey = model.ribbon?.icon?.value || model.ribbon?.icon?.fallback;
+  const artValue = model.art?.value || model.art?.fallback;
+
+  return {
+    mode: model.mode,
+    title,
+    subtitle,
+    description,
+    color: model.color?.value || model.color?.fallback || card.color,
+    illustrationUrl: artValue,
+    illustrationAlt: model.art?.alt || title,
+    illustration: model.art?.node,
+    illustrationHidden: model.art?.hidden,
+    ribbonText,
+    ribbonIcon: model.ribbon?.icon?.icon,
+    ribbonIconKey,
+    ribbonPosition: model.ribbon?.position,
+    ribbonHidden: model.ribbon?.hidden,
+    ribbonEditable: model.ribbon?.text?.editable || model.ribbon?.icon?.editable,
+    stats: model.stats?.values,
+    statsLabel: model.stats?.label,
+    statsEditable: model.stats?.editable,
+    statPointsRemaining: model.stats?.remainingValue,
+    statPointsRemainingLabel: model.stats?.remainingValueLabel,
+    getStatEditableRange: model.stats?.getEditableRange,
+    footer: model.footer,
+    titleAccessory: model.actions,
+    colorEditable: model.color?.editable,
+    editable:
+      model.title?.editable ||
+      model.subtitle?.editable ||
+      model.description?.editable ||
+      model.art?.editable ||
+      model.color?.editable ||
+      model.ribbon?.text?.editable ||
+      model.ribbon?.icon?.editable ||
+      model.stats?.editable,
+    metadata: model.metadata,
+    institutional: model.institutional,
+    genericBack: model.genericBack,
+    onFieldChange: (field, value) => {
+      if (field === 'title') void model.title?.onChange?.(value);
+      if (field === 'subtitle') void model.subtitle?.onChange?.(value);
+      if (field === 'description') void model.description?.onChange?.(value);
+      if (field === 'illustrationUrl') void model.art?.onChange?.(value);
+      if (field === 'ribbonText') void model.ribbon?.text?.onChange?.(value);
+      if (field === 'ribbonIcon') void model.ribbon?.icon?.onChange?.(value);
+    },
+    onIllustrationUpload: model.art?.upload,
+    illustrationUploadErrorMessageKey: model.art?.uploadErrorMessageKey,
+    onColorChange: model.color?.onChange,
+    onStatChange: model.stats?.onChange,
+    onRibbonClick: model.ribbon?.onClick,
+    className: model.className,
+  };
 }
 
 function isPlayingCardSide(value: PlayingCardBack | undefined): value is PlayingCardSide {
@@ -965,6 +888,17 @@ function resolveAccentToken(
   }
   if (characterClass) return CHARACTER_CLASS_ACCENTS[characterClass];
   return resolveUiColorTokenName(value);
+}
+
+function resolveCardTone(card: PlayingCardData) {
+  if (card.kind === 'activity') return 'quest';
+  if (card.kind === 'cohort') return 'cohort';
+  if (card.kind === 'guild') return 'guild';
+  if (card.kind === 'reward') return 'reward';
+  if (card.kind === 'school') return 'school';
+  if (card.kind === 'student') return 'student';
+  if (card.kind === 'character') return 'character';
+  return 'default';
 }
 
 function formatCharacterClass(characterClass: GameCharacterClass) {

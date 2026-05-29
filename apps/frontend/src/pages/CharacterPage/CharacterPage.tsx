@@ -24,6 +24,12 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { useErrorReporter } from '../../features/errors/notifications';
 import { uploadAsset } from '../../features/assets/api';
+import {
+  CHARACTER_CLASS_BASE_STATS,
+  GAME_STAT_FIELDS,
+  createEmptyGameStats,
+  type GameStatKey,
+} from '../../features/game/characterStats';
 
 type EditablePlayerCardOverride = Partial<Record<PlayingCardEditableField, string>> & {
   stats?: Record<string, number>;
@@ -35,52 +41,6 @@ type CharacterProfileUpdatePayload = {
   characterIllustrationUrl?: string;
   characterStats?: GameStats;
   gameId?: string | null;
-};
-
-type GameStatKey = keyof GameStats;
-
-const STAT_FIELDS: Array<{ id: GameStatKey; label: string }> = [
-  { id: 'strength', label: 'STR' },
-  { id: 'dexterity', label: 'DEX' },
-  { id: 'constitution', label: 'CON' },
-  { id: 'intelligence', label: 'INT' },
-  { id: 'wisdom', label: 'WIS' },
-  { id: 'charisma', label: 'CHA' },
-];
-
-const CHARACTER_CLASS_BASE_STATS: Record<GameCharacterClass, GameStats> = {
-  scholar: {
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    intelligence: 2,
-    wisdom: 1,
-    charisma: 1,
-  },
-  champion: {
-    strength: 2,
-    dexterity: 0,
-    constitution: 1,
-    intelligence: 0,
-    wisdom: 0,
-    charisma: 1,
-  },
-  guide: {
-    strength: 0,
-    dexterity: 2,
-    constitution: 0,
-    intelligence: 0,
-    wisdom: 1,
-    charisma: 1,
-  },
-  specialist: {
-    strength: 1,
-    dexterity: 1,
-    constitution: 1,
-    intelligence: 1,
-    wisdom: 0,
-    charisma: 0,
-  },
 };
 
 const DEFAULT_STAT_CONFIG: GameCharacterStatConfig = {
@@ -269,12 +229,12 @@ export function CharacterPage() {
     };
   };
   const currentClassLabel = character ? t(`game.classes.${character.characterClass}`) : '';
-  const baseStats = character ? getCharacterClassBaseStats(character.characterClass, classDefinitions) : createEmptyStats();
+  const baseStats = character ? getCharacterClassBaseStats(character.characterClass, classDefinitions) : createEmptyGameStats();
   const statMaxValue = statConfig.maxValue;
   const statBudget = character ? statConfig.allocationBudget : 0;
   const statAllocations = character
     ? getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue)
-    : createEmptyStats();
+    : createEmptyGameStats();
   const remainingStatPoints = getRemainingStatPoints(statBudget, statAllocations);
   const playerCard = character
     ? applyPlayerCardOverrides(
@@ -494,7 +454,7 @@ function buildPlayerCharacterCard({
       statPointsRemaining: remainingStatPoints,
       statPointsRemainingLabel: remainingStatPointsLabel,
       getStatEditableRange,
-      stats: STAT_FIELDS.map(({ id, label }) => ({
+      stats: GAME_STAT_FIELDS.map(({ id, label }) => ({
         id,
         label,
         value: Math.min(statMaxValue, baseStats[id] + statAllocations[id]),
@@ -516,7 +476,7 @@ function getCharacterClassBaseStats(
 }
 
 function getStatAllocationBudget(stats: GameStats) {
-  return STAT_FIELDS.reduce((total, { id }) => total + Math.max(0, Math.round(stats[id])), 0);
+  return GAME_STAT_FIELDS.reduce((total, { id }) => total + Math.max(0, Math.round(stats[id])), 0);
 }
 
 function getCurrentStatAllocations(
@@ -526,14 +486,14 @@ function getCurrentStatAllocations(
   baseStats: GameStats,
   statMaxValue: number
 ): GameStats {
-  const allocations = STAT_FIELDS.reduce<GameStats>((current, { id }) => {
+  const allocations = GAME_STAT_FIELDS.reduce<GameStats>((current, { id }) => {
     current[id] = clampStatValue(
       Math.round(overrides?.[id] ?? characterStats[id]),
       0,
       Math.max(0, statMaxValue - baseStats[id])
     );
     return current;
-  }, createEmptyStats());
+  }, createEmptyGameStats());
   const spentPoints = getStatAllocationBudget(allocations);
 
   if (spentPoints <= statBudget) return allocations;
@@ -541,7 +501,7 @@ function getCurrentStatAllocations(
   let overflow = spentPoints - statBudget;
   const normalizedAllocations = { ...allocations };
 
-  for (const { id } of [...STAT_FIELDS].reverse()) {
+  for (const { id } of [...GAME_STAT_FIELDS].reverse()) {
     if (overflow <= 0) break;
     const refundablePoints = Math.min(normalizedAllocations[id], overflow);
     normalizedAllocations[id] -= refundablePoints;
@@ -556,18 +516,7 @@ function getRemainingStatPoints(statBudget: number, allocations: GameStats) {
 }
 
 function getGameStatKey(statId: string): GameStatKey | null {
-  return STAT_FIELDS.some(({ id }) => id === statId) ? (statId as GameStatKey) : null;
-}
-
-function createEmptyStats(): GameStats {
-  return {
-    strength: 0,
-    dexterity: 0,
-    constitution: 0,
-    intelligence: 0,
-    wisdom: 0,
-    charisma: 0,
-  };
+  return GAME_STAT_FIELDS.some(({ id }) => id === statId) ? (statId as GameStatKey) : null;
 }
 
 function clampStatValue(value: number, min: number, max: number) {
@@ -601,7 +550,7 @@ function buildClassCard({
       subtitle: characterClass,
       description,
       ribbonText,
-      stats: STAT_FIELDS.map(({ id, label: statLabel }) => ({
+      stats: GAME_STAT_FIELDS.map(({ id, label: statLabel }) => ({
         id,
         label: statLabel,
         value: baseStats[id],
