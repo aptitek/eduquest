@@ -646,10 +646,15 @@ export function ManagementPage() {
             back={selectedStudentCharacterBack}
             kind={selectedStudentRow?.character ? 'character' : undefined}
             characterClass={selectedStudentRow?.character?.characterClass}
+            presentation={
+              selectedStudentRow
+                ? { fit: 'contain', width: 'viewportConstrained' }
+                : { fit: 'fillHeight' }
+            }
             className={cn(
               'max-h-[calc(100vh-8rem)] xl:sticky xl:top-8',
               selectedStudentRow
-                ? 'h-auto max-w-[min(24rem,calc((100vh-8rem)*5/7))] self-start'
+                ? 'self-start'
                 : 'h-full'
             )}
           />
@@ -664,6 +669,7 @@ export function ManagementPage() {
             editable
             onClick={canCreateManagementRow ? createManagementRow : undefined}
             interactive={canCreateManagementRow}
+            presentation={{ fit: 'fillHeight' }}
             className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
           />
         )}

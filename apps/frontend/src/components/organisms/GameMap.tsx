@@ -515,7 +515,7 @@ function buildMapNodeMarker({
               name: playerMarker.label,
               avatarUrl: playerMarker.illustrationUrl,
               color: playerMarker.characterClass ? CHARACTER_CLASS_COLORS[playerMarker.characterClass] : undefined,
-              onClick: () => openClassTarget(),
+              onClick: () => openDirectoryTarget(),
             },
           ]}
           color={playerMarker.characterClass ? CHARACTER_CLASS_COLORS[playerMarker.characterClass] : SOLO_OCCUPANCY_COLOR}
@@ -604,7 +604,7 @@ function AdminGuildMapMarker({
     icon: group.iconKey ? renderLucideIcon(group.iconKey, 18) : undefined,
     color: group.color,
     subtitle: t('graph.presentCount').replace('{count}', String(group.members.length)),
-    onClick: () => openClassTarget(group.name),
+    onClick: () => openDirectoryTarget(group.name),
   }));
 
   return (
@@ -721,7 +721,7 @@ function toAvatarMembers(
     avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
     color: member.characterClass ? CHARACTER_CLASS_COLORS[member.characterClass] : undefined,
     subtitle: member.characterClass,
-    onClick: () => openClassTarget(member.guildName || guildName, member.studentId),
+    onClick: () => openDirectoryTarget(member.guildName || guildName, member.studentId),
   }));
 }
 
@@ -738,10 +738,10 @@ function orderCurrentPlayerFirst(
   ];
 }
 
-function openClassTarget(guildName?: string, memberId?: string) {
+function openDirectoryTarget(guildName?: string, memberId?: string) {
   if (guildName || memberId) {
     sessionStorage.setItem(
-      'eduquest_class_scroll_target',
+      'eduquest_directory_scroll_target',
       JSON.stringify({
         guildName,
         memberId,
@@ -749,7 +749,7 @@ function openClassTarget(guildName?: string, memberId?: string) {
     );
   }
 
-  window.location.hash = 'class';
+  window.location.hash = 'annuaire';
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
@@ -806,7 +806,7 @@ function buildAnnularSegments(
                 avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
                 subtitle: member.characterClass,
                 onClick: () =>
-                  openClassTarget(member.guildName || segment.guildName, member.studentId),
+                  openDirectoryTarget(member.guildName || segment.guildName, member.studentId),
               }))
             ),
           },
@@ -832,7 +832,7 @@ function buildAnnularSegments(
         name: member.displayName,
         avatarUrl: member.characterIllustrationUrl || member.avatarUrl,
         subtitle: member.characterClass,
-        onClick: () => openClassTarget(member.guildName || segment.guildName, member.studentId),
+        onClick: () => openDirectoryTarget(member.guildName || segment.guildName, member.studentId),
       })),
     };
   });

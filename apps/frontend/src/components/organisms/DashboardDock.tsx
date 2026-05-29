@@ -8,7 +8,7 @@ import type {
   RewardSystemConfig,
 } from '@eduquest/shared';
 import type { PlayingCardData, PlayingCardEditableField, PlayingCardSide } from '../molecules/PlayingCard';
-import { PlayingHand, PlayingHandPanel } from '../molecules/PlayingCard';
+import { PlayingHand } from '../molecules/PlayingCard';
 import { GlobalProgressGauge } from '../molecules/GlobalProgressGauge/GlobalProgressGauge';
 import { HoldToConfirmButton } from '../atoms/HoldToConfirmButton';
 import { AddButton } from '../atoms/AddButton';
@@ -39,7 +39,6 @@ import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
 import { Coins, GripVertical } from 'lucide-react';
 import {
-  buildClassGuildHand,
   buildGuildCardHands,
   buildPodiumCards,
   buildProgressBonusCards,
@@ -77,8 +76,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
     : { layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } };
   const [route, setRoute] = useState(() => getHashRoute());
   const [usesWideGuildDeck, setUsesWideGuildDeck] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
-  const [classPodiumTarget, setClassPodiumTarget] = useState<HTMLElement | null>(null);
-  const [guildHandTarget, setGuildHandTarget] = useState<HTMLElement | null>(null);
   const [progressBonusTarget, setProgressBonusTarget] = useState<HTMLElement | null>(null);
   const [editableCardSides, setEditableCardSides] = useState<Record<string, EditableCardSideOverride>>({});
   const [guilds, setGuilds] = useState<DockGuild[]>([]);
@@ -115,15 +112,12 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const playerGuild = latestMembership?.guild;
   const playerName = user ? formatUserDisplayName(user) : t('dashboard.dock.player');
   const playerAvatar = character?.illustrationUrl || user?.avatarUrl || user?.githubAvatarUrl || mascotUrl;
-  const isGuildPage = route === 'guild';
-  const isClassPage = route === 'class';
+  const isDirectoryPage = route === 'annuaire';
   const isProgressPage = route === 'bonus';
   const progressBonusSeenStorageKey = getProgressBonusSeenStorageKey(user?.id, selectedGameId);
 
   useEffect(() => {
     const handleHashChange = () => {
-      setClassPodiumTarget(null);
-      setGuildHandTarget(null);
       setProgressBonusTarget(null);
       const nextRoute = getHashRoute();
       setRoute(nextRoute);
@@ -215,32 +209,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
     },
     [isProgressPage, progressBonusSeenStorageKey]
   );
-
-  useEffect(() => {
-    if (route !== 'class') {
-      setClassPodiumTarget(null);
-      return undefined;
-    }
-
-    const updateTarget = () => setClassPodiumTarget(getConnectedElementById('class-podium-hands-target'));
-    updateTarget();
-
-    const animationFrame = window.requestAnimationFrame(updateTarget);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [route]);
-
-  useEffect(() => {
-    if (route !== 'guild') {
-      setGuildHandTarget(null);
-      return undefined;
-    }
-
-    const updateTarget = () => setGuildHandTarget(getConnectedElementById('guild-hand-target'));
-    updateTarget();
-
-    const animationFrame = window.requestAnimationFrame(updateTarget);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [route]);
 
   useEffect(() => {
     if (route !== 'bonus') {
@@ -528,8 +496,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const podiumGuilds = mergeGuilds(playerGuild ? [playerGuild] : [], guilds);
   const podiumCards = buildPodiumCards(t, podiumGuilds);
   const podiumSentinelCard: PlayingCardData = {
-    id: 'class-remaining-guilds-list',
-    layoutId: 'class-remaining-guilds-list',
+    id: 'directory-remaining-guilds-list',
+    layoutId: 'directory-remaining-guilds-list',
     kind: 'guild',
     title: t('class.remaining'),
     subtitle: latestMembership?.cohort?.name || t('dashboard.dock.cohortDeck'),
@@ -538,22 +506,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
     faceDown: true,
   };
   const podiumDeckCards = buildPodiumDeckCards(podiumCards, podiumGuilds.length, podiumSentinelCard);
-  const podiumSentinelCards = podiumDeckCards.length > podiumCards.length
-    ? toNonEmptyCards([podiumDeckCards[podiumCards.length]])
-    : null;
-  const openClassPage = (card?: PlayingCardData) => {
-    if (!user?.isAdmin && !hasPlayerGuild) {
-      window.location.hash = 'guild';
-      return;
-    }
-
-    const guildName = card?.guild?.name || (card?.kind === 'guild' && !card.faceDown ? card.title : undefined);
-    if (guildName) {
-      sessionStorage.setItem('eduquest_class_scroll_target', JSON.stringify({ guildName }));
-    }
-
-    window.location.hash = 'class';
-  };
   const openProgressPage = () => {
     window.location.hash = 'bonus';
   };
@@ -586,82 +538,37 @@ export function DashboardDock({ className }: DashboardDockProps) {
             ? 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
             : 'h-full w-full'
         )}
-        cardClassName={cn(!isProgressPage && 'w-28 translate-y-0 2xl:w-32')}
-        stackCardClassName={cn(!isProgressPage && 'w-24 translate-y-0 2xl:w-28')}
+        cardPresentation={!isProgressPage ? { width: 'dockSmall' } : undefined}
+        stackCardPresentation={!isProgressPage ? { width: 'dockSmallStack' } : undefined}
       />
     </motion.div>
   ) : null;
 
   if (user?.isAdmin) {
     const adminPodiumCards = podiumDeckCards;
-    const adminPodiumHands = podiumCards.map((card) =>
-      buildClassGuildHand(t, {
-        guild: card.guild || {
-          id: card.id || 'guild',
-          name: card.title || t('dashboard.dock.playerGuild'),
-          gold: 0,
-          boostPointsSpent: 0,
-        },
-        guildName: card.title,
-      })
-    );
     const adminPodiumContent = (
       <motion.div
         layout
         transition={layoutTransition}
-        className={cn(
-          'overflow-visible [perspective:1600px]',
-          isClassPage
-            ? 'relative z-0 w-full'
-            : 'relative z-50 h-56 w-28 shrink-0 sm:w-32 lg:h-60 xl:w-32 2xl:w-36'
-        )}
+        className="relative z-50 h-56 w-28 shrink-0 overflow-visible [perspective:1600px] sm:w-32 lg:h-60 xl:w-32 2xl:w-36"
       >
-        {isClassPage && adminPodiumHands.length > 0 ? (
-          <div className="space-y-5">
-            {adminPodiumHands.map((hand, index) => (
-              <PlayingHandPanel
-                key={hand.id}
-                id={`class-guild-${slugify(hand.title || 'guild')}`}
-                hand={hand}
-                rank={index + 1}
-              />
-            ))}
-            {podiumSentinelCards ? (
-              <PlayingHand
-                hand={{
-                  id: 'admin-class-podium-sentinel-deck',
-                  cards: podiumSentinelCards,
-                  mainCardIndex: 0,
-                  variant: 'horizontal',
-                }}
-                mode="mini"
-                variant="horizontal"
-                visibleCardCount={1}
-                expandOnHover={false}
-                className="mx-auto h-64 w-32 sm:w-36"
-                cardClassName="w-28 translate-y-0 sm:w-32 2xl:w-36"
-              />
-            ) : null}
-          </div>
-        ) : (
-          <PlayingHand
-            hand={{
-              id: 'admin-class-podium-deck',
-              cards: adminPodiumCards,
-              mainCardIndex: 0,
-              variant: usesWideGuildDeck ? 'horizontal' : 'vertical',
-            }}
-            mode="mini"
-            variant={usesWideGuildDeck ? 'horizontal' : 'vertical'}
-            stackSide="left"
-            visibleCardCount={adminPodiumCards.length}
-            expandOnHover
-            onCardSelect={openClassPage}
-            className={cn(isClassPage ? 'mx-auto h-64 w-32 sm:w-36' : 'h-full w-full')}
-            cardClassName="w-28 translate-y-0 sm:w-32 2xl:w-36"
-            stackCardClassName="w-24 translate-y-0 sm:w-28 2xl:w-32"
-          />
-        )}
+        <PlayingHand
+          hand={{
+            id: 'admin-podium-deck',
+            cards: adminPodiumCards,
+            mainCardIndex: 0,
+            variant: usesWideGuildDeck ? 'horizontal' : 'vertical',
+          }}
+          mode="mini"
+          variant={usesWideGuildDeck ? 'horizontal' : 'vertical'}
+          stackSide="left"
+          visibleCardCount={adminPodiumCards.length}
+          expandOnHover
+          onCardSelect={openProgressPage}
+          className="h-full w-full"
+          cardPresentation={{ width: 'dockSmall' }}
+          stackCardPresentation={{ width: 'dockSmallStack' }}
+        />
       </motion.div>
     );
     const voteButton = (
@@ -779,7 +686,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           <div className="absolute inset-x-0 bottom-0 flex h-56 w-full items-end justify-center gap-2 overflow-visible px-2 sm:gap-3 lg:h-60 lg:gap-4 lg:px-3 xl:gap-5 2xl:gap-6">
             {!isProgressPage ? adminBonusContent : null}
 
-            {!isClassPage ? adminPodiumContent : null}
+            {adminPodiumContent}
 
             {adminGaugeContent('h-36 w-36 shrink sm:h-40 sm:w-40 lg:h-44 lg:w-auto lg:min-w-[20rem] lg:max-w-[42rem] lg:flex-1 xl:min-w-[22rem] 2xl:min-w-[24rem]')}
 
@@ -801,8 +708,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
           </div>
         </aside>
 
-        {isClassPage ? (isConnectedElement(classPodiumTarget) ? createPortal(adminPodiumContent, classPodiumTarget) : adminPodiumContent) : null}
-
       </>
     );
   }
@@ -822,28 +727,6 @@ export function DashboardDock({ className }: DashboardDockProps) {
         gold: 0,
         boostPointsSpent: 0,
       };
-  const classPodiumHands = podiumCards.map((card) => {
-    const hand = buildClassGuildHand(t, {
-      guild: card.guild || activePlayerGuild,
-      guildName: card.title,
-    });
-
-    return {
-      ...hand,
-      cards: hand.cards.map((handCard) =>
-        handCard.kind === 'guild' && handCard.guild?.name === activePlayerGuild.name
-          ? makeEditableDashboardCard({
-              card: handCard,
-              cardKey: 'guild',
-              sideOverrides: editableCardSides,
-              onFieldChange: updateEditableCardField,
-              onColorChange: updateEditableGuildColor,
-              onStatChange: updateEditableCardStat,
-            })
-          : handCard
-      ) as [PlayingCardData, ...PlayingCardData[]],
-    };
-  });
   const openCharacterPage = () => {
     window.location.hash = 'character';
   };
@@ -899,8 +782,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
       return card;
     }) as [PlayingCardData, ...PlayingCardData[]],
   };
-  const openGuildPage = () => {
-    window.location.hash = 'guild';
+  const openDirectoryPage = () => {
+    window.location.hash = 'annuaire';
   };
   const boostGuild = async () => {
     const token = localStorage.getItem('eduquest_token');
@@ -961,113 +844,44 @@ export function DashboardDock({ className }: DashboardDockProps) {
     <motion.div
       layout
       transition={layoutTransition}
-      className={cn(
-        'overflow-visible [perspective:1600px]',
-        isClassPage
-          ? 'relative z-0 w-full'
-          : 'relative z-50 h-64 w-32 shrink-0 sm:w-36 lg:h-72 xl:w-40 2xl:w-52'
-      )}
+      className="relative z-50 h-64 w-32 shrink-0 overflow-visible [perspective:1600px] sm:w-36 lg:h-72 xl:w-40 2xl:w-52"
     >
-      {isClassPage ? (
-        <div className="space-y-5">
-          {classPodiumHands.length > 0 ? (
-            classPodiumHands.map((hand, index) => (
-              <PlayingHandPanel
-                key={hand.id}
-                id={`class-guild-${slugify(hand.title || 'guild')}`}
-                hand={hand}
-                rank={index + 1}
-              />
-            ))
-          ) : (
-            podiumSentinelCards ? (
-              <PlayingHand
-                hand={{
-                  id: 'class-podium-sentinel-deck',
-                  cards: podiumSentinelCards,
-                  mainCardIndex: 0,
-                  variant: 'horizontal',
-                }}
-                mode="mini"
-                variant="horizontal"
-                visibleCardCount={1}
-                expandOnHover={false}
-                className="mx-auto h-64 w-32 sm:w-36"
-                cardClassName="w-32 translate-y-0 sm:w-36"
-              />
-            ) : null
-          )}
-          {classPodiumHands.length > 0 && podiumSentinelCards ? (
-            <PlayingHand
-              hand={{
-                id: 'class-podium-sentinel-deck',
-                cards: podiumSentinelCards,
-                mainCardIndex: 0,
-                variant: 'horizontal',
-              }}
-              mode="mini"
-              variant="horizontal"
-              visibleCardCount={1}
-              expandOnHover={false}
-              className="mx-auto h-64 w-32 sm:w-36"
-              cardClassName="w-32 translate-y-0 sm:w-36"
-            />
-          ) : null}
-        </div>
-      ) : (
-        <PlayingHand
-          hand={{
-            id: 'class-podium-deck',
-            cards: podiumDeckCards,
-            mainCardIndex: 0,
-            variant: usesWideGuildDeck ? 'horizontal' : 'vertical',
-          }}
-          mode="mini"
-          variant={usesWideGuildDeck ? 'horizontal' : 'vertical'}
-          stackSide="left"
-          visibleCardCount={podiumDeckCards.length}
-          expandOnHover
-          onCardSelect={openClassPage}
-          className="h-full w-full"
-          cardClassName="w-32 translate-y-0 sm:w-36 xl:w-36 2xl:w-40"
-          stackCardClassName="w-28 translate-y-0 sm:w-32 xl:w-32 2xl:w-36"
-        />
-      )}
+      <PlayingHand
+        hand={{
+          id: 'podium-deck',
+          cards: podiumDeckCards,
+          mainCardIndex: 0,
+          variant: usesWideGuildDeck ? 'horizontal' : 'vertical',
+        }}
+        mode="mini"
+        variant={usesWideGuildDeck ? 'horizontal' : 'vertical'}
+        stackSide="left"
+        visibleCardCount={podiumDeckCards.length}
+        expandOnHover
+        onCardSelect={openProgressPage}
+        className="h-full w-full"
+        cardPresentation={{ width: 'dockLarge' }}
+        stackCardPresentation={{ width: 'dockLargeStack' }}
+      />
     </motion.div>
   );
   const guildContent = (
     <motion.div
       layout
       transition={layoutTransition}
-      className={cn(
-        'overflow-visible [perspective:1600px]',
-        isGuildPage
-          ? 'relative z-0 w-full'
-          : 'relative z-50 h-64 w-32 shrink-0 sm:w-36 lg:h-72 xl:w-40'
-      )}
+      className="relative z-50 h-64 w-32 shrink-0 overflow-visible [perspective:1600px] sm:w-36 lg:h-72 xl:w-40"
     >
-      {isGuildPage ? (
-        <PlayingHand
-          hand={guildHand}
-          mode="full"
-          visibleCardCount={guildHand.cards.length}
-          expandOnHover={false}
-          className="mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]"
-          cardClassName="shadow-glow-primary"
-        />
-      ) : (
-        <PlayingHand
-          hand={guildHand}
-          mode="mini"
-          variant={!usesWideGuildDeck ? 'vertical' : 'horizontal'}
-          visibleCardCount={guildHand.cards.length}
-          expandOnHover
-          onCardSelect={openGuildPage}
-          className="h-full w-full"
-          cardClassName="w-32 translate-y-0 sm:w-36 xl:w-40"
-          stackCardClassName="w-28 translate-y-0 sm:w-32 xl:w-36"
-        />
-      )}
+      <PlayingHand
+        hand={guildHand}
+        mode="mini"
+        variant={!usesWideGuildDeck ? 'vertical' : 'horizontal'}
+        visibleCardCount={guildHand.cards.length}
+        expandOnHover
+        onCardSelect={openDirectoryPage}
+        className="h-full w-full"
+        cardPresentation={{ width: 'dockMedium' }}
+        stackCardPresentation={{ width: 'dockMediumStack' }}
+      />
     </motion.div>
   );
   const bonusContent = progressBonusCards ? (
@@ -1101,8 +915,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
             ? 'mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]'
             : 'h-full w-full'
         )}
-        cardClassName={cn(!isProgressPage && 'w-32 translate-y-0')}
-        stackCardClassName={cn(!isProgressPage && 'w-28 translate-y-0')}
+        cardPresentation={!isProgressPage ? { width: 'dockMedium' } : undefined}
+        stackCardPresentation={!isProgressPage ? { width: 'dockMediumStack' } : undefined}
       />
     </motion.div>
   ) : null;
@@ -1124,7 +938,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         >
           {!isProgressPage ? bonusContent : null}
 
-          {!isClassPage ? podiumContent : null}
+          {!isDirectoryPage ? podiumContent : null}
 
           {hasPlayerGuild ? (
             <GlobalProgressGauge
@@ -1144,13 +958,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
             />
           ) : null}
 
-          {!isGuildPage ? guildContent : null}
+          {!isDirectoryPage ? guildContent : null}
         </div>
       </aside>
-
-      {isClassPage ? (isConnectedElement(classPodiumTarget) ? createPortal(podiumContent, classPodiumTarget) : podiumContent) : null}
-
-      {isGuildPage ? (isConnectedElement(guildHandTarget) ? createPortal(guildContent, guildHandTarget) : guildContent) : null}
 
       {isProgressPage && !user?.isAdmin && isConnectedElement(progressBonusTarget)
         ? createPortal(bonusContent, progressBonusTarget)
@@ -1294,6 +1104,7 @@ function toNonEmptyCards(cards: PlayingCardData[]): [PlayingCardData, ...Playing
 
 function getHashRoute() {
   const route = window.location.hash.replace(/^#\/?/, '');
+  if (route === 'guild' || route === 'class') return 'annuaire';
   return route === 'progress' ? 'bonus' : route;
 }
 

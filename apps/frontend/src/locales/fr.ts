@@ -387,6 +387,7 @@ export const fr = {
     emptyState: 'Aucune main de guilde à afficher.',
     errors: {
       illustrationUpload: "L’illustration de la guilde n'a pas pu être enregistrée. Détail : {detail}",
+      create: "La guilde n'a pas pu être créée. Détail : {detail}",
       invite: "L’invitation de guilde n'a pas pu être envoyée. Détail : {detail}",
       acceptInvitation: "L’invitation de guilde n'a pas pu être acceptée. Détail : {detail}",
       declineInvitation: "L’invitation de guilde n'a pas pu être refusée. Détail : {detail}",
@@ -409,6 +410,33 @@ export const fr = {
     unguildedDescription: 'Carte temporaire de cohorte pour les profils en attente de guilde.',
     errors: {
       loadGuilds: 'Les guildes de classe n’ont pas pu être chargées. La page classe a été vidée pour éviter des données obsolètes. Détail : {detail}',
+    },
+  },
+  directory: {
+    nav: 'Annuaire',
+    title: 'Annuaire',
+    currentGuild: 'Guilde actuelle',
+    currentGuildHelp:
+      'Votre guilde reste à gauche, votre personnage juste à côté, puis les autres membres de la guilde.',
+    otherGuilds: 'Autres guildes',
+    searchLabel: 'Rechercher une guilde',
+    searchPlaceholder: 'Rechercher une guilde ou un membre...',
+    noSearchResults: 'Aucune guilde ne correspond à cette recherche.',
+    noOtherGuilds: 'Aucune autre guilde à afficher.',
+    revealJoinCard: 'Changer de guilde',
+    currentGuildFallback: 'votre guilde actuelle',
+    joinActionRibbon: 'Rejoindre',
+    joinGuild: 'Maintenir pour rejoindre',
+    joiningGuild: 'Changement...',
+    joinGuildWarning:
+      'Vous allez quitter {currentGuild} pour rejoindre {targetGuild}. Votre ancienne guilde sera remplacée.',
+    joinGuildNoCurrentWarning:
+      'Vous allez rejoindre {targetGuild}. Cette action vous rattache à cette guilde.',
+    card: 'carte',
+    cards: 'cartes',
+    errors: {
+      loadGuilds: 'L’annuaire n’a pas pu être chargé. Les guildes peuvent être indisponibles jusqu’au prochain rafraîchissement. Détail : {detail}',
+      joinGuild: 'La guilde n’a pas pu être rejointe. Votre guilde actuelle n’a pas changé. Détail : {detail}',
     },
   },
   bonus: {
@@ -538,6 +566,15 @@ export const fr = {
     submitBossAnswer: 'Soumettre la réponse au boss',
     filesSelected: '{count}/{max} fichier(s) sélectionné(s).',
     fileLimit: 'Jusqu’à {max} fichier(s), {size} chacun.',
+    guildRallyTitle: 'Ralliement de guilde',
+    guildRallyNoGuildHelp:
+      'Créez une guilde pour participer au ralliement. Vous rejoindrez automatiquement la nouvelle guilde.',
+    createGuildCard: 'Créer une guilde',
+    creatingGuild: 'Création de la guilde...',
+    defaultGuildName: 'Guilde de {name}',
+    defaultGuildDescription: 'Nouvelle guilde prête à rallier des membres.',
+    inviteGuildMember: 'Inviter un membre',
+    inviteGuildMemberHelp: 'Ouvrir les invitations de guilde',
     addResource: 'Ajouter une ressource',
     removeResource: 'Retirer la ressource',
     noResources: 'Aucune ressource pour le moment.',

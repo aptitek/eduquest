@@ -979,81 +979,83 @@ export function MapPage() {
               onChange={handleChangeEdgeStyles}
             />
           ) : selectedActivity ? (
-            <ActivityCard
-              activity={toActivityCardData(selectedActivity, activities, activityEdges, t)}
-              canEdit={Boolean(user?.isAdmin)}
-              showCompletionAction={!user?.isAdmin}
-              isCompleted={completedActivityIds.includes(selectedActivity.id)}
-              isResolving={completingActivityId === selectedActivity.id}
-              resolveError={completionError}
-              completionProgressTarget={
-                selectedActivity.participationMode === 'guild'
-                  ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
-                  : undefined
-              }
-              completionProgressValue={
-                pendingGuildVoteActivityIds.has(selectedActivity.id)
-                  ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
-                  : getGuildVoteProgressValue(selectedActivity)
-              }
-              isCompletionPending={
-                pendingGuildVoteActivityIds.has(selectedActivity.id) ||
-                hasCurrentStudentVotedForGuildActivity(selectedActivity)
-              }
-              completionPendingLabel={t('activityCard.waitingGuild')}
-              onResolve={
-                user?.isAdmin || selectedActivity.isLocked
-                  ? undefined
-                  : (draft) => handleCompleteActivity(selectedActivity, draft)
-              }
-              onIconChange={
-                user?.isAdmin ? (iconKey) => handleActivityIconChange(selectedActivity, iconKey) : undefined
-              }
-              onTitleChange={
-                user?.isAdmin ? (title) => handleActivityTitleChange(selectedActivity, title) : undefined
-              }
-              onSubtitleChange={
-                user?.isAdmin ? (subtitle) => handleActivitySubtitleChange(selectedActivity, subtitle) : undefined
-              }
-              onDescriptionChange={
-                user?.isAdmin
-                  ? (description) => handleActivityDescriptionChange(selectedActivity, description)
-                  : undefined
-              }
-              onGoldRewardChange={
-                user?.isAdmin ? (goldReward) => handleActivityGoldRewardChange(selectedActivity, goldReward) : undefined
-              }
-              onResourcesChange={
-                user?.isAdmin ? (resources) => handleActivityResourcesChange(selectedActivity, resources) : undefined
-              }
-              onPositionChange={
-                user?.isAdmin ? (position) => handleActivityCardPositionChange(selectedActivity, position) : undefined
-              }
-              onParticipationModeChange={
-                user?.isAdmin
-                  ? (participationMode) => handleActivityParticipationModeChange(selectedActivity, participationMode)
-                  : undefined
-              }
-              onCardColorChange={
-                user?.isAdmin
-                  ? (cardColor) => handleActivityCardColorChange(selectedActivity, cardColor)
-                  : undefined
-              }
-              onIllustrationUrlChange={
-                user?.isAdmin
-                  ? (illustrationUrl) => handleActivityIllustrationChange(selectedActivity, illustrationUrl)
-                  : undefined
-              }
-              onIllustrationUpload={
-                user?.isAdmin ? (file) => uploadActivityIllustration(selectedActivity, file) : undefined
-              }
-              onStepRangesChange={
-                user?.isAdmin
-                  ? (stepRanges) => handleActivityStepRangesChange(selectedActivity, stepRanges)
-                  : undefined
-              }
-              className="h-full min-h-0 w-full max-w-none"
-            />
+            <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overflow-x-visible pb-4">
+              <ActivityCard
+                activity={toActivityCardData(selectedActivity, activities, activityEdges, t)}
+                canEdit={Boolean(user?.isAdmin)}
+                showCompletionAction={!user?.isAdmin}
+                isCompleted={completedActivityIds.includes(selectedActivity.id)}
+                isResolving={completingActivityId === selectedActivity.id}
+                resolveError={completionError}
+                completionProgressTarget={
+                  selectedActivity.participationMode === 'guild'
+                    ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
+                    : undefined
+                }
+                completionProgressValue={
+                  pendingGuildVoteActivityIds.has(selectedActivity.id)
+                    ? getNextGuildVoteProgressTarget(selectedActivity, currentGuildMemberCount)
+                    : getGuildVoteProgressValue(selectedActivity)
+                }
+                isCompletionPending={
+                  pendingGuildVoteActivityIds.has(selectedActivity.id) ||
+                  hasCurrentStudentVotedForGuildActivity(selectedActivity)
+                }
+                completionPendingLabel={t('activityCard.waitingGuild')}
+                onResolve={
+                  user?.isAdmin || selectedActivity.isLocked
+                    ? undefined
+                    : (draft) => handleCompleteActivity(selectedActivity, draft)
+                }
+                onIconChange={
+                  user?.isAdmin ? (iconKey) => handleActivityIconChange(selectedActivity, iconKey) : undefined
+                }
+                onTitleChange={
+                  user?.isAdmin ? (title) => handleActivityTitleChange(selectedActivity, title) : undefined
+                }
+                onSubtitleChange={
+                  user?.isAdmin ? (subtitle) => handleActivitySubtitleChange(selectedActivity, subtitle) : undefined
+                }
+                onDescriptionChange={
+                  user?.isAdmin
+                    ? (description) => handleActivityDescriptionChange(selectedActivity, description)
+                    : undefined
+                }
+                onGoldRewardChange={
+                  user?.isAdmin ? (goldReward) => handleActivityGoldRewardChange(selectedActivity, goldReward) : undefined
+                }
+                onResourcesChange={
+                  user?.isAdmin ? (resources) => handleActivityResourcesChange(selectedActivity, resources) : undefined
+                }
+                onPositionChange={
+                  user?.isAdmin ? (position) => handleActivityCardPositionChange(selectedActivity, position) : undefined
+                }
+                onParticipationModeChange={
+                  user?.isAdmin
+                    ? (participationMode) => handleActivityParticipationModeChange(selectedActivity, participationMode)
+                    : undefined
+                }
+                onCardColorChange={
+                  user?.isAdmin
+                    ? (cardColor) => handleActivityCardColorChange(selectedActivity, cardColor)
+                    : undefined
+                }
+                onIllustrationUrlChange={
+                  user?.isAdmin
+                    ? (illustrationUrl) => handleActivityIllustrationChange(selectedActivity, illustrationUrl)
+                    : undefined
+                }
+                onIllustrationUpload={
+                  user?.isAdmin ? (file) => uploadActivityIllustration(selectedActivity, file) : undefined
+                }
+                onStepRangesChange={
+                  user?.isAdmin
+                    ? (stepRanges) => handleActivityStepRangesChange(selectedActivity, stepRanges)
+                    : undefined
+                }
+                className="min-h-[28rem] w-full max-w-none shrink-0"
+              />
+            </div>
           ) : (
             <ActivityCard
               emptyCardLabel={user?.isAdmin ? t('map.addActivity') : undefined}
@@ -1176,7 +1178,7 @@ function toActivityCardData(
     .map((edge) => (edge.fromActivityId === activity.id ? edge.toActivityId : edge.fromActivityId))
     .map((activityId) => activityById.get(activityId)?.title)
     .filter((title): title is string => Boolean(title));
-  const resources = getActivityResources(metadata, activity.url);
+  const resources = getActivityResources(activity, metadata, t);
 
   return {
     title: activity.title,
@@ -1305,18 +1307,19 @@ function getNestedStringMetadata(metadata: Record<string, unknown>, objectKey: s
   return typeof nestedValue === 'string' ? nestedValue : undefined;
 }
 
-function getActivityResources(metadata: Record<string, unknown>, activityUrl?: string): ActivityResourceLink[] {
-  if (Array.isArray(metadata.resources)) {
-    return getResourceList(metadata);
-  }
-
+function getActivityResources(
+  activity: Activity,
+  metadata: Record<string, unknown>,
+  t: (path: string) => string
+): ActivityResourceLink[] {
   const resources = [
+    getDefaultOnboardingResource(activity, metadata, t),
     ...getResourceList(metadata),
     resourceFromUrl(getStringMetadata(metadata, 'geniallyUrl')),
     resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'projectUrl')),
     resourceFromUrl(getNestedStringMetadata(metadata, 'boss', 'gradingUrl')),
     resourceFromUrl(getStringMetadata(metadata, 'rubricUrl')),
-    resourceFromUrl(activityUrl),
+    resourceFromUrl(activity.url),
   ].filter((resource): resource is ActivityResourceLink => Boolean(resource?.url));
 
   const seenUrls = new Set<string>();
@@ -1325,6 +1328,28 @@ function getActivityResources(metadata: Record<string, unknown>, activityUrl?: s
     seenUrls.add(resource.url);
     return true;
   });
+}
+
+function getDefaultOnboardingResource(
+  activity: Activity,
+  metadata: Record<string, unknown>,
+  t: (path: string) => string
+): ActivityResourceLink | undefined {
+  const onboardingTask = getStringMetadata(metadata, 'onboardingTask');
+
+  if (onboardingTask === 'institutional_profile') {
+    return { title: t('header.userMenu.profileSettings'), url: '#profile' };
+  }
+
+  if (onboardingTask === 'character_card' || activity.type === 'character_creation') {
+    return { title: t('character.title'), url: '#character' };
+  }
+
+  if (activity.type === 'tavern' || onboardingTask === 'guild') {
+    return { title: t('directory.title'), url: '#annuaire' };
+  }
+
+  return undefined;
 }
 
 function getResourceList(metadata: Record<string, unknown>): ActivityResourceLink[] {

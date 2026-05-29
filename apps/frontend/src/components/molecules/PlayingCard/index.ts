@@ -19,8 +19,15 @@ export type {
   CardTextSlot,
   CardTone,
   PlayingCardKind,
+  PlayingCardEmphasis,
+  PlayingCardFit,
   PlayingCardModel,
+  PlayingCardOverlay,
+  PlayingCardOverlayPlacement,
+  PlayingCardPresentation,
+  PlayingCardSize,
   PlayingCardVariantOptions,
+  PlayingCardWidthPreset,
 } from './types';
 export * from './slots';
 export * from './PlayingHand';

@@ -8,7 +8,7 @@ export interface PlayingHandPageProps {
   title: string;
   subtitle?: string;
   hands: readonly PlayingHandData[];
-  currentView?: 'map' | 'management' | 'guild';
+  currentView?: 'map' | 'management' | 'annuaire';
   emptyState?: string;
 }
 
@@ -42,7 +42,7 @@ export function PlayingHandPage({
                   visibleCardCount={hand.cards.length}
                   expandOnHover={false}
                   className="mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]"
-                  cardClassName="shadow-glow-primary"
+                  cardPresentation={{ emphasis: 'glow' }}
                 />
               </section>
             ))}

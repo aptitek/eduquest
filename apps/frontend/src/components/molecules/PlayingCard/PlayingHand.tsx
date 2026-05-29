@@ -5,6 +5,7 @@ import type { StackLayoutOrder, StackLayoutOrientation, StackLayoutSide } from '
 import { cn } from '../../../utils/cn';
 import { PlayingCard } from './PlayingCard';
 import type { PlayingCardData } from './PlayingCard';
+import type { PlayingCardPresentation } from './types';
 
 export type PlayingHandMode = 'mini' | 'full';
 export type PlayingHandVariant = 'arc' | 'fan' | 'horizontal' | 'vertical';
@@ -34,6 +35,9 @@ export interface PlayingHandProps {
   cardClassName?: string;
   stackCardClassName?: string;
   mainCardClassName?: string;
+  cardPresentation?: PlayingCardPresentation;
+  stackCardPresentation?: PlayingCardPresentation;
+  mainCardPresentation?: PlayingCardPresentation;
   onCardSelect?: (card: PlayingCardData, index: number) => void;
 }
 
@@ -46,6 +50,8 @@ export interface PlayingHandPanelProps {
   className?: string;
   handClassName?: string;
   cardClassName?: string;
+  cardPresentation?: PlayingCardPresentation;
+  onCardSelect?: (card: PlayingCardData, index: number) => void;
 }
 
 const MAX_DEFAULT_VISIBLE_CARDS = 5;
@@ -66,6 +72,9 @@ export function PlayingHand({
   cardClassName,
   stackCardClassName,
   mainCardClassName,
+  cardPresentation,
+  stackCardPresentation,
+  mainCardPresentation,
   onCardSelect,
 }: PlayingHandProps) {
   const visibleCards = hand.cards.slice(0, Math.max(1, visibleCardCount)) as [
@@ -99,27 +108,31 @@ export function PlayingHand({
         className
       )}
       emphasisClassName={cn(
-        mode === 'full'
-          ? 'z-40 w-72 rounded-[1.4rem] duration-500 md:w-80 hover:!z-50 hover:-translate-y-5 hover:scale-[1.03] hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-5 focus-within:scale-[1.03] focus-within:drop-shadow-2xl'
-          : 'duration-500 hover:!z-50 hover:-translate-y-2 hover:scale-110 hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-2 focus-within:scale-110 focus-within:drop-shadow-2xl',
-        mainCardClassName || cardClassName
+        mode === 'full' ? 'z-40 rounded-[1.4rem] duration-500' : 'duration-500',
+        mainCardClassName
       )}
       stackItemClassName={cn(
-        mode === 'full' ? 'w-72 rounded-[1.4rem] duration-500 md:w-80' : 'duration-500',
-        stackCardClassName || cardClassName
+        mode === 'full' ? 'rounded-[1.4rem] duration-500' : 'duration-500',
+        stackCardClassName
       )}
       renderItem={({ item: card, index, isEmphasis }) => (
         <PlayingCard
           {...card}
           size={mode === 'full' ? 'full' : 'mini'}
+          presentation={resolveHandCardPresentation({
+            mode,
+            isEmphasis,
+            cardPresentation,
+            mainCardPresentation,
+            stackCardPresentation,
+          })}
           interactive={isEmphasis ? card.interactive : Boolean(onCardSelect)}
           onClick={resolveCardSelectHandler(card, index, isEmphasis, onCardSelect)}
           className={cn(
             card.className,
-            mode === 'full' ? 'min-h-0 w-full max-w-none' : 'translate-y-0',
+            mode === 'full' ? 'min-h-0' : undefined,
             isEmphasis ? mainCardClassName || cardClassName : stackCardClassName || cardClassName
           )}
-          auraClassName={cn(mode === 'full' && isEmphasis && 'shadow-glow-primary')}
         />
       )}
     />
@@ -135,6 +148,8 @@ export function PlayingHandPanel({
   className,
   handClassName,
   cardClassName,
+  cardPresentation,
+  onCardSelect,
 }: PlayingHandPanelProps) {
   return (
     <motion.section
@@ -164,7 +179,9 @@ export function PlayingHandPanel({
         visibleCardCount={hand.cards.length}
         expandOnHover={false}
         className={cn('mx-auto h-[28rem] min-h-0 max-w-7xl md:h-[30rem]', handClassName)}
-        cardClassName={cn('shadow-glow-primary', cardClassName)}
+        cardClassName={cardClassName}
+        cardPresentation={cardPresentation || { emphasis: 'glow' }}
+        onCardSelect={onCardSelect}
       />
     </motion.section>
   );
@@ -184,6 +201,32 @@ function resolveCardSelectHandler(
 function resolveStackOrientation(variant: PlayingHandVariant): StackLayoutOrientation {
   if (variant === 'vertical') return 'vertical';
   return 'horizontal';
+}
+
+function resolveHandCardPresentation({
+  mode,
+  isEmphasis,
+  cardPresentation,
+  mainCardPresentation,
+  stackCardPresentation,
+}: {
+  mode: PlayingHandMode;
+  isEmphasis: boolean;
+  cardPresentation?: PlayingCardPresentation;
+  mainCardPresentation?: PlayingCardPresentation;
+  stackCardPresentation?: PlayingCardPresentation;
+}): PlayingCardPresentation {
+  const base: PlayingCardPresentation =
+    mode === 'full'
+      ? { width: 'handFull', emphasis: isEmphasis ? 'handEmphasis' : 'handStack' }
+      : { emphasis: 'dockHover' };
+  const itemPresentation = isEmphasis ? mainCardPresentation : stackCardPresentation;
+
+  return {
+    ...base,
+    ...cardPresentation,
+    ...itemPresentation,
+  };
 }
 
 export default PlayingHand;

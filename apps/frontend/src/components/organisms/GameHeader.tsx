@@ -23,11 +23,11 @@ import {
   formatRewardNotificationDescription,
   formatRewardNotificationTitle,
 } from '../../features/game/formatRewardNotification';
-import { Check, ChevronDown, Coins, Gift, GraduationCap, Mail, Map, Megaphone, Settings, Sparkles, Users } from 'lucide-react';
+import { Check, ChevronDown, Coins, Gift, GraduationCap, Mail, Map, Megaphone, Settings, Sparkles } from 'lucide-react';
 import iconUrl from '../../assets/icon.svg';
 
 interface GameHeaderProps {
-  currentView?: 'map' | 'management' | 'guild' | 'class' | 'bonus' | 'character';
+  currentView?: 'map' | 'management' | 'annuaire' | 'bonus' | 'character';
   hideNavigation?: boolean;
   navigationMode?: 'full' | 'mapOnly';
 }
@@ -175,7 +175,7 @@ export function GameHeader({
                       current.filter((notification) => notification.id !== `guild-invitation-${invitation.id}`)
                     );
                     setDismissedNotificationIds((current) => new Set(current).add(`guild-invitation-${invitation.id}`));
-                    window.location.hash = 'guild';
+                    window.location.hash = 'annuaire';
                   })
                   .catch((error) => {
                     if (error instanceof ApiClientError && (error.status === 404 || error.status === 409)) {
@@ -235,10 +235,6 @@ export function GameHeader({
   };
   const showGameSelector = user?.isAdmin ? availableGames.length > 0 : availableGames.length > 1;
   const selectedGame = availableGames.find((game) => game.id === selectedGameId);
-  const selectedMembership =
-    (selectedGameId && student?.cohortMemberships?.find((membership) => membership.cohortId === selectedGameId)) ||
-    student?.cohortMemberships?.[0];
-  const hasPlayerGuild = Boolean(selectedMembership?.guildId || selectedMembership?.guild?.id);
   const canShowProgress = Boolean(user?.isAdmin || character);
   const addAdminCohortNotification = () => {
     const title = adminNotificationTitle.trim();
@@ -400,36 +396,18 @@ export function GameHeader({
               <>
                 <button
                   type="button"
-                  aria-current={currentView === 'guild' ? 'page' : undefined}
+                  aria-current={currentView === 'annuaire' ? 'page' : undefined}
                   onClick={() => {
-                    window.location.hash = 'guild';
+                    window.location.hash = 'annuaire';
                   }}
                   className={cn(
                     'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    currentView === 'guild' && 'bg-gaming-base text-status-quest'
+                    currentView === 'annuaire' && 'bg-gaming-base text-status-quest'
                   )}
                 >
-                  <Users size={16} aria-hidden />
-                  {t('guild.nav')}
+                  <GraduationCap size={16} aria-hidden />
+                  {t('directory.nav')}
                 </button>
-
-                {hasPlayerGuild ? (
-                  <button
-                    type="button"
-                    aria-current={currentView === 'class' ? 'page' : undefined}
-                    onClick={() => {
-                      window.location.hash = 'class';
-                    }}
-                    className={cn(
-                      'flex flex-col items-center justify-center gap-1 px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                      !gameSelector && 'border-r border-gaming-border',
-                      currentView === 'class' && 'bg-gaming-base text-status-quest'
-                    )}
-                  >
-                    <GraduationCap size={16} aria-hidden />
-                    {t('class.nav')}
-                  </button>
-                ) : null}
 
                 {gameSelector}
 
@@ -454,18 +432,17 @@ export function GameHeader({
               <>
                 <button
                   type="button"
-                  aria-current={currentView === 'class' ? 'page' : undefined}
+                  aria-current={currentView === 'annuaire' ? 'page' : undefined}
                   onClick={() => {
-                    window.location.hash = 'class';
+                    window.location.hash = 'annuaire';
                   }}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-1 px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
-                    !gameSelector && 'border-r border-gaming-border',
-                    currentView === 'class' && 'bg-gaming-base text-status-quest'
+                    'flex flex-col items-center justify-center gap-1 border-r border-gaming-border px-5 font-display font-bold uppercase tracking-[0.18em] text-text-secondary transition hover:bg-gaming-base hover:text-text-primary',
+                    currentView === 'annuaire' && 'bg-gaming-base text-status-quest'
                   )}
                 >
                   <GraduationCap size={16} aria-hidden />
-                  {t('class.nav')}
+                  {t('directory.nav')}
                 </button>
 
                 {gameSelector}
@@ -566,7 +543,7 @@ function runNotificationAction(actionTarget?: string) {
     window.location.hash = '';
   }
   if (actionTarget === 'guild') {
-    window.location.hash = 'guild';
+    window.location.hash = 'annuaire';
   }
 }
 

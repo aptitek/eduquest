@@ -307,20 +307,48 @@ function BonusVotePanel({
                 isSelected ? 'rounded-[1.4rem] ring-4 ring-status-quest ring-offset-4 ring-offset-gaming-base' : ''
               }`}
             >
-              <PlayingCard {...card} size="full" className="w-full" />
-              <span className="absolute right-4 top-4 z-50 rounded-full border border-gaming-border bg-gaming-base/95 px-3 py-1 text-sm font-black text-text-primary shadow-card">
-                {result?.voteCount || 0} vote{(result?.voteCount || 0) > 1 ? 's' : ''}
-              </span>
-              {result?.isLeader ? (
-                <span className="absolute left-4 top-4 z-50 rounded-full bg-status-completed px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-gaming-base shadow-card">
-                  Leader
-                </span>
-              ) : null}
-              {isGuildVote ? (
-                <span className="absolute bottom-4 left-4 z-50 rounded-full border border-status-quest/60 bg-gaming-base/95 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-status-quest shadow-card">
-                  Vote de guilde
-                </span>
-              ) : null}
+              <PlayingCard
+                {...card}
+                size="full"
+                presentation={{ fit: 'fillWidth' }}
+                overlays={[
+                  {
+                    id: 'vote-count',
+                    placement: 'top-right-inside',
+                    content: (
+                      <span className="rounded-full border border-gaming-border bg-gaming-base/95 px-3 py-1 text-sm font-black text-text-primary shadow-card">
+                        {result?.voteCount || 0} vote{(result?.voteCount || 0) > 1 ? 's' : ''}
+                      </span>
+                    ),
+                  },
+                  ...(result?.isLeader
+                    ? [
+                        {
+                          id: 'leader',
+                          placement: 'top-left-inside' as const,
+                          content: (
+                            <span className="rounded-full bg-status-completed px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-gaming-base shadow-card">
+                              Leader
+                            </span>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(isGuildVote
+                    ? [
+                        {
+                          id: 'guild-vote',
+                          placement: 'bottom-left-inside' as const,
+                          content: (
+                            <span className="rounded-full border border-status-quest/60 bg-gaming-base/95 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-status-quest shadow-card">
+                              Vote de guilde
+                            </span>
+                          ),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
             </button>
           );
         }}

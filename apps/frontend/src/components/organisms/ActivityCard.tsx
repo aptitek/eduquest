@@ -169,6 +169,7 @@ export function ActivityCard({
         <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
           <PlayingCard
             size="full"
+            presentation={{ fit: 'contain' }}
             kind="activity"
             accentToken="quest"
             title={emptyCardLabel || t('activityCard.emptyState')}
@@ -176,8 +177,6 @@ export function ActivityCard({
             editable={Boolean(onEmptyCardClick)}
             interactive={Boolean(onEmptyCardClick)}
             onClick={onEmptyCardClick}
-            className="h-full max-h-full w-auto max-w-full"
-            sideClassName="h-full"
           />
         </div>
       </div>
@@ -316,37 +315,38 @@ export function ActivityCard({
             ) : undefined
           }
           flipLabel={t('activityCard.flipAdminView')}
-          className="h-full max-h-full w-auto max-w-full"
-          sideClassName="h-full"
+          presentation={{ fit: 'contain' }}
+          overlays={
+            showCompletionAction && !hasBossAnswerFields
+              ? [
+                  {
+                    id: 'quest-completion',
+                    placement: 'bottom-right-outside',
+                    interactive: true,
+                    content: (
+                      <QuestCompletionAction
+                        isCompleted={isCompleted}
+                        isResolving={isResolving}
+                        error={resolveError}
+                        onComplete={onResolve}
+                        mode={draft.participationMode}
+                        progressTarget={completionProgressTarget}
+                        progressValue={completionProgressValue}
+                        isPending={isCompletionPending}
+                        pendingLabel={completionPendingLabel}
+                        completeLabel={
+                          draft.participationMode === 'guild'
+                            ? t('activityCard.vote')
+                            : t('activityCard.complete')
+                        }
+                        completedLabel={t('activityCard.questResolved')}
+                      />
+                    ),
+                  },
+                ]
+              : undefined
+          }
         />
-        {showCompletionAction && !hasBossAnswerFields ? (
-          <div
-            className={cn(
-              'pointer-events-none absolute z-30 flex',
-              'bottom-0 right-0 translate-x-1/2 translate-y-1/2 justify-end'
-            )}
-          >
-            <div className="pointer-events-auto">
-              <QuestCompletionAction
-                isCompleted={isCompleted}
-                isResolving={isResolving}
-                error={resolveError}
-                onComplete={onResolve}
-                mode={draft.participationMode}
-                progressTarget={completionProgressTarget}
-                progressValue={completionProgressValue}
-                isPending={isCompletionPending}
-                pendingLabel={completionPendingLabel}
-                completeLabel={
-                  draft.participationMode === 'guild'
-                    ? t('activityCard.vote')
-                    : t('activityCard.complete')
-                }
-                completedLabel={t('activityCard.questResolved')}
-              />
-            </div>
-          </div>
-        ) : null}
       </div>
       {hasBossAnswerFields ? (
         <BossSubmissionForm
@@ -628,7 +628,7 @@ function ResourceUrlRow({
 }) {
   const { t } = useTranslation();
   const faviconUrl = getFaviconUrl(resource.url);
-  const isInternalResource = resource.url === '#profile' || resource.url === '#character';
+  const isInternalResource = ['#profile', '#character', '#annuaire', '#guild'].includes(resource.url);
   const resourceLabel = resource.title || resource.url;
 
   const handleResourceClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -640,7 +640,7 @@ function ResourceUrlRow({
       return;
     }
 
-    window.location.hash = 'character';
+    window.location.hash = resource.url === '#character' ? 'character' : 'annuaire';
   };
 
   return (

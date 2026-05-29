@@ -1,5 +1,14 @@
 import { cn } from '../../../utils/cn';
-import type { CardTone, PlayingCardSize, PlayingCardVariantOptions } from './types';
+import type {
+  CardTone,
+  PlayingCardEmphasis,
+  PlayingCardFit,
+  PlayingCardOverlayPlacement,
+  PlayingCardPresentation,
+  PlayingCardSize,
+  PlayingCardVariantOptions,
+  PlayingCardWidthPreset,
+} from './types';
 
 export interface PlayingCardSizeLayout {
   size: PlayingCardSize;
@@ -69,6 +78,9 @@ export function playingCardRootClassName({
   size = 'mini',
   tone = 'default',
   state = 'readonly',
+  fit = 'intrinsic',
+  width = 'default',
+  emphasis = 'none',
 }: PlayingCardVariantOptions = {}) {
   return cn(
     'group relative aspect-[5/7] min-h-0 overflow-hidden rounded-[1.4rem] border border-[color:var(--playing-card-accent)] bg-gaming-card shadow-2xl outline-none',
@@ -80,7 +92,62 @@ export function playingCardRootClassName({
     state === 'faceDown' && size !== 'full' && 'bg-gaming-base',
     state === 'disabled' && 'pointer-events-none opacity-60',
     state === 'editable' && 'ring-1 ring-[color:var(--playing-card-accent)]/20',
+    playingCardFitClassName(fit),
+    playingCardWidthPresetClassName(width),
+    playingCardEmphasisClassName(emphasis),
     toneClassNameMap[tone]
+  );
+}
+
+export function normalizePlayingCardPresentation(
+  presentation?: PlayingCardPresentation
+): Required<PlayingCardPresentation> {
+  return {
+    fit: presentation?.fit || 'intrinsic',
+    width: presentation?.width || 'default',
+    emphasis: presentation?.emphasis || 'none',
+  };
+}
+
+export function playingCardFitClassName(fit: PlayingCardFit = 'intrinsic') {
+  if (fit === 'fillWidth') return 'w-full max-w-none';
+  if (fit === 'fillHeight') return 'h-full max-h-full';
+  if (fit === 'contain') return 'h-full max-h-full w-auto max-w-full';
+  return '';
+}
+
+export function playingCardWidthPresetClassName(width: PlayingCardWidthPreset = 'default') {
+  if (width === 'handFull') return 'w-72 max-w-none md:w-80';
+  if (width === 'dockSmall') return 'w-28 sm:w-32 2xl:w-36';
+  if (width === 'dockSmallStack') return 'w-24 sm:w-28 2xl:w-32';
+  if (width === 'dockMedium') return 'w-32 sm:w-36 xl:w-40';
+  if (width === 'dockMediumStack') return 'w-28 sm:w-32 xl:w-36';
+  if (width === 'dockLarge') return 'w-32 sm:w-36 xl:w-36 2xl:w-40';
+  if (width === 'dockLargeStack') return 'w-28 sm:w-32 xl:w-32 2xl:w-36';
+  if (width === 'viewportConstrained') return 'max-w-[min(24rem,calc((100vh-8rem)*5/7))]';
+  return '';
+}
+
+export function playingCardEmphasisClassName(emphasis: PlayingCardEmphasis = 'none') {
+  if (emphasis === 'glow') return 'shadow-glow-primary';
+  if (emphasis === 'handEmphasis') {
+    return 'duration-500 hover:!z-50 hover:-translate-y-5 hover:scale-[1.03] hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-5 focus-within:scale-[1.03] focus-within:drop-shadow-2xl';
+  }
+  if (emphasis === 'handStack') return 'duration-500';
+  if (emphasis === 'dockHover') {
+    return 'translate-y-0 duration-500 hover:!z-50 hover:-translate-y-2 hover:scale-110 hover:drop-shadow-2xl focus-within:!z-50 focus-within:-translate-y-2 focus-within:scale-110 focus-within:drop-shadow-2xl';
+  }
+  return '';
+}
+
+export function playingCardOverlayClassName(placement: PlayingCardOverlayPlacement) {
+  return cn(
+    'absolute z-50 flex',
+    placement === 'top-left-inside' && 'left-3 top-3',
+    placement === 'top-right-inside' && 'right-3 top-3',
+    placement === 'bottom-left-inside' && 'bottom-3 left-3',
+    placement === 'bottom-right-inside' && 'bottom-3 right-3',
+    placement === 'bottom-right-outside' && 'bottom-0 right-0 translate-x-1/2 translate-y-1/2 justify-end'
   );
 }
 

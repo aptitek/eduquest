@@ -387,6 +387,7 @@ export const en: TranslationKeys = {
     emptyState: 'No guild hand to display.',
     errors: {
       illustrationUpload: 'The guild illustration could not be saved. Detail: {detail}',
+      create: 'The guild could not be created. Detail: {detail}',
       invite: 'The guild invitation could not be sent. Detail: {detail}',
       acceptInvitation: 'The guild invitation could not be accepted. Detail: {detail}',
       declineInvitation: 'The guild invitation could not be declined. Detail: {detail}',
@@ -409,6 +410,33 @@ export const en: TranslationKeys = {
     unguildedDescription: 'Temporary cohort card for profiles waiting for a guild assignment.',
     errors: {
       loadGuilds: 'Class guilds could not be loaded. The class page was cleared to avoid stale guild data. Detail: {detail}',
+    },
+  },
+  directory: {
+    nav: 'Directory',
+    title: 'Directory',
+    currentGuild: 'Current guild',
+    currentGuildHelp:
+      'Your guild stays on the left, your character right beside it, then the other guild members.',
+    otherGuilds: 'Other guilds',
+    searchLabel: 'Search guilds',
+    searchPlaceholder: 'Search for a guild or member...',
+    noSearchResults: 'No guild matches this search.',
+    noOtherGuilds: 'No other guilds to display.',
+    revealJoinCard: 'Change guild',
+    currentGuildFallback: 'your current guild',
+    joinActionRibbon: 'Join',
+    joinGuild: 'Hold to join',
+    joiningGuild: 'Changing...',
+    joinGuildWarning:
+      'You will leave {currentGuild} to join {targetGuild}. Your previous guild will be replaced.',
+    joinGuildNoCurrentWarning:
+      'You will join {targetGuild}. This action attaches you to that guild.',
+    card: 'card',
+    cards: 'cards',
+    errors: {
+      loadGuilds: 'The directory could not be loaded. Guilds may be unavailable until the next refresh. Detail: {detail}',
+      joinGuild: 'The guild could not be joined. Your current guild was not changed. Detail: {detail}',
     },
   },
   bonus: {
@@ -537,6 +565,15 @@ export const en: TranslationKeys = {
     submitBossAnswer: 'Submit boss answer',
     filesSelected: '{count}/{max} file(s) selected.',
     fileLimit: 'Up to {max} file(s), {size} each.',
+    guildRallyTitle: 'Guild rally',
+    guildRallyNoGuildHelp:
+      'Create a guild to join the rally. You will automatically join the new guild.',
+    createGuildCard: 'Create a guild',
+    creatingGuild: 'Creating guild...',
+    defaultGuildName: "{name}'s Guild",
+    defaultGuildDescription: 'New guild ready to rally members.',
+    inviteGuildMember: 'Invite a member',
+    inviteGuildMemberHelp: 'Open guild invitations',
     addResource: 'Add resource',
     removeResource: 'Remove resource',
     noResources: 'No resources yet.',

@@ -4,6 +4,47 @@ import type { RadarGraphAxis, RadarGraphDataset } from '../RadarGraph';
 
 export type PlayingCardSize = 'nano' | 'mini' | 'full';
 
+export type PlayingCardFit = 'intrinsic' | 'fillWidth' | 'fillHeight' | 'contain';
+
+export type PlayingCardWidthPreset =
+  | 'default'
+  | 'handFull'
+  | 'dockSmall'
+  | 'dockSmallStack'
+  | 'dockMedium'
+  | 'dockMediumStack'
+  | 'dockLarge'
+  | 'dockLargeStack'
+  | 'viewportConstrained';
+
+export type PlayingCardEmphasis =
+  | 'none'
+  | 'glow'
+  | 'handEmphasis'
+  | 'handStack'
+  | 'dockHover';
+
+export interface PlayingCardPresentation {
+  fit?: PlayingCardFit;
+  width?: PlayingCardWidthPreset;
+  emphasis?: PlayingCardEmphasis;
+}
+
+export type PlayingCardOverlayPlacement =
+  | 'top-left-inside'
+  | 'top-right-inside'
+  | 'bottom-left-inside'
+  | 'bottom-right-inside'
+  | 'bottom-right-outside';
+
+export interface PlayingCardOverlay {
+  id: string;
+  content: ReactNode;
+  placement: PlayingCardOverlayPlacement;
+  className?: string;
+  interactive?: boolean;
+}
+
 export type PlayingCardKind =
   | 'activity'
   | 'character'
@@ -144,6 +185,7 @@ export interface CardFaceModel {
   genericBack?: CardGenericBackSlot;
   actions?: ReactNode;
   footer?: ReactNode;
+  footerPlacement?: 'body' | 'aside';
   className?: string;
 }
 
@@ -158,4 +200,7 @@ export interface PlayingCardVariantOptions {
   layout?: 'standard' | 'compact' | 'detail';
   state?: 'readonly' | 'editable' | 'disabled' | 'faceDown';
   color?: CSSProperties['color'];
+  fit?: PlayingCardFit;
+  width?: PlayingCardWidthPreset;
+  emphasis?: PlayingCardEmphasis;
 }

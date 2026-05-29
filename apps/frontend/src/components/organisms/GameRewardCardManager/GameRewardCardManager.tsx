@@ -177,7 +177,6 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
       }}
       stackSide="left"
       className="mx-auto h-[30rem] min-h-0 max-w-7xl md:h-[32rem]"
-      cardClassName="w-72 md:w-80"
     />
   );
 
@@ -288,7 +287,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
             <PlayingCard
               {...card}
               size="full"
-              className="w-full max-w-none"
+              presentation={{ fit: 'fillWidth' }}
               interactive
               onClick={
                 card.id === spareRewardCard.id

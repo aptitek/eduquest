@@ -345,7 +345,7 @@ export function CharacterPage() {
 
           <div className="grid gap-8 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] xl:items-center">
             <div className="mx-auto w-full max-w-sm">
-              <PlayingCard {...playerCard} size="full" className="w-full" />
+              <PlayingCard {...playerCard} size="full" presentation={{ fit: 'fillWidth' }} />
             </div>
             <div className="min-w-0 overflow-visible rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg">
               <div className="mb-4 flex items-center justify-between gap-3">

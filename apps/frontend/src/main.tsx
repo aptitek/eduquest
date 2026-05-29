@@ -3,8 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 import '@xyflow/react/dist/style.css';
 import { MapPage } from './pages/MapPage/MapPage';
-import { GuildPage } from './pages/GuildPage/GuildPage';
-import { ClassPage } from './pages/ClassPage/ClassPage';
+import { AnnuairePage } from './pages/AnnuairePage';
 import { ProgressPage } from './pages/ProgressPage/ProgressPage';
 import { CharacterPage } from './pages/CharacterPage/CharacterPage';
 import { LoginPage } from './pages/LoginPage/LoginPage';
@@ -29,6 +28,7 @@ document.documentElement.dataset.theme =
 
 function getHashRoute() {
   const route = window.location.hash.replace(/^#\/?/, '');
+  if (route === 'guild' || route === 'class') return 'annuaire';
   return route === 'progress' ? 'bonus' : route;
 }
 
@@ -100,7 +100,7 @@ function App() {
     return <ManagementPage />;
   }
 
-  if (user.isAdmin && ['guild', 'character'].includes(route)) {
+  if (user.isAdmin && route === 'character') {
     return <MapPage />;
   }
 
@@ -117,12 +117,8 @@ function App() {
     return <CharacterPage />;
   }
 
-  if (route === 'guild') {
-    return <GuildPage />;
-  }
-
-  if (route === 'class') {
-    return <ClassPage />;
+  if (route === 'annuaire') {
+    return <AnnuairePage />;
   }
 
   if (route === 'bonus') {

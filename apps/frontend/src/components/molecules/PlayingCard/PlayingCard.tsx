@@ -43,10 +43,12 @@ import {
 } from './PlayingCardParts';
 import {
   PLAYING_CARD_SIZE_LAYOUTS,
+  normalizePlayingCardPresentation,
   playingCardBackClassName,
   playingCardDetailPanelClassName,
   playingCardFaceClassName,
   playingCardInnerClassName,
+  playingCardOverlayClassName,
   playingCardRootClassName,
 } from './cardVariants';
 import { CardSection } from './slots';
@@ -56,6 +58,9 @@ import type {
   CardGenericBackSlot,
   CardInstitutionalSlot,
   CardMetadataSlot,
+  PlayingCardOverlay,
+  PlayingCardPresentation,
+  PlayingCardSize,
   PlayingCardModel,
 } from './types';
 
@@ -64,10 +69,11 @@ export type {
   CardGenericBackSlot,
   CardInstitutionalSlot,
   CardMetadataSlot,
+  PlayingCardOverlay,
+  PlayingCardPresentation,
+  PlayingCardSize,
   PlayingCardModel,
 } from './types';
-
-export type PlayingCardSize = 'nano' | 'mini' | 'full';
 
 export type PlayingCardAccent = UiColorTokenName;
 
@@ -110,6 +116,7 @@ export interface PlayingCardSide {
   statPointsRemainingLabel?: string;
   getStatEditableRange?: (statId: string, currentValue: number) => { min: number; max: number };
   footer?: ReactNode;
+  footerPlacement?: 'body' | 'aside';
   titleAccessory?: ReactNode;
   colorEditable?: boolean;
   editable?: boolean;
@@ -158,6 +165,7 @@ export interface PlayingCardData {
   statPointsRemainingLabel?: string;
   getStatEditableRange?: (statId: string, currentValue: number) => { min: number; max: number };
   footer?: ReactNode;
+  footerPlacement?: 'body' | 'aside';
   titleAccessory?: ReactNode;
   colorEditable?: boolean;
   frontContent?: ReactNode;
@@ -181,6 +189,8 @@ export interface PlayingCardData {
 
 export interface PlayingCardProps extends PlayingCardData {
   size?: PlayingCardSize;
+  presentation?: PlayingCardPresentation;
+  overlays?: PlayingCardOverlay[];
   auraClassName?: string;
 }
 
@@ -195,6 +205,8 @@ const GAME_STAT_MAX_VALUE = 5;
 
 export function PlayingCard({
   size = 'mini',
+  presentation,
+  overlays,
   auraClassName,
   className,
   innerClassName,
@@ -213,6 +225,8 @@ export function PlayingCard({
   const isFull = size === 'full';
   const hasBack = Boolean(isFull && (card.model?.back || card.back));
   const isActionable = Boolean(onClick);
+  const normalizedPresentation = normalizePlayingCardPresentation(presentation);
+  const hasOutsideOverlay = overlays?.some((overlay) => overlay.placement.endsWith('-outside'));
 
   return (
     <motion.article
@@ -233,8 +247,10 @@ export function PlayingCard({
           size,
           tone: resolveCardTone(card),
           state: card.faceDown || front.mode === 'genericBack' ? 'faceDown' : card.editable ? 'editable' : 'readonly',
+          ...normalizedPresentation,
         }),
         resolvePlayingCardAccentClassName(color, accent),
+        hasOutsideOverlay && 'overflow-visible',
         className
       )}
     >
@@ -282,20 +298,47 @@ export function PlayingCard({
       </motion.div>
 
       {isFull && hasBack ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            setIsFlipped((current) => !current);
+        <PlayingCardOverlaySlot
+          overlay={{
+            id: 'flip',
+            placement: 'bottom-right-inside',
+            interactive: true,
+            content: (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsFlipped((current) => !current);
+                }}
+                aria-label={card.flipLabel || t('playingCard.flip')}
+                title={card.flipLabel || t('playingCard.flip')}
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-gaming-border bg-gaming-base/95 text-text-secondary shadow-xl transition hover:scale-110 hover:border-status-quest hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-status-quest"
+              >
+                <RotateCw size={24} aria-hidden />
+              </button>
+            ),
           }}
-          aria-label={card.flipLabel || t('playingCard.flip')}
-          title={card.flipLabel || t('playingCard.flip')}
-          className="absolute bottom-3 right-3 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-gaming-border bg-gaming-base/95 text-text-secondary shadow-xl transition hover:scale-110 hover:border-status-quest hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-status-quest"
-        >
-          <RotateCw size={24} aria-hidden />
-        </button>
+        />
       ) : null}
+
+      {overlays?.map((overlay) => (
+        <PlayingCardOverlaySlot key={overlay.id} overlay={overlay} />
+      ))}
     </motion.article>
+  );
+}
+
+function PlayingCardOverlaySlot({ overlay }: { overlay: PlayingCardOverlay }) {
+  return (
+    <div
+      className={cn(
+        playingCardOverlayClassName(overlay.placement),
+        overlay.interactive === false ? 'pointer-events-none' : 'pointer-events-auto',
+        overlay.className
+      )}
+    >
+      {overlay.content}
+    </div>
   );
 }
 
@@ -545,7 +588,9 @@ function PlayingCardDetailPanel({
             </p>
           )
         ) : null}
-        {side.footer ? <div className="mt-3 text-sm text-text-secondary">{side.footer}</div> : null}
+        {side.footer && side.footerPlacement !== 'aside' ? (
+          <div className="mt-3 text-sm text-text-secondary">{side.footer}</div>
+        ) : null}
         <CardSections metadata={side.metadata} institutional={side.institutional} />
       </div>
 
@@ -563,6 +608,10 @@ function PlayingCardDetailPanel({
           getEditableRange={side.getStatEditableRange}
           onValueChange={side.onStatChange}
         />
+      ) : side.footer && side.footerPlacement === 'aside' ? (
+        <div className="flex w-36 shrink-0 items-center justify-center">
+          {side.footer}
+        </div>
       ) : null}
     </section>
   );
@@ -715,6 +764,7 @@ function resolveFrontSide(card: PlayingCardData): PlayingCardSide {
     statPointsRemainingLabel: card.statPointsRemainingLabel,
     getStatEditableRange: card.getStatEditableRange,
     footer: card.footer,
+    footerPlacement: card.footerPlacement,
       titleAccessory: card.titleAccessory,
     colorEditable: card.colorEditable,
     editable: card.editable,
@@ -824,6 +874,7 @@ function resolveModelSide(model: CardFaceModel, card: PlayingCardData): PlayingC
     statPointsRemainingLabel: model.stats?.remainingValueLabel,
     getStatEditableRange: model.stats?.getEditableRange,
     footer: model.footer,
+    footerPlacement: model.footerPlacement,
     titleAccessory: model.actions,
     colorEditable: model.color?.editable,
     editable:
