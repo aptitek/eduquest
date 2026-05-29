@@ -21,6 +21,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { DeleteButton } from '../atoms/DeleteButton';
+import { AvatarBadge } from '../atoms/AvatarBadge';
 import { AvatarDeck, type AvatarDeckMember } from './AvatarDeck';
 import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -197,6 +198,14 @@ const GRAPH_EDGE_ANIMATION_STYLES = `
 .graph-fog-cloud-reverse {
   animation-name: graph-fog-drift-reverse;
   animation-duration: 24s;
+}
+
+.react-flow__node:has(.graph-ring-popover) {
+  z-index: 900 !important;
+}
+
+.react-flow__node:has(.react-flow__handle) .react-flow__handle {
+  z-index: 1200 !important;
 }
 `;
 
@@ -791,7 +800,7 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
   const node = data.graphNode;
   const isDisabled = !data.allowLockedSelection && node.isLocked;
   const handleClassName = cn(
-    '!z-[60] !h-2 !w-2 !border-status-quest !bg-gaming-card',
+    '!z-[1200] !h-2 !w-2 !border-status-quest !bg-gaming-card',
     !isConnectable && '!opacity-0 pointer-events-none'
   );
 
@@ -848,7 +857,7 @@ function GraphFlowNodeRenderer({ data, isConnectable }: NodeProps<GraphFlowNode>
         </div>
       ) : null}
       {node.marker ? (
-        <div className="pointer-events-auto absolute -top-5 left-1/2 z-50 -translate-x-1/2">
+        <div className="pointer-events-auto absolute -top-8 left-1/2 z-50 -translate-x-1/2">
           {node.marker}
         </div>
       ) : null}
@@ -1020,7 +1029,7 @@ function RingSectorPopover({
 
   return (
     <div
-      className="pointer-events-auto absolute left-full top-1/2 z-[100] ml-3 w-52 -translate-y-1/2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 text-left shadow-2xl backdrop-blur"
+      className="graph-ring-popover pointer-events-auto absolute left-full top-1/2 z-[1000] ml-3 w-52 -translate-y-1/2 rounded-2xl border border-gaming-border bg-gaming-card/95 p-3 text-left shadow-2xl backdrop-blur"
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       onPointerEnter={onPointerEnter}
@@ -1048,7 +1057,35 @@ function RingSectorPopover({
           </p>
         </div>
       </div>
-      {segment.members?.length ? (
+      {segment.kind === 'solo' && segment.members?.length ? (
+        <div className="rounded-xl border border-gaming-border bg-gaming-base/70">
+          <div className="grid max-h-44 grid-cols-4 gap-2 overflow-y-auto p-2">
+            {segment.members.map((member) => (
+              <button
+                key={member.id}
+                type="button"
+                title={member.name}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  member.onClick?.();
+                }}
+                className="flex min-w-0 flex-col items-center gap-1 rounded-xl p-1 text-center transition hover:bg-gaming-card focus:outline-none focus:ring-2 focus:ring-status-quest"
+              >
+                <AvatarBadge
+                  name={member.name}
+                  src={member.avatarUrl}
+                  icon={member.icon}
+                  color={member.color || segment.color}
+                  size="sm"
+                />
+                <span className="w-full truncate text-[0.6rem] font-semibold text-text-muted">
+                  {member.name}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : segment.members?.length ? (
         <AvatarDeck
           members={segment.members}
           color={segment.color}

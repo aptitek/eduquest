@@ -29,9 +29,15 @@ interface AvatarDeckProps {
   orientation?: 'horizontal' | 'vertical';
   className?: string;
   avatarClassName?: string;
+  stackItemClassName?: string;
   labelClassName?: string;
   getAvatarMotion?: (member: AvatarDeckMember, index: number) => AvatarDeckMotion | undefined;
+  expanded?: boolean;
+  reserveOpenWidth?: boolean;
+  expandOnHover?: boolean;
   expandOnParentHover?: boolean;
+  liftItemsOnHover?: boolean;
+  showLabelsOnHover?: boolean;
   align?: 'start' | 'center';
   interactive?: boolean;
 }
@@ -62,9 +68,15 @@ export function AvatarDeck({
   orientation = 'horizontal',
   className,
   avatarClassName,
+  stackItemClassName,
   labelClassName,
   getAvatarMotion,
+  expanded = true,
+  reserveOpenWidth = false,
+  expandOnHover = true,
   expandOnParentHover = true,
+  liftItemsOnHover = true,
+  showLabelsOnHover = true,
   align = 'start',
   interactive = true,
 }: AvatarDeckProps) {
@@ -77,7 +89,9 @@ export function AvatarDeck({
   return (
     <div
       className={cn(
-        'group/avatar-deck relative z-[90] overflow-visible outline-none transition-[width] duration-300 [width:var(--deck-rest-width)] hover:[width:var(--deck-open-width)] focus:[width:var(--deck-open-width)] focus-within:[width:var(--deck-open-width)]',
+        'group/avatar-deck relative z-[90] overflow-visible outline-none transition-[width] duration-300',
+        reserveOpenWidth ? '[width:var(--deck-open-width)]' : '[width:var(--deck-rest-width)]',
+        expandOnHover && 'hover:[width:var(--deck-open-width)] focus:[width:var(--deck-open-width)] focus-within:[width:var(--deck-open-width)]',
         expandOnParentHover &&
           'group-hover/graph-node:[width:var(--deck-open-width)] group-focus-within/graph-node:[width:var(--deck-open-width)]',
         sizeClassNames.container,
@@ -99,13 +113,14 @@ export function AvatarDeck({
         emphasisIndex={0}
         visibleStackCount={members.length}
         expandOnHover={false}
-        expanded
+        expanded={expanded}
         className={cn('absolute inset-0', align === 'center' && 'left-1/2 -translate-x-1/2')}
         emphasisClassName="shadow-none"
         stackItemClassName={cn(
           'shadow-none',
           expandOnParentHover &&
-            'group-hover/graph-node:[--stack-x:var(--stack-open-x)] group-hover/graph-node:[--stack-y:var(--stack-open-y)] group-hover/graph-node:[--stack-rotation:var(--stack-open-rotation)] group-hover/graph-node:[--stack-scale:var(--stack-open-scale)] group-focus-within/graph-node:[--stack-x:var(--stack-open-x)] group-focus-within/graph-node:[--stack-y:var(--stack-open-y)] group-focus-within/graph-node:[--stack-rotation:var(--stack-open-rotation)] group-focus-within/graph-node:[--stack-scale:var(--stack-open-scale)]'
+            'group-hover/graph-node:[--stack-x:var(--stack-open-x)] group-hover/graph-node:[--stack-y:var(--stack-open-y)] group-hover/graph-node:[--stack-rotation:var(--stack-open-rotation)] group-hover/graph-node:[--stack-scale:var(--stack-open-scale)] group-focus-within/graph-node:[--stack-x:var(--stack-open-x)] group-focus-within/graph-node:[--stack-y:var(--stack-open-y)] group-focus-within/graph-node:[--stack-rotation:var(--stack-open-rotation)] group-focus-within/graph-node:[--stack-scale:var(--stack-open-scale)]',
+          stackItemClassName
         )}
         renderItem={({ item: member, index }) => {
           const motion = getAvatarMotion?.(member, index);
@@ -114,7 +129,10 @@ export function AvatarDeck({
             <button
               type="button"
               className={cn(
-                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200 hover:!z-50 hover:[transform:translateY(-0.75rem)_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateY(-0.75rem)_scale(1.12)] focus:drop-shadow-2xl',
+                'group/avatar-item flex items-center rounded-full outline-none transition-[filter,transform] duration-200',
+                liftItemsOnHover
+                  ? 'hover:!z-50 hover:[transform:translateY(-0.75rem)_scale(1.12)] hover:drop-shadow-2xl focus:!z-50 focus:[transform:translateY(-0.75rem)_scale(1.12)] focus:drop-shadow-2xl'
+                  : 'hover:!z-50 focus:!z-50',
                 motion && 'map-avatar-travel'
               )}
               title={member.name}
@@ -135,15 +153,17 @@ export function AvatarDeck({
                 size={size}
                 className={avatarClassName}
               />
-              <span
-                className={cn(
-                  'ml-2 max-w-0 overflow-hidden whitespace-nowrap rounded-full border border-gaming-border bg-gaming-card/95 px-0 py-0 font-semibold text-text-primary opacity-0 shadow-xl transition-[max-width,opacity,padding] duration-200 group-hover/avatar-item:max-w-32 group-hover/avatar-item:px-2 group-hover/avatar-item:py-0.5 group-hover/avatar-item:opacity-100 group-focus/avatar-item:max-w-32 group-focus/avatar-item:px-2 group-focus/avatar-item:py-0.5 group-focus/avatar-item:opacity-100',
-                  sizeClassNames.label,
-                  labelClassName
-                )}
-              >
-                {member.name}
-              </span>
+              {showLabelsOnHover ? (
+                <span
+                  className={cn(
+                    'ml-2 max-w-0 overflow-hidden whitespace-nowrap rounded-full border border-gaming-border bg-gaming-card/95 px-0 py-0 font-semibold text-text-primary opacity-0 shadow-xl transition-[max-width,opacity,padding] duration-200 group-hover/avatar-item:max-w-32 group-hover/avatar-item:px-2 group-hover/avatar-item:py-0.5 group-hover/avatar-item:opacity-100 group-focus/avatar-item:max-w-32 group-focus/avatar-item:px-2 group-focus/avatar-item:py-0.5 group-focus/avatar-item:opacity-100',
+                    sizeClassNames.label,
+                    labelClassName
+                  )}
+                >
+                  {member.name}
+                </span>
+              ) : null}
             </button>
           );
         }}

@@ -306,7 +306,7 @@ function getStackItemStyle({
       ? `${direction * dynamicHorizontalStep * depth}px`
       : isArc
         ? `calc(-50% + ${centerOffset * openStep + mess.x}rem)`
-        : `${direction * (depth * (spacing === 'wide' ? 15 : 5) + mess.x)}rem`;
+        : `${direction * (depth * openStep + mess.x)}rem`;
   const arcDrop = arcRadius * distanceFromCenter * distanceFromCenter * 0.95;
   const activeLift = isActive ? 1.2 : 0;
   const restRotation = isArc

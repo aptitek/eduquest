@@ -160,6 +160,14 @@ export function GameMap({
   const occupancyByActivityId = new Map(
     nodeOccupancies.map((occupancy) => [occupancy.activityId, occupancy])
   );
+  const effectivePlayerMarker = playerMarker
+    ? {
+        ...playerMarker,
+        guildId:
+          playerMarker.guildId ||
+          resolvePlayerGuildIdFromOccupancies(nodeOccupancies, playerMarker.studentId),
+      }
+    : undefined;
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const graphNodes: GraphNode<Activity>[] = activities.map((act) => {
     const visibilityStatus: NodeStatus = act.isRevealed ? 'ACTIVE' : 'FOG_OF_WAR';
@@ -169,12 +177,12 @@ export function GameMap({
     const isCompleted = showCompletionState && Boolean(act.isCompleted);
     const showAdminFogBadge = canEditLocked && isActivityFoggedByStepWindow(act, currentStep);
     const hasPlayerMarker =
-      playerMarker &&
-      (playerMarker.activityId ? playerMarker.activityId === act.id : act.isCurrent);
+      effectivePlayerMarker &&
+      (effectivePlayerMarker.activityId ? effectivePlayerMarker.activityId === act.id : act.isCurrent);
     const occupancy = occupancyByActivityId.get(act.id);
     const marker = buildMapNodeMarker({
-      playerMarker: hasPlayerMarker ? playerMarker : undefined,
-      currentPlayerMarker: playerMarker,
+      playerMarker: hasPlayerMarker ? effectivePlayerMarker : undefined,
+      currentPlayerMarker: effectivePlayerMarker,
       occupancy,
       activity: act,
       activityById,
@@ -222,7 +230,7 @@ export function GameMap({
       edge,
       fromActivity: activityById.get(edge.fromActivityId),
       toActivity: activityById.get(edge.toActivityId),
-      currentActivityId: playerMarker?.activityId,
+      currentActivityId: effectivePlayerMarker?.activityId,
       currentStep,
     });
 
@@ -462,7 +470,9 @@ function buildMapNodeMarker({
   showGuildOccupancyMarkers?: boolean;
   t: (path: string) => string;
 }) {
-  const adminGuildGroups = showGuildOccupancyMarkers ? buildAdminGuildMarkerGroups(occupancy, t) : [];
+  const isGuildActivity = activity.participationMode === 'guild';
+  const adminGuildGroups =
+    showGuildOccupancyMarkers && isGuildActivity ? buildAdminGuildMarkerGroups(occupancy, t) : [];
   const currentPlayerStudentId = showGuildOccupancyMarkers ? undefined : currentPlayerMarker?.studentId;
   const currentPlayerGuildId = showGuildOccupancyMarkers ? undefined : currentPlayerMarker?.guildId;
   const currentPlayerInOccupancy = Boolean(
@@ -483,25 +493,35 @@ function buildMapNodeMarker({
           />,
         ]
       : []
-    : (occupancy?.segments || []).flatMap((segment) => {
-        const visibleMembers = currentPlayerGuildId
-          ? (segment.members || []).filter((member) => member.guildId === currentPlayerGuildId)
-          : [];
-        if (!visibleMembers.length) return [];
-        return [
-          <OccupancyMemberMapMarker
-            key={segment.guildId || `${activity.id}-${segment.guildName || segment.kind}`}
-            color={segment.color || (segment.kind === 'guild' ? FALLBACK_GUILD_COLOR : SOLO_OCCUPANCY_COLOR)}
-            guildName={segment.guildName}
-            members={visibleMembers}
-            currentActivity={activity}
-            activityById={activityById}
-            currentPlayerStudentId={currentPlayerStudentId}
-          />,
-        ];
-      });
+    : currentPlayerGuildId
+      ? (occupancy?.segments || []).flatMap((segment) => {
+          const segmentMembers = segment.members || [];
+          const isCurrentGuildSegment = Boolean(
+            segment.guildId === currentPlayerGuildId ||
+              segmentMembers.some((member) => member.guildId === currentPlayerGuildId)
+          );
+          const visibleMembers =
+            isCurrentGuildSegment && segment.guildId === currentPlayerGuildId
+              ? segmentMembers
+              : segmentMembers.filter((member) => member.guildId === currentPlayerGuildId);
+          if (!visibleMembers.length) return [];
+          return [
+            <GuildOccupancyMapMarker
+              key={segment.guildId || `${activity.id}-${segment.guildName || segment.kind}`}
+              color={segment.color || (segment.kind === 'guild' ? FALLBACK_GUILD_COLOR : SOLO_OCCUPANCY_COLOR)}
+              guildName={segment.guildName || visibleMembers[0]?.guildName}
+              members={visibleMembers}
+              currentActivity={activity}
+              activityById={activityById}
+              currentPlayerStudentId={currentPlayerStudentId}
+            />,
+          ];
+        })
+      : [];
 
-  const shouldShowStandalonePlayerMarker = Boolean(playerMarker && !currentPlayerInOccupancy);
+  const shouldShowStandalonePlayerMarker = Boolean(
+    playerMarker && (!currentPlayerGuildId || !currentPlayerInOccupancy || guildMarkers.length === 0)
+  );
 
   if (!shouldShowStandalonePlayerMarker && guildMarkers.length === 0) return undefined;
 
@@ -537,7 +557,24 @@ function isSystemOnboardingActivity(activity: Activity) {
   return metadata.onboardingTask === 'institutional_profile' || metadata.onboardingTask === 'character_card';
 }
 
-function OccupancyMemberMapMarker({
+function resolvePlayerGuildIdFromOccupancies(
+  occupancies: GameMapNodeOccupancy[],
+  studentId?: string
+) {
+  if (!studentId) return undefined;
+
+  for (const occupancy of occupancies) {
+    for (const segment of occupancy.segments) {
+      const member = segment.members?.find((candidate) => candidate.studentId === studentId);
+      if (member?.guildId) return member.guildId;
+      if (member && segment.guildId) return segment.guildId;
+    }
+  }
+
+  return undefined;
+}
+
+function GuildOccupancyMapMarker({
   color,
   guildName,
   members,
@@ -563,15 +600,19 @@ function OccupancyMemberMapMarker({
       color={color}
       size={includesCurrentPlayer ? 'md' : 'sm'}
       className="shrink-0"
+      stackItemClassName="!left-0"
       align="center"
-      restStepRem={includesCurrentPlayer ? 0.55 : 0.5}
-      openStepRem={includesCurrentPlayer ? 1.35 : 1.1}
-      expandOnParentHover={false}
+      restStepRem={includesCurrentPlayer ? 0.28 : 0.24}
+      openStepRem={includesCurrentPlayer ? 0.72 : 0.58}
+      expanded={false}
+      reserveOpenWidth
+      expandOnHover={false}
+      expandOnParentHover
+      liftItemsOnHover={false}
+      showLabelsOnHover={false}
       getAvatarMotion={(member) => {
         const occupancyMember = members.find((candidate) => candidate.studentId === member.id);
-        return getTravelMotion(
-          getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity)
-        );
+        return getTravelMotion(getTravelVector(activityById, occupancyMember?.fromActivityId, currentActivity));
       }}
     />
   );
