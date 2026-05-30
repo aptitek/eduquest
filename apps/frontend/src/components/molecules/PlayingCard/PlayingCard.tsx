@@ -172,6 +172,7 @@ export function PlayingCard({
       onClick={onClick}
       onPointerEnter={onPointerEnter}
       onKeyDown={(event) => {
+        if (isKeyboardEventFromEditableElement(event.target)) return;
         if (!isActionable || (event.key !== 'Enter' && event.key !== ' ')) return;
         event.preventDefault();
         onClick?.();
@@ -558,7 +559,7 @@ function PlayingCardDetailPanel({
 
   return (
     <section className={playingCardDetailPanelClassName()}>
-      <div className="min-w-0 flex-1 space-y-3 text-left">
+      <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto pr-2 text-left">
         {face.subtitle || canEditSubtitle ? (
           <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
             {canEditSubtitle ? (
@@ -790,6 +791,19 @@ function getCardIcon(face: PlayingCardFaceSlots, size: number) {
 function shouldRenderCardIconInType(face: PlayingCardFaceSlots) {
   if (!face.icon || !face.type || face.type.icon) return false;
   return !['cost', 'rank', 'votes'].includes(face.type.variant);
+}
+
+function isKeyboardEventFromEditableElement(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+
+  const tagName = target.tagName.toLowerCase();
+  return (
+    target.isContentEditable ||
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    tagName === 'button'
+  );
 }
 
 function shouldRenderGuildIconInType(

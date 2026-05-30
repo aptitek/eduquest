@@ -54,7 +54,7 @@ function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: 
 export function ManagementPage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
-  const { user, student, character } = useGameStore();
+  const { user, student, character, patchSchool } = useGameStore();
   const [activeTab, setActiveTab] = useState<ManagementTab>('schools');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<SelectedManagementEntity | null>(null);
@@ -132,20 +132,22 @@ export function ManagementPage() {
   const cohortRows = useMemo<CohortRow[]>(() => {
     if (!managementBackup) return [];
 
-    return managementBackup.cohorts.map((cohort) => ({
-      ...cohort,
-      schoolName:
-        cohort.school?.name ||
-        managementBackup.schools.find((school) => school.id === cohort.schoolId)?.name ||
-        '-',
-      campusName:
-        cohort.campus?.name ||
-        managementBackup.campuses.find((campus) => campus.id === cohort.campusId)?.name ||
-        '-',
-      studentCount: managementBackup.students.filter((profile) =>
-        profile.student.cohortMemberships?.some((membership) => membership.cohortId === cohort.id)
-      ).length,
-    }));
+    return managementBackup.cohorts.map((cohort) => {
+      const school = managementBackup.schools.find((item) => item.id === cohort.schoolId) || cohort.school;
+
+      return {
+        ...cohort,
+        school,
+        schoolName: school?.name || '-',
+        campusName:
+          cohort.campus?.name ||
+          managementBackup.campuses.find((campus) => campus.id === cohort.campusId)?.name ||
+          '-',
+        studentCount: managementBackup.students.filter((profile) =>
+          profile.student.cohortMemberships?.some((membership) => membership.cohortId === cohort.id)
+        ).length,
+      };
+    });
   }, [managementBackup]);
 
   const studentRows = useMemo<StudentRow[]>(() => {
@@ -154,7 +156,10 @@ export function ManagementPage() {
         .filter(({ user: rowUser }) => !rowUser.isAdmin)
         .map(({ user: rowUser, student: rowStudent, character: rowCharacter }) => {
           const latestMembership = getLatestCohortMembership(rowStudent.cohortMemberships);
-          const selectedSchool = latestMembership?.cohort?.school;
+          const selectedCohort = latestMembership?.cohortId
+            ? cohortRows.find((cohort) => cohort.id === latestMembership.cohortId)
+            : undefined;
+          const selectedSchool = selectedCohort?.school || latestMembership?.cohort?.school;
 
           return {
             ...rowStudent,
@@ -164,9 +169,7 @@ export function ManagementPage() {
             user: rowUser,
             displayName: formatUserDisplayName(rowUser),
             email: getSchoolInstitutionalEmail(rowUser, latestMembership?.institutionalEmail),
-            cohort: latestMembership?.cohortId
-              ? cohortRows.find((cohort) => cohort.id === latestMembership.cohortId)
-              : undefined,
+            cohort: selectedCohort,
             age: calculateAge(rowUser.birthDate),
           };
         });
@@ -268,6 +271,8 @@ export function ManagementPage() {
     try {
       const backup = await updateManagementSchool(token, selectedSchoolRow.id, update);
       setManagementBackup(backup);
+      const updatedSchool = backup.schools.find((school) => school.id === selectedSchoolRow.id);
+      if (updatedSchool) patchSchool(updatedSchool);
     } catch (error) {
       reportError(error, {
         messageKey: 'management.errors.updateSchoolFailed',
@@ -444,6 +449,7 @@ export function ManagementPage() {
     <CohortDetailCard
       cohort={selectedCohortRow}
       cohortOptions={cohortRows}
+      schoolOptions={schoolRows}
       campusOptions={campusOptions}
       onUpdate={(update) => updateSelectedCohort(update)}
       t={t}

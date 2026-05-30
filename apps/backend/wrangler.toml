@@ -1,20 +1,28 @@
 name = "eduquest-backend"
 main = "src/index.ts"
-compatibility_date = "2024-02-22"
+compatibility_date = "2026-05-30"
 compatibility_flags = [ "nodejs_compat" ]
+
+# Replace the route patterns with the production hostname attached to the Pages project.
+routes = [
+  { pattern = "example.com/api/*", zone_name = "example.com" },
+  { pattern = "example.com/assets/*", zone_name = "example.com" }
+]
+
+[vars]
+APP_ENV = "production"
+FRONTEND_URL = "https://example.com"
 
 [[r2_buckets]]
 binding = "ASSETS"
 bucket_name = "eduquest-assets"
 
-# [vars]
-# MY_VARIABLE = "my-variable-value"
+[[d1_databases]]
+binding = "DB"
+database_name = "eduquest-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "src/db/d1-migrations"
 
 # [[kv_namespaces]]
 # binding = "MY_KV"
 # id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "eduquest-db"
-# database_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

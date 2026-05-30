@@ -48,11 +48,11 @@ import {
   repairManualAllocation,
   type CharacterStatAllocation,
 } from '../services/character-class-reallocation';
-import { apiError, missingDatabaseUrl, parseRequiredJsonBody } from './http';
+import { apiError, missingDatabaseBinding, parseRequiredJsonBody } from './http';
 
 type Bindings = {
   APP_ENV?: string;
-  DATABASE_URL?: string;
+  DB?: D1Database;
   JWT_SECRET?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -146,7 +146,9 @@ type ManagementStudentUpdateBody = {
   characterStats?: Partial<GameStats>;
   gameId?: string | null;
 };
-type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
+type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>> & {
+  address?: string;
+};
 type ManagementSchoolCreateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
 type ManagementCohortUpdateBody = Partial<
   Pick<Cohort, 'schoolId' | 'startYear' | 'grade' | 'level' | 'registrationOpen' | 'name' | 'majorSpeciality' | 'minorSpeciality' | 'description'>
@@ -204,6 +206,30 @@ function isPersistableImageUrl(value?: string | null) {
   } catch {
     return false;
   }
+}
+
+function parseManagementAddress(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '-') return null;
+
+  const parts = trimmed
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const line1 = parts[0] || trimmed;
+  const country = parts.length > 2 ? parts[parts.length - 1] : null;
+  const middleParts = parts.slice(1, country ? -1 : undefined);
+  const line2 = middleParts.length > 1 ? middleParts[0] : null;
+  const postalCity = middleParts.length > 1 ? middleParts.slice(1).join(', ') : middleParts[0];
+  const postalCityMatch = postalCity?.match(/^(\d[\dA-Za-z -]{1,12})\s+(.+)$/);
+
+  return {
+    line1,
+    line2,
+    postalCode: postalCityMatch ? postalCityMatch[1].trim() : null,
+    city: postalCityMatch ? postalCityMatch[2].trim() : postalCity || '',
+    country,
+  };
 }
 
 function toAddress(record: AddressRecord): Address {
@@ -417,14 +443,14 @@ function toManagementCohortInvite(
 }
 
 async function listActiveCohortInvites(
-  databaseUrl: string | undefined,
+  databaseUrl: D1Database | undefined,
   cohortId: string,
   frontendUrl: string
 ): Promise<ManagementCohortInvite[]> {
   const now = Date.now();
 
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required for cohort invites.');
+    throw new Error('D1 binding is required for cohort invites.');
   }
 
   const records = await getDb(databaseUrl)
@@ -462,7 +488,7 @@ async function resolveCohortInvite(
 }
 
 async function assignStudentToRegistrationCohort(
-  databaseUrl: string | undefined,
+  databaseUrl: D1Database | undefined,
   invite: CohortInvitePayload | null,
   userId: string
 ) {
@@ -534,9 +560,9 @@ async function hasCohortRegistrationTarget(db: ReturnType<typeof getDb>, invite:
   return Boolean(openCohort);
 }
 
-async function getManagementBackup(databaseUrl: string | undefined): Promise<ManagementBackup> {
+async function getManagementBackup(databaseUrl: D1Database | undefined): Promise<ManagementBackup> {
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required for management data.');
+    throw new Error('D1 binding is required for management data.');
   }
 
   const db = getDb(databaseUrl);
@@ -662,14 +688,14 @@ function toDevStudentOption(profile: ManagementBackup['students'][number]): DevS
   };
 }
 
-async function getDevStudentOptions(databaseUrl: string | undefined): Promise<DevStudentOption[]> {
+async function getDevStudentOptions(databaseUrl: D1Database | undefined): Promise<DevStudentOption[]> {
   if (!databaseUrl) return [];
 
   const backup = await getManagementBackup(databaseUrl);
   return backup.students.filter((profile) => !profile.user.isAdmin).map(toDevStudentOption);
 }
 
-async function findDevDatabaseUser(databaseUrl: string, identifier?: string | null) {
+async function findDevDatabaseUser(databaseUrl: D1Database, identifier?: string | null) {
   const db = getDb(databaseUrl);
   const userRecords = await db.select().from(users).orderBy(desc(users.createdAt));
   const selectableUsers = userRecords.map(toUser);
@@ -744,9 +770,9 @@ authRouter.get('/github/callback', async (c) => {
     return c.redirect(`${frontendUrl}/?error=config_error`);
   }
 
-  const databaseUrl = c.env.DATABASE_URL;
+  const databaseUrl = c.env.DB;
   if (!databaseUrl) {
-    console.error('DATABASE_URL is missing; database-backed OAuth sessions cannot be created.');
+    console.error('D1 binding is missing; database-backed OAuth sessions cannot be created.');
     return c.redirect(`${frontendUrl}/?error=missing_database_url`);
   }
 
@@ -944,17 +970,17 @@ authRouter.get('/github/callback', async (c) => {
 
 authRouter.get('/dev/students', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
-  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+  if (!c.env.DB) return missingDatabaseBinding(c);
 
   return c.json({
     success: true,
-    students: await getDevStudentOptions(c.env.DATABASE_URL),
+    students: await getDevStudentOptions(c.env.DB),
   });
 });
 
 authRouter.get('/dev/mock-github', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
-  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+  if (!c.env.DB) return missingDatabaseBinding(c);
 
   const jwtSecret = requireJwtSecret(c.env);
   const frontendUrl = requireFrontendUrl(c.env);
@@ -967,7 +993,7 @@ authRouter.get('/dev/mock-github', async (c) => {
   const avatarUrl = `https://avatars.githubusercontent.com/u/${Math.floor(Math.random() * 1000000)}?v=4`;
 
   try {
-    const db = getDb(c.env.DATABASE_URL);
+    const db = getDb(c.env.DB);
     await ensureCharacterClassSeeds(db);
 
     const [newUser] = await db
@@ -992,7 +1018,7 @@ authRouter.get('/dev/mock-github', async (c) => {
       .returning();
 
     if (newStudent) {
-      await assignStudentToRegistrationCohort(c.env.DATABASE_URL, cohortInvite, newUser.id);
+      await assignStudentToRegistrationCohort(c.env.DB, cohortInvite, newUser.id);
     }
 
     const token = await signAuthToken(
@@ -1013,11 +1039,11 @@ authRouter.get('/dev/mock-github', async (c) => {
 });
 
 authRouter.get('/character-classes', async (c) => {
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   await ensureCharacterClassSeeds(db);
   const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, c.req.query('gameId'));
 
@@ -1043,13 +1069,13 @@ authRouter.get('/management', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1066,11 +1092,11 @@ authRouter.post('/management/schools', async (c) => {
     body = {};
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
-  await getDb(c.env.DATABASE_URL).insert(schools).values({
+  await getDb(c.env.DB).insert(schools).values({
     name: body.name?.trim() || 'Nouvelle école',
     website: body.website?.trim() || null,
     emailDomain: body.emailDomain?.trim() || null,
@@ -1078,7 +1104,7 @@ authRouter.post('/management/schools', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1099,26 +1125,29 @@ authRouter.post('/management/cohorts', async (c) => {
     return apiError(c, 'Invalid cohort grade', 400, { errorCode: 'validation_failed' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
-  const db = getDb(c.env.DATABASE_URL);
-  const schoolId = body.schoolId || (await db.select().from(schools).limit(1))[0]?.id;
-  if (!schoolId) {
+  const db = getDb(c.env.DB);
+  const [schoolRecord] = body.schoolId
+    ? await db.select().from(schools).where(eq(schools.id, body.schoolId)).limit(1)
+    : await db.select().from(schools).limit(1);
+  if (!schoolRecord) {
     return apiError(c, 'Create a school before creating a cohort.', 400, { errorCode: 'validation_failed' });
   }
 
+  const schoolId = schoolRecord.id;
   const campusId =
     (await db.select().from(campuses).where(eq(campuses.schoolId, schoolId)).limit(1))[0]?.id ||
     null;
 
-  await db.transaction(async (tx) => {
+  try {
     if (body.registrationOpen) {
-      await tx.update(cohorts).set({ registrationOpen: false, updatedAt: new Date() });
+      await db.update(cohorts).set({ registrationOpen: false, updatedAt: new Date() });
     }
 
-    await tx.insert(cohorts).values({
+    await db.insert(cohorts).values({
       schoolId,
       campusId,
       startYear: body.startYear || new Date().getFullYear(),
@@ -1130,11 +1159,14 @@ authRouter.post('/management/cohorts', async (c) => {
       minorSpeciality: body.minorSpeciality?.trim() || null,
       description: body.description?.trim() || null,
     });
-  });
+  } catch (error: any) {
+    console.error('Management cohort create SQL error:', error.message);
+    return apiError(c, 'Cohort could not be created.', 500);
+  }
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1157,11 +1189,11 @@ authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
 
   const cohortId = c.req.param('cohortId');
   const frontendUrl = requireFrontendUrl(c.env);
-  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+  if (!c.env.DB) return missingDatabaseBinding(c);
 
   return c.json({
     success: true,
-    invites: await listActiveCohortInvites(c.env.DATABASE_URL, cohortId, frontendUrl),
+    invites: await listActiveCohortInvites(c.env.DB, cohortId, frontendUrl),
   });
 });
 
@@ -1172,11 +1204,11 @@ authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
   }
 
   const cohortId = c.req.param('cohortId');
-  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+  if (!c.env.DB) return missingDatabaseBinding(c);
 
   const cohortExists =
     (
-      await getDb(c.env.DATABASE_URL)
+      await getDb(c.env.DB)
         .select()
         .from(cohorts)
         .where(eq(cohorts.id, cohortId))
@@ -1208,7 +1240,7 @@ authRouter.post('/management/cohorts/:cohortId/invite', async (c) => {
   );
   const createdAt = new Date();
 
-  await getDb(c.env.DATABASE_URL).insert(cohortInvites).values({
+  await getDb(c.env.DB).insert(cohortInvites).values({
     id: inviteId,
     cohortId,
     token,
@@ -1238,9 +1270,9 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
   const cohortId = c.req.param('cohortId');
   const inviteId = c.req.param('inviteId');
   const revokedAt = new Date();
-  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+  if (!c.env.DB) return missingDatabaseBinding(c);
 
-  await getDb(c.env.DATABASE_URL)
+  await getDb(c.env.DB)
     .update(cohortInvites)
     .set({ revokedAt })
     .where(and(eq(cohortInvites.id, inviteId), eq(cohortInvites.cohortId, cohortId)));
@@ -1248,7 +1280,7 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
   return c.json({
     success: true,
     invites: await listActiveCohortInvites(
-      c.env.DATABASE_URL,
+      c.env.DB,
       cohortId,
       requireFrontendUrl(c.env)
     ),
@@ -1282,11 +1314,11 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
   const classSlug = rawClassSlug as GameCharacterClass;
   const cohortId = c.req.param('cohortId');
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
   const baseStats = normalizeBaseStats(
     body.baseStats || {},
@@ -1318,74 +1350,72 @@ authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', asy
       return apiError(c, 'Character class not found', 404);
     }
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(gameCharacterClasses)
+    await db
+      .update(gameCharacterClasses)
+      .set({
+        baseStrength: baseStats.strength,
+        baseDexterity: baseStats.dexterity,
+        baseConstitution: baseStats.constitution,
+        baseIntelligence: baseStats.intelligence,
+        baseWisdom: baseStats.wisdom,
+        baseCharisma: baseStats.charisma,
+      })
+      .where(eq(gameCharacterClasses.slug, classSlug));
+
+    const affectedCharacters = await db
+      .select({
+        studentId: gameCharacters.studentId,
+        strength: gameCharacters.strength,
+        dexterity: gameCharacters.dexterity,
+        constitution: gameCharacters.constitution,
+        intelligence: gameCharacters.intelligence,
+        wisdom: gameCharacters.wisdom,
+        charisma: gameCharacters.charisma,
+      })
+      .from(cohortMemberships)
+      .innerJoin(students, eq(students.userId, cohortMemberships.userId))
+      .innerJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
+      .where(
+        and(
+          eq(cohortMemberships.cohortId, cohortId),
+          eq(gameCharacters.characterClass, classSlug)
+        )
+      );
+
+    for (const character of affectedCharacters) {
+      const repair = repairManualAllocation(
+        {
+          strength: character.strength,
+          dexterity: character.dexterity,
+          constitution: character.constitution,
+          intelligence: character.intelligence,
+          wisdom: character.wisdom,
+          charisma: character.charisma,
+        },
+        baseStats,
+        balanceConfig.rewardSystem.attributes.levelOneMaxValue,
+        balanceConfig.rewardSystem.attributes.statAllocationBudget
+      );
+
+      if (!repair.changed) continue;
+
+      await db
+        .update(gameCharacters)
         .set({
-          baseStrength: baseStats.strength,
-          baseDexterity: baseStats.dexterity,
-          baseConstitution: baseStats.constitution,
-          baseIntelligence: baseStats.intelligence,
-          baseWisdom: baseStats.wisdom,
-          baseCharisma: baseStats.charisma,
+          strength: repair.nextManual.strength,
+          dexterity: repair.nextManual.dexterity,
+          constitution: repair.nextManual.constitution,
+          intelligence: repair.nextManual.intelligence,
+          wisdom: repair.nextManual.wisdom,
+          charisma: repair.nextManual.charisma,
+          updatedAt: new Date(),
         })
-        .where(eq(gameCharacterClasses.slug, classSlug));
-
-      const affectedCharacters = await tx
-        .select({
-          studentId: gameCharacters.studentId,
-          strength: gameCharacters.strength,
-          dexterity: gameCharacters.dexterity,
-          constitution: gameCharacters.constitution,
-          intelligence: gameCharacters.intelligence,
-          wisdom: gameCharacters.wisdom,
-          charisma: gameCharacters.charisma,
-        })
-        .from(cohortMemberships)
-        .innerJoin(students, eq(students.userId, cohortMemberships.userId))
-        .innerJoin(gameCharacters, eq(gameCharacters.studentId, students.id))
-        .where(
-          and(
-            eq(cohortMemberships.cohortId, cohortId),
-            eq(gameCharacters.characterClass, classSlug)
-          )
-        );
-
-      for (const character of affectedCharacters) {
-        const repair = repairManualAllocation(
-          {
-            strength: character.strength,
-            dexterity: character.dexterity,
-            constitution: character.constitution,
-            intelligence: character.intelligence,
-            wisdom: character.wisdom,
-            charisma: character.charisma,
-          },
-          baseStats,
-          balanceConfig.rewardSystem.attributes.levelOneMaxValue,
-          balanceConfig.rewardSystem.attributes.statAllocationBudget
-        );
-
-        if (!repair.changed) continue;
-
-        await tx
-          .update(gameCharacters)
-          .set({
-            strength: repair.nextManual.strength,
-            dexterity: repair.nextManual.dexterity,
-            constitution: repair.nextManual.constitution,
-            intelligence: repair.nextManual.intelligence,
-            wisdom: repair.nextManual.wisdom,
-            charisma: repair.nextManual.charisma,
-            updatedAt: new Date(),
-          })
-          .where(eq(gameCharacters.studentId, character.studentId));
-      }
-    });
+        .where(eq(gameCharacters.studentId, character.studentId));
+    }
 
     return c.json({
       success: true,
-      backup: await getManagementBackup(c.env.DATABASE_URL),
+      backup: await getManagementBackup(c.env.DB),
     });
   } catch (error: any) {
     console.error('Character class management SQL error:', error.message);
@@ -1425,11 +1455,11 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
   const studentId = c.req.param('studentId');
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const [studentRecord] = await db
     .select()
     .from(students)
@@ -1662,7 +1692,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1672,12 +1702,12 @@ authRouter.delete('/management/students/:studentId', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   const studentId = c.req.param('studentId');
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const [studentRecord] = await db
     .select()
     .from(students)
@@ -1688,14 +1718,12 @@ authRouter.delete('/management/students/:studentId', async (c) => {
     return apiError(c, 'Student not found', 404);
   }
 
-  await db.transaction(async (tx) => {
-    await tx.delete(gameCharacters).where(eq(gameCharacters.studentId, studentId));
-    await tx.delete(users).where(eq(users.id, studentRecord.userId));
-  });
+  await db.delete(gameCharacters).where(eq(gameCharacters.studentId, studentId));
+  await db.delete(users).where(eq(users.id, studentRecord.userId));
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1722,12 +1750,12 @@ authRouter.put('/management/cohorts/:cohortId', async (c) => {
     return apiError(c, 'Invalid cohort grade', 400, { errorCode: 'validation_failed' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   const cohortId = c.req.param('cohortId');
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const [cohortRecord] = await db
     .select()
     .from(cohorts)
@@ -1738,10 +1766,19 @@ authRouter.put('/management/cohorts/:cohortId', async (c) => {
     return apiError(c, 'Cohort not found', 404);
   }
 
+  const targetSchoolId = body.schoolId ?? cohortRecord.schoolId;
+  const isChangingSchool = targetSchoolId !== cohortRecord.schoolId;
+  if (body.schoolId !== undefined) {
+    const [schoolRecord] = await db.select().from(schools).where(eq(schools.id, body.schoolId)).limit(1);
+    if (!schoolRecord) {
+      return apiError(c, 'School not found', 400, { errorCode: 'validation_failed' });
+    }
+  }
+
   const cohortUpdate: Partial<typeof cohorts.$inferInsert> = {
     updatedAt: new Date(),
   };
-  if (body.schoolId !== undefined) cohortUpdate.schoolId = body.schoolId;
+  if (body.schoolId !== undefined) cohortUpdate.schoolId = targetSchoolId;
   if (body.startYear !== undefined) cohortUpdate.startYear = body.startYear;
   if (body.grade !== undefined) cohortUpdate.grade = body.grade;
   if (body.level !== undefined) cohortUpdate.level = body.level;
@@ -1751,39 +1788,51 @@ authRouter.put('/management/cohorts/:cohortId', async (c) => {
   if (body.description !== undefined) cohortUpdate.description = body.description.trim() || null;
   if (body.registrationOpen !== undefined) cohortUpdate.registrationOpen = body.registrationOpen;
 
-  await db.transaction(async (tx) => {
+  try {
     if (body.campusName !== undefined) {
       const campusName = body.campusName.trim();
-      if (cohortRecord.campusId) {
-        await tx
+      if (cohortRecord.campusId && !isChangingSchool) {
+        await db
           .update(campuses)
           .set({ name: campusName || 'Campus principal', updatedAt: new Date() })
           .where(eq(campuses.id, cohortRecord.campusId));
       } else if (campusName) {
-        const [newCampus] = await tx
+        const [newCampus] = await db
           .insert(campuses)
           .values({
-            schoolId: cohortUpdate.schoolId || cohortRecord.schoolId,
+            schoolId: targetSchoolId,
             name: campusName,
           })
           .returning();
         cohortUpdate.campusId = newCampus.id;
+      } else {
+        cohortUpdate.campusId = null;
       }
+    } else if (isChangingSchool) {
+      const [campusRecord] = await db
+        .select()
+        .from(campuses)
+        .where(eq(campuses.schoolId, targetSchoolId))
+        .limit(1);
+      cohortUpdate.campusId = campusRecord?.id || null;
     }
 
     if (body.registrationOpen === true) {
-      await tx
+      await db
         .update(cohorts)
         .set({ registrationOpen: false, updatedAt: new Date() })
         .where(sql`${cohorts.id} <> ${cohortId}`);
     }
 
-    await tx.update(cohorts).set(cohortUpdate).where(eq(cohorts.id, cohortId));
-  });
+    await db.update(cohorts).set(cohortUpdate).where(eq(cohorts.id, cohortId));
+  } catch (error: any) {
+    console.error('Management cohort update SQL error:', error.message);
+    return apiError(c, 'Cohort could not be updated.', 500);
+  }
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1793,16 +1842,16 @@ authRouter.delete('/management/cohorts/:cohortId', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   const cohortId = c.req.param('cohortId');
-  await getDb(c.env.DATABASE_URL).delete(cohorts).where(eq(cohorts.id, cohortId));
+  await getDb(c.env.DB).delete(cohorts).where(eq(cohorts.id, cohortId));
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1833,11 +1882,11 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
     });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const [schoolRecord] = await db.select().from(schools).where(eq(schools.id, schoolId)).limit(1);
 
   if (!schoolRecord) {
@@ -1860,9 +1909,50 @@ authRouter.put('/management/schools/:schoolId', async (c) => {
 
   await db.update(schools).set(schoolUpdate).where(eq(schools.id, schoolId));
 
+  if (body.address !== undefined) {
+    const parsedAddress = parseManagementAddress(body.address);
+    const [campusRecord] = await db
+      .select()
+      .from(campuses)
+      .where(eq(campuses.schoolId, schoolId))
+      .limit(1);
+
+    if (!parsedAddress) {
+      if (campusRecord?.addressId) {
+        await db
+          .update(campuses)
+          .set({ addressId: null, updatedAt: new Date() })
+          .where(eq(campuses.id, campusRecord.id));
+      }
+    } else if (campusRecord?.addressId) {
+      await db
+        .update(addresses)
+        .set({ ...parsedAddress, updatedAt: new Date() })
+        .where(eq(addresses.id, campusRecord.addressId));
+    } else {
+      const [addressRecord] = await db
+        .insert(addresses)
+        .values(parsedAddress)
+        .returning();
+
+      if (campusRecord) {
+        await db
+          .update(campuses)
+          .set({ addressId: addressRecord.id, updatedAt: new Date() })
+          .where(eq(campuses.id, campusRecord.id));
+      } else {
+        await db.insert(campuses).values({
+          schoolId,
+          addressId: addressRecord.id,
+          name: 'Campus principal',
+        });
+      }
+    }
+  }
+
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1872,16 +1962,16 @@ authRouter.delete('/management/schools/:schoolId', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   const schoolId = c.req.param('schoolId');
-  await getDb(c.env.DATABASE_URL).delete(schools).where(eq(schools.id, schoolId));
+  await getDb(c.env.DB).delete(schools).where(eq(schools.id, schoolId));
 
   return c.json({
     success: true,
-    backup: await getManagementBackup(c.env.DATABASE_URL),
+    backup: await getManagementBackup(c.env.DB),
   });
 });
 
@@ -1899,12 +1989,12 @@ authRouter.get('/management/reward-balance', async (c) => {
   }
 
   const cohortId = c.req.query('cohortId') || c.req.query('gameId') || undefined;
-  if (!c.env.DATABASE_URL) {
+  if (!c.env.DB) {
     const config = await RewardBalanceConfigService.getActiveConfig();
     return c.json({ success: true, config });
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const config = await RewardBalanceConfigService.getActiveConfig(db, cohortId);
   return c.json({ success: true, config });
 });
@@ -1914,11 +2004,11 @@ authRouter.get('/management/reward-balance/versions', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
+  if (!c.env.DB) {
     return c.json({ success: true, versions: [] });
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const cohortId = c.req.query('cohortId') || c.req.query('gameId') || undefined;
   const versions = await RewardBalanceConfigService.listVersions(db, cohortId);
   return c.json({ success: true, versions });
@@ -1930,15 +2020,15 @@ authRouter.put('/management/reward-balance', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   const body = await parseRequiredJsonBody<RewardBalanceConfigPayload>(c);
   if (body instanceof Response) return body;
 
   const cohortId = c.req.query('cohortId') || c.req.query('gameId') || undefined;
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const created = await RewardBalanceConfigService.publish(db, body, currentUser.id, cohortId);
   const config = await RewardBalanceConfigService.getActiveConfig(db, cohortId);
 
@@ -1950,8 +2040,8 @@ authRouter.post('/management/reward-balance/preview', async (c) => {
     return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
   }
 
-  if (!c.env.DATABASE_URL) {
-    return missingDatabaseUrl(c);
+  if (!c.env.DB) {
+    return missingDatabaseBinding(c);
   }
 
   const body = await parseRequiredJsonBody<RewardBalanceConfigPayload & {
@@ -1966,7 +2056,7 @@ authRouter.post('/management/reward-balance/preview', async (c) => {
     return apiError(c, 'activityId, studentId, and guildId are required.', 400);
   }
 
-  const db = getDb(c.env.DATABASE_URL);
+  const db = getDb(c.env.DB);
   const { activityId, studentId, guildId, cohortId, ...configPayload } = body;
   const breakdown = await new RewardPreviewService(db).preview({
     activityId,
@@ -1986,7 +2076,7 @@ authRouter.post('/management/reward-balance/preview', async (c) => {
 // Dev-only login: explicit opt-in, database-backed, and disabled in production.
 authRouter.get('/dev/login', async (c) => {
   if (!isDebugAuthEnabled(c)) return c.notFound();
-  if (!c.env.DATABASE_URL) return missingDatabaseUrl(c);
+  if (!c.env.DB) return missingDatabaseBinding(c);
 
   const jwtSecret = requireJwtSecret(c.env);
   const frontendUrl = requireFrontendUrl(c.env);
@@ -1994,16 +2084,16 @@ authRouter.get('/dev/login', async (c) => {
   const requestedUser = c.req.query('studentId') || c.req.query('username');
 
   try {
-    const user = await findDevDatabaseUser(c.env.DATABASE_URL, requestedUser);
+    const user = await findDevDatabaseUser(c.env.DB, requestedUser);
     if (!user) {
       return c.redirect(`${frontendUrl}/?error=debug_user_not_found`);
     }
 
     if (!user.isAdmin) {
-      await assignStudentToRegistrationCohort(c.env.DATABASE_URL, cohortInvite, user.id);
+      await assignStudentToRegistrationCohort(c.env.DB, cohortInvite, user.id);
     }
 
-    await getDb(c.env.DATABASE_URL)
+    await getDb(c.env.DB)
       .update(users)
       .set({ lastLogin: new Date(), updatedAt: new Date() })
       .where(eq(users.id, user.id));
@@ -2027,9 +2117,9 @@ authRouter.get('/me', authMiddleware, async (c) => {
     });
   }
 
-  const databaseUrl = c.env.DATABASE_URL;
+  const databaseUrl = c.env.DB;
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
   const jwtSecret = requireJwtSecret(c.env);
 
@@ -2238,7 +2328,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     });
   }
 
-  const databaseUrl = c.env.DATABASE_URL;
+  const databaseUrl = c.env.DB;
   const jwtSecret = requireJwtSecret(c.env);
 
   let body: {
@@ -2295,7 +2385,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
   let characterStatsUpdate: CharacterStatAllocation | undefined;
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   // Objets mis à jour pour la réponse

@@ -5,16 +5,17 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "node scripts/dev-with-migrations.mjs",
-    "dev:worker": "wrangler dev src/index.ts --show-interactive-dev-session=false",
-    "deploy": "npm run db:migrate && npm run deploy:worker",
+    "dev:worker": "wrangler dev src/index.ts --show-interactive-dev-session=false --persist-to .wrangler/state",
+    "build": "tsc --noEmit",
+    "deploy": "npm run db:migrate:remote && npm run deploy:worker",
     "deploy:worker": "wrangler deploy --minify src/index.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "wrangler d1 migrations apply eduquest-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply eduquest-db --remote"
   },
   "dependencies": {
     "hono": "^4.0.0",
     "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.3",
     "@eduquest/shared": "*"
   },
   "devDependencies": {

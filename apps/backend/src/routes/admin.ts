@@ -13,10 +13,10 @@ import {
   students,
 } from '../db/schema';
 import type { UserPayload } from '../middleware/auth';
-import { apiError, parseJsonBody, requireAdminUser, requireDatabaseUrl } from './http';
+import { apiError, parseJsonBody, requireAdminUser, requireDatabase } from './http';
 
 type Bindings = {
-  DATABASE_URL?: string;
+  DB?: D1Database;
 };
 
 type Variables = {
@@ -43,7 +43,7 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = await parseJsonBody<CohortStepBody>(c, {});
@@ -80,20 +80,18 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
       );
     }
 
-    const [updatedCohort] = await db.transaction(async (tx) => {
-      if (relocationPlan.moves.length > 0) {
-        await tx.insert(gameCharacterMoves).values(relocationPlan.moves);
-      }
+    if (relocationPlan.moves.length > 0) {
+      await db.insert(gameCharacterMoves).values(relocationPlan.moves);
+    }
 
-      return tx
-        .update(cohorts)
-        .set({
-          currentStep,
-          updatedAt: new Date(),
-        })
-        .where(eq(cohorts.id, existingCohort.id))
-        .returning();
-    });
+    const [updatedCohort] = await db
+      .update(cohorts)
+      .set({
+        currentStep,
+        updatedAt: new Date(),
+      })
+      .where(eq(cohorts.id, existingCohort.id))
+      .returning();
 
     return c.json({
       success: true,
@@ -126,7 +124,7 @@ adminRouter.get('/cohorts/:cohortId/step', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   try {

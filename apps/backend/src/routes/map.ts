@@ -52,11 +52,11 @@ import type { UserPayload } from '../middleware/auth';
 import { createEventContext, publishEvent } from '../events';
 import { VotingCostService } from '../services/rewards';
 import { RewardBalanceConfigService } from '../services/reward-balance-config';
-import { apiError, missingDatabaseUrl, parseJsonBody, requireAdminUser, requireDatabaseUrl } from './http';
+import { apiError, missingDatabaseBinding, parseJsonBody, requireAdminUser, requireDatabase } from './http';
 
 type Bindings = {
   APP_ENV?: string;
-  DATABASE_URL?: string;
+  DB?: D1Database;
   ASSETS?: R2Bucket;
 };
 type Variables = {
@@ -78,7 +78,7 @@ type ProgressMilestoneRecord = typeof progressMilestones.$inferSelect;
 type GameBonusCardRecord = typeof gameBonusCards.$inferSelect;
 type MilestoneBonusVoteRecord = typeof milestoneBonusVotes.$inferSelect;
 type Database = ReturnType<typeof getDb>;
-type GuildMutationDb = Pick<Database, 'select' | 'update'>;
+type GuildMutationDb = Pick<Database, 'select' | 'update' | 'delete'>;
 
 const ONLINE_PRESENCE_WINDOW_MS = 60 * 60 * 1000;
 
@@ -1550,6 +1550,15 @@ async function cancelPendingInvitationsForFullGuild(
   return memberCount;
 }
 
+async function deleteGuildIfEmpty(db: GuildMutationDb, cohortId: string, guildId: string | undefined) {
+  if (!guildId) return;
+
+  const memberCount = await countGuildMembers(db, cohortId, guildId);
+  if (memberCount > 0) return;
+
+  await db.delete(guilds).where(and(eq(guilds.id, guildId), eq(guilds.cohortId, cohortId)));
+}
+
 async function switchStudentGuild(
   db: GuildMutationDb,
   params: {
@@ -1595,6 +1604,9 @@ async function switchStudentGuild(
   }
 
   await cancelPendingInvitationsForFullGuild(db, params.targetGuild);
+  if (previousGuildId && previousGuildId !== params.targetGuild.id) {
+    await deleteGuildIfEmpty(db, params.membership.cohortId, previousGuildId);
+  }
 }
 
 async function resolveAdminCohort(
@@ -1730,7 +1742,7 @@ function getDefaultOnboardingResource(task: string | undefined) {
 
 function getDefaultOnboardingIconKey(task: string | undefined) {
   if (task === 'institutional_profile') return 'user-check';
-  if (task === 'character_card') return 'anvil';
+  if (task === 'character_card') return 'contact';
   if (task === 'guild_rally') return 'users';
   return undefined;
 }
@@ -1796,7 +1808,7 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
         subtitle: 'Onboarding · Classe et personnage',
         description:
           'Choisissez une classe pour créer votre carte personnage et entrer dans la partie.',
-        iconKey: 'anvil',
+        iconKey: 'contact',
         resources: [{ title: 'Créer la carte personnage', url: '#character' }],
       },
     });
@@ -1902,7 +1914,7 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
       defaultIconKey &&
       (!currentIconKey ||
         (task === 'institutional_profile' && currentIconKey === 'onboarding') ||
-        (task === 'character_card' && currentIconKey === 'character_creation'));
+        (task === 'character_card' && ['anvil', 'character_creation'].includes(currentIconKey)));
     if (shouldUseDefaultIcon) {
       nextMetadata = { ...nextMetadata, iconKey: defaultIconKey };
     }
@@ -1946,7 +1958,7 @@ mapRouter.post('/map/activities', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const requestedCohortId = getRequestedGameId(c);
@@ -2004,7 +2016,7 @@ mapRouter.delete('/map/activities/:activityId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2079,7 +2091,7 @@ mapRouter.patch('/map/activities/:activityId/position', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2146,7 +2158,7 @@ mapRouter.patch('/map/activities/:activityId/title', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2208,7 +2220,7 @@ mapRouter.patch('/map/activities/:activityId/card-fields', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2309,7 +2321,7 @@ mapRouter.patch('/map/activities/:activityId/step-ranges', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2391,7 +2403,7 @@ mapRouter.patch('/map/activities/:activityId/icon', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2464,7 +2476,7 @@ mapRouter.patch('/map/activities/:activityId/card-color', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2522,7 +2534,7 @@ mapRouter.patch('/map/activities/:activityId/illustration', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const activityId = c.req.param('activityId');
@@ -2593,7 +2605,7 @@ mapRouter.delete('/map/edges/:edgeId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const edgeId = c.req.param('edgeId');
@@ -2640,7 +2652,7 @@ mapRouter.post('/map/edges', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const requestedCohortId = getRequestedGameId(c);
@@ -2719,7 +2731,7 @@ mapRouter.patch('/map/edges/:edgeId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const edgeId = c.req.param('edgeId');
@@ -2817,11 +2829,11 @@ mapRouter.patch('/map/edges/:edgeId', async (c) => {
 });
 
 mapRouter.get('/games', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -2877,7 +2889,7 @@ mapRouter.get('/games', async (c) => {
 });
 
 mapRouter.post('/guilds', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
   const requestedCohortId = getRequestedGameId(c);
   const body = await parseJsonBody<CreateGuildPayload>(c, {});
@@ -2927,7 +2939,7 @@ mapRouter.post('/guilds', async (c) => {
     });
   }
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -2937,39 +2949,38 @@ mapRouter.post('/guilds', async (c) => {
     if (!context) {
       return apiError(c, 'Cohort context not found.', 404);
     }
-    const createdGuild = await db.transaction(async (tx) => {
-      const [guildRecord] = await tx
-        .insert(guilds)
-        .values({
-          cohortId: context.cohortRecord.id,
-          name,
-          description: description || null,
-          iconUrl: iconUrl || null,
-          iconKey: iconKey || null,
-          color: color || null,
-          recruitmentStatus: recruitmentStatus || 'open',
-          recruitmentMessage: recruitmentMessage || null,
-          maxMembers: maxMembers || 3,
-        })
-        .returning();
+    const [createdGuild] = await db
+      .insert(guilds)
+      .values({
+        cohortId: context.cohortRecord.id,
+        name,
+        description: description || null,
+        iconUrl: iconUrl || null,
+        iconKey: iconKey || null,
+        color: color || null,
+        recruitmentStatus: recruitmentStatus || 'open',
+        recruitmentMessage: recruitmentMessage || null,
+        maxMembers: maxMembers || 3,
+      })
+      .returning();
 
-      const [updatedMembership] = await tx
-        .update(cohortMemberships)
-        .set({ guildId: guildRecord.id })
-        .where(
-          and(
-            eq(cohortMemberships.userId, context.membership.userId),
-            eq(cohortMemberships.cohortId, context.membership.cohortId)
-          )
+    const [updatedMembership] = await db
+      .update(cohortMemberships)
+      .set({ guildId: createdGuild.id })
+      .where(
+        and(
+          eq(cohortMemberships.userId, context.membership.userId),
+          eq(cohortMemberships.cohortId, context.membership.cohortId)
         )
-        .returning();
+      )
+      .returning();
 
-      if (!updatedMembership) {
-        throw new Error('Student already belongs to a guild for this cohort.');
-      }
-
-      return guildRecord;
-    });
+    if (!updatedMembership) {
+      throw new Error('Student already belongs to a guild for this cohort.');
+    }
+    if (context.membership.guildId && context.membership.guildId !== createdGuild.id) {
+      await deleteGuildIfEmpty(db, context.membership.cohortId, context.membership.guildId);
+    }
 
     const [creatorRecord] = await db
       .select({
@@ -3031,12 +3042,12 @@ mapRouter.post('/guilds', async (c) => {
 });
 
 mapRouter.get('/guilds', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3194,7 +3205,7 @@ mapRouter.get('/guilds', async (c) => {
 });
 
 mapRouter.patch('/guilds/:guildId', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const guildId = c.req.param('guildId');
   const user = c.get('user');
 
@@ -3276,7 +3287,7 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   }
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3322,12 +3333,12 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
 });
 
 mapRouter.post('/guilds/:guildId/join', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
   const guildId = c.req.param('guildId');
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3354,14 +3365,12 @@ mapRouter.post('/guilds/:guildId/join', async (c) => {
       return apiError(c, 'Guild is full.', 409);
     }
 
-    const [updatedGuild] = await db.transaction(async (tx) => {
-      await switchStudentGuild(tx, {
-        membership: context.membership,
-        targetGuild: guildRecord,
-      });
-
-      return tx.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+    await switchStudentGuild(db, {
+      membership: context.membership,
+      targetGuild: guildRecord,
     });
+
+    const [updatedGuild] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
 
     return c.json({ success: true, source: 'database', guild: toGuildPayload(updatedGuild) });
   } catch (error: any) {
@@ -3371,7 +3380,7 @@ mapRouter.post('/guilds/:guildId/join', async (c) => {
 });
 
 mapRouter.post('/guilds/:guildId/invitations', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
   const guildId = c.req.param('guildId');
   const body = await parseJsonBody<GuildInvitationPayload>(c, {});
@@ -3390,7 +3399,7 @@ mapRouter.post('/guilds/:guildId/invitations', async (c) => {
     });
   }
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3468,12 +3477,12 @@ mapRouter.post('/guilds/:guildId/invitations', async (c) => {
 });
 
 mapRouter.post('/guild-invitations/:invitationId/accept', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
   const invitationId = c.req.param('invitationId');
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3512,17 +3521,14 @@ mapRouter.post('/guild-invitations/:invitationId/accept', async (c) => {
       return apiError(c, 'Guild is full.', 409);
     }
 
-    const [updatedInvitation] = await db.transaction(async (tx) => {
-      const [accepted] = await tx
-        .update(guildInvitations)
-        .set({ status: 'accepted', respondedAt: new Date(), updatedAt: new Date() })
-        .where(eq(guildInvitations.id, invitation.id))
-        .returning();
-      await switchStudentGuild(tx, {
-        membership: context.membership,
-        targetGuild: guildRecord,
-      });
-      return [accepted];
+    const [updatedInvitation] = await db
+      .update(guildInvitations)
+      .set({ status: 'accepted', respondedAt: new Date(), updatedAt: new Date() })
+      .where(eq(guildInvitations.id, invitation.id))
+      .returning();
+    await switchStudentGuild(db, {
+      membership: context.membership,
+      targetGuild: guildRecord,
     });
 
     return c.json({
@@ -3538,12 +3544,12 @@ mapRouter.post('/guild-invitations/:invitationId/accept', async (c) => {
 });
 
 mapRouter.post('/guild-invitations/:invitationId/decline', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const user = c.get('user');
   const invitationId = c.req.param('invitationId');
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3577,12 +3583,12 @@ mapRouter.post('/guild-invitations/:invitationId/decline', async (c) => {
 });
 
 mapRouter.post('/guilds/:guildId/votes', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const guildId = c.req.param('guildId');
   const user = c.get('user');
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   let body: { votes?: number };
@@ -3632,13 +3638,13 @@ mapRouter.post('/guilds/:guildId/votes', async (c) => {
 });
 
 mapRouter.post('/map/activities/:activityId/complete', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const activityId = c.req.param('activityId');
   const user = c.get('user');
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3810,13 +3816,13 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
 });
 
 mapRouter.post('/map/activities/:activityId/move', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
   const activityId = c.req.param('activityId');
   const user = c.get('user');
   const requestedCohortId = getRequestedGameId(c);
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -3938,10 +3944,10 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
 
 // GET /api/map : Renvoie la carte des activités (dynamique ou mock)
 mapRouter.get('/map', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -4165,10 +4171,10 @@ mapRouter.get('/map', async (c) => {
 });
 
 mapRouter.get('/dashboard', async (c) => {
-  const databaseUrl = c.env?.DATABASE_URL;
+  const databaseUrl = c.env?.DB;
 
   if (!databaseUrl) {
-    return missingDatabaseUrl(c);
+    return missingDatabaseBinding(c);
   }
 
   try {
@@ -4249,7 +4255,7 @@ mapRouter.get('/dashboard', async (c) => {
 });
 
 mapRouter.get('/games/:gameId/milestones', async (c) => {
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
@@ -4290,7 +4296,7 @@ mapRouter.post('/games/:gameId/milestones', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = normalizeMilestonePayload(await parseJsonBody<GameMilestonePayload>(c));
@@ -4333,7 +4339,7 @@ mapRouter.patch('/games/:gameId/milestones/:milestoneId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = normalizeMilestonePayload(await parseJsonBody<GameMilestonePayload>(c));
@@ -4385,7 +4391,7 @@ mapRouter.delete('/games/:gameId/milestones/:milestoneId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
@@ -4422,7 +4428,7 @@ mapRouter.delete('/games/:gameId/milestones/:milestoneId', async (c) => {
 });
 
 mapRouter.get('/games/:gameId/reward-cards', async (c) => {
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
@@ -4456,7 +4462,7 @@ mapRouter.post('/games/:gameId/reward-cards', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = normalizeRewardCardPayload(await parseJsonBody<GameRewardCardPayload>(c));
@@ -4503,7 +4509,7 @@ mapRouter.put('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = normalizeRewardCardPayload(await parseJsonBody<GameRewardCardPayload>(c));
@@ -4555,7 +4561,7 @@ mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
 
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
@@ -4587,7 +4593,7 @@ mapRouter.delete('/games/:gameId/reward-cards/:rewardCardId', async (c) => {
 });
 
 mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   try {
@@ -4741,7 +4747,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
 });
 
 mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) => {
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = await parseJsonBody<{ bonusCardId?: unknown }>(c, {});
@@ -4827,7 +4833,7 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
 });
 
 mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) => {
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   if (databaseUrl instanceof Response) return databaseUrl;
 
   const body = await parseJsonBody<{ votes?: unknown }>(c, {});

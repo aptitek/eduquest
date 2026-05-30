@@ -3,7 +3,7 @@ export type AppEnvironment = 'development' | 'production';
 export type RuntimeBindings = {
   APP_ENV?: string;
   ENABLE_DEBUG_AUTH?: string;
-  DATABASE_URL?: string;
+  DB?: D1Database;
   FRONTEND_URL?: string;
   JWT_SECRET?: string;
   ASSET_PUBLIC_BASE_URL?: string;

@@ -10,13 +10,10 @@ describe('runtime configuration', () => {
   });
 
   it('keeps debug auth tied to explicit dev-only debug flags', () => {
-    expect(isDebugAuthEnabled({ APP_ENV: 'development', DATABASE_URL: 'postgres://local' })).toBe(
-      false
-    );
+    expect(isDebugAuthEnabled({ APP_ENV: 'development' })).toBe(false);
     expect(
       isDebugAuthEnabled({
         APP_ENV: 'development',
-        DATABASE_URL: 'postgres://local',
         ENABLE_DEBUG_AUTH: 'true',
       })
     ).toBe(true);

@@ -1,24 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import {
-  Activity as ActivityGlyph,
-  Anvil,
-  BookOpen,
-  Castle,
   Coins,
-  Compass,
   ExternalLink,
-  Flame,
-  Hammer,
-  Map,
-  ScrollText,
-  Shield,
-  Sparkles,
-  Swords,
-  TreePine,
-  Trophy,
-  UserCheck,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import type {
   ActivityParticipationMode,
   ActivityStepRange,
@@ -32,39 +16,9 @@ import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
 import { EditableIcon } from '../atoms/EditableIcon';
 import { EditableText } from '../atoms/EditableText';
 import { useTranslation } from '../../hooks/useTranslation';
+import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 import { resolveColorTextClassName } from '../../styles/colorTokens';
 import { cn } from '../../utils/cn';
-
-const PUBLIC_ICON_MAP: Record<string, LucideIcon> = {
-  Activity: ActivityGlyph,
-  Anvil,
-  TreePine,
-  ScrollText,
-  Swords,
-  Flame,
-  Compass,
-  BookOpen,
-  Shield,
-  Hammer,
-  Sparkles,
-  Trophy,
-  UserCheck,
-  'user-check': UserCheck,
-  anvil: Anvil,
-  Castle,
-  Map,
-  onboarding: Compass,
-  character_creation: Sparkles,
-  tavern: Castle,
-  tutorial: BookOpen,
-  ice_breaker: Sparkles,
-  campfire: Flame,
-  quiz: ScrollText,
-  practical: Hammer,
-  mini_boss: Shield,
-  boss: Swords,
-  activity: ActivityGlyph,
-};
 
 type ActivityCardEditableField = 'title' | 'subtitle' | 'description' | 'art' | 'type';
 
@@ -171,15 +125,14 @@ export function ActivityCard({
     return (
       <div
         className={cn(
-          'flex h-full min-h-0 justify-center',
-          showCompletionAction && 'pb-28 pr-24',
+          'flex h-full min-h-0 w-full justify-center overflow-hidden',
           className
         )}
       >
-        <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
+        <div className="relative flex h-full min-h-0 w-full max-w-full justify-center">
           <PlayingCard
             size="page"
-            presentation={{ fit: 'contain' }}
+            presentation={{ fit: 'fillWidth', width: 'activityPage' }}
             kind="activity"
             accentToken="quest"
             model={{
@@ -297,7 +250,7 @@ export function ActivityCard({
     onColorChange: updateCardColor,
     onFieldChange: updateCardField,
     onIllustrationUpload,
-    actions: completionAction,
+    reserveCompletionActionSpace: Boolean(completionAction),
   });
 
   return (
@@ -306,11 +259,11 @@ export function ActivityCard({
         'flex h-full min-h-0 justify-center',
         hasBossAnswerFields
           ? 'flex-col items-center gap-4 overflow-y-auto pb-4'
-          : showCompletionAction && 'pb-28 pr-24',
+          : 'w-full overflow-hidden',
         className
       )}
     >
-      <div className="relative flex h-full min-h-0 w-fit max-w-full justify-center">
+      <div className="relative flex h-full min-h-0 w-full max-w-full justify-center overflow-hidden">
         <PlayingCard
           size="page"
           accentToken="quest"
@@ -340,7 +293,19 @@ export function ActivityCard({
           autoFlipToBack={isRevealingSelectedActivity}
           onAutoFlipComplete={() => setIsRevealingSelectedActivity(false)}
           flipLabel={t('activityCard.flipAdminView')}
-          presentation={{ fit: 'contain' }}
+          presentation={{ fit: 'fillWidth', width: 'activityPage' }}
+          overlays={
+            completionAction
+              ? [
+                  {
+                    id: 'activity-completion-action',
+                    placement: 'bottom-right-inside',
+                    content: completionAction,
+                    className: 'bottom-5 right-5',
+                  },
+                ]
+              : undefined
+          }
         />
       </div>
       {hasBossAnswerFields ? (
@@ -502,7 +467,7 @@ function buildActivityFace({
   onColorChange,
   onFieldChange,
   onIllustrationUpload,
-  actions,
+  reserveCompletionActionSpace,
 }: {
   activity: ActivityCardData;
   canEdit: boolean;
@@ -511,7 +476,7 @@ function buildActivityFace({
   onColorChange: (cardColor: string) => void;
   onFieldChange: (field: ActivityCardEditableField, value: string) => void;
   onIllustrationUpload?: (file: File) => Promise<string | void>;
-  actions?: ReactNode;
+  reserveCompletionActionSpace?: boolean;
 }): PlayingCardFaceSlots {
   const showUploadTarget = canEdit && Boolean(onIllustrationUpload);
 
@@ -588,10 +553,10 @@ function buildActivityFace({
           activity={activity}
           canEdit={canEdit}
           onResourcesChange={onResourcesChange}
+          reserveCompletionActionSpace={reserveCompletionActionSpace}
         />
       ),
     },
-    actions,
     className: 'bg-gaming-card text-text-primary',
   };
 }
@@ -600,10 +565,12 @@ function ActivityCardFooter({
   activity,
   canEdit,
   onResourcesChange,
+  reserveCompletionActionSpace,
 }: {
   activity: ActivityCardData;
   canEdit: boolean;
   onResourcesChange: (resources: ActivityResourceLink[]) => void;
+  reserveCompletionActionSpace?: boolean;
 }) {
   const updateResourceUrl = (index: number, url: string) => {
     onResourcesChange(
@@ -614,7 +581,7 @@ function ActivityCardFooter({
   };
 
   return (
-    <div className="space-y-3">
+    <div className={cn('space-y-3', reserveCompletionActionSpace && 'pb-28 pr-28')}>
       <ActivityResourceList
         resources={activity.resources}
         canEdit={canEdit}
@@ -820,7 +787,6 @@ function ActivityIcon({
   canEdit?: boolean;
   onChange?: (iconId: string) => void;
 }) {
-  const Icon = PUBLIC_ICON_MAP[iconId] || Sparkles;
   const iconClassName = color ? resolveColorTextClassName(color) : undefined;
 
   if (canEdit && onChange) {
@@ -837,7 +803,7 @@ function ActivityIcon({
     );
   }
 
-  return <Icon size={size} aria-hidden className={iconClassName} />;
+  return renderLucideIcon(iconId, size, iconClassName);
 }
 
 function NumberField({

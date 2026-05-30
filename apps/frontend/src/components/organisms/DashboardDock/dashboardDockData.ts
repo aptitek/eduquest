@@ -1,7 +1,7 @@
 import type { CohortMembership, GameCharacterClass, GameStats } from '@eduquest/shared';
 import type { CardStatValue, PlayingCardProps, PlayingHandData } from '../../molecules/PlayingCard';
 import { resolveUiColorTokenValue } from '../../../styles/colorTokens';
-import { getCharacterClassIconKey } from '../../../features/game/characterStats';
+import { getCharacterClassIconKey, toPlayingCardStats } from '../../../features/game/characterStats';
 import type { DockGuild, DockGuildMember } from './types';
 
 type Translate = (path: string) => string;
@@ -152,12 +152,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
               t('dashboard.dock.playerCardDescription').replace('{class}', options.characterClassLabel)
             ),
             stats: {
-              values: [
-                { id: 'strength', label: 'STR', value: options.characterStats.strength ?? 0 },
-                { id: 'dexterity', label: 'DEX', value: options.characterStats.dexterity ?? 0 },
-                { id: 'intelligence', label: 'INT', value: options.characterStats.intelligence ?? 0 },
-                { id: 'charisma', label: 'CHA', value: options.characterStats.charisma ?? 0 },
-              ],
+              values: toPlayingCardStats(options.characterStats),
               label: options.playerName,
             },
           },

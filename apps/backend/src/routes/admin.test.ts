@@ -3,6 +3,7 @@ import { sign } from 'hono/jwt';
 import app from '../index';
 
 const JWT_SECRET = 'test-secret';
+const DB = {} as D1Database;
 
 describe('admin routes', () => {
   it('requires an admin for cohort progression updates', async () => {
@@ -33,7 +34,7 @@ describe('admin routes', () => {
         },
         body: JSON.stringify({ currentStep: -1 }),
       },
-      { JWT_SECRET, DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, DB }
     );
     const payload = (await response.json()) as { error?: string };
 

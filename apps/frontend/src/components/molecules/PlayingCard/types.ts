@@ -8,6 +8,7 @@ export type PlayingCardFit = 'intrinsic' | 'fillWidth' | 'fillHeight' | 'contain
 
 export type PlayingCardWidthPreset =
   | 'default'
+  | 'activityPage'
   | 'handFull'
   | 'dockSmall'
   | 'dockSmallStack'

@@ -5,6 +5,7 @@ import { Clipboard, ExternalLink, LockKeyhole, UnlockKeyhole, X } from 'lucide-r
 import { AddButton } from '../../atoms/AddButton';
 import { DeleteButton } from '../../atoms/DeleteButton';
 import { BadgeDropdown } from '../../molecules/BadgeDropdown';
+import { SchoolLogoBadge } from '../../molecules/SchoolLogoBadge';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
 import {
   createManagementCohortInvite,
@@ -13,7 +14,7 @@ import {
   type ManagementCohortUpdate,
   type ManagementCohortInvite,
 } from '../../../features/management/api';
-import type { CohortRow } from '../../../features/management/types';
+import type { CohortRow, SchoolRow } from '../../../features/management/types';
 import { formatGrade } from '../../../features/management/utils';
 import aptitekLogoUrl from '../../../assets/logo.svg';
 import { keepFocusInContainer } from '../../../utils/focusTrap';
@@ -54,12 +55,14 @@ function formatTimeRemaining(expiresAt: string, t: (key: string) => string) {
 export function CohortDetailCard({
   cohort,
   cohortOptions,
+  schoolOptions,
   campusOptions,
   onUpdate,
   t,
 }: {
   cohort: CohortRow;
   cohortOptions: CohortRow[];
+  schoolOptions: SchoolRow[];
   campusOptions: string[];
   onUpdate?: (update: ManagementCohortUpdate) => void | Promise<void>;
   t: (key: string) => string;
@@ -87,6 +90,12 @@ export function CohortDetailCard({
   const qrDialogRef = useRef<HTMLDivElement>(null);
   const resolvedLogoUrl =
     cohort.school?.logoUrl || (cohort.schoolName === 'Aptitek' ? aptitekLogoUrl : undefined);
+  const hasCurrentSchoolOption = schoolOptions.some((school) => school.id === cohort.schoolId);
+  const getSchoolOption = (schoolId: string) =>
+    schoolOptions.find((school) => school.id === schoolId) ||
+    (schoolId === cohort.schoolId
+      ? { id: cohort.schoolId, name: cohort.schoolName, logoUrl: cohort.school?.logoUrl }
+      : undefined);
   const schoolYearOptions = Array.from(
     new Set([String(cohort.startYear), ...cohortOptions.map((item) => String(item.startYear))])
   );
@@ -466,22 +475,52 @@ export function CohortDetailCard({
 
         <div className="flex min-h-full flex-col gap-5">
           <div className="flex w-full flex-col items-center gap-2">
-            <div
-              className="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-2"
-              title={cohort.schoolName}
-            >
-              {resolvedLogoUrl ? (
-                <img
-                  src={resolvedLogoUrl}
-                  alt={cohort.schoolName}
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <span className="px-3 text-center text-sm font-display font-semibold text-text-secondary">
-                  {cohort.schoolName}
-                </span>
-              )}
-            </div>
+            <BadgeDropdown
+              options={[
+                ...(!hasCurrentSchoolOption && cohort.schoolId ? [cohort.schoolId] : []),
+                ...schoolOptions.map((school) => school.id),
+              ]}
+              value={cohort.schoolId ? [cohort.schoolId] : []}
+              onChange={(next) => {
+                const schoolId = next[0];
+                if (!schoolId || schoolId === cohort.schoolId) return;
+                void onUpdate?.({ schoolId });
+              }}
+              multiple={false}
+              placeholder={cohort.schoolName}
+              searchPlaceholder={t('management.cohorts.school')}
+              emptyFilterHint={t('management.cohorts.school')}
+              className="w-full"
+              badgeClassName="flex h-32 w-full shrink-0 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-base/50 p-2 text-text-secondary transition hover:border-primary focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/40"
+              selectedMaxWidth="max-w-full"
+              fullWidth
+              showArrow={false}
+              getOptionText={(schoolId) => getSchoolOption(schoolId)?.name || schoolId}
+              renderSelectedBadge={() =>
+                resolvedLogoUrl ? (
+                  <img
+                    src={resolvedLogoUrl}
+                    alt={cohort.schoolName}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <span className="px-3 text-center text-sm font-display font-semibold text-text-secondary">
+                    {cohort.schoolName}
+                  </span>
+                )
+              }
+              renderOption={(schoolId) => {
+                const school = getSchoolOption(schoolId);
+                return school ? (
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <SchoolLogoBadge name={school.name} logoUrl={school.logoUrl} />
+                    <span className="truncate">{school.name}</span>
+                  </span>
+                ) : (
+                  schoolId
+                );
+              }}
+            />
 
             <div className="w-full min-w-0">
               <BadgeDropdown

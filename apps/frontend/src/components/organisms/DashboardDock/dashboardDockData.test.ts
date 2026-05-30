@@ -55,10 +55,12 @@ describe('dashboard dock data builders', () => {
 
     const playerCard = hand.cards.find((card) => card.id === 'player');
     expect(getFront(playerCard)?.info?.stats?.values).toEqual([
-      { id: 'strength', label: 'STR', value: 7 },
-      { id: 'dexterity', label: 'DEX', value: 16 },
-      { id: 'intelligence', label: 'INT', value: 13 },
-      { id: 'charisma', label: 'CHA', value: 15 },
+      { id: 'strength', label: 'STR', value: 7, max: 5 },
+      { id: 'dexterity', label: 'DEX', value: 16, max: 5 },
+      { id: 'constitution', label: 'CON', value: 0, max: 5 },
+      { id: 'intelligence', label: 'INT', value: 13, max: 5 },
+      { id: 'wisdom', label: 'WIS', value: 0, max: 5 },
+      { id: 'charisma', label: 'CHA', value: 15, max: 5 },
     ]);
   });
 });

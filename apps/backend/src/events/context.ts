@@ -5,9 +5,9 @@ export type EventDb = ReturnType<typeof getDb>;
 
 export interface EventBindings {
   APP_ENV?: string;
-  DATABASE_URL?: string;
+  DB?: D1Database;
   GITHUB_WEBHOOK_SECRET?: string;
-  [key: string]: string | R2Bucket | undefined;
+  [key: string]: string | R2Bucket | D1Database | undefined;
 }
 
 export interface EventContext {

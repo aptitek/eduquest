@@ -5,12 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const backendRoot = resolve(__dirname, '..');
-const migrationsDir = join(backendRoot, 'src/db/migrations');
+const migrationsDir = join(backendRoot, 'src/db/d1-migrations');
 const devVarsPath = join(backendRoot, '.dev.vars');
 const wranglerArgs = [
   'dev',
   'src/index.ts',
   '--show-interactive-dev-session=false',
+  '--persist-to',
+  '.wrangler/state',
   ...process.argv.slice(2),
 ];
 

@@ -13,7 +13,7 @@ import { apiError } from './routes/http';
 type Bindings = {
   APP_ENV?: string;
   ENABLE_DEBUG_AUTH?: string;
-  DATABASE_URL?: string;
+  DB?: D1Database;
   JWT_SECRET?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;

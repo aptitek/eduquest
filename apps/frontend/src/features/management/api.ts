@@ -73,7 +73,9 @@ export type ManagementStudentUpdate = {
   gameId?: string | null;
 };
 
-export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
+export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>> & {
+  address?: string;
+};
 
 export type ManagementSchoolCreate = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
 

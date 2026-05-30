@@ -11,7 +11,14 @@ import {
   type PlayingCardProps,
   type PlayingHandData,
 } from '../components/molecules/PlayingCard';
-import { fetchClassRoster, joinGuild, updateGuild, type ClassRosterGuild, type GuildFieldsPayload } from '../features/game/api';
+import {
+  createGuild,
+  fetchClassRoster,
+  joinGuild,
+  updateGuild,
+  type ClassRosterGuild,
+  type GuildFieldsPayload,
+} from '../features/game/api';
 import { useGameStore } from '../features/game/gameStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { cn } from '../utils/cn';
@@ -42,6 +49,9 @@ export function AnnuairePage() {
   const [completedJoinGuildRevealId, setCompletedJoinGuildRevealId] = useState<string | null>(null);
   const [joiningGuildId, setJoiningGuildId] = useState<string | null>(null);
   const [editableGuildCards, setEditableGuildCards] = useState<Record<string, EditableGuildCardOverride>>({});
+  const [createdGuild, setCreatedGuild] = useState<ClassRosterGuild | null>(null);
+  const [isCreatingGuild, setIsCreatingGuild] = useState(false);
+  const [isCreatedGuildRevealComplete, setIsCreatedGuildRevealComplete] = useState(false);
   const [loading, setLoading] = useState(true);
   const currentGuildSectionRef = useRef<HTMLElement | null>(null);
   const latestMembership =
@@ -51,7 +61,6 @@ export function AnnuairePage() {
   const membershipGuild = latestMembership?.guild;
   const currentGuild =
     guilds.find((guild) => guild.id === currentGuildId || guild.id === membershipGuild?.id) || membershipGuild;
-  const currentGuildKey = getGuildIdentityKey(currentGuild);
   const openOwnCharacterPage = useCallback(() => {
     window.location.hash = 'character';
   }, []);
@@ -68,6 +77,8 @@ export function AnnuairePage() {
         if (isMounted) {
           setGuilds(roster.guilds);
           setCurrentGuildId(roster.currentGuildId);
+          setCreatedGuild(null);
+          setIsCreatedGuildRevealComplete(false);
         }
       } catch (error) {
         reportError(error, {
@@ -121,15 +132,28 @@ export function AnnuairePage() {
 
   const additionalGuilds = useMemo(() => {
     const normalizedQuery = normalizeSearch(searchQuery);
+    const currentGuildIds = new Set(
+      [currentGuild?.id, currentGuildId, membershipGuild?.id, createdGuild?.id].filter(
+        (id): id is string => Boolean(id)
+      )
+    );
+    const currentGuildKey = getGuildIdentityKey(currentGuild);
+
     return mergeGuilds(currentGuild ? [currentGuild] : [], guilds)
-      .filter((guild) => getGuildIdentityKey(guild) !== currentGuildKey)
+      .filter((guild) => {
+        if (currentGuildIds.has(guild.id)) return false;
+        return currentGuildIds.size > 0 || getGuildIdentityKey(guild) !== currentGuildKey;
+      })
       .filter((guild) => !normalizedQuery || doesGuildMatchSearch(guild, normalizedQuery))
       .sort(sortByName);
-  }, [currentGuild, currentGuildKey, guilds, searchQuery]);
+  }, [createdGuild?.id, currentGuild, currentGuildId, guilds, membershipGuild?.id, searchQuery]);
   const groupedGuilds = useMemo(() => groupGuildsByInitial(additionalGuilds), [additionalGuilds]);
 
   const applyUpdatedGuild = useCallback((updatedGuild: ClassRosterGuild) => {
     setGuilds((current) => upsertGuild(current, updatedGuild));
+    setCreatedGuild((current) =>
+      current?.id === updatedGuild.id ? { ...current, ...updatedGuild } : current
+    );
     setCurrentGuildId((current) => current === updatedGuild.id ? updatedGuild.id : current);
   }, []);
 
@@ -192,6 +216,41 @@ export function AnnuairePage() {
     window.location.hash = `character?studentId=${encodeURIComponent(studentId)}`;
   }, []);
 
+  const handleCreateGuild = async () => {
+    if (isCreatingGuild || createdGuild) return;
+
+    setIsCreatingGuild(true);
+    setIsCreatedGuildRevealComplete(false);
+    try {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+      const guild = await createGuild(
+        token,
+        {
+          name: t('directory.newGuildName'),
+          description: '',
+          iconKey: 'Shield',
+          recruitmentStatus: 'open',
+          maxMembers: DEFAULT_GUILD_MAX_MEMBERS,
+        },
+        selectedGameId
+      );
+      const nextGuild = guild as ClassRosterGuild;
+      setCreatedGuild(nextGuild);
+      setCurrentGuildId(nextGuild.id);
+      setGuilds((current) => upsertGuild(current, nextGuild));
+      if (nextGuild.cohortId) setStudentGuild(nextGuild.cohortId, nextGuild);
+    } catch (error) {
+      reportError(error, {
+        messageKey: 'directory.errors.createGuild',
+        id: 'directory.errors.createGuild',
+        logMessage: 'Could not create guild from directory.',
+      });
+    } finally {
+      setIsCreatingGuild(false);
+    }
+  };
+
   const handleJoinGuild = async (guild: ClassRosterGuild) => {
     if (joiningGuildId) return;
     if (isGuildFull(guild)) return;
@@ -248,6 +307,42 @@ export function AnnuairePage() {
 
       <div className="space-y-8">
         <h2 className="sr-only">{t('directory.title')}</h2>
+
+        <motion.section
+          layout
+          aria-labelledby="directory-create-guild-title"
+          className="scroll-mt-24 space-y-4"
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <Users className="text-status-quest" size={22} aria-hidden />
+            <h3 id="directory-create-guild-title" className="text-xl font-bold">
+              {t('directory.createGuild')}
+            </h3>
+          </div>
+          <p className="max-w-3xl text-sm text-text-secondary">
+            {t('directory.createGuildHelp')}
+          </p>
+          <PlayingHandPanel
+            hand={buildCreateGuildHand({
+              t,
+              guild: createdGuild,
+              guildOverride: createdGuild ? editableGuildCards[createdGuild.id] : undefined,
+              isCreating: isCreatingGuild,
+              isRevealComplete: isCreatedGuildRevealComplete,
+              onCreate: () => void handleCreateGuild(),
+              onRevealComplete: () => setIsCreatedGuildRevealComplete(true),
+              onGuildFieldChange: createdGuild
+                ? (field, value) => updateEditableGuildField(createdGuild.id, field, value)
+                : undefined,
+              onGuildColorChange: createdGuild
+                ? (color) => updateEditableGuildColor(createdGuild.id, color)
+                : undefined,
+            })}
+            className="border-status-quest/40 bg-gaming-card/50"
+            handClassName="h-[24rem] md:h-[28rem]"
+            onCardSelect={(card) => card.onClick?.()}
+          />
+        </motion.section>
 
         {currentGuildHand ? (
           <motion.section
@@ -441,6 +536,89 @@ function buildJoinableGuildHand({
       onRevealComplete,
       onJoin,
     })] as [PlayingCardProps, ...PlayingCardProps[]],
+  };
+}
+
+function buildCreateGuildHand({
+  t,
+  guild,
+  guildOverride,
+  isCreating,
+  isRevealComplete,
+  onCreate,
+  onRevealComplete,
+  onGuildFieldChange,
+  onGuildColorChange,
+}: {
+  t: (path: string) => string;
+  guild: ClassRosterGuild | null;
+  guildOverride?: EditableGuildCardOverride;
+  isCreating: boolean;
+  isRevealComplete: boolean;
+  onCreate: () => void;
+  onRevealComplete: () => void;
+  onGuildFieldChange?: (field: EditableGuildField, value: string) => void;
+  onGuildColorChange?: (color: string) => void;
+}): PlayingHandData {
+  if (!guild) {
+    return {
+      id: 'directory-create-guild-hand',
+      title: t('directory.createGuild'),
+      cards: [
+        {
+          id: 'directory-create-guild-empty',
+          layoutId: 'directory-create-guild-empty',
+          kind: 'guild',
+          accentToken: 'neutral',
+          model: { front: 'none' },
+          interactive: !isCreating,
+          onClick: isCreating ? undefined : onCreate,
+        },
+      ],
+      mainCardIndex: 0,
+      variant: 'fan',
+    };
+  }
+
+  const baseHand = buildClassGuildHand(t, {
+    guild,
+    guildName: guild.name || t('directory.newGuildName'),
+    layoutPrefix: 'directory-created-guild',
+  });
+  const [guildCard] = baseHand.cards;
+  const editableGuildCard =
+    onGuildFieldChange && onGuildColorChange
+      ? makeEditableGuildCard({
+          card: guildCard,
+          override: guildOverride,
+          onFieldChange: onGuildFieldChange,
+          onColorChange: onGuildColorChange,
+        })
+      : guildCard;
+
+  const front =
+    editableGuildCard.model.front && editableGuildCard.model.front !== 'none'
+      ? editableGuildCard.model.front
+      : undefined;
+  const revealedCard: PlayingCardProps =
+    isRevealComplete || !front
+      ? editableGuildCard
+      : {
+          ...editableGuildCard,
+          model: {
+            front: 'none',
+            back: front,
+          },
+          autoFlipToBack: true,
+          onAutoFlipComplete: onRevealComplete,
+        };
+
+  return {
+    id: 'directory-create-guild-hand',
+    title: t('directory.createGuild'),
+    cards: [revealedCard],
+    mainCardIndex: 0,
+    variant: 'fan',
   };
 }
 

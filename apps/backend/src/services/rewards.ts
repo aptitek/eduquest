@@ -519,66 +519,62 @@ export class RewardService {
     const configOverrides = RewardSystemConfigService.merge(this.configOverrides, input.config);
     const config = RewardSystemConfigService.resolve(configOverrides);
 
-    return this.db.transaction(async (tx: RewardDb) => {
-      const guild = await new GuildSnapshotRepository(tx).getGuild(input.guildId);
-      let resolvedActiveDays = input.activeDays;
-      const strategy = RewardService.strategies[activityType];
-      const calculatedPoints = await strategy.calculate(
-        {
-          guild,
-          guildId: input.guildId,
-          studentId: input.studentId,
-          basePoints: input.activity.basePoints,
-          hoursEarly: input.hoursEarly,
-          activeDays: input.activeDays,
-          activeDaysRepository: {
-            countActiveDays: async (lookup) => {
-              const activeDays = await new PointTransactionActiveDaysRepository(tx).countActiveDays(
-                {
-                  ...lookup,
-                  now: input.now,
-                }
-              );
-              resolvedActiveDays = activeDays;
-              return activeDays;
-            },
-          },
-          config: configOverrides,
-        },
-        config
-      );
-      const finalPoints = GuildModifiers.charismaBuff(calculatedPoints, guild, config);
-      const amount = Math.round(finalPoints);
-
-      const [updatedGuild] = await tx
-        .update(guilds)
-        .set({
-          gold: sql`${guilds.gold} + ${amount}`,
-          updatedAt: input.now || new Date(),
-        })
-        .where(eq(guilds.id, input.guildId))
-        .returning({ gold: guilds.gold });
-
-      await tx.insert(pointTransactions).values({
+    const guild = await new GuildSnapshotRepository(this.db).getGuild(input.guildId);
+    let resolvedActiveDays = input.activeDays;
+    const strategy = RewardService.strategies[activityType];
+    const calculatedPoints = await strategy.calculate(
+      {
+        guild,
         guildId: input.guildId,
         studentId: input.studentId,
-        activityId: input.activity.id,
-        amount,
-        transactionType: input.transactionType || 'EARNED',
-        createdAt: input.now || new Date(),
-      });
+        basePoints: input.activity.basePoints,
+        hoursEarly: input.hoursEarly,
+        activeDays: input.activeDays,
+        activeDaysRepository: {
+          countActiveDays: async (lookup) => {
+            const activeDays = await new PointTransactionActiveDaysRepository(this.db).countActiveDays({
+              ...lookup,
+              now: input.now,
+            });
+            resolvedActiveDays = activeDays;
+            return activeDays;
+          },
+        },
+        config: configOverrides,
+      },
+      config
+    );
+    const finalPoints = GuildModifiers.charismaBuff(calculatedPoints, guild, config);
+    const amount = Math.round(finalPoints);
 
-      return {
-        guildId: input.guildId,
-        activityId: input.activity.id,
-        activityType,
-        amount,
-        calculatedPoints,
-        finalPoints,
-        activeDays: resolvedActiveDays,
-        balance: updatedGuild.gold,
-      };
+    const [updatedGuild] = await this.db
+      .update(guilds)
+      .set({
+        gold: sql`${guilds.gold} + ${amount}`,
+        updatedAt: input.now || new Date(),
+      })
+      .where(eq(guilds.id, input.guildId))
+      .returning({ gold: guilds.gold });
+
+    await this.db.insert(pointTransactions).values({
+      guildId: input.guildId,
+      studentId: input.studentId,
+      activityId: input.activity.id,
+      amount,
+      transactionType: input.transactionType || 'EARNED',
+      createdAt: input.now || new Date(),
     });
+
+    return {
+      guildId: input.guildId,
+      activityId: input.activity.id,
+      activityType,
+      amount,
+      calculatedPoints,
+      finalPoints,
+      activeDays: resolvedActiveDays,
+      balance: updatedGuild.gold,
+    };
   }
 }
 
@@ -632,108 +628,106 @@ export class VotingCostService {
       throw new Error('A database client is required to spend guild votes.');
     }
 
-    return this.db.transaction(async (tx: RewardDb) => {
-      const balanceConfig = await RewardBalanceConfigService.getActiveConfig(tx, input.cohortId);
-      const config = balanceConfig.rewardSystem;
-      const guildProfile = await loadGuildStatProfile(tx, input.guildId, balanceConfig, {
-        enforceConfiguredMemberCount: false,
-      });
-      const breakdown = SpendBreakdownBuilder.build({
-        votes: input.votes,
-        guildProfile,
-        config,
-        guildId: input.guildId,
-        studentId: input.studentId,
-        alreadyPurchasedVotes: input.alreadyPurchasedVotes,
-        balanceConfigVersion: balanceConfig.version,
-      });
-      const cost = breakdown.finalCost;
-
-      const [guildRecord] = await tx
-        .select({ gold: guilds.gold })
-        .from(guilds)
-        .where(eq(guilds.id, input.guildId))
-        .limit(1);
-
-      if (!guildRecord) {
-        throw new Error('Guild not found.');
-      }
-
-      if ((guildRecord.gold || 0) < cost) {
-        throw new Error('Guild does not have enough gold to buy these votes.');
-      }
-
-      const [updatedGuild] = await tx
-        .update(guilds)
-        .set({
-          gold: sql`${guilds.gold} - ${cost}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(guilds.id, input.guildId))
-        .returning({ gold: guilds.gold });
-
-      await tx.insert(pointTransactions).values({
-        guildId: input.guildId,
-        studentId: input.studentId,
-        amount: -cost,
-        transactionType: 'SPENT_VOTE',
-      });
-
-      breakdown.balance = updatedGuild.gold;
-
-      const result = {
-        guildId: input.guildId,
-        votes: input.votes,
-        cost,
-        balance: updatedGuild.gold,
-        breakdown,
-      };
-
-      const eventContext = createEventContext({ db: tx });
-      await publishEvent(
-        {
-          type: 'guild.votes.spent',
-          source: 'service.rewards',
-          payload: {
-            guildId: result.guildId,
-            studentId: input.studentId,
-            votes: result.votes,
-            cost: result.cost,
-            balance: result.balance,
-          },
-        },
-        eventContext
-      );
-      await publishEvent(
-        {
-          type: 'guild.gold.spent',
-          source: 'service.rewards',
-          payload: {
-            guildId: result.guildId,
-            studentId: input.studentId,
-            amount: result.cost,
-            balance: result.balance,
-            reason: 'votes',
-            breakdown,
-          },
-        },
-        eventContext
-      );
-      await publishEvent(
-        {
-          type: 'progress.boosted',
-          source: 'service.rewards',
-          payload: {
-            guildId: result.guildId,
-            studentId: input.studentId,
-            votes: result.votes,
-            cost: result.cost,
-          },
-        },
-        eventContext
-      );
-
-      return result;
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(this.db, input.cohortId);
+    const config = balanceConfig.rewardSystem;
+    const guildProfile = await loadGuildStatProfile(this.db, input.guildId, balanceConfig, {
+      enforceConfiguredMemberCount: false,
     });
+    const breakdown = SpendBreakdownBuilder.build({
+      votes: input.votes,
+      guildProfile,
+      config,
+      guildId: input.guildId,
+      studentId: input.studentId,
+      alreadyPurchasedVotes: input.alreadyPurchasedVotes,
+      balanceConfigVersion: balanceConfig.version,
+    });
+    const cost = breakdown.finalCost;
+
+    const [guildRecord] = await this.db
+      .select({ gold: guilds.gold })
+      .from(guilds)
+      .where(eq(guilds.id, input.guildId))
+      .limit(1);
+
+    if (!guildRecord) {
+      throw new Error('Guild not found.');
+    }
+
+    if ((guildRecord.gold || 0) < cost) {
+      throw new Error('Guild does not have enough gold to buy these votes.');
+    }
+
+    const [updatedGuild] = await this.db
+      .update(guilds)
+      .set({
+        gold: sql`${guilds.gold} - ${cost}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(guilds.id, input.guildId))
+      .returning({ gold: guilds.gold });
+
+    await this.db.insert(pointTransactions).values({
+      guildId: input.guildId,
+      studentId: input.studentId,
+      amount: -cost,
+      transactionType: 'SPENT_VOTE',
+    });
+
+    breakdown.balance = updatedGuild.gold;
+
+    const result = {
+      guildId: input.guildId,
+      votes: input.votes,
+      cost,
+      balance: updatedGuild.gold,
+      breakdown,
+    };
+
+    const eventContext = createEventContext({ db: this.db });
+    await publishEvent(
+      {
+        type: 'guild.votes.spent',
+        source: 'service.rewards',
+        payload: {
+          guildId: result.guildId,
+          studentId: input.studentId,
+          votes: result.votes,
+          cost: result.cost,
+          balance: result.balance,
+        },
+      },
+      eventContext
+    );
+    await publishEvent(
+      {
+        type: 'guild.gold.spent',
+        source: 'service.rewards',
+        payload: {
+          guildId: result.guildId,
+          studentId: input.studentId,
+          amount: result.cost,
+          balance: result.balance,
+          reason: 'votes',
+          breakdown,
+        },
+      },
+      eventContext
+    );
+    await publishEvent(
+      {
+        type: 'progress.boosted',
+        source: 'service.rewards',
+        payload: {
+          guildId: result.guildId,
+          studentId: input.studentId,
+          votes: result.votes,
+          cost: result.cost,
+        },
+      },
+      eventContext
+    );
+
+    return result;
   }
 }

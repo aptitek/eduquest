@@ -95,7 +95,10 @@ export function SchoolDetailCard({
             />
             <EditableText
               value={draft.address}
-              onChange={(value) => setDraft((current) => ({ ...current, address: value }))}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, address: value }));
+                void onUpdate?.({ address: value });
+              }}
               placeholder={t('management.schools.address')}
               className="text-sm text-text-secondary"
             />

@@ -74,49 +74,47 @@ export class RewardComputationService {
       return false;
     }
 
-    const balance = await this.db.transaction(async (tx) => {
-      const [updatedGuild] = await tx
-        .update(guilds)
-        .set({
-          gold: sql`${guilds.gold} + ${breakdown.finalAmount}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(guilds.id, context.guildId))
-        .returning({ gold: guilds.gold });
+    const [updatedGuild] = await this.db
+      .update(guilds)
+      .set({
+        gold: sql`${guilds.gold} + ${breakdown.finalAmount}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(guilds.id, context.guildId))
+      .returning({ gold: guilds.gold });
 
-      await tx.insert(pointTransactions).values({
-        guildId: context.guildId,
-        studentId: context.studentId,
-        activityId: context.activityId,
-        amount: breakdown.finalAmount,
-        transactionType: 'EARNED',
-      });
+    await this.db.insert(pointTransactions).values({
+      guildId: context.guildId,
+      studentId: context.studentId,
+      activityId: context.activityId,
+      amount: breakdown.finalAmount,
+      transactionType: 'EARNED',
+    });
 
-      if (context.cohortId) {
-        const [existingProgress] = await tx
-          .select({ id: cohortProgress.id })
-          .from(cohortProgress)
-          .where(eq(cohortProgress.cohortId, context.cohortId))
-          .limit(1);
+    if (context.cohortId) {
+      const [existingProgress] = await this.db
+        .select({ id: cohortProgress.id })
+        .from(cohortProgress)
+        .where(eq(cohortProgress.cohortId, context.cohortId))
+        .limit(1);
 
-        if (!existingProgress) {
-          await tx.insert(cohortProgress).values({
-            cohortId: context.cohortId,
-            labelI18nKey: 'dashboard.dock.milestone',
-          });
-        }
-
-        await tx
-          .update(cohortProgress)
-          .set({
-            currentPoints: sql`${cohortProgress.currentPoints} + ${breakdown.finalAmount}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(cohortProgress.cohortId, context.cohortId));
+      if (!existingProgress) {
+        await this.db.insert(cohortProgress).values({
+          cohortId: context.cohortId,
+          labelI18nKey: 'dashboard.dock.milestone',
+        });
       }
 
-      return updatedGuild.gold;
-    });
+      await this.db
+        .update(cohortProgress)
+        .set({
+          currentPoints: sql`${cohortProgress.currentPoints} + ${breakdown.finalAmount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(cohortProgress.cohortId, context.cohortId));
+    }
+
+    const balance = updatedGuild.gold;
 
     breakdown.balance = balance;
 

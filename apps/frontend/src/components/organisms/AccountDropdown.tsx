@@ -249,8 +249,8 @@ export function AccountDropdown() {
                   institutionalEmailOverride ??
                   latestCohortMembership?.institutionalEmail
                 }
-                institutionalEmailDomain={latestSchool?.emailDomain || 'school.edu'}
-                onInstitutionalEmailChange={handleInstitutionalEmailChange}
+                institutionalEmailDomain={latestSchool?.emailDomain}
+                onInstitutionalEmailChange={latestSchool ? handleInstitutionalEmailChange : undefined}
                 schoolName={latestSchool?.name}
                 schoolLogoUrl={latestSchool?.logoUrl}
                 cohort={latestCohort}

@@ -10,7 +10,7 @@ import { isProduction } from '../config/runtime';
 
 type Bindings = {
   APP_ENV?: string;
-  DATABASE_URL?: string;
+  DB?: D1Database;
   GITHUB_WEBHOOK_SECRET?: string;
 };
 
@@ -79,7 +79,7 @@ webhooksRouter.post('/github', async (c) => {
   }
 
   const events = Array.isArray(parsed) ? parsed : [parsed];
-  const databaseUrl = c.env.DATABASE_URL;
+  const databaseUrl = c.env.DB;
   const context = createEventContext({
     db: databaseUrl ? getDb(databaseUrl) : undefined,
     env: c.env,

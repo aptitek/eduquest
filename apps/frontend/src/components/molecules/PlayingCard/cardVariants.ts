@@ -128,6 +128,7 @@ export function playingCardFitClassName(fit: PlayingCardFit = 'intrinsic') {
 }
 
 export function playingCardWidthPresetClassName(width: PlayingCardWidthPreset = 'default') {
+  if (width === 'activityPage') return 'h-full w-full max-w-none';
   if (width === 'handFull') return 'w-72 max-w-none md:w-80';
   if (width === 'dockSmall') return 'w-28 sm:w-32 2xl:w-36';
   if (width === 'dockSmallStack') return 'w-24 sm:w-28 2xl:w-32';
@@ -178,5 +179,5 @@ export function playingCardBackClassName() {
 }
 
 export function playingCardDetailPanelClassName() {
-  return 'relative flex max-h-[43%] shrink-0 gap-3 border-t border-gaming-border bg-gaming-card/95 p-4';
+  return 'relative flex max-h-[43%] min-h-0 shrink-0 gap-3 overflow-hidden border-t border-gaming-border bg-gaming-card/95 p-4';
 }

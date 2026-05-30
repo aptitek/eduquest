@@ -4,10 +4,10 @@ import { getDb } from '../db';
 import { cohortMemberships, gameActivities, students } from '../db/schema';
 import type { UserPayload } from '../middleware/auth';
 import { RewardPreviewService } from '../services/reward-preview';
-import { apiError, forbidden, requireDatabaseUrl } from './http';
+import { apiError, forbidden, requireDatabase } from './http';
 
 type Bindings = {
-  DATABASE_URL?: string;
+  DB?: D1Database;
 };
 
 type Variables = {
@@ -17,7 +17,7 @@ type Variables = {
 export const rewardsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 rewardsRouter.get('/rewards/preview', async (c) => {
-  const databaseUrl = requireDatabaseUrl(c);
+  const databaseUrl = requireDatabase(c);
   const user = c.get('user');
   const activityId = c.req.query('activityId');
   const studentId = c.req.query('studentId');

@@ -1024,7 +1024,7 @@ export function MapPage() {
               onChange={handleChangeEdgeStyles}
             />
           ) : (
-            <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overflow-x-visible pb-4">
+            <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
               <ActivityCard
                 activity={
                   selectedActivity
@@ -1118,7 +1118,7 @@ export function MapPage() {
                 emptyCardLabel={user?.isAdmin ? t('map.addActivity') : undefined}
                 onEmptyCardClick={user?.isAdmin && !selectedActivity && !isCreatingActivity ? handleCreateActivity : undefined}
                 className={cn(
-                  'min-h-[28rem] w-full max-w-none shrink-0',
+                  'min-h-0 w-full max-w-none flex-1',
                   isCreatingActivity && 'cursor-wait opacity-70'
                 )}
               />
@@ -1445,7 +1445,7 @@ function getDefaultOnboardingResource(
     return { title: t('character.title'), url: '#character' };
   }
 
-  if (activity.type === 'tavern' || onboardingTask === 'guild') {
+  if (activity.type === 'tavern' || onboardingTask === 'guild_rally') {
     return { title: t('directory.title'), url: '#annuaire' };
   }
 

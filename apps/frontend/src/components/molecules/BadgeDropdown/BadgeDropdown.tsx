@@ -21,6 +21,8 @@ export interface BadgeDropdownProps {
   fullWidth?: boolean;
   showArrow?: boolean;
   renderBadge?: (item: string) => ReactNode;
+  renderSelectedBadge?: (item: string) => ReactNode;
+  renderOption?: (item: string) => ReactNode;
   getOptionText?: (item: string) => string;
   normalizeInput?: (item: string) => string;
 }
@@ -45,6 +47,8 @@ export function BadgeDropdown({
   fullWidth,
   showArrow: showArrowProp,
   renderBadge,
+  renderSelectedBadge,
+  renderOption,
   getOptionText,
   normalizeInput,
 }: BadgeDropdownProps) {
@@ -247,7 +251,7 @@ export function BadgeDropdown({
                         isSelected && 'badge-primary border-primary text-primary-content'
                       )}
                     >
-                      {renderBadge ? renderBadge(item) : item}
+                      {renderOption ? renderOption(item) : renderBadge ? renderBadge(item) : item}
                       {isSelected && <Check size={11} aria-hidden />}
                     </button>
                   );
@@ -295,7 +299,11 @@ export function BadgeDropdown({
           {selected.length > 0 ? (
             selected.map((item) => (
               <span key={item} className={cn(badgeClass, 'shrink-0')}>
-                {renderBadge ? renderBadge(item) : item}
+                {renderSelectedBadge
+                  ? renderSelectedBadge(item)
+                  : renderBadge
+                    ? renderBadge(item)
+                    : item}
               </span>
             ))
           ) : (

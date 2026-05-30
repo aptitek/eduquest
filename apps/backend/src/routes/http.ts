@@ -83,14 +83,14 @@ export function forbidden(c: ApiContext, error = 'Forbidden') {
   return apiError(c, error, 403, { errorCode: 'access_denied' });
 }
 
-export function missingDatabaseUrl(c: ApiContext) {
+export function missingDatabaseBinding(c: ApiContext) {
   return apiError(c, 'Database access is not configured.', 503, {
     errorCode: 'server_configuration',
   });
 }
 
-export function requireDatabaseUrl(c: ApiContext) {
-  return c.env?.DATABASE_URL || missingDatabaseUrl(c);
+export function requireDatabase(c: ApiContext) {
+  return c.env?.DB || missingDatabaseBinding(c);
 }
 
 export function requireAdminUser(c: ApiContext) {

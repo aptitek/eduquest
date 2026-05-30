@@ -137,48 +137,46 @@ export class RewardBalanceConfigService {
 
     const nextVersion = (latest?.version || 0) + 1;
 
-    return db.transaction(async (tx) => {
-      const [previousActive] = await tx
-        .select()
-        .from(rewardBalanceConfigs)
-        .where(
-          and(
-            eq(rewardBalanceConfigs.isActive, true),
-            cohortId ? eq(rewardBalanceConfigs.cohortId, cohortId) : isNull(rewardBalanceConfigs.cohortId)
-          )
+    const [previousActive] = await db
+      .select()
+      .from(rewardBalanceConfigs)
+      .where(
+        and(
+          eq(rewardBalanceConfigs.isActive, true),
+          cohortId ? eq(rewardBalanceConfigs.cohortId, cohortId) : isNull(rewardBalanceConfigs.cohortId)
         )
-        .limit(1);
+      )
+      .limit(1);
 
-      if (previousActive) {
-        await tx
-          .update(rewardBalanceConfigs)
-          .set({ isActive: false })
-          .where(eq(rewardBalanceConfigs.id, previousActive.id));
-      }
+    if (previousActive) {
+      await db
+        .update(rewardBalanceConfigs)
+        .set({ isActive: false })
+        .where(eq(rewardBalanceConfigs.id, previousActive.id));
+    }
 
-      const [created] = await tx
-        .insert(rewardBalanceConfigs)
-        .values({
-          cohortId,
-          version: nextVersion,
-          label: payload.label || `Version ${nextVersion}`,
-          config: payload,
-          isActive: true,
-          createdBy: adminUserId,
-        })
-        .returning();
+    const [created] = await db
+      .insert(rewardBalanceConfigs)
+      .values({
+        cohortId,
+        version: nextVersion,
+        label: payload.label || `Version ${nextVersion}`,
+        config: payload,
+        isActive: true,
+        createdBy: adminUserId,
+      })
+      .returning();
 
-      await tx.insert(auditLogs).values({
-        tableName: 'reward_balance_configs',
-        recordId: created.id,
-        action: 'INSERT',
-        oldData: previousActive?.config || null,
-        newData: payload,
-        userId: adminUserId,
-      });
-
-      RewardBalanceConfigService.clearCache();
-      return created;
+    await db.insert(auditLogs).values({
+      tableName: 'reward_balance_configs',
+      recordId: created.id,
+      action: 'INSERT',
+      oldData: previousActive?.config || null,
+      newData: payload,
+      userId: adminUserId,
     });
+
+    RewardBalanceConfigService.clearCache();
+    return created;
   }
 }

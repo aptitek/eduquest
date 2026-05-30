@@ -113,6 +113,10 @@ export function RadarGraph({
     datasets.find((dataset) => dataset.id === editableDatasetId) || datasets[0];
   const canEdit = editable && Boolean(onValueChange) && Boolean(editableDataset);
   const remainingRibbonText = remainingValue !== undefined ? String(remainingValue) : undefined;
+  const remainingRibbonAccessibleLabel =
+    remainingValue !== undefined && remainingValueLabel
+      ? `${remainingValueLabel}: ${remainingValue}`
+      : remainingRibbonText;
   const remainingRibbonColor =
     remainingValue !== undefined ? getRemainingRibbonColor(remainingValue) : undefined;
 
@@ -406,7 +410,11 @@ export function RadarGraph({
         ) : null}
 
         {remainingRibbonText ? (
-          <g className="pointer-events-none select-none drop-shadow-sm" transform="translate(116 -16) rotate(45)">
+          <g
+            aria-label={remainingRibbonAccessibleLabel}
+            className="pointer-events-none select-none drop-shadow-sm"
+            transform="translate(116 -16) rotate(45)"
+          >
             <rect
               x="-42"
               y="-9"

@@ -3,6 +3,7 @@ import { sign } from 'hono/jwt';
 import app from '../index';
 
 const JWT_SECRET = 'test-secret';
+const DB = {} as D1Database;
 
 describe('map routes', () => {
   it('requires database-backed map data', async () => {
@@ -94,7 +95,7 @@ describe('map routes', () => {
         },
         body: JSON.stringify({ mapX: 120.5, mapY: 240 }),
       },
-      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, APP_ENV: 'development', DB }
     );
     const payload = (await response.json()) as any;
 
@@ -146,7 +147,7 @@ describe('map routes', () => {
         },
         body: JSON.stringify({ name: '   ' }),
       },
-      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, APP_ENV: 'development', DB }
     );
     const payload = (await response.json()) as any;
 
@@ -203,7 +204,7 @@ describe('map routes', () => {
       {
         method: 'POST',
       },
-      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, APP_ENV: 'development', DB }
     );
     const payload = (await response.json()) as any;
 
@@ -223,7 +224,7 @@ describe('map routes', () => {
         },
         body: JSON.stringify({ iconKey: '' }),
       },
-      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, APP_ENV: 'development', DB }
     );
     const payload = (await response.json()) as any;
 
@@ -260,7 +261,7 @@ describe('map routes', () => {
         },
         body: JSON.stringify({ stepRanges: [{ startStep: 3, endStep: 3 }] }),
       },
-      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, APP_ENV: 'development', DB }
     );
     const payload = (await response.json()) as any;
 
@@ -317,7 +318,7 @@ describe('map routes', () => {
           ],
         }),
       },
-      { JWT_SECRET, APP_ENV: 'development', DATABASE_URL: 'postgres://invalid.test/db' }
+      { JWT_SECRET, APP_ENV: 'development', DB }
     );
     const payload = (await response.json()) as any;
 

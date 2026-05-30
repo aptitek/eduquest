@@ -316,7 +316,12 @@ describe('game API client', () => {
   it('surfaces API errors instead of substituting mock data', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(jsonResponse({ success: false, error: 'DATABASE_URL is required.' }, 503))
+      vi.fn().mockResolvedValue(jsonResponse({
+        success: false,
+        error: 'D1 binding is required.',
+        errorCode: 'server_configuration',
+        message: 'The server is not configured correctly. Please contact an administrator.',
+      }, 503))
     );
 
     await expect(fetchMapActivities('token-1')).rejects.toMatchObject({

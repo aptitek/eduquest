@@ -418,6 +418,10 @@ export const en: TranslationKeys = {
     currentGuild: 'Current guild',
     currentGuildHelp:
       'Your guild stays on the left, your character right beside it, then the other guild members.',
+    createGuild: 'Create a guild',
+    createGuildHelp:
+      'This empty card creates a new guild, then flips over so you can edit its name, visuals, and description.',
+    newGuildName: 'New guild',
     otherGuilds: 'Other guilds',
     searchLabel: 'Search guilds',
     searchPlaceholder: 'Search for a guild or member...',
@@ -436,6 +440,7 @@ export const en: TranslationKeys = {
     cards: 'cards',
     errors: {
       loadGuilds: 'The directory could not be loaded. Guilds may be unavailable until the next refresh. Detail: {detail}',
+      createGuild: 'The guild could not be created. Detail: {detail}',
       joinGuild: 'The guild could not be joined. Your current guild was not changed. Detail: {detail}',
     },
   },

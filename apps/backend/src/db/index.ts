@@ -1,25 +1,11 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/d1';
 import * as schema from './schema';
 
-function shouldUseSsl(databaseUrl: string) {
-  const host = new URL(databaseUrl).hostname;
-  return !['localhost', '127.0.0.1', 'postgres'].includes(host);
-}
-
 /**
- * Initialise et retourne une instance de Drizzle ORM connectée à PostgreSQL.
- * Spécifiquement optimisé pour les Workers Cloudflare (pool de connexions de 1 max par instance).
+ * Initialise et retourne une instance de Drizzle ORM connectée à Cloudflare D1.
  */
-export function getDb(databaseUrl: string) {
-  const client = postgres(databaseUrl, {
-    max: 1, // Limite critique pour le Serverless/Cloudflare Workers pour éviter d'épuiser les connexions Postgres
-    ssl: shouldUseSsl(databaseUrl)
-      ? { rejectUnauthorized: false } // Requis pour les connexions cloud sécurisées comme Neon ou Supabase
-      : false,
-  });
-
-  return drizzle(client, { schema });
+export function getDb(database: D1Database) {
+  return drizzle(database, { schema });
 }
 
 export * from './schema';

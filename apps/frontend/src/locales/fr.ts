@@ -418,6 +418,10 @@ export const fr = {
     currentGuild: 'Guilde actuelle',
     currentGuildHelp:
       'Votre guilde reste à gauche, votre personnage juste à côté, puis les autres membres de la guilde.',
+    createGuild: 'Créer une guilde',
+    createGuildHelp:
+      'Cette carte vide crée une nouvelle guilde, puis se retourne pour modifier son nom, son visuel et sa description.',
+    newGuildName: 'Nouvelle guilde',
     otherGuilds: 'Autres guildes',
     searchLabel: 'Rechercher une guilde',
     searchPlaceholder: 'Rechercher une guilde ou un membre...',
@@ -436,6 +440,7 @@ export const fr = {
     cards: 'cartes',
     errors: {
       loadGuilds: 'L’annuaire n’a pas pu être chargé. Les guildes peuvent être indisponibles jusqu’au prochain rafraîchissement. Détail : {detail}',
+      createGuild: 'La guilde n’a pas pu être créée. Détail : {detail}',
       joinGuild: 'La guilde n’a pas pu être rejointe. Votre guilde actuelle n’a pas changé. Détail : {detail}',
     },
   },

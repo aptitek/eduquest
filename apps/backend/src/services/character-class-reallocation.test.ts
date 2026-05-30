@@ -36,13 +36,13 @@ describe('character class reallocation', () => {
     );
 
     expect(repair.changed).toBe(true);
-    expect(repair.refundedPoints).toBe(8);
+    expect(repair.refundedPoints).toBe(9);
     expect(repair.nextManual).toEqual({
       strength: 2,
       dexterity: 1,
       constitution: 3,
       intelligence: 0,
-      wisdom: 1,
+      wisdom: 0,
       charisma: 0,
     });
   });

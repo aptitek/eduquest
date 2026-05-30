@@ -14,6 +14,7 @@ import {
   GameMapNodeOccupancy,
   GameMapRun,
   Guild,
+  School,
 } from '@eduquest/shared';
 
 interface GameState {
@@ -37,6 +38,7 @@ interface GameState {
     activityCompletions?: GameActivityCompletion[]
   ) => void;
   patchUser: (patch: Partial<User>) => void;
+  patchSchool: (school: School) => void;
   patchCharacter: (patch: Partial<GameCharacter>) => void;
   setCharacterClass: (characterClass: GameCharacterClass) => void;
   setActivities: (activities: Activity[]) => void;
@@ -85,6 +87,29 @@ export const useGameStore = create<GameState>((set) => ({
       return {
         user,
         nodeOccupancies: syncProfileInNodeOccupancies(state.nodeOccupancies, state.student, user, state.character),
+      };
+    }),
+  patchSchool: (school) =>
+    set((state) => {
+      if (!state.student?.cohortMemberships) return {};
+
+      return {
+        student: {
+          ...state.student,
+          cohortMemberships: state.student.cohortMemberships.map((membership) =>
+            membership.cohort?.schoolId === school.id || membership.cohort?.school?.id === school.id
+              ? {
+                  ...membership,
+                  cohort: membership.cohort
+                    ? {
+                        ...membership.cohort,
+                        school,
+                      }
+                    : membership.cohort,
+                }
+              : membership
+          ),
+        },
       };
     }),
   patchCharacter: (patch) =>
