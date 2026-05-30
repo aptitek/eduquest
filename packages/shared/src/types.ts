@@ -496,6 +496,8 @@ export interface ProgressMilestone {
   descriptionI18nKey?: string;
   cost: number;
   sortOrder?: number;
+  voteOpenedAt?: string;
+  voteClosedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -567,6 +569,9 @@ export interface MilestoneBonusVoteState {
   hasTie: boolean;
   isVoteOpen: boolean;
   isVoteClosed: boolean;
+  hasVoteOpened: boolean;
+  voteOpenedAt?: string;
+  voteClosedAt?: string;
 }
 
 export interface GameBonusVoteState {
@@ -576,9 +581,10 @@ export interface GameBonusVoteState {
   selectedMilestoneId?: string;
   guildId?: string;
   guildGold?: number;
+  guildVoteBalance?: number;
   currentGuildMemberCount?: number;
   boostCostPreview?: VoteSpendBreakdown;
-  baseVotesPerGuild: number;
+  baseVotesPerGuild?: number;
 }
 
 export type NotificationTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -594,7 +600,7 @@ export interface Notification {
   icon?: string;
   tone?: NotificationTone;
   actionLabelI18nKey?: string;
-  actionTarget?: 'map' | 'guild' | 'acknowledge' | 'collect' | 'review';
+  actionTarget?: 'map' | 'guild' | 'bonus' | 'acknowledge' | 'collect' | 'review';
   context?: RewardNotificationContext;
 }
 

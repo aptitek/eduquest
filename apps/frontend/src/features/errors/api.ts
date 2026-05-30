@@ -171,6 +171,9 @@ function normalizeLegacyMessage(message: string) {
   }
   if (/^missing session token\.?$/i.test(trimmed)) return getDefaultErrorMessage('session_expired');
   if (/^database_url is required\.?$/i.test(trimmed)) return getDefaultErrorMessage('server_configuration');
+  if (/^guild does not have enough gold to buy these votes\.?$/i.test(trimmed)) {
+    return 'La guilde n’a pas assez d’or pour lancer ce boost.';
+  }
   return trimmed || getDefaultErrorMessage('unknown_error');
 }
 

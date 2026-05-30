@@ -40,6 +40,7 @@ import {
   gameActivities,
   gameMapRuns,
   guildInvitations,
+  guildVoteBalances,
   guilds,
   milestoneBonusVotes,
   notifications,
@@ -77,6 +78,7 @@ type GuildInvitationRecord = typeof guildInvitations.$inferSelect;
 type ProgressMilestoneRecord = typeof progressMilestones.$inferSelect;
 type GameBonusCardRecord = typeof gameBonusCards.$inferSelect;
 type MilestoneBonusVoteRecord = typeof milestoneBonusVotes.$inferSelect;
+type GuildVoteBalanceRecord = typeof guildVoteBalances.$inferSelect;
 type Database = ReturnType<typeof getDb>;
 
 const GUILD_CREATION_ONBOARDING_REWARD_ACTION = 'guild_created';
@@ -1304,6 +1306,8 @@ function toMilestone(record: ProgressMilestoneRecord) {
     descriptionI18nKey: record.descriptionI18nKey || undefined,
     cost: record.cost,
     sortOrder: record.sortOrder,
+    voteOpenedAt: toIsoString(record.voteOpenedAt),
+    voteClosedAt: toIsoString(record.voteClosedAt),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
   };
@@ -1344,6 +1348,96 @@ function toVote(record: MilestoneBonusVoteRecord) {
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
   };
+}
+
+function getMilestoneVoteStatus(milestone: Pick<ProgressMilestoneRecord, 'voteOpenedAt' | 'voteClosedAt'>) {
+  const hasVoteOpened = Boolean(milestone.voteOpenedAt);
+  const isVoteOpen = hasVoteOpened && !milestone.voteClosedAt;
+  const isVoteClosed = Boolean(milestone.voteClosedAt);
+
+  return {
+    hasVoteOpened,
+    isVoteOpen,
+    isVoteClosed,
+    voteOpenedAt: toIsoString(milestone.voteOpenedAt),
+    voteClosedAt: toIsoString(milestone.voteClosedAt),
+  };
+}
+
+function getGuildVoteBalanceAmount(record: Pick<GuildVoteBalanceRecord, 'voteBalance'> | undefined) {
+  return Math.max(0, record?.voteBalance || 0);
+}
+
+async function nextNotificationSortOrder(db: Database): Promise<number> {
+  const [latestNotification] = await db
+    .select({ sortOrder: notifications.sortOrder })
+    .from(notifications)
+    .orderBy(desc(notifications.sortOrder))
+    .limit(1);
+
+  return (latestNotification?.sortOrder ?? 0) + 10;
+}
+
+async function getGuildVoteBalance(db: Database, guildId: string, cohortId: string) {
+  const [balance] = await db
+    .select()
+    .from(guildVoteBalances)
+    .where(and(eq(guildVoteBalances.guildId, guildId), eq(guildVoteBalances.cohortId, cohortId)))
+    .limit(1);
+
+  return balance;
+}
+
+async function addGuildVoteBalance(db: Database, guildId: string, cohortId: string, votes: number) {
+  const current = await getGuildVoteBalance(db, guildId, cohortId);
+  if (current) {
+    const [updated] = await db
+      .update(guildVoteBalances)
+      .set({
+        voteBalance: sql`${guildVoteBalances.voteBalance} + ${votes}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(guildVoteBalances.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  const [created] = await db
+    .insert(guildVoteBalances)
+    .values({ guildId, cohortId, voteBalance: votes })
+    .returning();
+  return created;
+}
+
+async function clearGuildVoteBalance(db: Database, guildId: string, cohortId: string) {
+  const current = await getGuildVoteBalance(db, guildId, cohortId);
+  if (!current) return undefined;
+
+  const [updated] = await db
+    .update(guildVoteBalances)
+    .set({ voteBalance: 0, updatedAt: new Date() })
+    .where(eq(guildVoteBalances.id, current.id))
+    .returning();
+  return updated;
+}
+
+async function getPurchasedGuildVoteCount(
+  db: Database,
+  guildId: string,
+  progressId: string,
+  cohortId: string,
+  baseVotesPerGuild: number
+) {
+  const [applied] = await db
+    .select({
+      value: sql<number>`coalesce(sum(max(${milestoneBonusVotes.voteCount} - ${baseVotesPerGuild}, 0)), 0)`,
+    })
+    .from(milestoneBonusVotes)
+    .innerJoin(progressMilestones, eq(progressMilestones.id, milestoneBonusVotes.milestoneId))
+    .where(and(eq(milestoneBonusVotes.guildId, guildId), eq(progressMilestones.progressId, progressId)));
+  const balance = await getGuildVoteBalance(db, guildId, cohortId);
+
+  return Number(applied?.value || 0) + getGuildVoteBalanceAmount(balance);
 }
 
 type BoostApprovalMetadata = {
@@ -3166,8 +3260,7 @@ mapRouter.get('/guilds', async (c) => {
     const guildRecords = await db
       .select()
       .from(guilds)
-      .where(eq(guilds.cohortId, cohortRecord.id))
-      .orderBy(desc(guilds.gold));
+      .where(eq(guilds.cohortId, cohortRecord.id));
     const guildSpendRows =
       guildRecords.length > 0
         ? await db
@@ -3262,17 +3355,21 @@ mapRouter.get('/guilds', async (c) => {
     const guildById = new Map(guildRecords.map((guild) => [guild.id, guild]));
     const rosterByUserId = new Map(rosterStudentRecords.map((student) => [student.userId, student]));
 
-    return c.json({
-      success: true,
-      source: 'database',
-      guilds: guildRecords.map((guild) => ({
+    const rosterGuilds = guildRecords
+      .map((guild) => ({
         ...toGuildPayload(guild),
         boostPointsSpent: boostPointsSpentByGuildId.get(guild.id) || 0,
         stats: statsByGuildId.get(guild.id),
         members: (membersByGuildId.get(guild.id) || []).sort((a, b) =>
           a.displayName.localeCompare(b.displayName)
         ),
-      })),
+      }))
+      .sort((a, b) => (b.boostPointsSpent || 0) - (a.boostPointsSpent || 0) || a.name.localeCompare(b.name));
+
+    return c.json({
+      success: true,
+      source: 'database',
+      guilds: rosterGuilds,
       unguildedStudents: rosterStudents
         .filter((item) => !item.guildId)
         .map((item) => item.student)
@@ -4514,6 +4611,151 @@ mapRouter.patch('/games/:gameId/milestones/:milestoneId', async (c) => {
   }
 });
 
+mapRouter.patch('/games/:gameId/milestones/:milestoneId/vote-state', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = requireDatabase(c);
+  if (databaseUrl instanceof Response) return databaseUrl;
+
+  const body = await parseJsonBody<{ action?: unknown; winningBonusCardId?: unknown }>(c, {});
+  const action = typeof body?.action === 'string' ? body.action.trim() : '';
+  const winningBonusCardId = typeof body?.winningBonusCardId === 'string' ? body.winningBonusCardId.trim() : '';
+  if (action !== 'open' && action !== 'close') {
+    return apiError(c, 'action must be "open" or "close".', 400);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const cohortRecord = await resolveAdminCohort(db, c.req.param('gameId'));
+    if (!cohortRecord) {
+      return apiError(c, 'Game not found.', 404);
+    }
+
+    const progress = await getCohortProgress(db, cohortRecord.id);
+    if (!progress) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
+
+    const [milestone] = await db
+      .select()
+      .from(progressMilestones)
+      .where(
+        and(
+          eq(progressMilestones.id, c.req.param('milestoneId')),
+          eq(progressMilestones.progressId, progress.id)
+        )
+      )
+      .limit(1);
+
+    if (!milestone) {
+      return apiError(c, 'Milestone not found.', 404);
+    }
+
+    if (action === 'open') {
+      if (milestone.voteOpenedAt) {
+        return apiError(c, 'Bonus vote has already been opened for this milestone.', 409);
+      }
+      if (progress.currentPoints < milestone.cost) {
+        return apiError(c, 'Milestone progress is not reached yet.', 409);
+      }
+
+      const [updated] = await db
+        .update(progressMilestones)
+        .set({ voteOpenedAt: new Date(), updatedAt: new Date() })
+        .where(eq(progressMilestones.id, milestone.id))
+        .returning();
+
+      return c.json({ success: true, milestone: toMilestone(updated) });
+    }
+
+    if (!milestone.voteOpenedAt || milestone.voteClosedAt) {
+      return apiError(c, 'Bonus vote is not open.', 409);
+    }
+
+    const voteRows = await db
+      .select({
+        id: milestoneBonusVotes.id,
+        bonusCardId: milestoneBonusVotes.bonusCardId,
+        voteCount: milestoneBonusVotes.voteCount,
+      })
+      .from(milestoneBonusVotes)
+      .where(eq(milestoneBonusVotes.milestoneId, milestone.id));
+    const totals = new Map<string, number>();
+    for (const row of voteRows) {
+      totals.set(row.bonusCardId, (totals.get(row.bonusCardId) || 0) + row.voteCount);
+    }
+    const maxVotes = Math.max(0, ...Array.from(totals.values()));
+    const leadingBonusCardIds = Array.from(totals.entries())
+      .filter(([, voteCount]) => voteCount === maxVotes && maxVotes > 0)
+      .map(([bonusCardId]) => bonusCardId);
+    if (leadingBonusCardIds.length > 1) {
+      if (!winningBonusCardId || !leadingBonusCardIds.includes(winningBonusCardId)) {
+        return apiError(c, 'A tied winning bonus card must be selected before closing the vote.', 409);
+      }
+
+      const winningVote = voteRows.find((row) => row.bonusCardId === winningBonusCardId);
+      if (!winningVote) {
+        return apiError(c, 'Winning bonus card vote not found.', 404);
+      }
+
+      await db
+        .update(milestoneBonusVotes)
+        .set({
+          voteCount: sql`${milestoneBonusVotes.voteCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(milestoneBonusVotes.id, winningVote.id));
+    }
+
+    const [updated] = await db
+      .update(progressMilestones)
+      .set({ voteClosedAt: new Date(), updatedAt: new Date() })
+      .where(eq(progressMilestones.id, milestone.id))
+      .returning();
+
+    const finalVoteRows = await db
+      .select({
+        bonusCardId: milestoneBonusVotes.bonusCardId,
+        voteCount: sql<number>`sum(${milestoneBonusVotes.voteCount})`,
+      })
+      .from(milestoneBonusVotes)
+      .where(eq(milestoneBonusVotes.milestoneId, milestone.id))
+      .groupBy(milestoneBonusVotes.bonusCardId);
+    const finalMaxVotes = Math.max(0, ...finalVoteRows.map((row) => Number(row.voteCount || 0)));
+    const winningRows = finalVoteRows.filter((row) => Number(row.voteCount || 0) === finalMaxVotes && finalMaxVotes > 0);
+    if (winningRows.length === 1) {
+      const [winningCard] = await db
+        .select({ id: gameBonusCards.id, title: gameBonusCards.title })
+        .from(gameBonusCards)
+        .where(eq(gameBonusCards.id, winningRows[0].bonusCardId))
+        .limit(1);
+      const sortOrder = await nextNotificationSortOrder(db);
+      await db.insert(notifications).values({
+        cohortId: cohortRecord.id,
+        titleI18nKey: 'dashboard.notifications.bonusUnlocked.title',
+        descriptionI18nKey: 'dashboard.notifications.bonusUnlocked.description',
+        icon: 'gift',
+        tone: 'success',
+        actionLabelI18nKey: 'dashboard.notifications.bonusUnlocked.action',
+        actionTarget: 'bonus',
+        context: {
+          type: 'bonus_unlocked',
+          milestoneId: milestone.id,
+          bonusCardId: winningCard?.id || winningRows[0].bonusCardId,
+          bonusCardTitle: winningCard?.title,
+        },
+        sortOrder,
+      });
+    }
+
+    return c.json({ success: true, milestone: toMilestone(updated) });
+  } catch (error: any) {
+    console.error('Milestone vote state update SQL error:', error.message);
+    return apiError(c, 'Milestone vote state could not be updated.', 500);
+  }
+});
+
 mapRouter.delete('/games/:gameId/milestones/:milestoneId', async (c) => {
   const adminUser = requireAdminUser(c);
   if (adminUser instanceof Response) return adminUser;
@@ -4802,7 +5044,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         .filter(([, voteCount]) => voteCount === maxVotes && maxVotes > 0)
         .map(([bonusCardId]) => bonusCardId);
 
-      const isVoteClosed = progress.currentPoints >= milestone.cost;
+      const voteStatus = getMilestoneVoteStatus(milestone);
 
       const guildVote = guildId
         ? milestoneVotes.find((vote) => vote.guildId === guildId)
@@ -4826,22 +5068,33 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         guildVote: guildVoteWithApproval ? toVote(guildVoteWithApproval) : undefined,
         leadingBonusCardIds,
         hasTie: leadingBonusCardIds.length > 1,
-        isVoteOpen: !isVoteClosed,
-        isVoteClosed,
+        ...voteStatus,
       };
     });
 
     const [guildRecord] = guildId
       ? await db.select({ gold: guilds.gold }).from(guilds).where(eq(guilds.id, guildId)).limit(1)
       : [];
+    const guildVoteBalance = guildId
+      ? await getGuildVoteBalance(db, guildId, cohortRecord.id)
+      : undefined;
     let boostCostPreview: VoteSpendBreakdown | undefined;
     if (guildId && context?.studentRecord) {
       try {
+        const baseVotesPerGuild = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+        const alreadyPurchasedVotes = await getPurchasedGuildVoteCount(
+          db,
+          guildId,
+          progress.id,
+          cohortRecord.id,
+          baseVotesPerGuild
+        );
         boostCostPreview = await new VotingCostService(db).previewGuildVotes({
           guildId,
           cohortId: cohortRecord.id,
           studentId: context.studentRecord.id,
           votes: 1,
+          alreadyPurchasedVotes,
         });
       } catch (error: any) {
         console.warn('Bonus vote boost preview could not be loaded:', error.message);
@@ -4849,7 +5102,7 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
     }
 
     const selectedMilestoneId =
-      milestones.find((milestone) => progress.currentPoints < milestone.cost)?.id ||
+      milestones.find((milestone) => !milestone.voteClosedAt)?.id ||
       milestones[0]?.id;
 
     return c.json({
@@ -4862,9 +5115,10 @@ mapRouter.get('/games/:gameId/bonus-votes', async (c) => {
         selectedMilestoneId,
         guildId,
         guildGold: guildRecord?.gold,
+        guildVoteBalance: getGuildVoteBalanceAmount(guildVoteBalance),
         currentGuildMemberCount: guildStudentIds.length || undefined,
         boostCostPreview,
-        baseVotesPerGuild: balanceConfig.rewardSystem.voting.baseVotesPerGuild,
+        baseVotesPerGuild: Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild),
       },
     });
   } catch (error: any) {
@@ -4915,12 +5169,16 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
       return apiError(c, 'Milestone or bonus card not found.', 404);
     }
 
-    if (progress.currentPoints >= milestone.cost) {
-      return apiError(c, 'Bonus vote is closed.', 409);
+    const voteStatus = getMilestoneVoteStatus(milestone);
+    if (!voteStatus.isVoteOpen) {
+      return apiError(c, 'Bonus vote is not open.', 409);
     }
 
+    const voteBalance = await getGuildVoteBalance(db, context.membership.guildId, context.cohortRecord.id);
     const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, context.cohortRecord.id);
-    const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+    const baseVotesPerGuild = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+    const storedVotes = getGuildVoteBalanceAmount(voteBalance);
+
     const [existing] = await db
       .select()
       .from(milestoneBonusVotes)
@@ -4932,12 +5190,19 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
       )
       .limit(1);
 
+    const appliedVotes = (existing ? 0 : baseVotesPerGuild) + storedVotes;
+    if (!existing && appliedVotes <= 0) {
+      return apiError(c, 'Boost before voting for a bonus card.', 409);
+    }
+
+    const nextVoteCount = (existing?.voteCount || 0) + appliedVotes;
     const [saved] = existing
       ? await db
           .update(milestoneBonusVotes)
           .set({
             bonusCardId: bonusCard.id,
-            voteCount: Math.max(existing.voteCount, baseVotes),
+            voteCount: nextVoteCount,
+            metadata: setBoostApprovalMetadata(existing.metadata, undefined),
             updatedAt: new Date(),
           })
           .where(eq(milestoneBonusVotes.id, existing.id))
@@ -4948,11 +5213,15 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/bonus-votes', async (c) =
             milestoneId: milestone.id,
             bonusCardId: bonusCard.id,
             guildId: context.membership.guildId,
-            voteCount: baseVotes,
+            voteCount: nextVoteCount,
           })
           .returning();
 
-    return c.json({ success: true, vote: toVote(saved) });
+    if (storedVotes > 0) {
+      await clearGuildVoteBalance(db, context.membership.guildId, context.cohortRecord.id);
+    }
+
+    return c.json({ success: true, vote: toVote(saved), appliedVotes });
   } catch (error: any) {
     console.error('Bonus vote cast SQL error:', error.message);
     return apiError(c, 'Bonus vote could not be saved.', 500);
@@ -4979,82 +5248,66 @@ mapRouter.post('/games/:gameId/milestones/:milestoneId/boost-votes', async (c) =
 
     const progress = await getCohortProgress(db, context.cohortRecord.id);
     if (!progress) {
-      return apiError(c, 'Cast a bonus vote before boosting it.', 409);
+      return apiError(c, 'Create at least one milestone before boosting.', 409);
     }
-    const [existing] = await db
+    const [milestone] = await db
       .select()
-      .from(milestoneBonusVotes)
-      .innerJoin(progressMilestones, eq(progressMilestones.id, milestoneBonusVotes.milestoneId))
+      .from(progressMilestones)
       .where(
         and(
-          eq(milestoneBonusVotes.milestoneId, c.req.param('milestoneId')),
-          eq(milestoneBonusVotes.guildId, context.membership.guildId),
+          eq(progressMilestones.id, c.req.param('milestoneId')),
           eq(progressMilestones.progressId, progress.id)
         )
       )
       .limit(1);
 
-    if (!existing) {
-      return apiError(c, 'Cast a bonus vote before boosting it.', 409);
+    if (!milestone) {
+      return apiError(c, 'Milestone not found.', 404);
     }
 
-    if (progress.currentPoints < existing.progress_milestones.cost) {
-      return apiError(c, 'Bonus vote boost is only available after the vote is closed.', 409);
+    const voteStatus = getMilestoneVoteStatus(milestone);
+    if (voteStatus.isVoteOpen) {
+      return apiError(c, 'Boost is disabled while the bonus vote is open.', 409);
     }
 
     const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, context.cohortRecord.id);
-    const baseVotes = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
-    const guildStudentIds = await loadActiveGuildStudentIds(
+    const baseVotesPerGuild = Math.max(1, balanceConfig.rewardSystem.voting.baseVotesPerGuild);
+    const alreadyPurchasedVotes = await getPurchasedGuildVoteCount(
       db,
-      context.cohortRecord.id,
       context.membership.guildId,
-      { includeStudentId: context.studentRecord.id }
+      progress.id,
+      context.cohortRecord.id,
+      baseVotesPerGuild
     );
-    const requiredVotes = getRequiredGuildActivityVotes(guildStudentIds.length);
-    const pendingApproval = getBoostApprovalMetadata(existing.milestone_bonus_votes);
-    const approvalVotes = pendingApproval?.votes || votes;
-    const approverStudentIds = new Set(pendingApproval?.approverStudentIds || []);
-    approverStudentIds.add(context.studentRecord.id);
-    const nextApproval = {
-      votes: approvalVotes,
-      approverStudentIds: [...approverStudentIds],
-    };
-
-    if (nextApproval.approverStudentIds.length < requiredVotes) {
-      const [updated] = await db
-        .update(milestoneBonusVotes)
-        .set({
-          metadata: setBoostApprovalMetadata(existing.milestone_bonus_votes.metadata, nextApproval),
-          updatedAt: new Date(),
-        })
-        .where(eq(milestoneBonusVotes.id, existing.milestone_bonus_votes.id))
-        .returning();
-
-      return c.json({
-        success: true,
-        vote: toVote(withBoostApprovalState(updated, { requiredVotes, hasVoted: true })),
-      });
-    }
-
-    const alreadyPurchasedVotes = Math.max(0, existing.milestone_bonus_votes.voteCount - baseVotes);
     const voteSpend = await new VotingCostService(db).spendGuildVotes({
       guildId: context.membership.guildId,
       cohortId: context.cohortRecord.id,
       studentId: context.studentRecord.id,
-      votes: approvalVotes,
+      votes,
       alreadyPurchasedVotes,
     });
-    const [updated] = await db
-      .update(milestoneBonusVotes)
+
+    const [updatedProgress] = await db
+      .update(cohortProgress)
       .set({
-        voteCount: sql`${milestoneBonusVotes.voteCount} + ${approvalVotes}`,
-        metadata: setBoostApprovalMetadata(existing.milestone_bonus_votes.metadata, undefined),
+        currentPoints: sql`${cohortProgress.currentPoints} + ${voteSpend.cost}`,
         updatedAt: new Date(),
       })
-      .where(eq(milestoneBonusVotes.id, existing.milestone_bonus_votes.id))
+      .where(eq(cohortProgress.id, progress.id))
       .returning();
+    const updatedVoteBalance = await addGuildVoteBalance(
+      db,
+      context.membership.guildId,
+      context.cohortRecord.id,
+      votes
+    );
 
-    return c.json({ success: true, vote: toVote(updated), voteSpend });
+    return c.json({
+      success: true,
+      voteSpend,
+      guildVoteBalance: getGuildVoteBalanceAmount(updatedVoteBalance),
+      currentPoints: updatedProgress?.currentPoints ?? progress.currentPoints + voteSpend.cost,
+    });
   } catch (error: any) {
     console.error('Bonus vote boost SQL error:', error.message);
     return apiError(c, error.message || 'Bonus vote boost failed.', 400);

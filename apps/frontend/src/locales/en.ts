@@ -30,6 +30,7 @@ export const en: TranslationKeys = {
   },
   errors: {
     notificationTitle: 'Error',
+    notificationNoticeTitle: 'Notification',
     debugLogSummary: 'Show full error log',
     copyDebugLog: 'Copy log',
     copiedDebugLog: 'Copied',
@@ -98,7 +99,7 @@ export const en: TranslationKeys = {
       noGuildDescription: 'Join or create a guild to unlock boosts and voting.',
       noGuildBoost: 'Guild required',
       goldSpent: '{amount} gold spent',
-      boostPointsSpent: '{amount} boost points spent',
+      boostPointsSpent: '{amount} points',
       newRibbon: 'New',
       cardHandModalSubtitle: 'Preview the full-size guild hand with database-backed game data.',
       guildCardDescription:
@@ -166,6 +167,11 @@ export const en: TranslationKeys = {
         description: 'Deadline +24h entered the reward pool.',
         meta: '8 min ago',
         action: 'Review',
+      },
+      bonusUnlocked: {
+        title: 'Cohort bonus unlocked',
+        description: 'A winning bonus card joined the cohort active bonuses.',
+        action: 'View bonuses',
       },
     },
   },

@@ -120,7 +120,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
         front: {
           title: { value: options.guildName, variant: 'title' },
           subtitle: {
-            value: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.gold || 0)),
+            value: t('dashboard.dock.boostPointsSpent').replace('{amount}', String(options.guild.boostPointsSpent || 0)),
             variant: 'subtitle',
           },
           color: { value: guildColor },
@@ -205,7 +205,7 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
           front: {
             title: { value: guildName, variant: 'title' },
             subtitle: {
-              value: t('dashboard.dock.goldSpent').replace('{amount}', String(options.guild.gold || 0)),
+              value: t('dashboard.dock.boostPointsSpent').replace('{amount}', String(options.guild.boostPointsSpent || 0)),
               variant: 'subtitle',
             },
             color: { value: guildColor },

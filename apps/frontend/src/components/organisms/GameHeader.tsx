@@ -566,6 +566,9 @@ function runNotificationAction(actionTarget?: string) {
   if (actionTarget === 'guild') {
     window.location.hash = 'annuaire';
   }
+  if (actionTarget === 'bonus') {
+    window.location.hash = 'bonus';
+  }
 }
 
 export default GameHeader;

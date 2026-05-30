@@ -619,6 +619,7 @@ export class VotingCostService {
       config: balanceConfig.rewardSystem,
       guildId: input.guildId,
       studentId: input.studentId,
+      alreadyPurchasedVotes: input.alreadyPurchasedVotes,
       balanceConfigVersion: balanceConfig.version,
     });
   }

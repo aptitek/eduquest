@@ -17,6 +17,7 @@ import {
   spendGuildVotes,
   updateCohortStep,
   updateGuild,
+  updateMilestoneVoteState,
 } from './api';
 
 describe('game API client', () => {
@@ -325,7 +326,32 @@ describe('game API client', () => {
       milestones: [],
       bonusCards: [],
       voteStates: [],
+      guildVoteBalance: 0,
     });
+  });
+
+  it('updates milestone vote state through the backend route', async () => {
+    const milestone = {
+      id: 'milestone-1',
+      labelI18nKey: 'Milestone 1',
+      cost: 100,
+      voteOpenedAt: '2026-05-30T05:00:00.000Z',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true, milestone }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(updateMilestoneVoteState('token-1', 'cohort-1', 'milestone-1', 'open')).resolves.toEqual(milestone);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/games/cohort-1/milestones/milestone-1/vote-state',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer token-1',
+        },
+        body: JSON.stringify({ action: 'open' }),
+      }
+    );
   });
 
   it('surfaces API errors instead of substituting mock data', async () => {

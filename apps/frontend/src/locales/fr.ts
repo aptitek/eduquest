@@ -28,6 +28,7 @@ export const fr = {
   },
   errors: {
     notificationTitle: 'Erreur',
+    notificationNoticeTitle: 'Notification',
     debugLogSummary: 'Afficher le journal complet de l’erreur',
     copyDebugLog: 'Copier le journal',
     copiedDebugLog: 'Copié',
@@ -96,7 +97,7 @@ export const fr = {
       noGuildDescription: 'Rejoignez ou créez une guilde pour débloquer les boosts et les votes.',
       noGuildBoost: 'Guilde requise',
       goldSpent: '{amount} or dépensé',
-      boostPointsSpent: '{amount} points de boost dépensés',
+      boostPointsSpent: '{amount} points',
       newRibbon: 'Nouveau',
       cardHandModalSubtitle:
         'Prévisualisez la main de guilde en cartes pleine taille avec les données de jeu de la base.',
@@ -165,6 +166,11 @@ export const fr = {
         description: 'Deadline +24h entre dans la réserve de récompenses.',
         meta: 'Il y a 8 min',
         action: 'Consulter',
+      },
+      bonusUnlocked: {
+        title: 'Bonus de cohorte débloqué',
+        description: 'Une carte bonus gagnante rejoint les bonus actifs de la cohorte.',
+        action: 'Voir les bonus',
       },
     },
   },

@@ -604,8 +604,11 @@ type BonusVoteStateResponse =
 type BonusVoteResponse =
   | {
       success: true;
-      vote: GameBonusVoteState['voteStates'][number]['guildVote'];
+      vote?: GameBonusVoteState['voteStates'][number]['guildVote'];
       voteSpend?: SpendGuildVoteResult;
+      guildVoteBalance?: number;
+      currentPoints?: number;
+      appliedVotes?: number;
     }
   | {
       success: false;
@@ -1098,6 +1101,30 @@ export async function deleteGameMilestone(
   return data.milestone;
 }
 
+export async function updateMilestoneVoteState(
+  token: string,
+  gameId: string,
+  milestoneId: string,
+  action: 'open' | 'close',
+  winningBonusCardId?: string
+): Promise<CohortProgressData['gauge']['milestones'][number]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/milestones/${milestoneId}/vote-state`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action, winningBonusCardId }),
+  });
+  const data = (await response.json()) as MilestoneResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Milestone vote state update failed.');
+  }
+
+  return data.milestone;
+}
+
 export async function fetchGameBonusVoteState(token: string, gameId: string): Promise<GameBonusVoteState> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/games/${gameId}/bonus-votes`, {
     headers: {
@@ -1115,6 +1142,7 @@ export async function fetchGameBonusVoteState(token: string, gameId: string): Pr
     milestones: data.voteState.milestones || [],
     bonusCards: data.voteState.bonusCards || [],
     voteStates: data.voteState.voteStates || [],
+    guildVoteBalance: data.voteState.guildVoteBalance || 0,
   };
 }
 

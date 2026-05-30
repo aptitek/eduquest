@@ -35,6 +35,7 @@ import {
   User,
   UserCheck,
   Users,
+  Vote,
   type LucideIcon,
 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
@@ -79,6 +80,7 @@ const ICON_BY_PASCAL: Record<string, LucideIcon> = {
   User,
   UserCheck,
   Users,
+  Vote,
   onboarding: Compass,
   character_creation: Contact,
   tavern: Users,

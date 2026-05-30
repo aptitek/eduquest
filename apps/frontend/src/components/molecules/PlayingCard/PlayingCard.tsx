@@ -7,6 +7,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { EditableFieldContext, EditableText } from '../../atoms/EditableText';
+import { EditableIcon } from '../../atoms/EditableIcon';
 import { EditableSchoolLogo } from '../EditableSchoolLogo';
 import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { cn } from '../../../utils/cn';
@@ -525,7 +526,15 @@ function CardIconOverlay({
   if (shouldRenderCardIconInType(face)) return null;
   const icon = getCardIcon(face, 64);
   if (!icon) return null;
-  const isInteractiveIcon = Boolean(face.icon?.editable || face.icon?.onChange);
+  const editableIcon: (typeof face.icon & { value: string; onChange: (value: string) => void | Promise<void> }) | undefined =
+    face.icon?.editable && face.icon.onChange && face.icon.value && !face.icon.icon
+      ? {
+          ...face.icon,
+          value: face.icon.value,
+          onChange: face.icon.onChange,
+        }
+      : undefined;
+  const isInteractiveIcon = Boolean(editableIcon || face.icon?.onChange);
   const hideGuildChromeUntilExpanded = shouldHideRibbonUntilNanoExpanded(cardSize);
 
   return (
@@ -538,8 +547,25 @@ function CardIconOverlay({
         hideGuildChromeUntilExpanded && NANO_GUILD_CHROME_REVEAL_CLASSNAME
       )}
       style={face.icon?.color ? { color: String(face.icon.color) } : undefined}
+      onClick={(event) => {
+        if (isInteractiveIcon) event.stopPropagation();
+      }}
     >
-      {icon}
+      {editableIcon ? (
+        <EditableIcon
+          value={editableIcon.value}
+          onChange={editableIcon.onChange}
+          label={editableIcon.label}
+          searchPlaceholder={editableIcon.searchPlaceholder}
+          defaultIconIds={editableIcon.defaultIconIds}
+          limit={editableIcon.limit}
+          size={64}
+          buttonClassName="h-20 w-20 rounded-2xl bg-transparent text-inherit hover:bg-gaming-base/40 focus-visible:ring-status-quest/70"
+          iconClassName="drop-shadow-lg"
+        />
+      ) : (
+        icon
+      )}
     </div>
   );
 }

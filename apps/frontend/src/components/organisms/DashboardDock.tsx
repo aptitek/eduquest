@@ -17,6 +17,7 @@ import { StepSelector } from '../molecules/StepSelector';
 import { useGameStore } from '../../features/game/gameStore';
 import {
   boostMilestoneBonusVote,
+  castMilestoneBonusVote,
   createGameMilestone,
   deleteGameMilestone,
   fetchCohortStep,
@@ -27,6 +28,7 @@ import {
   updateCohortStep,
   updateGameMilestone,
   updateGuild,
+  updateMilestoneVoteState,
   updateRewardBalanceConfig,
   type GuildFieldsPayload,
   type RewardBalanceConfigState,
@@ -45,8 +47,8 @@ import {
 } from './DashboardDock/dashboardDockData';
 import type { DockGuild } from './DashboardDock/types';
 import { motion, useReducedMotion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { useErrorReporter } from '../../features/errors/notifications';
-import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
 
 export interface DashboardDockProps {
   className?: string;
@@ -64,6 +66,8 @@ type VoteCostConfig = Pick<
 
 const PROGRESS_BONUS_SEEN_STORAGE_PREFIX = 'eduquest_progress_seen_bonus_cards';
 const COHORT_STEP_UPDATED_STORAGE_KEY = 'eduquest_cohort_step_updated';
+const BONUS_VOTE_SELECTION_STORAGE_KEY = 'eduquest_bonus_vote_selection';
+const BONUS_VOTE_SELECTION_PROMPT_STORAGE_KEY = 'eduquest_bonus_vote_selection_prompt';
 const DEFAULT_VOTE_COST_CONFIG: VoteCostConfig = {
   baseVoteCost: 1,
   quadraticExponent: 2,
@@ -86,10 +90,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [isSavingAdminStep, setIsSavingAdminStep] = useState(false);
   const [savingMilestoneId, setSavingMilestoneId] = useState<string | null>(null);
   const [draggedMilestoneId, setDraggedMilestoneId] = useState<string | null>(null);
-  const [isVoteOpen, setIsVoteOpen] = useState(false);
   const [rewardBalanceConfig, setRewardBalanceConfig] = useState<RewardBalanceConfigState | null>(null);
   const [isSavingVoteCost, setIsSavingVoteCost] = useState(false);
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
+  const [bonusHandTarget, setBonusHandTarget] = useState<HTMLElement | null>(null);
   const { user, student, character, selectedGameId } = useGameStore();
   const { t, tMaybe } = useTranslation();
   const reportError = useErrorReporter();
@@ -125,6 +129,15 @@ export function DashboardDock({ className }: DashboardDockProps) {
     window.addEventListener('hashchange', handleHashChange);
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateBonusHandTarget = () => setBonusHandTarget(document.getElementById('bonus-hand-target'));
+    updateBonusHandTarget();
+    window.addEventListener('hashchange', updateBonusHandTarget);
+    return () => {
+      window.removeEventListener('hashchange', updateBonusHandTarget);
     };
   }, []);
 
@@ -224,17 +237,22 @@ export function DashboardDock({ className }: DashboardDockProps) {
     if (!token) return undefined;
 
     let isMounted = true;
-    fetchGuilds(token, selectedGameId)
-      .then((nextGuilds) => {
-        if (isMounted) setGuilds(nextGuilds);
-      })
-      .catch((error) => {
-        console.warn('Could not load dashboard guilds.', error);
-        showDockError('dashboard.dock.errors.loadGuilds', error);
-      });
+    const loadGuilds = () => {
+      fetchGuilds(token, selectedGameId)
+        .then((nextGuilds) => {
+          if (isMounted) setGuilds(nextGuilds);
+        })
+        .catch((error) => {
+          console.warn('Could not load dashboard guilds.', error);
+          showDockError('dashboard.dock.errors.loadGuilds', error);
+        });
+    };
 
+    loadGuilds();
+    window.addEventListener('eduquest:guilds-updated', loadGuilds);
     return () => {
       isMounted = false;
+      window.removeEventListener('eduquest:guilds-updated', loadGuilds);
     };
   }, [selectedGameId]);
 
@@ -268,14 +286,13 @@ export function DashboardDock({ className }: DashboardDockProps) {
                   art: {
                     value: card.illustrationUrl,
                     alt: card.title,
-                    node: card.illustrationUrl
-                      ? undefined
-                      : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
                   },
+                  icon: { value: card.iconKey || 'Gift', colored: true },
                   type: {
-                    variant: 'cost',
+                    variant: 'votes',
                     value: card.cost,
                     text: { value: String(card.cost || 0), variant: 'ribbon' },
+                    icon: { value: 'Vote' },
                   },
                   info: {
                     sections: card.description
@@ -514,6 +531,8 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const openProgressPage = () => {
     window.location.hash = 'bonus';
   };
+  const selectedBonusVoteState = getSelectedBonusVoteState(bonusVoteState);
+  const selectedVoteMilestone = selectedBonusVoteState?.milestone;
   const adminBonusContent = progressBonusCards ? (
     <motion.div
       layout
@@ -576,20 +595,56 @@ export function DashboardDock({ className }: DashboardDockProps) {
         />
       </motion.div>
     ) : null;
+    const isSelectedVoteOpen = selectedBonusVoteState?.isVoteOpen ?? false;
+    const canOpenVote =
+      Boolean(selectedGameId && selectedVoteMilestone && !selectedVoteMilestone.voteOpenedAt) &&
+      gaugeCurrentPoints >= (selectedVoteMilestone?.cost ?? Number.POSITIVE_INFINITY);
+    const canCloseVote = Boolean(selectedGameId && selectedVoteMilestone && isSelectedVoteOpen);
+    const updateSelectedVoteState = async () => {
+      if (!selectedGameId || !selectedVoteMilestone || savingMilestoneId) return;
+      const action = isSelectedVoteOpen ? 'close' : 'open';
+      if (action === 'open' && !canOpenVote) return;
+      if (action === 'close' && !canCloseVote) return;
+
+      setSavingMilestoneId('vote-state');
+      try {
+        const token = localStorage.getItem('eduquest_token');
+        if (!token) throw new Error('Missing session token.');
+        const selectedTieBreakWinner = getStoredBonusVoteSelection(selectedGameId);
+        await updateMilestoneVoteState(
+          token,
+          selectedGameId,
+          selectedVoteMilestone.id,
+          action,
+          action === 'close' && selectedTieBreakWinner?.milestoneId === selectedVoteMilestone.id
+            ? selectedTieBreakWinner.bonusCardId
+            : undefined
+        );
+        notifyMilestonesUpdated();
+        window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
+      } catch (error) {
+        console.warn('Could not update milestone vote state.', error);
+        showDockError('dashboard.dock.errors.loadProgress', error);
+      } finally {
+        setSavingMilestoneId(null);
+      }
+    };
     const voteButton = (
       <HoldToConfirmButton
-        onConfirm={() => setIsVoteOpen((current) => !current)}
+        onConfirm={updateSelectedVoteState}
         holdDuration={1200}
         shape="round"
-        variant={isVoteOpen ? 'btn-error' : 'btn-primary'}
+        variant={isSelectedVoteOpen ? 'btn-error' : 'btn-primary'}
+        disabled={savingMilestoneId === 'vote-state' || (!canOpenVote && !canCloseVote)}
         className={cn(
           'h-20 w-20 min-h-0 font-display text-xs font-black uppercase tracking-[0.12em] shadow-glow-primary lg:h-24 lg:w-24 lg:text-sm',
-          isVoteOpen
+          isSelectedVoteOpen
             ? 'border-status-danger/40 bg-status-danger text-primary-content'
-            : 'border-primary/40 bg-primary text-primary-content'
+            : 'border-primary/40 bg-primary text-primary-content',
+          (!canOpenVote && !canCloseVote) && 'cursor-not-allowed opacity-50'
         )}
       >
-        {isVoteOpen ? 'Close vote' : 'Open vote'}
+        {isSelectedVoteOpen ? 'Close vote' : 'Open vote'}
       </HoldToConfirmButton>
     );
     const voteCostConfig = rewardBalanceConfig?.rewardSystem.voting
@@ -678,7 +733,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         milestones={gaugeMilestones}
         label={gaugeLabel}
         centerContent={voteControls}
-        boostLabel={isVoteOpen ? 'Close vote' : 'Open vote'}
+        boostLabel={isSelectedVoteOpen ? 'Close vote' : 'Open vote'}
         milestoneBadgesExpanded={isProgressPage}
         className={cn(
           'rounded-none border-0 bg-transparent shadow-none',
@@ -793,15 +848,65 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const openDirectoryPage = () => {
     window.location.hash = 'annuaire';
   };
-  const boostGuild = async () => {
+  const isGuildVoteOpen = selectedBonusVoteState?.isVoteOpen ?? false;
+  const canUseGuildBoostAction = Boolean(selectedGameId && hasPlayerGuild && selectedBonusVoteState);
+  const canBoostGuild = canUseGuildBoostAction && !isGuildVoteOpen;
+  const confirmGuildGaugeAction = () => {
+    if (isGuildVoteOpen) {
+      void castSelectedGuildVote();
+      return;
+    }
+    void boostGuild();
+  };
+  const castSelectedGuildVote = async () => {
     const token = localStorage.getItem('eduquest_token');
-    if (!token || !selectedGameId || !activePlayerGuild.id) return;
+    const selectedVoteTarget = getStoredBonusVoteSelection(selectedGameId);
+    if (
+      !token ||
+      !selectedGameId ||
+      !selectedBonusVoteState?.isVoteOpen ||
+      !selectedVoteTarget ||
+      selectedVoteTarget.milestoneId !== selectedBonusVoteState.milestone.id
+    ) {
+      try {
+        localStorage.setItem(
+          BONUS_VOTE_SELECTION_PROMPT_STORAGE_KEY,
+          JSON.stringify({ gameId: selectedGameId, milestoneId: selectedBonusVoteState?.milestone.id })
+        );
+      } catch {
+        // Navigating to the bonus page still gives the student the selection context.
+      }
+      openProgressPage();
+      return;
+    }
 
     try {
-      const latestVoteState = bonusVoteState || await fetchGameBonusVoteState(token, selectedGameId);
-      const boostableVoteState = getBoostableGuildVoteState(latestVoteState);
-      if (!boostableVoteState) {
-        throw new Error('No closed guild vote is available to boost.');
+      await castMilestoneBonusVote(
+        token,
+        selectedGameId,
+        selectedVoteTarget.milestoneId,
+        selectedVoteTarget.bonusCardId
+      );
+      const nextVoteState = await fetchGameBonusVoteState(token, selectedGameId);
+      setBonusVoteState(nextVoteState);
+      setActiveRewardCardIds(getActiveRewardCardIds(nextVoteState));
+      window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
+    } catch (error) {
+      console.warn('Could not cast guild bonus vote.', error);
+      showDockError('dashboard.dock.errors.spendVote', error);
+    }
+  };
+  const boostGuild = async () => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token || !selectedGameId || !activePlayerGuild.id || !canBoostGuild) return;
+
+    try {
+      const latestVoteState = await fetchGameBonusVoteState(token, selectedGameId);
+      const boostableVoteState = getSelectedBonusVoteState(latestVoteState);
+      if (!boostableVoteState || boostableVoteState.isVoteOpen) {
+        setBonusVoteState(latestVoteState);
+        setActiveRewardCardIds(getActiveRewardCardIds(latestVoteState));
+        return;
       }
 
       const boosted = await boostMilestoneBonusVote(token, selectedGameId, boostableVoteState.milestone.id, 1);
@@ -809,6 +914,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       setBonusVoteState(nextVoteState);
       setActiveRewardCardIds(getActiveRewardCardIds(nextVoteState));
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
+      window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
 
       const voteSpend = boosted.voteSpend;
       setGuilds((current) => {
@@ -826,18 +932,18 @@ export function DashboardDock({ className }: DashboardDockProps) {
   };
   const boostButton = (
     <HoldToConfirmButton
-      onConfirm={boostGuild}
+      onConfirm={confirmGuildGaugeAction}
       holdDuration={1200}
       shape="round"
       variant="btn-primary"
-      disabled={!selectedGameId || !hasPlayerGuild}
+      disabled={!canUseGuildBoostAction}
       className={cn(
         'h-28 w-28 min-h-0 -translate-y-4 border-primary/40 bg-primary text-primary-content font-display text-lg font-black shadow-glow-primary',
-        !hasPlayerGuild && 'cursor-not-allowed opacity-50',
+        !canUseGuildBoostAction && 'cursor-not-allowed opacity-50',
         isProgressPage && 'h-36 w-36 -translate-y-6 text-xl sm:h-40 sm:w-40 sm:text-2xl'
       )}
     >
-      {hasPlayerGuild ? t('dashboard.dock.boost') : t('dashboard.dock.noGuildBoost')}
+      {hasPlayerGuild ? (isGuildVoteOpen ? 'Vote' : t('dashboard.dock.boost')) : t('dashboard.dock.noGuildBoost')}
     </HoldToConfirmButton>
   );
   const goldIndicator = (
@@ -970,6 +1076,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         </div>
       </aside>
 
+      {isProgressPage && bonusContent && bonusHandTarget ? createPortal(bonusContent, bonusHandTarget) : null}
     </>
   );
 }
@@ -1030,7 +1137,7 @@ function withProgressBonusNewRibbonState(
     const shouldMarkSeen = Boolean(
       isProgressPage && card.id && front && !isFaceDown && !seenCardIds.has(card.id)
     );
-    const type = front?.type;
+    const shouldShowNewRibbon = Boolean(front && !isFaceDown && card.id && !seenCardIds.has(card.id));
 
     return {
       ...card,
@@ -1039,14 +1146,12 @@ function withProgressBonusNewRibbonState(
         front: front
           ? {
               ...front,
-              type:
-                type ||
-                (isFaceDown
-                  ? undefined
-                  : {
-                      variant: 'new',
-                      text: { value: 'New', variant: 'ribbon' },
-                    }),
+              type: shouldShowNewRibbon
+                ? {
+                    variant: 'new',
+                    text: { value: 'New', variant: 'ribbon' },
+                  }
+                : undefined,
             }
           : card.model.front,
       },
@@ -1100,8 +1205,42 @@ function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
   );
 }
 
-function getBoostableGuildVoteState(voteState: GameBonusVoteState | null) {
-  return voteState?.voteStates.find((state) => state.isVoteClosed && state.guildVote);
+function getSelectedBonusVoteState(voteState: GameBonusVoteState | null) {
+  if (!voteState) return undefined;
+  return (
+    voteState.voteStates.find((state) => state.isVoteOpen) ||
+    voteState.voteStates.find((state) => !state.isVoteClosed) ||
+    voteState.voteStates[voteState.voteStates.length - 1]
+  );
+}
+
+function getStoredBonusVoteSelection(gameId?: string | null) {
+  if (!gameId) return undefined;
+
+  try {
+    const rawValue = localStorage.getItem(BONUS_VOTE_SELECTION_STORAGE_KEY);
+    if (!rawValue) return undefined;
+    const value = JSON.parse(rawValue) as Partial<{
+      gameId: string;
+      milestoneId: string;
+      bonusCardId: string;
+    }>;
+
+    if (
+      value.gameId === gameId &&
+      typeof value.milestoneId === 'string' &&
+      typeof value.bonusCardId === 'string'
+    ) {
+      return {
+        milestoneId: value.milestoneId,
+        bonusCardId: value.bonusCardId,
+      };
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 function buildPodiumDeckCards(

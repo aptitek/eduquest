@@ -9,12 +9,16 @@ import { HoldToConfirmButton } from '../../components/atoms/HoldToConfirmButton'
 import { useTranslation } from '../../hooks/useTranslation';
 import { useGameStore } from '../../features/game/gameStore';
 import { GameRewardCardManager } from '../../components/organisms/GameRewardCardManager';
-import { renderLucideIcon } from '../../features/game/lucideIconCatalog';
+import { buildPodiumCards } from '../../components/organisms/DashboardDock/dashboardDockData';
 import {
   boostMilestoneBonusVote,
-  castMilestoneBonusVote,
   fetchGameBonusVoteState,
+  fetchGuilds,
+  type ClassRosterGuild,
 } from '../../features/game/api';
+
+const BONUS_VOTE_SELECTION_STORAGE_KEY = 'eduquest_bonus_vote_selection';
+const BONUS_VOTE_SELECTION_PROMPT_STORAGE_KEY = 'eduquest_bonus_vote_selection_prompt';
 
 export function ProgressPage() {
   const { t } = useTranslation();
@@ -22,10 +26,12 @@ export function ProgressPage() {
   const [voteState, setVoteState] = useState<GameBonusVoteState | null>(null);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(null);
   const [selectedBonusCardId, setSelectedBonusCardId] = useState<string | null>(null);
+  const [showSelectCardPrompt, setShowSelectCardPrompt] = useState(false);
+  const [guilds, setGuilds] = useState<ClassRosterGuild[]>([]);
   const [isVoting, setIsVoting] = useState(false);
 
   const loadVoteState = () => {
-    if (!selectedGameId || user?.isAdmin) return undefined;
+    if (!selectedGameId) return undefined;
     const token = localStorage.getItem('eduquest_token');
     if (!token) return undefined;
 
@@ -47,37 +53,103 @@ export function ProgressPage() {
 
   useEffect(() => loadVoteState(), [selectedGameId, user?.isAdmin]);
 
+  useEffect(() => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) return undefined;
+
+    let isMounted = true;
+    const loadGuilds = () => {
+      fetchGuilds(token, selectedGameId)
+        .then((nextGuilds) => {
+          if (isMounted) setGuilds(nextGuilds);
+        })
+        .catch((error) => {
+          console.warn('Could not load reward page guild podium.', error);
+        });
+    };
+
+    loadGuilds();
+    window.addEventListener('eduquest:guilds-updated', loadGuilds);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('eduquest:guilds-updated', loadGuilds);
+    };
+  }, [selectedGameId]);
+
+  useEffect(() => {
+    if (!selectedGameId) return undefined;
+
+    const refreshVoteState = () => {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) return;
+      fetchGameBonusVoteState(token, selectedGameId)
+        .then(setVoteState)
+        .catch((error) => {
+          console.warn('Could not refresh bonus vote state.', error);
+        });
+    };
+
+    window.addEventListener('eduquest:reward-cards-updated', refreshVoteState);
+    return () => {
+      window.removeEventListener('eduquest:reward-cards-updated', refreshVoteState);
+    };
+  }, [selectedGameId]);
+
   const selectedVoteState = voteState?.voteStates.find(
     (state) => state.milestone.id === selectedMilestoneId
   ) || voteState?.voteStates[0];
-  const voteCards = useMemo(
-    () => buildVoteCards(t, voteState?.bonusCards || []),
-    [t, voteState?.bonusCards]
-  );
-
   useEffect(() => {
     setSelectedBonusCardId(selectedVoteState?.guildVote?.bonusCardId ?? null);
   }, [selectedVoteState?.guildVote?.bonusCardId, selectedVoteState?.milestone.id]);
 
-  const castVote = async (bonusCardId: string) => {
-    if (!selectedGameId || !selectedVoteState?.isVoteOpen || isVoting) return;
-    const token = localStorage.getItem('eduquest_token');
-    if (!token) return;
+  useEffect(() => {
+    if (!selectedGameId || !selectedVoteState?.isVoteOpen) return;
 
-    setIsVoting(true);
     try {
-      await castMilestoneBonusVote(token, selectedGameId, selectedVoteState.milestone.id, bonusCardId);
-      await fetchGameBonusVoteState(token, selectedGameId).then(setVoteState);
-      window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
-    } catch (error) {
-      console.warn('Could not cast bonus vote.', error);
-    } finally {
-      setIsVoting(false);
+      const rawValue = localStorage.getItem(BONUS_VOTE_SELECTION_PROMPT_STORAGE_KEY);
+      if (!rawValue) return;
+      const value = JSON.parse(rawValue) as Partial<{ gameId: string; milestoneId: string }>;
+      if (value.gameId !== selectedGameId || value.milestoneId !== selectedVoteState.milestone.id) return;
+
+      setShowSelectCardPrompt(true);
+      localStorage.removeItem(BONUS_VOTE_SELECTION_PROMPT_STORAGE_KEY);
+    } catch {
+      localStorage.removeItem(BONUS_VOTE_SELECTION_PROMPT_STORAGE_KEY);
     }
-  };
+  }, [selectedGameId, selectedVoteState?.isVoteOpen, selectedVoteState?.milestone.id]);
+
+  const activeRewardCardIds = useMemo(() => getActiveRewardCardIds(voteState), [voteState]);
+  const voteCards = useMemo(
+    () =>
+      buildVoteCards(
+        t,
+        (voteState?.bonusCards || []).filter((card) => !activeRewardCardIds.has(card.id)),
+        selectedVoteState
+      ),
+    [activeRewardCardIds, selectedVoteState, t, voteState?.bonusCards]
+  );
+  const tieBreakVoteCards = useMemo(
+    () => voteCards.filter((card) => card.id && selectedVoteState?.leadingBonusCardIds.includes(card.id)),
+    [selectedVoteState?.leadingBonusCardIds, voteCards]
+  );
+  const podiumCards = useMemo(() => buildPodiumCards(t, guilds), [guilds, t]);
+
+  useEffect(() => {
+    if (!selectedGameId || !selectedVoteState?.isVoteOpen || !selectedBonusCardId) return;
+
+    localStorage.setItem(
+      BONUS_VOTE_SELECTION_STORAGE_KEY,
+      JSON.stringify({
+        gameId: selectedGameId,
+        milestoneId: selectedVoteState.milestone.id,
+        bonusCardId: selectedBonusCardId,
+      })
+    );
+    window.dispatchEvent(new CustomEvent('eduquest:bonus-vote-selection-updated'));
+  }, [selectedBonusCardId, selectedGameId, selectedVoteState?.isVoteOpen, selectedVoteState?.milestone.id]);
 
   const boostVote = async () => {
-    if (!selectedGameId || !selectedVoteState?.isVoteClosed || isVoting) return;
+    if (!selectedGameId || !selectedVoteState || selectedVoteState.isVoteOpen || isVoting) return;
     const token = localStorage.getItem('eduquest_token');
     if (!token) return;
 
@@ -86,6 +158,7 @@ export function ProgressPage() {
       await boostMilestoneBonusVote(token, selectedGameId, selectedVoteState.milestone.id, 1);
       await fetchGameBonusVoteState(token, selectedGameId).then(setVoteState);
       window.dispatchEvent(new CustomEvent('eduquest:reward-cards-updated'));
+      window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
     } catch (error) {
       console.warn('Could not boost bonus vote.', error);
     } finally {
@@ -100,6 +173,8 @@ export function ProgressPage() {
       <div className="space-y-8">
         <h2 className="sr-only">{t('bonus.title')}</h2>
 
+        <GuildPodium cards={podiumCards} />
+
         {user?.isAdmin ? (
           <>
             <section aria-labelledby="progress-active-title" className="space-y-4">
@@ -113,6 +188,14 @@ export function ProgressPage() {
             </section>
 
             <GameRewardCardManager gameId={selectedGameId} />
+
+            {selectedVoteState?.isVoteOpen && selectedVoteState.hasTie ? (
+              <AdminTieBreakPanel
+                selectedBonusCardId={selectedBonusCardId}
+                voteCards={tieBreakVoteCards}
+                onSelectCard={setSelectedBonusCardId}
+              />
+            ) : null}
           </>
         ) : null}
 
@@ -136,8 +219,11 @@ export function ProgressPage() {
             selectedBonusCardId={selectedBonusCardId}
             isVoting={isVoting}
             onSelectMilestone={setSelectedMilestoneId}
-            onSelectCard={setSelectedBonusCardId}
-            onVote={castVote}
+            onSelectCard={(bonusCardId) => {
+              setSelectedBonusCardId(bonusCardId);
+              if (bonusCardId) setShowSelectCardPrompt(false);
+            }}
+            showSelectCardPrompt={showSelectCardPrompt}
             onBoost={boostVote}
           />
         ) : null}
@@ -147,6 +233,83 @@ export function ProgressPage() {
 }
 
 export default ProgressPage;
+
+function GuildPodium({ cards }: { cards: PlayingCardProps[] }) {
+  if (cards.length === 0) return null;
+
+  const rankedSlots = [
+    { card: cards[1], rank: 2, className: 'order-1 translate-y-10 scale-90 sm:translate-y-12' },
+    { card: cards[0], rank: 1, className: 'order-2 z-10 translate-y-2 scale-105 sm:translate-y-4' },
+    { card: cards[2], rank: 3, className: 'order-3 translate-y-14 scale-[0.85] sm:translate-y-16' },
+  ].filter((slot): slot is { card: PlayingCardProps; rank: number; className: string } => Boolean(slot.card));
+
+  return (
+    <section aria-labelledby="guild-podium-title" className="space-y-3">
+      <h3 id="guild-podium-title" className="sr-only">
+        Podium des guildes
+      </h3>
+      <div className="relative mx-auto h-64 max-w-4xl overflow-hidden rounded-[2rem] border border-gaming-border bg-gaming-base/60 px-3 pt-4 shadow-inner sm:h-72">
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-gaming-base via-gaming-base/85 to-transparent" />
+        <div className="relative flex h-full items-end justify-center gap-2 sm:gap-5">
+          {rankedSlots.map(({ card, rank, className }) => (
+            <div
+              key={card.id || `guild-podium-${rank}`}
+              className={`w-28 shrink-0 transition-transform sm:w-36 md:w-40 ${className}`}
+            >
+              <PlayingCard
+                {...card}
+                size="mini"
+                presentation={{ width: rank === 1 ? 'dockLarge' : 'dockMedium' }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AdminTieBreakPanel({
+  selectedBonusCardId,
+  voteCards,
+  onSelectCard,
+}: {
+  selectedBonusCardId: string | null;
+  voteCards: PlayingCardProps[];
+  onSelectCard: (bonusCardId: string | null) => void;
+}) {
+  return (
+    <section aria-labelledby="bonus-tie-break-title" className="space-y-4">
+      <div className="rounded-2xl border border-status-warning/50 bg-status-warning/10 px-4 py-3">
+        <h3 id="bonus-tie-break-title" className="font-display text-sm font-black uppercase tracking-[0.16em] text-status-warning">
+          Égalité à trancher
+        </h3>
+        <p className="mt-1 text-sm font-semibold text-text-secondary">
+          Sélectionnez la carte qui doit devenir active, puis fermez le vote avec le bouton du dashboard.
+        </p>
+      </div>
+      <ResponsiveCardGrid
+        items={voteCards}
+        getKey={(card, index) => card.id || `tie-break-${index}`}
+        renderItem={(card) => {
+          const isSelected = selectedBonusCardId === card.id;
+          return (
+            <button
+              type="button"
+              onClick={() => card.id && onSelectCard(card.id)}
+              disabled={!card.id}
+              className={`group relative w-full text-left transition ${
+                isSelected ? 'rounded-[1.4rem] ring-4 ring-status-warning ring-offset-4 ring-offset-gaming-base' : ''
+              }`}
+            >
+              <PlayingCard {...card} size="full" presentation={{ fit: 'fillWidth' }} />
+            </button>
+          );
+        }}
+      />
+    </section>
+  );
+}
 
 function getRequiredBoostApprovals(memberCount?: number) {
   return Math.max(1, Math.ceil(Math.max(1, memberCount || 1) / 2));
@@ -184,9 +347,9 @@ function BonusVotePanel({
   voteCards,
   selectedBonusCardId,
   isVoting,
+  showSelectCardPrompt,
   onSelectMilestone,
   onSelectCard,
-  onVote,
   onBoost,
 }: {
   t: (path: string) => string;
@@ -196,18 +359,19 @@ function BonusVotePanel({
   voteCards: PlayingCardProps[];
   selectedBonusCardId: string | null;
   isVoting: boolean;
+  showSelectCardPrompt: boolean;
   onSelectMilestone: (milestoneId: string) => void;
   onSelectCard: (bonusCardId: string | null) => void;
-  onVote: (bonusCardId: string) => void;
   onBoost: () => void;
 }) {
   const guildVote = selectedVoteState?.guildVote;
   const boostCost = voteState?.boostCostPreview?.finalCost ?? 0;
+  const guildVoteBalance = voteState?.guildVoteBalance ?? 0;
+  const baseVotesAvailable = guildVote ? 0 : Math.max(1, voteState?.baseVotesPerGuild ?? 1);
+  const availableVotes = baseVotesAvailable + guildVoteBalance;
   const boostApproval = getBoostApprovalState(guildVote, voteState?.currentGuildMemberCount);
   const isVoteOpen = selectedVoteState?.isVoteOpen ?? false;
-  const isVoteClosed = selectedVoteState?.isVoteClosed ?? false;
-  const canCastVote = isVoteOpen && Boolean(selectedBonusCardId) && !isVoting;
-  const canBoostVote = isVoteClosed && Boolean(guildVote) && !isVoting && !boostApproval.hasVoted;
+  const canBoostVote = Boolean(selectedVoteState) && !isVoteOpen && !isVoting && !boostApproval.hasVoted;
 
   return (
     <section aria-labelledby="progress-next-vote-title" className="relative z-20 space-y-5">
@@ -221,7 +385,10 @@ function BonusVotePanel({
         <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.14em] ${
           isVoteOpen ? 'bg-status-completed/15 text-status-completed' : 'bg-status-warning/15 text-status-warning'
         }`}>
-          {isVoteOpen ? 'Vote ouvert' : 'Vote fermé'}
+          {isVoteOpen ? 'Vote ouvert' : 'Boost ouvert'}
+        </span>
+        <span className="rounded-full border border-gaming-border bg-gaming-card px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-text-secondary">
+          {availableVotes} vote{availableVotes > 1 ? 's' : ''} disponible{availableVotes > 1 ? 's' : ''}
         </span>
         <div className="flex flex-wrap gap-2">
           {(voteState?.milestones || []).map((milestone) => (
@@ -239,16 +406,7 @@ function BonusVotePanel({
             </button>
           ))}
         </div>
-        {isVoteOpen ? (
-          <button
-            type="button"
-            onClick={() => selectedBonusCardId && onVote(selectedBonusCardId)}
-            disabled={!canCastVote}
-            className="btn btn-primary btn-sm ml-auto font-display text-xs font-black uppercase tracking-[0.14em]"
-          >
-            Voter pour cette carte
-          </button>
-        ) : (
+        {!isVoteOpen ? (
           <div className="ml-auto flex items-center gap-3">
             <HoldToConfirmButton
               onConfirm={onBoost}
@@ -276,12 +434,20 @@ function BonusVotePanel({
               </p>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {isVoteOpen ? (
-        <p className="rounded-xl border border-status-quest/40 bg-status-quest/10 px-4 py-2 text-sm font-semibold text-status-quest">
-          Sélectionnez une carte, puis validez le vote de guilde avec le bouton.
+        <p
+          className={`rounded-xl border px-4 py-2 text-sm font-semibold ${
+            showSelectCardPrompt
+              ? 'border-status-warning/50 bg-status-warning/10 text-status-warning'
+              : 'border-status-quest/40 bg-status-quest/10 text-status-quest'
+          }`}
+        >
+          {showSelectCardPrompt
+            ? 'Sélectionnez une carte pour pouvoir valider le vote avec le bouton du dashboard.'
+            : 'Sélectionnez une carte, puis validez avec le bouton Vote en bas du dashboard.'}
         </p>
       ) : null}
 
@@ -297,7 +463,6 @@ function BonusVotePanel({
         renderItem={(card) => {
           const result = selectedVoteState?.results.find((item) => item.bonusCardId === card.id);
           const isSelected = selectedBonusCardId === card.id;
-          const isGuildVote = guildVote?.bonusCardId === card.id;
           const isFaceDown = isFaceDownCard(card);
           const showVoteOverlays = isVoteOpen && !isFaceDown;
           return (
@@ -316,15 +481,6 @@ function BonusVotePanel({
                 overlays={
                   showVoteOverlays
                     ? [
-                        {
-                          id: 'vote-count',
-                          placement: 'top-right-inside',
-                          content: (
-                            <span className="rounded-full border border-gaming-border bg-gaming-base/95 px-3 py-1 text-sm font-black text-text-primary shadow-card">
-                              {result?.voteCount || 0} vote{(result?.voteCount || 0) > 1 ? 's' : ''}
-                            </span>
-                          ),
-                        },
                         ...(result?.isLeader
                           ? [
                               {
@@ -333,19 +489,6 @@ function BonusVotePanel({
                                 content: (
                                   <span className="rounded-full bg-status-completed px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-gaming-base shadow-card">
                                     Leader
-                                  </span>
-                                ),
-                              },
-                            ]
-                          : []),
-                        ...(isGuildVote
-                          ? [
-                              {
-                                id: 'guild-vote',
-                                placement: 'bottom-left-inside' as const,
-                                content: (
-                                  <span className="rounded-full border border-status-quest/60 bg-gaming-base/95 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-status-quest shadow-card">
-                                    Vote de guilde
                                   </span>
                                 ),
                               },
@@ -369,43 +512,50 @@ function isFaceDownCard(card: PlayingCardProps) {
   return !front || front === 'none' || Boolean(front.back);
 }
 
-function buildVoteCards(t: (path: string) => string, bonusCards: GameRewardCard[]) {
+function buildVoteCards(
+  t: (path: string) => string,
+  bonusCards: GameRewardCard[],
+  selectedVoteState?: GameBonusVoteState['voteStates'][number]
+) {
   const cards: PlayingCardProps[] = bonusCards.length
-    ? bonusCards.map((card) => ({
-        kind: 'reward' as const,
-        id: card.id,
-        accentToken: card.accentToken,
-        model: {
-          front: {
-            title: { value: card.title, variant: 'title' },
-            subtitle: card.subtitle ? { value: card.subtitle, variant: 'subtitle' } : undefined,
-            color: { value: card.color },
-            art: {
-              value: card.illustrationUrl,
-              alt: card.title,
-              node: card.illustrationUrl
-                ? undefined
-                : renderLucideIcon(card.iconKey || 'Gift', 132, 'drop-shadow-lg'),
-            },
-            type: {
-              variant: 'cost',
-              value: card.cost,
-              text: { value: String(card.cost || 0), variant: 'ribbon' },
-            },
-            info: {
-              sections: [
-                {
-                  id: 'description',
-                  description: {
-                    value: card.description || card.subtitle || t('dashboard.rewards.fallbackDescription'),
-                    variant: 'description',
+    ? bonusCards.map((card) => {
+        const voteCount = selectedVoteState?.results.find((item) => item.bonusCardId === card.id)?.voteCount ?? 0;
+
+        return {
+          kind: 'reward' as const,
+          id: card.id,
+          accentToken: card.accentToken,
+          model: {
+            front: {
+              title: { value: card.title, variant: 'title' },
+              subtitle: card.subtitle ? { value: card.subtitle, variant: 'subtitle' } : undefined,
+              color: { value: card.color },
+              art: {
+                value: card.illustrationUrl,
+                alt: card.title,
+              },
+              icon: { value: card.iconKey || 'Gift', colored: true },
+              type: {
+                variant: 'votes',
+                value: voteCount,
+                text: { value: String(voteCount), variant: 'ribbon' },
+                icon: { value: 'Vote' },
+              },
+              info: {
+                sections: [
+                  {
+                    id: 'description',
+                    description: {
+                      value: card.description || card.subtitle || t('dashboard.rewards.fallbackDescription'),
+                      variant: 'description',
+                    },
                   },
-                },
-              ],
+                ],
+              },
             },
           },
-        },
-      }))
+        };
+      })
     : [
         {
           kind: 'reward' as const,
@@ -423,4 +573,14 @@ function buildVoteCards(t: (path: string) => string, bonusCards: GameRewardCard[
     ...card,
     layoutId: `progress-next-vote-${card.id}`,
   }));
+}
+
+function getActiveRewardCardIds(voteState: GameBonusVoteState | null) {
+  if (!voteState) return new Set<string>();
+
+  return new Set(
+    voteState.voteStates.flatMap((state) =>
+      state.isVoteClosed && !state.hasTie ? state.leadingBonusCardIds : []
+    )
+  );
 }

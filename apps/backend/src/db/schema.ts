@@ -148,6 +148,25 @@ export const guilds = dbTable('guilds', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
 });
 
+export const guildVoteBalances = dbTable(
+  'guild_vote_balances',
+  {
+    id: uuid('id').notNull().primaryKey().$defaultFn(() => crypto.randomUUID()),
+    guildId: uuid('guild_id')
+      .notNull()
+      .references(() => guilds.id, { onDelete: 'cascade' }),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => cohorts.id, { onDelete: 'cascade' }),
+    voteBalance: integer('vote_balance').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => ({
+    guildCohortIdx: uniqueIndex('guild_vote_balances_guild_cohort_idx').on(table.guildId, table.cohortId),
+  })
+);
+
 // Table centrale des utilisateurs
 export const userStatusEnum = enumText('user_status', ['online', 'offline', 'busy']);
 
@@ -523,6 +542,8 @@ export const progressMilestones = dbTable('progress_milestones', {
   descriptionI18nKey: text('description_i18n_key'),
   cost: integer('cost').notNull(),
   sortOrder: integer('sort_order').notNull(),
+  voteOpenedAt: timestamp('vote_opened_at', { withTimezone: true }),
+  voteClosedAt: timestamp('vote_closed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
 });
@@ -677,6 +698,17 @@ export const milestoneBonusVotesRelations = relations(milestoneBonusVotes, ({ on
   guild: one(guilds, {
     fields: [milestoneBonusVotes.guildId],
     references: [guilds.id],
+  }),
+}));
+
+export const guildVoteBalancesRelations = relations(guildVoteBalances, ({ one }) => ({
+  guild: one(guilds, {
+    fields: [guildVoteBalances.guildId],
+    references: [guilds.id],
+  }),
+  cohort: one(cohorts, {
+    fields: [guildVoteBalances.cohortId],
+    references: [cohorts.id],
   }),
 }));
 

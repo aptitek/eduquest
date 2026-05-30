@@ -42,7 +42,7 @@ export function ErrorNotificationProvider({ children }: { children: ReactNode })
       });
       const notification: HeaderNotification = {
         id,
-        title: t('errors.notificationTitle'),
+        title: isNotEnoughGoldForBoost(detail) ? t('errors.notificationNoticeTitle') : t('errors.notificationTitle'),
         description: (
           <ErrorNotificationDescription
             message={message}
@@ -51,9 +51,10 @@ export function ErrorNotificationProvider({ children }: { children: ReactNode })
             copyLabel={t('errors.copyDebugLog')}
             copiedLabel={t('errors.copiedDebugLog')}
             copyFailedLabel={t('errors.copyDebugLogFailed')}
+            showDebugLog={!isNotEnoughGoldForBoost(detail)}
           />
         ),
-        tone: 'danger',
+        tone: isNotEnoughGoldForBoost(detail) ? 'warning' : 'danger',
       };
 
       console.warn(logMessage, error);
@@ -139,6 +140,7 @@ function ErrorNotificationDescription({
   copyLabel,
   copiedLabel,
   copyFailedLabel,
+  showDebugLog = true,
 }: {
   message: string;
   debugLog: string;
@@ -146,6 +148,7 @@ function ErrorNotificationDescription({
   copyLabel: string;
   copiedLabel: string;
   copyFailedLabel: string;
+  showDebugLog?: boolean;
 }) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const resolvedCopyLabel =
@@ -170,7 +173,7 @@ function ErrorNotificationDescription({
   return (
     <div className="space-y-2">
       <p>{message}</p>
-      <details className="group rounded-xl border border-status-danger/25 bg-gaming-base/50 px-3 py-2">
+      {showDebugLog ? <details className="group rounded-xl border border-status-danger/25 bg-gaming-base/50 px-3 py-2">
         <summary className="cursor-pointer select-none font-display text-[0.66rem] font-black uppercase tracking-[0.14em] text-status-danger">
           {summaryLabel}
         </summary>
@@ -188,9 +191,13 @@ function ErrorNotificationDescription({
         <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gaming-base/90 p-2 font-mono text-[0.68rem] leading-relaxed text-status-danger">
           {debugLog}
         </pre>
-      </details>
+      </details> : null}
     </div>
   );
+}
+
+function isNotEnoughGoldForBoost(detail: string) {
+  return detail === 'La guilde n’a pas assez d’or pour lancer ce boost.';
 }
 
 function formatErrorDebugLog({

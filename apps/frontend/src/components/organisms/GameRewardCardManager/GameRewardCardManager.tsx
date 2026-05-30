@@ -20,8 +20,6 @@ import {
   SOLARIZED_SWATCH_OPTIONS,
   resolveUiColorTokenName,
 } from '../../../styles/colorTokens';
-import { renderLucideIcon } from '../../../features/game/lucideIconCatalog';
-import { EditableIcon } from '../../atoms/EditableIcon';
 import { uploadAsset } from '../../../features/assets/api';
 
 const DEFAULT_BONUS_COLOR = SOLARIZED_SWATCH_OPTIONS[5].value;
@@ -79,34 +77,39 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     if (!token) return undefined;
 
     let isMounted = true;
-    setIsLoading(true);
-    Promise.all([
-      fetchGameRewardCards(token, gameId),
-      fetchGameBonusVoteState(token, gameId).catch(() => null),
-    ])
-      .then(([cards, voteState]) => {
-        if (!isMounted) return;
-        setRewardCards(cards);
-        setActiveRewardCardIds(getActiveRewardCardIds(voteState));
-      })
-      .catch((loadError) => {
-        reportError(loadError, {
-          messageKey: 'rewardCards.loadError',
-          id: 'rewardCards.loadError',
-          logMessage: 'Could not load reward cards.',
+    const loadRewardCards = () => {
+      setIsLoading(true);
+      Promise.all([
+        fetchGameRewardCards(token, gameId),
+        fetchGameBonusVoteState(token, gameId).catch(() => null),
+      ])
+        .then(([cards, voteState]) => {
+          if (!isMounted) return;
+          setRewardCards(cards);
+          setActiveRewardCardIds(getActiveRewardCardIds(voteState));
+        })
+        .catch((loadError) => {
+          reportError(loadError, {
+            messageKey: 'rewardCards.loadError',
+            id: 'rewardCards.loadError',
+            logMessage: 'Could not load reward cards.',
+          });
+          if (isMounted) {
+            setError(t('rewardCards.loadError').replace('{detail}', getUserErrorMessage(loadError, t)));
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsLoading(false);
         });
-        if (isMounted) {
-          setError(t('rewardCards.loadError').replace('{detail}', getUserErrorMessage(loadError, t)));
-        }
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
+    };
 
+    loadRewardCards();
+    window.addEventListener('eduquest:reward-cards-updated', loadRewardCards);
     return () => {
       isMounted = false;
+      window.removeEventListener('eduquest:reward-cards-updated', loadRewardCards);
     };
-  }, [gameId]);
+  }, [gameId, reportError, t]);
 
   const createRewardCard = async () => {
     if (!gameId || isSaving) return;
@@ -145,7 +148,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
   const candidateRewardCards = rewardCards.filter((card) => !activeRewardCardIds.has(card.id));
   const activeCardData = toNonEmptyCards(
     activeRewardCards.length
-      ? activeRewardCards.map((card) => toEditablePlayingCard(card))
+      ? activeRewardCards.map((card) => toActivePlayingCard(card))
       : [
           {
             kind: 'reward' as const,
@@ -218,6 +221,23 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
         front: {
           title: { value: card.title },
           back: { mode: 'icon', icon: { value: card.iconKey || 'Gift' } },
+        },
+      },
+    };
+  }
+
+  function toActivePlayingCard(card: GameRewardCard): PlayingCardProps {
+    const playingCard = toEditablePlayingCard(card);
+    const front = playingCard.model.front && playingCard.model.front !== 'none' ? playingCard.model.front : undefined;
+    if (!front) return playingCard;
+
+    return {
+      ...playingCard,
+      model: {
+        ...playingCard.model,
+        front: {
+          ...front,
+          type: undefined,
         },
       },
     };
@@ -387,15 +407,23 @@ function toPlayingCard(
         art: {
           value: illustrationUrl,
           alt: fallbackTitle,
-          node: illustrationUrl ? undefined : renderRewardIcon(iconKey, options.editable, options.onIconChange, t),
           editable: options.editable,
           upload: options.onIllustrationUpload,
           onChange: (value) => options.onFieldChange('art', value),
         },
+        icon: {
+          value: iconKey,
+          editable: options.editable,
+          onChange: options.onIconChange,
+          label: t('rewardCards.fields.icon'),
+          searchPlaceholder: t('rewardCards.iconSearchPlaceholder'),
+          colored: true,
+        },
         type: {
-          variant: 'cost',
+          variant: 'votes',
           value: card.cost ?? 0,
           text: { value: String(card.cost ?? 0), variant: 'ribbon' },
+          icon: { value: 'Vote' },
         },
         info: {
           sections: [
@@ -451,29 +479,6 @@ function RewardCardControls({
         className="h-8 w-8 shadow-md"
       />
 
-    </div>
-  );
-}
-
-function renderRewardIcon(
-  iconKey: string,
-  editable: boolean,
-  onChange: (iconKey: string) => void,
-  t: (path: string) => string
-) {
-  if (!editable) return renderLucideIcon(iconKey, 132, 'drop-shadow-lg');
-
-  return (
-    <div className="flex h-full w-full items-center justify-center" onClick={(event) => event.stopPropagation()}>
-      <EditableIcon
-        value={iconKey}
-        onChange={onChange}
-        size={132}
-        label={t('rewardCards.fields.icon')}
-        searchPlaceholder={t('rewardCards.iconSearchPlaceholder')}
-        buttonClassName="h-full w-full rounded-none bg-transparent text-[color:var(--playing-card-accent)] hover:bg-transparent focus-visible:ring-status-quest/70"
-        iconClassName="drop-shadow-lg"
-      />
     </div>
   );
 }

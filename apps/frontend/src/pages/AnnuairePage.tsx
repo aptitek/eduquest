@@ -190,6 +190,7 @@ export function AnnuairePage() {
       current?.id === updatedGuild.id ? { ...current, ...updatedGuild } : current
     );
     setCurrentGuildId((current) => current === updatedGuild.id ? updatedGuild.id : current);
+    window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
   }, []);
 
   const updateEditableGuildField = useCallback(
@@ -333,6 +334,7 @@ export function AnnuairePage() {
       setCurrentGuildId(nextGuild.id);
       setGuilds((current) => upsertGuild(current, nextGuild));
       if (nextGuild.cohortId) setStudentGuild(nextGuild.cohortId, nextGuild);
+      window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
     } catch (error) {
       reportError(error, {
         messageKey: 'directory.errors.createGuild',
@@ -367,6 +369,7 @@ export function AnnuairePage() {
       setUnguildedStudents(roster.unguildedStudents);
       setInvitations(roster.invitations);
       setCurrentGuildId(roster.currentGuildId || nextGuild.id);
+      window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
     } catch (error) {
       reportError(error, {
         messageKey: 'directory.errors.joinGuild',
