@@ -204,6 +204,7 @@ export interface GameCharacter {
   studentId: string;
   characterClass: GameCharacterClass;
   stats: GameStats;
+  title?: string;
   illustrationUrl?: string;
   updatedAt?: string;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Palette } from 'lucide-react';
 import { SOLARIZED_SWATCH_OPTIONS } from '../../../styles/colorTokens';
 import { cn } from '../../../utils/cn';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -110,14 +111,18 @@ export function ColorSwatchPicker({
           setIsOpen((current) => !current);
         }}
         className={cn(
-          'h-7 w-7 rounded-full border border-gaming-border shadow-lg transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest disabled:cursor-not-allowed disabled:opacity-60',
+          'inline-flex h-8 w-8 items-center justify-center rounded-full border border-gaming-border shadow-lg transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-status-quest disabled:cursor-not-allowed disabled:opacity-60',
           SOLARIZED_SWATCH_OPTIONS.find((option) => option.value === selectedValue)?.className,
           buttonClassName
         )}
         aria-label={resolvedAriaLabel}
         aria-expanded={isOpen}
         title={resolvedAriaLabel}
-      />
+      >
+        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-gaming-base/90 text-white shadow-md backdrop-blur-sm">
+          <Palette size={20} aria-hidden />
+        </span>
+      </button>
 
       {isOpen
         ? createPortal(

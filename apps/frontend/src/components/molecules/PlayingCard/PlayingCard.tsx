@@ -461,7 +461,7 @@ function CardArtSlot({
     void face.art?.onChange?.(await readFileAsDataUrl(file));
   };
 
-  if (canEdit && (face.art?.value || face.art?.upload || (!face.art?.node && !face.icon))) {
+  if (canEdit && (face.art?.value || face.art?.upload || !face.art?.node)) {
     return (
       <motion.div
         layoutId={layoutId ? `${layoutId}-illustration` : undefined}
@@ -520,6 +520,7 @@ function CardIconOverlay({
   kind?: PlayingCardKind;
   cardSize: PlayingCardSize;
 }) {
+  if (kind === 'guild' && face.art?.editable) return null;
   if (shouldRenderGuildIconInType(kind, cardSize, face)) return null;
   if (shouldRenderCardIconInType(face)) return null;
   const icon = getCardIcon(face, 64);
@@ -811,7 +812,7 @@ function shouldRenderGuildIconInType(
   size: PlayingCardSize | 'mini' | 'full' | 'nano',
   face: PlayingCardFaceSlots
 ) {
-  return kind === 'guild' && size !== 'nano' && Boolean(face.icon);
+  return kind === 'guild' && size !== 'nano' && Boolean(face.icon) && !face.art?.editable;
 }
 
 function shouldHideRibbonUntilNanoExpanded(

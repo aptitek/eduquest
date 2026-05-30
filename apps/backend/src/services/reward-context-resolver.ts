@@ -18,6 +18,7 @@ import type { ResolvedRewardBalanceConfig } from './reward-balance-config';
 import type { RewardActivityInput } from './rewards';
 
 type RewardDb = ReturnType<typeof import('../db').getDb>;
+const GUILD_CREATION_ONBOARDING_REWARD_ACTION = 'guild_created';
 
 export interface ResolvedRewardContext {
   guildId: string;
@@ -81,11 +82,15 @@ export class RewardContextResolver {
       return null;
     }
 
+    const metadata = (activity.metadata || {}) as Record<string, unknown>;
+    if (!isRewardableOnboardingActivity(metadata, event.metadata)) {
+      return null;
+    }
+
     const guildProfile = await this.loadGuildProfileOrNull(payload.guildId);
     if (!guildProfile) {
       return null;
     }
-    const metadata = (activity.metadata || {}) as Record<string, unknown>;
     const difficultyRaw = metadata.difficulty;
     const difficulty =
       difficultyRaw === 1 || difficultyRaw === 2 || difficultyRaw === 3
@@ -252,4 +257,17 @@ export class RewardContextResolver {
       throw error;
     }
   }
+}
+
+function isRewardableOnboardingActivity(
+  activityMetadata: Record<string, unknown>,
+  eventMetadata?: Record<string, unknown>
+) {
+  const onboardingTask = activityMetadata.onboardingTask;
+  if (typeof onboardingTask !== 'string') return true;
+
+  return (
+    onboardingTask === 'guild_rally' &&
+    eventMetadata?.onboardingRewardAction === GUILD_CREATION_ONBOARDING_REWARD_ACTION
+  );
 }

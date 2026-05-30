@@ -186,7 +186,7 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
                 <EditableText
                   value={milestone.descriptionI18nKey || ''}
                   ariaLabel="Description du milestone"
-                  placeholder="Description..."
+                  placeholder="Description…"
                   className="text-sm font-medium text-text-muted"
                   onCommit={(description) => updateMilestone(milestone, { description })}
                 />

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Handshake, Search, Users } from 'lucide-react';
+import { Check, Handshake, Search, UserPlus, Users } from 'lucide-react';
+import type { GuildInvitation } from '@eduquest/shared';
 import { GameHeader } from '../components/organisms/GameHeader';
 import { GameLayout } from '../components/templates/GameLayout';
 import { CompoundBadge } from '../components/atoms/CompoundBadge';
@@ -14,11 +15,15 @@ import {
 import {
   createGuild,
   fetchClassRoster,
+  fetchMapActivities,
+  inviteToGuild,
   joinGuild,
   updateGuild,
   type ClassRosterGuild,
+  type ClassRosterStudent,
   type GuildFieldsPayload,
 } from '../features/game/api';
+import { uploadAsset } from '../features/assets/api';
 import { useGameStore } from '../features/game/gameStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { cn } from '../utils/cn';
@@ -41,13 +46,26 @@ type EditableGuildCardOverride = Partial<Record<EditableGuildField, string>> & {
 export function AnnuairePage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
-  const { user, student, character, selectedGameId, setStudentGuild } = useGameStore();
+  const {
+    user,
+    student,
+    character,
+    selectedGameId,
+    activities,
+    currentActivityId,
+    setMapData,
+    setStudentGuild,
+  } = useGameStore();
   const [guilds, setGuilds] = useState<ClassRosterGuild[]>([]);
+  const [unguildedStudents, setUnguildedStudents] = useState<ClassRosterStudent[]>([]);
+  const [invitations, setInvitations] = useState<GuildInvitation[]>([]);
   const [currentGuildId, setCurrentGuildId] = useState<string | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
+  const [unguildedSearchQuery, setUnguildedSearchQuery] = useState('');
   const [revealedJoinGuildId, setRevealedJoinGuildId] = useState<string | null>(null);
   const [completedJoinGuildRevealId, setCompletedJoinGuildRevealId] = useState<string | null>(null);
   const [joiningGuildId, setJoiningGuildId] = useState<string | null>(null);
+  const [invitingStudentUserId, setInvitingStudentUserId] = useState<string | null>(null);
   const [editableGuildCards, setEditableGuildCards] = useState<Record<string, EditableGuildCardOverride>>({});
   const [createdGuild, setCreatedGuild] = useState<ClassRosterGuild | null>(null);
   const [isCreatingGuild, setIsCreatingGuild] = useState(false);
@@ -61,6 +79,17 @@ export function AnnuairePage() {
   const membershipGuild = latestMembership?.guild;
   const currentGuild =
     guilds.find((guild) => guild.id === currentGuildId || guild.id === membershipGuild?.id) || membershipGuild;
+  const canUseGuildRallyActions = useMemo(
+    () =>
+      Boolean(
+        currentActivityId &&
+          activities.find((activity) => {
+            const metadata = (activity.metadata || {}) as Record<string, unknown>;
+            return activity.id === currentActivityId && metadata.onboardingTask === 'guild_rally';
+          })
+      ),
+    [activities, currentActivityId]
+  );
   const openOwnCharacterPage = useCallback(() => {
     window.location.hash = 'character';
   }, []);
@@ -74,8 +103,17 @@ export function AnnuairePage() {
         const token = localStorage.getItem('eduquest_token');
         if (!token) throw new Error('Missing session token.');
         const roster = await fetchClassRoster(token, selectedGameId);
+        void fetchMapActivities(token, selectedGameId)
+          .then((mapData) => {
+            if (isMounted) setMapData(mapData);
+          })
+          .catch((error) => {
+            console.warn('Could not refresh map state from directory.', error);
+          });
         if (isMounted) {
           setGuilds(roster.guilds);
+          setUnguildedStudents(roster.unguildedStudents);
+          setInvitations(roster.invitations);
           setCurrentGuildId(roster.currentGuildId);
           setCreatedGuild(null);
           setIsCreatedGuildRevealComplete(false);
@@ -88,6 +126,8 @@ export function AnnuairePage() {
         });
         if (isMounted) {
           setGuilds([]);
+          setUnguildedStudents([]);
+          setInvitations([]);
           setCurrentGuildId(undefined);
         }
       } finally {
@@ -100,35 +140,7 @@ export function AnnuairePage() {
     return () => {
       isMounted = false;
     };
-  }, [selectedGameId, reportError]);
-
-  const currentGuildHand = useMemo(() => {
-    if (!currentGuild || !student || !user || !character) return undefined;
-
-    const [hand] = buildGuildCardHands(t, {
-      guild: currentGuild,
-      guildName: currentGuild.name || t('dashboard.dock.playerGuild'),
-      playerStudentId: student.id,
-      playerName: formatUserDisplayName(user),
-      playerAvatar: character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl || mascotUrl,
-      characterClass: character.characterClass,
-      characterClassLabel: t(`game.classes.${character.characterClass}`),
-      characterStats: character.stats,
-      activeCardIndex: 0,
-    });
-
-    return {
-      ...hand,
-      cards: hand.cards.map((card) =>
-        card.id === 'player'
-          ? {
-              ...card,
-              onClick: openOwnCharacterPage,
-            }
-          : card
-      ) as [PlayingCardProps, ...PlayingCardProps[]],
-    };
-  }, [character, currentGuild, openOwnCharacterPage, student, t, user]);
+  }, [selectedGameId, reportError, setMapData]);
 
   const additionalGuilds = useMemo(() => {
     const normalizedQuery = normalizeSearch(searchQuery);
@@ -148,6 +160,29 @@ export function AnnuairePage() {
       .sort(sortByName);
   }, [createdGuild?.id, currentGuild, currentGuildId, guilds, membershipGuild?.id, searchQuery]);
   const groupedGuilds = useMemo(() => groupGuildsByInitial(additionalGuilds), [additionalGuilds]);
+  const pendingInvitationUserIds = useMemo(() => {
+    if (!currentGuild?.id) return new Set<string>();
+
+    return new Set(
+      invitations
+        .filter((invitation) => invitation.guildId === currentGuild.id && invitation.status === 'pending')
+        .map((invitation) => invitation.inviteeUserId)
+    );
+  }, [currentGuild?.id, invitations]);
+  const unguildedStudentCards = useMemo(
+    () =>
+      unguildedStudents
+        .filter((rosterStudent) => rosterStudent.userId !== user?.id)
+        .filter(hasRosterCharacterCard),
+    [unguildedStudents, user?.id]
+  );
+  const visibleUnguildedStudents = useMemo(() => {
+    const normalizedQuery = normalizeSearch(unguildedSearchQuery);
+
+    return unguildedStudentCards.filter(
+      (rosterStudent) => !normalizedQuery || doesStudentMatchSearch(rosterStudent, normalizedQuery)
+    );
+  }, [unguildedSearchQuery, unguildedStudentCards]);
 
   const applyUpdatedGuild = useCallback((updatedGuild: ClassRosterGuild) => {
     setGuilds((current) => upsertGuild(current, updatedGuild));
@@ -211,13 +246,71 @@ export function AnnuairePage() {
     },
     [applyUpdatedGuild, reportError]
   );
+  const uploadGuildIllustration = useCallback(async (guildId: string, file: File) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) throw new Error('directory.errors.updateGuild');
+
+    const asset = await uploadAsset(token, 'guild-icon', file, guildId);
+    return asset.url;
+  }, []);
+  const currentGuildHand = useMemo(() => {
+    if (!currentGuild || !student || !user || !character) return undefined;
+
+    const [hand] = buildGuildCardHands(t, {
+      guild: currentGuild,
+      guildName: currentGuild.name || t('dashboard.dock.playerGuild'),
+      playerStudentId: student.id,
+      playerName: formatUserDisplayName(user),
+      playerAvatar: character.illustrationUrl || user.avatarUrl || user.githubAvatarUrl || mascotUrl,
+      characterTitle: character.title,
+      characterClass: character.characterClass,
+      characterClassLabel: t(`game.classes.${character.characterClass}`),
+      characterStats: character.stats,
+      activeCardIndex: 0,
+    });
+
+    return {
+      ...hand,
+      cards: hand.cards.map((card) => {
+        if (card.id === 'guild' && currentGuild.id) {
+          return makeEditableGuildCard({
+            card,
+            override: editableGuildCards[currentGuild.id],
+            onFieldChange: (field, value) => updateEditableGuildField(currentGuild.id, field, value),
+            onColorChange: (color) => updateEditableGuildColor(currentGuild.id, color),
+            onArtUpload: (file) => uploadGuildIllustration(currentGuild.id, file),
+          });
+        }
+
+        if (card.id === 'player') {
+          return {
+            ...card,
+            onClick: openOwnCharacterPage,
+          };
+        }
+
+        return card;
+      }) as [PlayingCardProps, ...PlayingCardProps[]],
+    };
+  }, [
+    character,
+    currentGuild,
+    editableGuildCards,
+    openOwnCharacterPage,
+    student,
+    t,
+    updateEditableGuildColor,
+    updateEditableGuildField,
+    uploadGuildIllustration,
+    user,
+  ]);
   const openCharacterPageForStudent = useCallback((studentId: string | undefined) => {
     if (!studentId) return;
     window.location.hash = `character?studentId=${encodeURIComponent(studentId)}`;
   }, []);
 
   const handleCreateGuild = async () => {
-    if (isCreatingGuild || createdGuild) return;
+    if (isCreatingGuild || createdGuild || !canUseGuildRallyActions) return;
 
     setIsCreatingGuild(true);
     setIsCreatedGuildRevealComplete(false);
@@ -252,7 +345,7 @@ export function AnnuairePage() {
   };
 
   const handleJoinGuild = async (guild: ClassRosterGuild) => {
-    if (joiningGuildId) return;
+    if (joiningGuildId || !canUseGuildRallyActions) return;
     if (isGuildFull(guild)) return;
     setJoiningGuildId(guild.id);
     try {
@@ -271,6 +364,8 @@ export function AnnuairePage() {
 
       const roster = await fetchClassRoster(token, selectedGameId);
       setGuilds(roster.guilds);
+      setUnguildedStudents(roster.unguildedStudents);
+      setInvitations(roster.invitations);
       setCurrentGuildId(roster.currentGuildId || nextGuild.id);
     } catch (error) {
       reportError(error, {
@@ -282,6 +377,53 @@ export function AnnuairePage() {
       setJoiningGuildId(null);
     }
   };
+
+  const handleInviteStudent = useCallback(
+    async (rosterStudent: ClassRosterStudent) => {
+      if (!currentGuild?.id || invitingStudentUserId || pendingInvitationUserIds.has(rosterStudent.userId)) return;
+      if (!canUseGuildRallyActions) return;
+
+      setInvitingStudentUserId(rosterStudent.userId);
+      try {
+        const token = localStorage.getItem('eduquest_token');
+        if (!token) throw new Error('Missing session token.');
+        const invitation = await inviteToGuild(token, currentGuild.id, { inviteeUserId: rosterStudent.userId });
+        setInvitations((current) => upsertInvitation(current, invitation));
+      } catch (error) {
+        reportError(error, {
+          messageKey: 'directory.errors.inviteGuild',
+          id: `directory.errors.inviteGuild.${rosterStudent.userId}`,
+          logMessage: 'Could not invite student to guild from directory.',
+        });
+      } finally {
+        setInvitingStudentUserId(null);
+      }
+    },
+    [canUseGuildRallyActions, currentGuild?.id, invitingStudentUserId, pendingInvitationUserIds, reportError]
+  );
+
+  const unguildedStudentsHand = useMemo(
+    () =>
+      currentGuild?.id
+        ? buildUnguildedStudentsHand({
+            t,
+            students: visibleUnguildedStudents,
+            pendingInvitationUserIds,
+            invitingStudentUserId,
+            canInvite: canUseGuildRallyActions,
+            onInvite: (rosterStudent) => void handleInviteStudent(rosterStudent),
+          })
+        : undefined,
+    [
+      canUseGuildRallyActions,
+      currentGuild?.id,
+      handleInviteStudent,
+      invitingStudentUserId,
+      pendingInvitationUserIds,
+      t,
+      visibleUnguildedStudents,
+    ]
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -308,41 +450,47 @@ export function AnnuairePage() {
       <div className="space-y-8">
         <h2 className="sr-only">{t('directory.title')}</h2>
 
-        <motion.section
-          layout
-          aria-labelledby="directory-create-guild-title"
-          className="scroll-mt-24 space-y-4"
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <Users className="text-status-quest" size={22} aria-hidden />
-            <h3 id="directory-create-guild-title" className="text-xl font-bold">
-              {t('directory.createGuild')}
-            </h3>
-          </div>
-          <p className="max-w-3xl text-sm text-text-secondary">
-            {t('directory.createGuildHelp')}
-          </p>
-          <PlayingHandPanel
-            hand={buildCreateGuildHand({
-              t,
-              guild: createdGuild,
-              guildOverride: createdGuild ? editableGuildCards[createdGuild.id] : undefined,
-              isCreating: isCreatingGuild,
-              isRevealComplete: isCreatedGuildRevealComplete,
-              onCreate: () => void handleCreateGuild(),
-              onRevealComplete: () => setIsCreatedGuildRevealComplete(true),
-              onGuildFieldChange: createdGuild
-                ? (field, value) => updateEditableGuildField(createdGuild.id, field, value)
-                : undefined,
-              onGuildColorChange: createdGuild
-                ? (color) => updateEditableGuildColor(createdGuild.id, color)
-                : undefined,
-            })}
-            className="border-status-quest/40 bg-gaming-card/50"
-            handClassName="h-[24rem] md:h-[28rem]"
-            onCardSelect={(card) => card.onClick?.()}
-          />
-        </motion.section>
+        {canUseGuildRallyActions ? (
+          <motion.section
+            layout
+            aria-labelledby="directory-create-guild-title"
+            className="scroll-mt-24 space-y-4"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <Users className="text-status-quest" size={22} aria-hidden />
+              <h3 id="directory-create-guild-title" className="text-xl font-bold">
+                {t('directory.createGuild')}
+              </h3>
+            </div>
+            <p className="max-w-3xl text-sm text-text-secondary">
+              {t('directory.createGuildHelp')}
+            </p>
+            <PlayingHandPanel
+              hand={buildCreateGuildHand({
+                t,
+                guild: createdGuild,
+                guildOverride: createdGuild ? editableGuildCards[createdGuild.id] : undefined,
+                isCreating: isCreatingGuild,
+                canCreate: canUseGuildRallyActions,
+                isRevealComplete: isCreatedGuildRevealComplete,
+                onCreate: () => void handleCreateGuild(),
+                onRevealComplete: () => setIsCreatedGuildRevealComplete(true),
+                onGuildFieldChange: createdGuild
+                  ? (field, value) => updateEditableGuildField(createdGuild.id, field, value)
+                  : undefined,
+                onGuildColorChange: createdGuild
+                  ? (color) => updateEditableGuildColor(createdGuild.id, color)
+                  : undefined,
+                onGuildArtUpload: createdGuild
+                  ? (file) => uploadGuildIllustration(createdGuild.id, file)
+                  : undefined,
+              })}
+              className="border-status-quest/40 bg-gaming-card/50"
+              handClassName="h-[24rem] md:h-[28rem]"
+              onCardSelect={(card) => card.onClick?.()}
+            />
+          </motion.section>
+        ) : null}
 
         {currentGuildHand ? (
           <motion.section
@@ -375,13 +523,73 @@ export function AnnuairePage() {
           </motion.section>
         ) : null}
 
+        {currentGuild?.id && canUseGuildRallyActions && (loading || unguildedStudentCards.length > 0) ? (
+          <motion.section
+            layout
+            aria-labelledby="directory-unguilded-title"
+            className="scroll-mt-24 space-y-4"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <UserPlus className="text-status-quest" size={22} aria-hidden />
+                <h3 id="directory-unguilded-title" className="text-xl font-bold">
+                  {t('directory.unguildedTitle')}
+                </h3>
+                <CompoundBadge
+                  parts={[
+                    loading
+                      ? t('common.loading')
+                      : `${visibleUnguildedStudents.length} ${t(
+                          visibleUnguildedStudents.length > 1 ? 'directory.cards' : 'directory.card'
+                        )}`,
+                  ]}
+                />
+              </div>
+
+              <label className="relative block w-full max-w-md">
+                <span className="sr-only">{t('directory.unguildedSearchLabel')}</span>
+                <Search
+                  size={18}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={unguildedSearchQuery}
+                  onChange={(event) => setUnguildedSearchQuery(event.target.value)}
+                  placeholder={t('directory.unguildedSearchPlaceholder')}
+                  className="w-full rounded-2xl border border-gaming-border bg-gaming-base/80 py-2 pl-10 pr-4 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
+                />
+              </label>
+            </div>
+            <p className="max-w-3xl text-sm text-text-secondary">
+              {t('directory.unguildedHelp')}
+            </p>
+            {unguildedStudentsHand ? (
+              <PlayingHandPanel
+                hand={unguildedStudentsHand}
+                className="border-status-quest/40 bg-gaming-card/50"
+                handClassName="h-[30rem] md:h-[32rem]"
+              />
+            ) : (
+              <p className="rounded-2xl border border-dashed border-gaming-border p-6 text-center text-sm text-text-muted">
+                {loading
+                  ? t('common.loading')
+                  : unguildedSearchQuery.trim()
+                    ? t('directory.noUnguildedSearchResults')
+                    : t('directory.noUnguildedStudents')}
+              </p>
+            )}
+          </motion.section>
+        ) : null}
+
         <motion.section
           layoutId="directory-guilds-list"
           transition={{ layout: { duration: 0.68, ease: [0.22, 1, 0.36, 1] } }}
           aria-labelledby="directory-guilds-title"
-          className="relative rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg"
+          className="scroll-mt-24 space-y-4"
         >
-          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <Users className="text-status-quest" size={22} aria-hidden />
               <h3 id="directory-guilds-title" className="text-xl font-bold">
@@ -428,10 +636,12 @@ export function AnnuairePage() {
                         guildOverride: editableGuildCards[guild.id],
                         onGuildFieldChange: (field, value) => updateEditableGuildField(guild.id, field, value),
                         onGuildColorChange: (color) => updateEditableGuildColor(guild.id, color),
+                        onGuildArtUpload: (file) => uploadGuildIllustration(guild.id, file),
                         onMemberSelect: user?.isAdmin ? openCharacterPageForStudent : undefined,
                         isRevealed: revealedJoinGuildId === guild.id,
                         isRevealComplete: completedJoinGuildRevealId === guild.id,
                         isJoining: joiningGuildId === guild.id,
+                        canJoin: canUseGuildRallyActions,
                         onReveal: () => {
                           setRevealedJoinGuildId(guild.id);
                           setCompletedJoinGuildRevealId(null);
@@ -467,10 +677,12 @@ function buildJoinableGuildHand({
   guildOverride,
   onGuildFieldChange,
   onGuildColorChange,
+  onGuildArtUpload,
   onMemberSelect,
   isRevealed,
   isRevealComplete,
   isJoining,
+  canJoin,
   onReveal,
   onRevealComplete,
   onJoin,
@@ -484,10 +696,12 @@ function buildJoinableGuildHand({
   guildOverride?: EditableGuildCardOverride;
   onGuildFieldChange: (field: EditableGuildField, value: string) => void;
   onGuildColorChange: (color: string) => void;
+  onGuildArtUpload: (file: File) => Promise<string | void>;
   onMemberSelect?: (studentId: string | undefined) => void;
   isRevealed: boolean;
   isRevealComplete: boolean;
   isJoining: boolean;
+  canJoin: boolean;
   onReveal: () => void;
   onRevealComplete: () => void;
   onJoin: () => void;
@@ -503,6 +717,7 @@ function buildJoinableGuildHand({
               override: guildOverride,
               onFieldChange: onGuildFieldChange,
               onColorChange: onGuildColorChange,
+              onArtUpload: onGuildArtUpload,
             });
           }
 
@@ -519,7 +734,7 @@ function buildJoinableGuildHand({
       }
     : baseHand;
 
-  if (user?.isAdmin || isGuildFull(guild)) return hand;
+  if (user?.isAdmin || isGuildFull(guild) || !canJoin) return hand;
 
   return {
     ...hand,
@@ -532,6 +747,7 @@ function buildJoinableGuildHand({
       isRevealed,
       isRevealComplete,
       isJoining,
+      canJoin,
       onReveal,
       onRevealComplete,
       onJoin,
@@ -544,21 +760,25 @@ function buildCreateGuildHand({
   guild,
   guildOverride,
   isCreating,
+  canCreate,
   isRevealComplete,
   onCreate,
   onRevealComplete,
   onGuildFieldChange,
   onGuildColorChange,
+  onGuildArtUpload,
 }: {
   t: (path: string) => string;
   guild: ClassRosterGuild | null;
   guildOverride?: EditableGuildCardOverride;
   isCreating: boolean;
+  canCreate: boolean;
   isRevealComplete: boolean;
   onCreate: () => void;
   onRevealComplete: () => void;
   onGuildFieldChange?: (field: EditableGuildField, value: string) => void;
   onGuildColorChange?: (color: string) => void;
+  onGuildArtUpload?: (file: File) => Promise<string | void>;
 }): PlayingHandData {
   if (!guild) {
     return {
@@ -571,8 +791,8 @@ function buildCreateGuildHand({
           kind: 'guild',
           accentToken: 'neutral',
           model: { front: 'none' },
-          interactive: !isCreating,
-          onClick: isCreating ? undefined : onCreate,
+          interactive: !isCreating && canCreate,
+          onClick: isCreating || !canCreate ? undefined : onCreate,
         },
       ],
       mainCardIndex: 0,
@@ -593,6 +813,7 @@ function buildCreateGuildHand({
           override: guildOverride,
           onFieldChange: onGuildFieldChange,
           onColorChange: onGuildColorChange,
+          onArtUpload: onGuildArtUpload,
         })
       : guildCard;
 
@@ -622,16 +843,146 @@ function buildCreateGuildHand({
   };
 }
 
+function buildUnguildedStudentsHand({
+  t,
+  students,
+  pendingInvitationUserIds,
+  invitingStudentUserId,
+  canInvite,
+  onInvite,
+}: {
+  t: (path: string) => string;
+  students: ClassRosterStudent[];
+  pendingInvitationUserIds: Set<string>;
+  invitingStudentUserId: string | null;
+  canInvite: boolean;
+  onInvite: (rosterStudent: ClassRosterStudent) => void;
+}): PlayingHandData | undefined {
+  if (students.length === 0) return undefined;
+
+  return {
+    id: 'directory-unguilded-students-hand',
+    title: t('directory.unguildedTitle'),
+    cards: students.map((rosterStudent) =>
+      buildUnguildedStudentCard({
+        t,
+        rosterStudent,
+        isInvitationPending: pendingInvitationUserIds.has(rosterStudent.userId),
+        isInviting: invitingStudentUserId === rosterStudent.userId,
+        canInvite,
+        onInvite: () => onInvite(rosterStudent),
+      })
+    ) as [PlayingCardProps, ...PlayingCardProps[]],
+    mainCardIndex: 0,
+    variant: 'fan',
+  };
+}
+
+function buildUnguildedStudentCard({
+  t,
+  rosterStudent,
+  isInvitationPending,
+  isInviting,
+  canInvite,
+  onInvite,
+}: {
+  t: (path: string) => string;
+  rosterStudent: ClassRosterStudent;
+  isInvitationPending: boolean;
+  isInviting: boolean;
+  canInvite: boolean;
+  onInvite: () => void;
+}): PlayingCardProps {
+  const characterClass = rosterStudent.characterClass || 'scholar';
+  const classLabel = rosterStudent.characterClass
+    ? t(`game.classes.${rosterStudent.characterClass}`)
+    : t('dashboard.dock.guildmate');
+  const inviteButton = (
+    <div className="flex items-center justify-center">
+      <HoldToConfirmButton
+        onConfirm={onInvite}
+        holdDuration={1000}
+        disabled={isInvitationPending || isInviting || !canInvite}
+        variant="btn-success"
+        shape="round"
+        aria-label={
+          isInvitationPending
+            ? t('directory.invitationPending')
+            : isInviting
+              ? t('directory.invitingStudent')
+              : t('directory.inviteToGuild')
+        }
+        title={
+          isInvitationPending
+            ? t('directory.invitationPending')
+            : isInviting
+              ? t('directory.invitingStudent')
+              : t('directory.inviteToGuild')
+        }
+        className="h-20 w-20 !border-solarized-green !bg-solarized-green !text-gaming-base shadow-xl ring-2 ring-gaming-base/80 hover:!border-solarized-green hover:!bg-solarized-green/90 disabled:!border-solarized-green disabled:!bg-solarized-green disabled:!text-gaming-base disabled:opacity-80"
+      >
+        {isInvitationPending ? <Check size={26} aria-hidden /> : <UserPlus size={26} aria-hidden />}
+        <span className="sr-only">
+          {isInvitationPending
+            ? t('directory.invitationPending')
+            : isInviting
+              ? t('directory.invitingStudent')
+              : t('directory.inviteToGuild')}
+        </span>
+      </HoldToConfirmButton>
+    </div>
+  );
+  const card = buildCharacterPlayingCardData({
+    id: `unguilded-${rosterStudent.id}`,
+    layoutId: `unguilded-${rosterStudent.id}`,
+    displayName: rosterStudent.displayName,
+    subtitle: rosterStudent.characterTitle || rosterStudent.institutionalEmail || rosterStudent.email || '',
+    description: rosterStudent.bio || t('directory.unguildedCardDescription'),
+    characterClass,
+    classLabel,
+    illustrationUrl: rosterStudent.characterIllustrationUrl || rosterStudent.avatarUrl || mascotUrl,
+    stats: rosterStudent.stats,
+    typeText: classLabel,
+  });
+  const front =
+    card.model.front && card.model.front !== 'none'
+      ? {
+          ...card.model.front,
+        }
+      : card.model.front;
+
+  return {
+    ...card,
+    className: cn(card.className, 'overflow-visible'),
+    model: {
+      ...card.model,
+      front,
+    },
+    overlays: [
+      ...(card.overlays || []),
+      {
+        id: `${card.id}-invite-action`,
+        placement: 'bottom-right-outside',
+        interactive: true,
+        className: 'z-[80] translate-x-[28%] translate-y-[28%]',
+        content: inviteButton,
+      },
+    ],
+  };
+}
+
 function makeEditableGuildCard({
   card,
   override,
   onFieldChange,
   onColorChange,
+  onArtUpload,
 }: {
   card: PlayingCardProps;
   override?: EditableGuildCardOverride;
   onFieldChange: (field: EditableGuildField, value: string) => void;
   onColorChange: (color: string) => void;
+  onArtUpload?: (file: File) => Promise<string | void>;
 }): PlayingCardProps {
   const editableBack = card.model.back
     ? applyEditableGuildFace({
@@ -639,6 +990,7 @@ function makeEditableGuildCard({
         override,
         onFieldChange,
         onColorChange,
+        onArtUpload,
       })
     : undefined;
 
@@ -651,6 +1003,7 @@ function makeEditableGuildCard({
         override,
         onFieldChange,
         onColorChange,
+        onArtUpload,
       }) || card.model.front,
       ...(editableBack !== undefined ? { back: editableBack } : {}),
     },
@@ -662,11 +1015,13 @@ function applyEditableGuildFace({
   override,
   onFieldChange,
   onColorChange,
+  onArtUpload,
 }: {
   face: PlayingCardFace | undefined;
   override?: EditableGuildCardOverride;
   onFieldChange: (field: EditableGuildField, value: string) => void;
   onColorChange: (color: string) => void;
+  onArtUpload?: (file: File) => Promise<string | void>;
 }): PlayingCardFace | undefined {
   if (!face || face === 'none') return face;
   const descriptionSection = face.info?.sections?.find((section) => section.id === 'description');
@@ -684,6 +1039,7 @@ function applyEditableGuildFace({
       ...face.art,
       value: override?.art ?? face.art?.value,
       editable: true,
+      upload: onArtUpload,
       onChange: (value) => onFieldChange('art', value),
     },
     color: {
@@ -742,6 +1098,7 @@ function buildJoinGuildCard({
   isRevealed,
   isRevealComplete,
   isJoining,
+  canJoin,
   onReveal,
   onRevealComplete,
   onJoin,
@@ -754,6 +1111,7 @@ function buildJoinGuildCard({
   isRevealed: boolean;
   isRevealComplete: boolean;
   isJoining: boolean;
+  canJoin: boolean;
   onReveal: () => void;
   onRevealComplete: () => void;
   onJoin: () => void;
@@ -767,8 +1125,8 @@ function buildJoinGuildCard({
       kind: 'student',
       accentToken: 'neutral',
       model: { front: 'none' },
-      interactive: Boolean(user && character),
-      onClick: user && character ? onReveal : undefined,
+      interactive: Boolean(user && character && canJoin),
+      onClick: user && character && canJoin ? onReveal : undefined,
     };
   }
 
@@ -797,7 +1155,7 @@ function buildJoinGuildCard({
       <HoldToConfirmButton
         onConfirm={onJoin}
         holdDuration={1200}
-        disabled={isJoining}
+        disabled={isJoining || !canJoin}
         variant="btn-primary"
         className="min-h-24 w-full flex-col border-primary/40 bg-primary px-3 text-center text-primary-content"
       >
@@ -900,6 +1258,10 @@ function upsertGuild(guilds: ClassRosterGuild[], guild: ClassRosterGuild) {
   return [nextGuild, ...guilds.filter((candidate) => candidate.id !== guild.id)];
 }
 
+function upsertInvitation(invitations: GuildInvitation[], invitation: GuildInvitation) {
+  return [invitation, ...invitations.filter((candidate) => candidate.id !== invitation.id)];
+}
+
 function getGuildFieldPayload(field: EditableGuildField, value: string): GuildFieldsPayload | null {
   if (field === 'title') return { name: value };
   if (field === 'description') return { description: value };
@@ -928,6 +1290,22 @@ function doesGuildMatchSearch(guild: ClassRosterGuild, normalizedQuery: string) 
   ];
 
   return values.some((value) => normalizeSearch(value).includes(normalizedQuery));
+}
+
+function doesStudentMatchSearch(rosterStudent: ClassRosterStudent, normalizedQuery: string) {
+  const values = [
+    rosterStudent.displayName,
+    rosterStudent.email,
+    rosterStudent.institutionalEmail,
+    rosterStudent.characterTitle,
+    rosterStudent.characterClass,
+  ];
+
+  return values.some((value) => normalizeSearch(value).includes(normalizedQuery));
+}
+
+function hasRosterCharacterCard(rosterStudent: ClassRosterStudent) {
+  return Boolean(rosterStudent.characterClass);
 }
 
 function sortByName(a: ClassRosterGuild, b: ClassRosterGuild) {

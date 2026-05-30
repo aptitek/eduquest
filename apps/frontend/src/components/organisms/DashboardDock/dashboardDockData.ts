@@ -12,6 +12,8 @@ interface GuildHandOptions {
   playerStudentId?: string;
   playerName: string;
   playerAvatar: string;
+  characterTitle?: string;
+  playerDescription?: string;
   characterClass: GameCharacterClass;
   characterClassLabel: string;
   characterStats: GameStats;
@@ -27,7 +29,7 @@ interface ClassGuildHandOptions {
 
 export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): PlayingCardProps[] {
   const podiumGuilds = guilds
-    .filter((guild) => guild.boostPointsSpent === undefined || guild.boostPointsSpent > 0)
+    .filter((guild) => (guild.boostPointsSpent || 0) > 0)
     .sort(sortByBoostPointsSpentThenName);
 
   const toCard = (guild: DockGuild, index: number): PlayingCardProps => ({
@@ -46,6 +48,7 @@ export function buildPodiumCards(t: Translate, guilds: readonly DockGuild[]): Pl
           variant: 'rank',
           value: index + 1,
           text: { value: `#${index + 1}`, variant: 'ribbon' },
+          icon: { value: 'Trophy' },
           className: podiumRibbonClassNames[index],
         },
         icon: { value: guild.iconKey || 'Shield', colored: true },
@@ -106,6 +109,7 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
   const playerClassColor = resolveCardColor(options.characterClass);
   const otherMemberCards = (options.guild.members || [])
     .filter((member) => member.id !== options.playerStudentId)
+    .filter(hasCharacterCard)
     .map((member, index) => buildGuildMemberCard(t, member, 'guild-hand', index));
   const cards: [PlayingCardProps, ...PlayingCardProps[]] = [
     {
@@ -142,14 +146,15 @@ export function buildGuildCardHands(t: Translate, options: GuildHandOptions): [P
       model: {
         front: {
           title: { value: options.playerName, variant: 'title' },
-          subtitle: { value: options.characterClassLabel, variant: 'subtitle' },
+          subtitle: { value: options.characterTitle || '', variant: 'subtitle' },
           color: { value: playerClassColor },
           art: { value: options.playerAvatar, alt: options.playerName },
           icon: { value: getCharacterClassIconKey(options.characterClass), colored: true },
           type: { variant: 'class', text: { value: options.characterClassLabel, variant: 'ribbon' } },
           info: {
             sections: descriptionSection(
-              t('dashboard.dock.playerCardDescription').replace('{class}', options.characterClassLabel)
+              options.playerDescription ||
+                t('dashboard.dock.playerCardDescription').replace('{class}', options.characterClassLabel)
             ),
             stats: {
               values: toPlayingCardStats(options.characterStats),
@@ -180,9 +185,9 @@ export function buildClassGuildHand(t: Translate, options: ClassGuildHandOptions
   const guildSlug = slugify(guildName);
   const layoutPrefix = options.layoutPrefix || `class-guild-${guildSlug}`;
   const guildColor = resolveCardColor(options.guild.color);
-  const memberCards = (options.guild.members || []).map((member, index) =>
-    buildGuildMemberCard(t, member, layoutPrefix, index)
-  );
+  const memberCards = (options.guild.members || [])
+    .filter(hasCharacterCard)
+    .map((member, index) => buildGuildMemberCard(t, member, layoutPrefix, index));
 
   return {
     id: `${layoutPrefix}-hand`,
@@ -264,7 +269,7 @@ function buildGuildMemberCard(
   const classLabel = member.characterClass
     ? t(`game.classes.${member.characterClass}`)
     : t('dashboard.dock.guildmate');
-  const subtitle = member.institutionalEmail || member.email || classLabel;
+  const subtitle = member.characterTitle || member.institutionalEmail || member.email || '';
   const illustrationUrl = member.characterIllustrationUrl || member.avatarUrl;
   const characterClass = member.characterClass || 'scholar';
 
@@ -282,7 +287,7 @@ function buildGuildMemberCard(
         icon: { value: getCharacterClassIconKey(characterClass), colored: true },
         type: { variant: 'class', text: { value: classLabel, variant: 'ribbon' } },
         info: {
-          sections: descriptionSection(t('dashboard.dock.hiddenMember')),
+          sections: descriptionSection(member.bio || t('dashboard.dock.hiddenMember')),
           stats: member.stats
             ? {
                 values: [
@@ -300,6 +305,10 @@ function buildGuildMemberCard(
       },
     },
   };
+}
+
+function hasCharacterCard(member: DockGuildMember) {
+  return Boolean(member.characterClass);
 }
 
 function buildGuildStatLines(stats: GameStats | undefined): CardStatValue[] {

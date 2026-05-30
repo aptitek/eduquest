@@ -78,6 +78,8 @@ type ProgressMilestoneRecord = typeof progressMilestones.$inferSelect;
 type GameBonusCardRecord = typeof gameBonusCards.$inferSelect;
 type MilestoneBonusVoteRecord = typeof milestoneBonusVotes.$inferSelect;
 type Database = ReturnType<typeof getDb>;
+
+const GUILD_CREATION_ONBOARDING_REWARD_ACTION = 'guild_created';
 type GuildMutationDb = Pick<Database, 'select' | 'update' | 'delete'>;
 
 const ONLINE_PRESENCE_WINDOW_MS = 60 * 60 * 1000;
@@ -111,9 +113,11 @@ interface MapOccupancyMember {
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
+  bio?: string | null;
   avatarUrl?: string | null;
   githubAvatarUrl?: string | null;
   characterIllustrationUrl?: string | null;
+  characterTitle?: string | null;
   characterClass?: string | null;
   guildId?: string | null;
   guildName?: string | null;
@@ -869,9 +873,11 @@ function toClassRosterStudent(student: ClassRosterStudentRecord) {
     userId: student.userId,
     displayName: formatOccupancyMemberName(student),
     email: student.email || undefined,
+    bio: student.bio || undefined,
     institutionalEmail: student.institutionalEmail || undefined,
     avatarUrl: student.avatarUrl || student.githubAvatarUrl || undefined,
     characterIllustrationUrl: student.characterIllustrationUrl || undefined,
+    characterTitle: student.characterTitle || undefined,
     characterClass,
     guildId: student.guildId || undefined,
     guildName: student.guildName || undefined,
@@ -1218,6 +1224,47 @@ async function loadActivityAuthorizationState(
     currentStep,
     Boolean(guildId)
   );
+}
+
+async function isStudentOnGuildRallyNode(
+  db: Database,
+  context: {
+    studentRecord: Pick<StudentRecord, 'id'>;
+    membership: Pick<CohortMembershipRecord, 'cohortId'>;
+  }
+) {
+  const activeRun = await getOrCreateActiveRun(db, context.membership.cohortId);
+  const [latestMove] = await db
+    .select()
+    .from(gameCharacterMoves)
+    .where(
+      and(
+        eq(gameCharacterMoves.studentId, context.studentRecord.id),
+        eq(gameCharacterMoves.cohortId, context.membership.cohortId),
+        eq(gameCharacterMoves.mapRunId, activeRun.id)
+      )
+    )
+    .orderBy(desc(gameCharacterMoves.createdAt))
+    .limit(1);
+
+  if (!latestMove?.toActivityId) return false;
+
+  const [currentActivity] = await db
+    .select({ metadata: gameActivities.metadata })
+    .from(gameActivities)
+    .where(
+      and(
+        eq(gameActivities.id, latestMove.toActivityId),
+        or(
+          sql`${gameActivities.cohortId} IS NULL`,
+          eq(gameActivities.cohortId, context.membership.cohortId),
+          eq(gameActivities.mapRunId, activeRun.id)
+        )
+      )
+    )
+    .limit(1);
+
+  return currentActivity ? getOnboardingTask(currentActivity) === 'guild_rally' : false;
 }
 
 function toCohortPayload(record: CohortRecord) {
@@ -1714,7 +1761,7 @@ function withDefaultOnboardingResource(
   metadata: Record<string, unknown>,
   resource: { title: string; url: string }
 ): Record<string, unknown> {
-  const currentResources = Array.isArray(metadata.resources) ? metadata.resources : [];
+  const currentResources = normalizeOnboardingResources(metadata.resources);
   const hasResource = currentResources.some((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
     return (item as Record<string, unknown>).url === resource.url;
@@ -1726,6 +1773,26 @@ function withDefaultOnboardingResource(
   };
 }
 
+function normalizeOnboardingResources(resources: unknown) {
+  if (!Array.isArray(resources)) return [];
+
+  let changed = false;
+  const normalizedResources = resources.map((item) => {
+    const normalizedItem = normalizeOnboardingResource(item);
+    if (normalizedItem !== item) changed = true;
+    return normalizedItem;
+  });
+
+  return changed ? normalizedResources : resources;
+}
+
+function normalizeOnboardingResource(resource: unknown) {
+  if (!resource || typeof resource !== 'object' || Array.isArray(resource)) return resource;
+  const resourceRecord = resource as Record<string, unknown>;
+  if (resourceRecord.url !== '#guild') return resource;
+  return { ...resourceRecord, url: '#annuaire' };
+}
+
 function getDefaultOnboardingResource(task: string | undefined) {
   if (task === 'institutional_profile') {
     return { title: 'Compléter le profil institutionnel', url: '#profile' };
@@ -1734,7 +1801,7 @@ function getDefaultOnboardingResource(task: string | undefined) {
     return { title: 'Créer la carte personnage', url: '#character' };
   }
   if (task === 'guild_rally') {
-    return { title: 'Créer ou rejoindre une guilde', url: '#guild' };
+    return { title: 'Créer ou rejoindre une guilde', url: '#annuaire' };
   }
 
   return undefined;
@@ -1835,7 +1902,7 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
         description:
           'Créez une guilde, rejoignez un groupe existant ou répondez à vos invitations.',
         iconKey: 'users',
-        resources: [{ title: 'Créer ou rejoindre une guilde', url: '#guild' }],
+        resources: [{ title: 'Créer ou rejoindre une guilde', url: '#annuaire' }],
       },
     });
   }
@@ -2949,6 +3016,9 @@ mapRouter.post('/guilds', async (c) => {
     if (!context) {
       return apiError(c, 'Cohort context not found.', 404);
     }
+    if (!(await isStudentOnGuildRallyNode(db, context))) {
+      return apiError(c, 'Guild actions are only available from the guild rally activity.', 403);
+    }
     const [createdGuild] = await db
       .insert(guilds)
       .values({
@@ -2982,6 +3052,32 @@ mapRouter.post('/guilds', async (c) => {
       await deleteGuildIfEmpty(db, context.membership.cohortId, context.membership.guildId);
     }
 
+    const activeRun = await getOrCreateActiveRun(db, context.cohortRecord.id);
+    const onboardingActivities = await ensureOnboardingActivities(db, context.cohortRecord.id, activeRun.id);
+    const guildCreationActivity = onboardingActivities.find(
+      (activity) => getOnboardingTask(activity) === 'guild_rally'
+    );
+
+    if (guildCreationActivity) {
+      await publishEvent(
+        {
+          type: 'activity.validated',
+          source: 'http.guilds',
+          payload: {
+            activityId: guildCreationActivity.id,
+            studentId: context.studentRecord.id,
+            cohortId: context.cohortRecord.id,
+            guildId: createdGuild.id,
+            validatedBy: 'system',
+          },
+          metadata: {
+            onboardingRewardAction: GUILD_CREATION_ONBOARDING_REWARD_ACTION,
+          },
+        },
+        createEventContext({ db, env: c.env, userId: user?.id })
+      );
+    }
+
     const [creatorRecord] = await db
       .select({
         studentId: students.id,
@@ -2990,6 +3086,7 @@ mapRouter.post('/guilds', async (c) => {
         firstName: users.firstName,
         lastName: users.lastName,
         email: users.email,
+        bio: users.bio,
         avatarUrl: users.avatarUrl,
         githubAvatarUrl: users.githubAvatarUrl,
         guildId: cohortMemberships.guildId,
@@ -3000,6 +3097,7 @@ mapRouter.post('/guilds', async (c) => {
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
         characterIllustrationUrl: gameCharacters.illustrationUrl,
+        characterTitle: gameCharacters.title,
         strength: sql<number>`coalesce(${gameCharacters.strength}, 0) + coalesce(${gameCharacterClasses.baseStrength}, 0)`,
         dexterity: sql<number>`coalesce(${gameCharacters.dexterity}, 0) + coalesce(${gameCharacterClasses.baseDexterity}, 0)`,
         constitution: sql<number>`coalesce(${gameCharacters.constitution}, 0) + coalesce(${gameCharacterClasses.baseConstitution}, 0)`,
@@ -3098,12 +3196,14 @@ mapRouter.get('/guilds', async (c) => {
         firstName: users.firstName,
         lastName: users.lastName,
         email: users.email,
+        bio: users.bio,
         avatarUrl: users.avatarUrl,
         githubAvatarUrl: users.githubAvatarUrl,
         guildId: cohortMemberships.guildId,
         institutionalEmail: cohortMemberships.institutionalEmail,
         characterClass: gameCharacters.characterClass,
         characterIllustrationUrl: gameCharacters.illustrationUrl,
+        characterTitle: gameCharacters.title,
         strength: sql<number>`coalesce(${gameCharacters.strength}, 0) + coalesce(${gameCharacterClasses.baseStrength}, 0)`,
         dexterity: sql<number>`coalesce(${gameCharacters.dexterity}, 0) + coalesce(${gameCharacterClasses.baseDexterity}, 0)`,
         constitution: sql<number>`coalesce(${gameCharacters.constitution}, 0) + coalesce(${gameCharacterClasses.baseConstitution}, 0)`,
@@ -3355,6 +3455,9 @@ mapRouter.post('/guilds/:guildId/join', async (c) => {
     if (!context) {
       return apiError(c, 'Cohort context not found.', 404);
     }
+    if (!(await isStudentOnGuildRallyNode(db, context))) {
+      return apiError(c, 'Guild actions are only available from the guild rally activity.', 403);
+    }
     if (context.membership.guildId === guildId) {
       return c.json({ success: true, source: 'database', guild: toGuildPayload(guildRecord) });
     }
@@ -3412,6 +3515,9 @@ mapRouter.post('/guilds/:guildId/invitations', async (c) => {
     const context = await resolveStudentCohortContext(db, user, guildRecord.cohortId);
     if (!context || context.membership.guildId !== guildId) {
       return apiError(c, 'Only guild members can invite students.', 403);
+    }
+    if (!(await isStudentOnGuildRallyNode(db, context))) {
+      return apiError(c, 'Guild actions are only available from the guild rally activity.', 403);
     }
 
     const [inviteeMembership] = await db
@@ -3513,6 +3619,9 @@ mapRouter.post('/guild-invitations/:invitationId/accept', async (c) => {
     const context = await resolveStudentCohortContext(db, user, invitation.cohortId);
     if (!context) {
       return apiError(c, 'Cohort context not found.', 404);
+    }
+    if (!(await isStudentOnGuildRallyNode(db, context))) {
+      return apiError(c, 'Guild actions are only available from the guild rally activity.', 403);
     }
 
     const memberCount = await countGuildMembers(db, invitation.cohortId, invitation.guildId);
@@ -3887,6 +3996,34 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
     }
 
     if (latestMove?.toActivityId) {
+      const completionRecords = await db
+        .select()
+        .from(gameActivityCompletions)
+        .where(
+          and(
+            eq(gameActivityCompletions.studentId, studentRecord.id),
+            eq(gameActivityCompletions.cohortId, membership.cohortId)
+          )
+        );
+      const completedActivityIds = new Set(completionRecords.map((completion) => completion.activityId));
+
+      if (completedActivityIds.has(activityId)) {
+        const [moveRecord] = await db
+          .insert(gameCharacterMoves)
+          .values({
+            studentId: studentRecord.id,
+            cohortId: membership.cohortId,
+            mapRunId: activeRun.id,
+            fromActivityId: latestMove.toActivityId,
+            toActivityId: activityId,
+            moveType: 'move',
+          })
+          .returning();
+        const move = toCharacterMove(moveRecord);
+
+        return c.json({ success: true, source: 'database', move, currentActivityId: move.toActivityId });
+      }
+
       const [directEdge] = await db
         .select()
         .from(gameActivityEdges)
@@ -3907,16 +4044,6 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
         return apiError(c, 'Characters can only move through outgoing unlocked edges.', 403);
       }
 
-      const completionRecords = await db
-        .select()
-        .from(gameActivityCompletions)
-        .where(
-          and(
-            eq(gameActivityCompletions.studentId, studentRecord.id),
-            eq(gameActivityCompletions.cohortId, membership.cohortId)
-          )
-        );
-      const completedActivityIds = new Set(completionRecords.map((completion) => completion.activityId));
       if (!isEdgeUnlocked(toActivityEdge(directEdge), completedActivityIds, context.cohortRecord.currentStep)) {
         return apiError(c, 'Characters can only move through outgoing unlocked edges.', 403);
       }

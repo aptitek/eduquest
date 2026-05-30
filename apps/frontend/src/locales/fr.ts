@@ -1,6 +1,6 @@
 export const fr = {
   common: {
-    loading: 'Chargement...',
+    loading: 'Chargement…',
     apiSource: 'Source API',
     xp: 'XP',
     level: 'Niveau',
@@ -53,8 +53,8 @@ export const fr = {
   layout: {
     title: 'EduQuest',
     alpha: 'v1.0 (Alpha)',
-    loadingSession: 'Chargement de la session de jeu...',
-    loadingMap: 'Génération de la carte interactive...',
+    loadingSession: 'Chargement de la session de jeu…',
+    loadingMap: 'Génération de la carte interactive…',
     appIconAlt: 'Icône Aptipiou',
     primaryNav: 'Navigation principale',
   },
@@ -202,7 +202,7 @@ export const fr = {
   management: {
     title: 'Gestion',
     subtitle: "Vue d'administration pour gérer écoles, cohortes et étudiant·e·s.",
-    loading: 'Chargement des données de gestion...',
+    loading: 'Chargement des données de gestion…',
     nav: 'Gestion',
     tabs: {
       schools: 'École',
@@ -282,7 +282,7 @@ export const fr = {
       inviteTitle: 'Inscrire de nouveaux·elles étudiant·e·s',
       inviteDescription:
         'Partagez ce lien avec les nouveaux·elles inscrit·e·s. Toute inscription réalisée via ce lien sera automatiquement rattachée à cette cohorte pendant une semaine.',
-      inviteLoading: "Création du lien d'inscription...",
+      inviteLoading: "Création du lien d'inscription…",
       inviteLink: "Lien d'inscription",
       copy: 'Copier',
       copied: 'Copié',
@@ -313,7 +313,7 @@ export const fr = {
         'Ouvrez cette cohorte pour que les nouveaux comptes élèves soient assignés ici sans lien dédié. Une seule cohorte peut être ouverte à la fois.',
       openRegistration: "Ouvrir l'inscription automatique",
       closeRegistration: "Fermer l'inscription automatique",
-      registrationUpdating: 'Mise à jour...',
+      registrationUpdating: 'Mise à jour…',
       major: 'Majeure',
       minor: 'Mineure',
       classCards: 'Cartes de classe',
@@ -421,17 +421,30 @@ export const fr = {
     createGuild: 'Créer une guilde',
     createGuildHelp:
       'Cette carte vide crée une nouvelle guilde, puis se retourne pour modifier son nom, son visuel et sa description.',
+    guildRallyRequired:
+      'Placez votre personnage sur le nœud “Ralliement de guilde” de la carte pour créer, rejoindre ou inviter dans une guilde.',
     newGuildName: 'Nouvelle guilde',
+    unguildedTitle: 'Cartes sans guilde',
+    unguildedHelp:
+      'Ces cartes de personnage ne sont pas encore dans une guilde. Invitez-les depuis votre guilde actuelle pour compléter votre équipe.',
+    unguildedCardDescription: 'Cette carte de personnage attend encore une invitation de guilde.',
+    unguildedSearchLabel: 'Rechercher une carte sans guilde',
+    unguildedSearchPlaceholder: 'Rechercher une carte de personnage…',
+    noUnguildedSearchResults: 'Aucune carte sans guilde ne correspond à cette recherche.',
+    noUnguildedStudents: 'Toutes les cartes de personnage de la cohorte sont déjà dans une guilde.',
+    inviteToGuild: 'Maintenir pour inviter',
+    invitingStudent: 'Invitation…',
+    invitationPending: 'Invitation envoyée',
     otherGuilds: 'Autres guildes',
     searchLabel: 'Rechercher une guilde',
-    searchPlaceholder: 'Rechercher une guilde ou un membre...',
+    searchPlaceholder: 'Rechercher une guilde ou un membre…',
     noSearchResults: 'Aucune guilde ne correspond à cette recherche.',
     noOtherGuilds: 'Aucune autre guilde à afficher.',
     revealJoinCard: 'Changer de guilde',
     currentGuildFallback: 'votre guilde actuelle',
     joinActionRibbon: 'Rejoindre',
     joinGuild: 'Maintenir pour rejoindre',
-    joiningGuild: 'Changement...',
+    joiningGuild: 'Changement…',
     joinGuildWarning:
       'Vous allez quitter {currentGuild} pour rejoindre {targetGuild}. Votre ancienne guilde sera remplacée.',
     joinGuildNoCurrentWarning:
@@ -442,6 +455,7 @@ export const fr = {
       loadGuilds: 'L’annuaire n’a pas pu être chargé. Les guildes peuvent être indisponibles jusqu’au prochain rafraîchissement. Détail : {detail}',
       createGuild: 'La guilde n’a pas pu être créée. Détail : {detail}',
       joinGuild: 'La guilde n’a pas pu être rejointe. Votre guilde actuelle n’a pas changé. Détail : {detail}',
+      inviteGuild: "L’invitation n’a pas pu être envoyée. Vérifiez que vous êtes toujours dans cette guilde puis réessayez. Détail : {detail}",
     },
   },
   bonus: {
@@ -468,7 +482,7 @@ export const fr = {
     backTitle: 'Réglages du bonus',
     backSubtitle: 'Identité visuelle',
     backDescription: 'Modifiez les points directement sur le ruban, choisissez une icône ci-dessous et sélectionnez la couleur avec les mêmes pastilles que les cartes d’activité.',
-    iconSearchPlaceholder: 'Chercher une icône bonus, ex. cadeau, étoile, trophée...',
+    iconSearchPlaceholder: 'Chercher une icône bonus, ex. cadeau, étoile, trophée…',
     useCardColor: 'Utiliser la couleur de carte {color}',
     pointsShort: 'pts',
     fields: {
@@ -501,9 +515,10 @@ export const fr = {
     onboardingDescription:
       'Choisissez une classe pour créer votre carte personnage. Aucune statistique de personnage n’est créée avant cette étape.',
     onboardingRibbon: 'Onboarding',
-    creatingCharacter: 'Création...',
+    creatingCharacter: 'Création…',
     activeCardDescription:
       'Votre carte aventurier active. Changez de classe ci-dessous pour mettre à jour son rôle.',
+    characterTitlePlaceholder: 'Titre du personnage',
     pointsRemainingShort: 'pts',
     errors: {
       loadClasses: 'Les définitions de classes n’ont pas pu être chargées. Les statistiques par défaut seront affichées. Détail : {detail}',
@@ -533,7 +548,7 @@ export const fr = {
     startBoss: 'Lancer le Combat',
     startQuest: 'Résoudre la Quête',
     completedSuccess: 'Défi accompli avec succès !',
-    completing: 'Validation en cours...',
+    completing: 'Validation en cours…',
     completionError: "L'activité n'a pas pu être validée. Veuillez réessayer.",
     onboardingDesc:
       "Entrez dans l'aventure, découvrez le cadre de jeu et préparez votre première progression.",
@@ -562,12 +577,12 @@ export const fr = {
     vote: 'Voter',
     complete: 'Terminer',
     completeQuest: 'Terminer la quête',
-    resolving: 'Validation...',
+    resolving: 'Validation…',
     questResolved: 'Quête résolue',
     waitingGuild: 'En attente de la guilde',
     bossSubmission: 'Soumission du boss',
     bossSubmissionHelp: 'Soumettez vos liens de réponse et fichiers de projet.',
-    submitting: 'Soumission...',
+    submitting: 'Soumission…',
     submitBossAnswer: 'Soumettre la réponse au boss',
     filesSelected: '{count}/{max} fichier(s) sélectionné(s).',
     fileLimit: 'Jusqu’à {max} fichier(s), {size} chacun.',
@@ -575,7 +590,7 @@ export const fr = {
     guildRallyNoGuildHelp:
       'Créez une guilde pour participer au ralliement. Vous rejoindrez automatiquement la nouvelle guilde.',
     createGuildCard: 'Créer une guilde',
-    creatingGuild: 'Création de la guilde...',
+    creatingGuild: 'Création de la guilde…',
     defaultGuildName: 'Guilde de {name}',
     defaultGuildDescription: 'Nouvelle guilde prête à rallier des membres.',
     inviteGuildMember: 'Inviter un membre',
@@ -585,8 +600,8 @@ export const fr = {
     noResources: 'Aucune ressource pour le moment.',
     resourceUrlPlaceholder: 'https://example.com/resource',
     emptyResource: 'Ressource vide',
-    loadingIconSelector: 'Chargement du sélecteur d’icônes...',
-    iconSearchPlaceholder: 'Rechercher des icônes, ex. épée, livre, flamme...',
+    loadingIconSelector: 'Chargement du sélecteur d’icônes…',
+    iconSearchPlaceholder: 'Rechercher des icônes, ex. épée, livre, flamme…',
     useIcon: 'Utiliser l’icône {icon}',
     activityMode: 'Mode d’activité',
     modeSolo: 'Seul·e',
@@ -642,7 +657,7 @@ export const fr = {
     edgePath: '{from} vers {to}',
     edgePathTarget: 'vers {to}',
     fogConditions: 'Conditions de brouillard',
-    saving: 'Enregistrement...',
+    saving: 'Enregistrement…',
     help: 'Chaque intervalle peut remplacer la couleur et l’animation uniquement lorsque l’étape de cohorte {currentStep} est comprise dedans.',
     addInterval: 'Ajouter un intervalle',
     removeInterval: 'Retirer l’intervalle',

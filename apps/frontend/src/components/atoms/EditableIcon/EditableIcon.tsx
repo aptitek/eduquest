@@ -143,7 +143,7 @@ export function EditableIcon({
               <Suspense
                 fallback={
                   <div className="rounded-xl border border-gaming-border bg-gaming-base px-3 py-4 text-sm text-text-muted">
-                    Loading icon selector...
+                    Loading icon selector…
                   </div>
                 }
               >

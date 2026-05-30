@@ -22,16 +22,16 @@ describe('dashboard dock data builders', () => {
       'dashboard.dock.boostPointsSpent',
       'dashboard.dock.boostPointsSpent',
     ]);
+    expect(cards.map((card) => getFront(card)?.type?.icon?.value)).toEqual(['Trophy', 'Trophy', 'Trophy']);
   });
 
-  it('builds a partial podium while guild data is still loading', () => {
+  it('keeps the podium empty until a guild has spent boost points', () => {
     const cards = buildPodiumCards(t, [
       { id: 'guild-player', name: 'Solarized Sentinels', gold: 180 },
+      { id: 'guild-zero', name: 'Zero Guild', gold: 120, boostPointsSpent: 0 },
     ]);
 
-    expect(cards).toHaveLength(1);
-    expect(getFront(cards[0])?.title?.value).toBe('Solarized Sentinels');
-    expect(getFront(cards[0])?.type?.text?.value).toBe('#1');
+    expect(cards).toEqual([]);
   });
 
   it('uses real character stats in the player guild hand', () => {

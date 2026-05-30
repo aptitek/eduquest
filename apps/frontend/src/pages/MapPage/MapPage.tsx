@@ -374,6 +374,7 @@ export function MapPage() {
     }
     if (
       currentActivityId &&
+      !completedActivityIds.includes(activity.id) &&
       !hasUnlockedOutgoingMapEdge(activityEdges, currentActivityId, activity.id, completedActivityIds, currentStep)
     ) {
       return;
@@ -438,7 +439,7 @@ export function MapPage() {
         return next;
       });
       addActivityCompletion(completion);
-      gainXp(getActivityXpReward(act));
+      gainXp(getActivityCompletionGoldReward(act));
       if (act.participationMode === 'guild') {
         await fetchMapData({ preserveSelection: true, silent: true });
       } else {
@@ -1028,7 +1029,7 @@ export function MapPage() {
               <ActivityCard
                 activity={
                   selectedActivity
-                    ? toActivityCardData(selectedActivity, activities, activityEdges, t)
+                    ? toActivityCardData(selectedActivity, activities, activityEdges, t, Boolean(user?.isAdmin))
                     : undefined
                 }
                 canEdit={Boolean(user?.isAdmin)}
@@ -1227,7 +1228,8 @@ function toActivityCardData(
   activity: Activity,
   activities: Activity[],
   edges: GameActivityEdge[],
-  t: (path: string) => string
+  t: (path: string) => string,
+  canEdit = false
 ): ActivityCardData {
   const metadata = (activity.metadata || {}) as Record<string, unknown>;
   const activityById = new Map(activities.map((candidate) => [candidate.id, candidate]));
@@ -1250,7 +1252,7 @@ function toActivityCardData(
       t('activityCard.defaultDescription'),
     illustrationUrl: getStringMetadata(metadata, 'illustrationUrl'),
     illustrationAlt: getStringMetadata(metadata, 'illustrationAlt') || activity.title,
-    goldReward: getActivityXpReward(activity),
+    goldReward: getVisibleActivityGoldReward(activity, canEdit),
     cardColor: activity.cardColor,
     participationMode: activity.participationMode || 'solo',
     resources,
@@ -1266,6 +1268,22 @@ function toActivityCardData(
 function getStringMetadata(metadata: Record<string, unknown>, key: string) {
   const value = metadata[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+function getVisibleActivityGoldReward(activity: Activity, canEdit: boolean) {
+  if (!getStringMetadata((activity.metadata || {}) as Record<string, unknown>, 'onboardingTask')) {
+    return getActivityXpReward(activity);
+  }
+
+  return canEdit ? activity.basePoints || 0 : 0;
+}
+
+function getActivityCompletionGoldReward(activity: Activity) {
+  if (getStringMetadata((activity.metadata || {}) as Record<string, unknown>, 'onboardingTask')) {
+    return 0;
+  }
+
+  return getActivityXpReward(activity);
 }
 
 function isSystemOnboardingActivity(activity: Activity) {
@@ -1445,7 +1463,11 @@ function getDefaultOnboardingResource(
     return { title: t('character.title'), url: '#character' };
   }
 
-  if (activity.type === 'tavern' || onboardingTask === 'guild_rally') {
+  if (onboardingTask === 'guild_rally') {
+    return undefined;
+  }
+
+  if (activity.type === 'tavern') {
     return { title: t('directory.title'), url: '#annuaire' };
   }
 
@@ -1462,12 +1484,16 @@ function getResourceList(metadata: Record<string, unknown>): ActivityResourceLin
     const resource = item as Record<string, unknown>;
     const title = typeof resource.title === 'string' ? resource.title : undefined;
     const url = typeof resource.url === 'string' ? resource.url : undefined;
-    return url ? [{ title, url }] : [];
+    return url ? [{ title, url: normalizeActivityResourceUrl(url) }] : [];
   });
 }
 
 function resourceFromUrl(url?: string, title?: string): ActivityResourceLink | undefined {
-  return url ? { title, url } : undefined;
+  return url ? { title, url: normalizeActivityResourceUrl(url) } : undefined;
+}
+
+function normalizeActivityResourceUrl(url: string) {
+  return url === '#guild' ? '#annuaire' : url;
 }
 
 function getBossAnswerFields(activity: Activity, t: (path: string) => string): BossActivityAnswerField[] | undefined {

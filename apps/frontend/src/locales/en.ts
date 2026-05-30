@@ -2,7 +2,7 @@ import { TranslationKeys } from './fr';
 
 export const en: TranslationKeys = {
   common: {
-    loading: 'Loading...',
+    loading: 'Loading…',
     apiSource: 'API Source',
     xp: 'XP',
     level: 'Level',
@@ -55,8 +55,8 @@ export const en: TranslationKeys = {
   layout: {
     title: 'EduQuest',
     alpha: 'v1.0 (Alpha)',
-    loadingSession: 'Loading game session...',
-    loadingMap: 'Generating interactive map...',
+    loadingSession: 'Loading game session…',
+    loadingMap: 'Generating interactive map…',
     appIconAlt: 'Aptipiou icon',
     primaryNav: 'Primary navigation',
   },
@@ -203,7 +203,7 @@ export const en: TranslationKeys = {
   management: {
     title: 'Management',
     subtitle: 'Administration view for managing schools, cohorts, and students.',
-    loading: 'Loading management data...',
+    loading: 'Loading management data…',
     nav: 'Management',
     tabs: {
       schools: 'School',
@@ -283,7 +283,7 @@ export const en: TranslationKeys = {
       inviteTitle: 'Register new students',
       inviteDescription:
         'Share this link with new registrants. Any signup completed through it is automatically attached to this cohort for one week.',
-      inviteLoading: 'Creating registration link...',
+      inviteLoading: 'Creating registration link…',
       inviteLink: 'Registration link',
       copy: 'Copy',
       copied: 'Copied',
@@ -314,7 +314,7 @@ export const en: TranslationKeys = {
         'Open this cohort to assign new student accounts here without a dedicated link. Only one cohort can be open at a time.',
       openRegistration: 'Open automatic registration',
       closeRegistration: 'Close automatic registration',
-      registrationUpdating: 'Updating...',
+      registrationUpdating: 'Updating…',
       major: 'Major',
       minor: 'Minor',
       classCards: 'Class cards',
@@ -421,17 +421,30 @@ export const en: TranslationKeys = {
     createGuild: 'Create a guild',
     createGuildHelp:
       'This empty card creates a new guild, then flips over so you can edit its name, visuals, and description.',
+    guildRallyRequired:
+      'Move your character onto the “Guild rally” map node to create, join, or invite students into a guild.',
     newGuildName: 'New guild',
+    unguildedTitle: 'Cards without a guild',
+    unguildedHelp:
+      'These character cards are not in a guild yet. Invite them from your current guild to complete your team.',
+    unguildedCardDescription: 'This character card is still waiting for a guild invitation.',
+    unguildedSearchLabel: 'Search cards without a guild',
+    unguildedSearchPlaceholder: 'Search for a character card…',
+    noUnguildedSearchResults: 'No unguilded card matches this search.',
+    noUnguildedStudents: 'Every character card in the cohort already belongs to a guild.',
+    inviteToGuild: 'Hold to invite',
+    invitingStudent: 'Inviting…',
+    invitationPending: 'Invitation sent',
     otherGuilds: 'Other guilds',
     searchLabel: 'Search guilds',
-    searchPlaceholder: 'Search for a guild or member...',
+    searchPlaceholder: 'Search for a guild or member…',
     noSearchResults: 'No guild matches this search.',
     noOtherGuilds: 'No other guilds to display.',
     revealJoinCard: 'Change guild',
     currentGuildFallback: 'your current guild',
     joinActionRibbon: 'Join',
     joinGuild: 'Hold to join',
-    joiningGuild: 'Changing...',
+    joiningGuild: 'Changing…',
     joinGuildWarning:
       'You will leave {currentGuild} to join {targetGuild}. Your previous guild will be replaced.',
     joinGuildNoCurrentWarning:
@@ -442,6 +455,7 @@ export const en: TranslationKeys = {
       loadGuilds: 'The directory could not be loaded. Guilds may be unavailable until the next refresh. Detail: {detail}',
       createGuild: 'The guild could not be created. Detail: {detail}',
       joinGuild: 'The guild could not be joined. Your current guild was not changed. Detail: {detail}',
+      inviteGuild: 'The invitation could not be sent. Check that you still belong to this guild and try again. Detail: {detail}',
     },
   },
   bonus: {
@@ -468,7 +482,7 @@ export const en: TranslationKeys = {
     backTitle: 'Bonus settings',
     backSubtitle: 'Visual identity',
     backDescription: 'Edit the points directly on the ribbon, choose an icon below, and pick the card color from the same swatches used by activity cards.',
-    iconSearchPlaceholder: 'Search bonus icons, e.g. gift, star, trophy...',
+    iconSearchPlaceholder: 'Search bonus icons, e.g. gift, star, trophy…',
     useCardColor: 'Use {color} card color',
     pointsShort: 'pts',
     fields: {
@@ -501,8 +515,9 @@ export const en: TranslationKeys = {
     onboardingDescription:
       'Choose a class to create your character card. No character stats are created before this step.',
     onboardingRibbon: 'Onboarding',
-    creatingCharacter: 'Creating...',
+    creatingCharacter: 'Creating…',
     activeCardDescription: 'Your active adventurer card. Change class below to update its role.',
+    characterTitlePlaceholder: 'Character title',
     pointsRemainingShort: 'pts',
     errors: {
       loadClasses: 'Character class definitions could not be loaded. Default class stats will be shown. Detail: {detail}',
@@ -532,7 +547,7 @@ export const en: TranslationKeys = {
     startBoss: 'Start Battle',
     startQuest: 'Solve Quest',
     completedSuccess: 'Challenge successfully completed!',
-    completing: 'Completing...',
+    completing: 'Completing…',
     completionError: 'The activity could not be completed. Please try again.',
     onboardingDesc:
       'Enter the adventure, learn the game frame, and prepare your first progression step.',
@@ -561,12 +576,12 @@ export const en: TranslationKeys = {
     vote: 'Vote',
     complete: 'Complete',
     completeQuest: 'Complete quest',
-    resolving: 'Resolving...',
+    resolving: 'Resolving…',
     questResolved: 'Quest resolved',
     waitingGuild: 'Waiting for guild',
     bossSubmission: 'Boss submission',
     bossSubmissionHelp: 'Submit your answer links and project files.',
-    submitting: 'Submitting...',
+    submitting: 'Submitting…',
     submitBossAnswer: 'Submit boss answer',
     filesSelected: '{count}/{max} file(s) selected.',
     fileLimit: 'Up to {max} file(s), {size} each.',
@@ -574,7 +589,7 @@ export const en: TranslationKeys = {
     guildRallyNoGuildHelp:
       'Create a guild to join the rally. You will automatically join the new guild.',
     createGuildCard: 'Create a guild',
-    creatingGuild: 'Creating guild...',
+    creatingGuild: 'Creating guild…',
     defaultGuildName: "{name}'s Guild",
     defaultGuildDescription: 'New guild ready to rally members.',
     inviteGuildMember: 'Invite a member',
@@ -584,8 +599,8 @@ export const en: TranslationKeys = {
     noResources: 'No resources yet.',
     resourceUrlPlaceholder: 'https://example.com/resource',
     emptyResource: 'Empty resource',
-    loadingIconSelector: 'Loading icon selector...',
-    iconSearchPlaceholder: 'Search icons, e.g. sword, book, flame...',
+    loadingIconSelector: 'Loading icon selector…',
+    iconSearchPlaceholder: 'Search icons, e.g. sword, book, flame…',
     useIcon: 'Use {icon} icon',
     activityMode: 'Activity mode',
     modeSolo: 'Alone',
@@ -641,7 +656,7 @@ export const en: TranslationKeys = {
     edgePath: '{from} to {to}',
     edgePathTarget: 'to {to}',
     fogConditions: 'Fog conditions',
-    saving: 'Saving...',
+    saving: 'Saving…',
     help: 'Each interval can override color and animation only while cohort step {currentStep} is inside it.',
     addInterval: 'Add interval',
     removeInterval: 'Remove interval',

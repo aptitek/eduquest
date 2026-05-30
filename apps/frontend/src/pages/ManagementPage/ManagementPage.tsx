@@ -709,7 +709,13 @@ function buildStudentCharacterBackSide(
       editable: true,
       onChange: (value) => void updateSelectedStudent({ user: { displayName: value } }),
     },
-    subtitle: { value: classLabel, variant: 'subtitle' },
+    subtitle: {
+      value: character?.title || '',
+      variant: 'subtitle',
+      placeholder: t('character.characterTitlePlaceholder'),
+      editable: true,
+      onChange: (value) => void updateSelectedStudent({ characterTitle: value }),
+    },
     art: {
       value: illustrationUrl,
       alt: row.displayName,

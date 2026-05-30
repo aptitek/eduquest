@@ -66,6 +66,34 @@ function withGameParam(path: string, gameId?: string | null) {
   return url.toString();
 }
 
+const TRANSIENT_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+function delay(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+function isTransientFetchError(error: unknown) {
+  return error instanceof TypeError;
+}
+
+async function fetchWithTransientRetry(input: RequestInfo | URL, init: RequestInit, retries = 2): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(input, init);
+      if (!TRANSIENT_HTTP_STATUSES.has(response.status) || attempt === retries) return response;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientFetchError(error) || attempt === retries) throw error;
+    }
+
+    await delay(150 * (attempt + 1));
+  }
+
+  throw lastError;
+}
+
 type GamesResponse =
   | {
       success: true;
@@ -153,9 +181,11 @@ export interface ClassRosterStudent {
   userId: string;
   displayName: string;
   email?: string;
+  bio?: string;
   institutionalEmail?: string;
   avatarUrl?: string;
   characterIllustrationUrl?: string;
+  characterTitle?: string;
   characterClass?: GameCharacterClass;
   guildId?: string;
   guildName?: string;
@@ -276,7 +306,7 @@ export async function fetchGuilds(token: string, gameId?: string | null): Promis
 }
 
 export async function fetchClassRoster(token: string, gameId?: string | null): Promise<ClassRoster> {
-  const response = await fetch(withGameParam('/api/guilds', gameId), {
+  const response = await fetchWithTransientRetry(withGameParam('/api/guilds', gameId), {
     headers: {
       Authorization: `Bearer ${token}`,
     },

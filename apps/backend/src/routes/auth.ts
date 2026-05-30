@@ -142,6 +142,7 @@ type ManagementStudentUpdateBody = {
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
   characterIllustrationUrl?: string;
+  characterTitle?: string;
   characterClass?: string;
   characterStats?: Partial<GameStats>;
   gameId?: string | null;
@@ -333,6 +334,7 @@ function toGameCharacter(record: GameCharacterRecord): GameCharacter {
     studentId: record.studentId,
     characterClass: normalizeGameCharacterClass(record.characterClass),
     stats: toGameCharacterStats(record),
+    title: record.title || undefined,
     illustrationUrl: record.illustrationUrl || undefined,
     updatedAt: toIsoString(record.updatedAt),
   };
@@ -1495,6 +1497,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
   if (
     body.characterClass !== undefined ||
     body.characterIllustrationUrl !== undefined ||
+    body.characterTitle !== undefined ||
     body.characterStats !== undefined
   ) {
     if (body.characterClass !== undefined && !GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
@@ -1557,6 +1560,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
           ...(body.characterIllustrationUrl !== undefined
             ? { illustrationUrl: body.characterIllustrationUrl || null }
             : {}),
+          ...(body.characterTitle !== undefined ? { title: body.characterTitle.trim() || null } : {}),
           ...(characterStatsUpdate
             ? {
                 strength: characterStatsUpdate.strength,
@@ -1577,6 +1581,7 @@ authRouter.put('/management/students/:studentId', async (c) => {
         ...(body.characterIllustrationUrl !== undefined
           ? { illustrationUrl: body.characterIllustrationUrl || null }
           : {}),
+        ...(body.characterTitle !== undefined ? { title: body.characterTitle.trim() || null } : {}),
         ...(characterStatsUpdate
           ? {
               strength: characterStatsUpdate.strength,
@@ -2347,6 +2352,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     photoUrl?: string;
     characterClass?: string;
     characterIllustrationUrl?: string;
+    characterTitle?: string;
     characterStats?: Partial<GameStats>;
     gameId?: string;
   };
@@ -2603,6 +2609,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         if (
           body.characterClass !== undefined ||
           body.characterIllustrationUrl !== undefined ||
+          body.characterTitle !== undefined ||
           body.characterStats !== undefined
         ) {
           if (body.characterClass !== undefined && !GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
@@ -2668,6 +2675,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                   ...(body.characterIllustrationUrl !== undefined
                     ? { illustrationUrl: body.characterIllustrationUrl || null }
                     : {}),
+                  ...(body.characterTitle !== undefined ? { title: body.characterTitle.trim() || null } : {}),
                   ...(characterStatsUpdate
                     ? {
                         strength: characterStatsUpdate.strength,
@@ -2690,6 +2698,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
                   ...(body.characterIllustrationUrl !== undefined
                     ? { illustrationUrl: body.characterIllustrationUrl || null }
                     : {}),
+                  ...(body.characterTitle !== undefined ? { title: body.characterTitle.trim() || null } : {}),
                   ...(characterStatsUpdate
                     ? {
                         strength: characterStatsUpdate.strength,

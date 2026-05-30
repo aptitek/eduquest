@@ -551,7 +551,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
   if (user?.isAdmin) {
     const adminPodiumCards = podiumDeckCards;
-    const adminPodiumContent = (
+    const adminPodiumContent = adminPodiumCards ? (
       <motion.div
         layout
         transition={layoutTransition}
@@ -575,7 +575,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
           stackCardPresentation={{ width: 'dockSmallStack' }}
         />
       </motion.div>
-    );
+    ) : null;
     const voteButton = (
       <HoldToConfirmButton
         onConfirm={() => setIsVoteOpen((current) => !current)}
@@ -749,6 +749,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     playerStudentId: student.id,
     playerName,
     playerAvatar,
+    characterTitle: character.title,
     characterClass: character.characterClass,
     characterClassLabel: t(`game.classes.${character.characterClass}`),
     characterStats: character.stats,
@@ -847,7 +848,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       tone="gold"
     />
   );
-  const podiumContent = (
+  const podiumContent = podiumDeckCards ? (
     <motion.div
       layout
       transition={layoutTransition}
@@ -871,7 +872,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
         stackCardPresentation={{ width: 'dockLargeStack' }}
       />
     </motion.div>
-  );
+  ) : null;
   const guildContent = (
     <motion.div
       layout
@@ -1109,6 +1110,8 @@ function buildPodiumDeckCards(
   sentinelCard: PlayingCardProps
 ) {
   const topPodiumCards = podiumCards.slice(0, 3);
+  if (topPodiumCards.length === 0) return toNonEmptyCards([sentinelCard]);
+
   const shouldShowSentinel =
     topPodiumCards.length < 3 || (topPodiumCards.length === 3 && guildCount > topPodiumCards.length);
 
@@ -1238,7 +1241,7 @@ function VoteCostEditor({
         </label>
       </div>
       {isSaving ? (
-        <p className="mt-0.5 px-1 text-[0.55rem] font-semibold text-status-quest">Saving...</p>
+        <p className="mt-0.5 px-1 text-[0.55rem] font-semibold text-status-quest">Saving…</p>
       ) : null}
     </div>
   );
@@ -1347,7 +1350,7 @@ function InlineMilestoneEditor({
             value={descriptionDraft}
             disabled={disabled}
             aria-label="Description du milestone"
-            placeholder="Description..."
+            placeholder="Description…"
             onChange={(event) => setDescriptionDraft(event.currentTarget.value)}
             onBlur={() => commitText('description')}
             onKeyDown={(event) => {
@@ -1380,7 +1383,7 @@ function InlineMilestoneEditor({
         />
       </div>
       {isSaving ? (
-        <p className="mt-1 px-1 text-[0.62rem] font-semibold text-status-quest">Sauvegarde...</p>
+        <p className="mt-1 px-1 text-[0.62rem] font-semibold text-status-quest">Sauvegarde…</p>
       ) : null}
     </div>
   );

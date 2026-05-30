@@ -68,6 +68,7 @@ export type ManagementStudentUpdate = {
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
   characterIllustrationUrl?: string;
+  characterTitle?: string;
   characterClass?: GameCharacterClass;
   characterStats?: GameStats;
   gameId?: string | null;

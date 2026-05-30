@@ -37,7 +37,7 @@ import {
   type GameStatKey,
 } from '../../features/game/characterStats';
 
-type CharacterCardEditableField = 'title' | 'description' | 'art';
+type CharacterCardEditableField = 'title' | 'subtitle' | 'description' | 'art';
 
 type EditablePlayerCardOverride = Partial<Record<CharacterCardEditableField, string>> & {
   stats?: Record<string, number>;
@@ -45,6 +45,7 @@ type EditablePlayerCardOverride = Partial<Record<CharacterCardEditableField, str
 
 type CharacterProfileUpdatePayload = {
   displayName?: string;
+  characterTitle?: string;
   bio?: string;
   characterIllustrationUrl?: string;
   characterStats?: GameStats;
@@ -251,6 +252,8 @@ export function CharacterPage() {
     const trimmedValue = value.trim();
     if (field === 'title') {
       void savePlayerCardProfileUpdate({ displayName: trimmedValue });
+    } else if (field === 'subtitle') {
+      void savePlayerCardProfileUpdate({ characterTitle: trimmedValue });
     } else if (field === 'description') {
       void savePlayerCardProfileUpdate({ bio: value });
     } else if (field === 'art') {
@@ -315,6 +318,8 @@ export function CharacterPage() {
           avatarUrl,
           characterClass: editableCharacter.characterClass,
           classLabel: currentClassLabel,
+          characterTitle: editableCharacter.title,
+          characterTitlePlaceholder: t('character.characterTitlePlaceholder'),
           statAllocations,
           baseStats,
           statMaxValue,
@@ -481,6 +486,12 @@ function applyPlayerCardOverrides(
               editable: true,
               onChange: (value) => onFieldChange('title', value),
             },
+            subtitle: {
+              ...front.subtitle,
+              value: override.subtitle ?? front.subtitle?.value,
+              editable: true,
+              onChange: (value) => onFieldChange('subtitle', value),
+            },
             art: {
               ...front.art,
               value: override.art ?? front.art?.value,
@@ -523,6 +534,8 @@ function buildPlayerCharacterCard({
   avatarUrl,
   characterClass,
   classLabel,
+  characterTitle,
+  characterTitlePlaceholder,
   statAllocations,
   baseStats,
   statMaxValue,
@@ -536,6 +549,8 @@ function buildPlayerCharacterCard({
   avatarUrl?: string;
   characterClass: GameCharacterClass;
   classLabel: string;
+  characterTitle?: string;
+  characterTitlePlaceholder: string;
   statAllocations: GameStats;
   baseStats: GameStats;
   statMaxValue: number;
@@ -552,7 +567,7 @@ function buildPlayerCharacterCard({
     model: {
       front: {
         title: { value: name, variant: 'title' },
-        subtitle: { value: classLabel, variant: 'subtitle' },
+        subtitle: { value: characterTitle || '', variant: 'subtitle', placeholder: characterTitlePlaceholder },
         art: { value: avatarUrl, alt: name },
         icon: { value: getCharacterClassIconKey(characterClass), colored: true },
         type: { variant: 'class', text: { value: classLabel, variant: 'ribbon' } },
@@ -720,6 +735,7 @@ function toManagementStudentUpdate(payload: CharacterProfileUpdatePayload): Mana
     ...(payload.characterIllustrationUrl !== undefined
       ? { characterIllustrationUrl: payload.characterIllustrationUrl }
       : {}),
+    ...(payload.characterTitle !== undefined ? { characterTitle: payload.characterTitle } : {}),
     ...(payload.characterStats !== undefined ? { characterStats: payload.characterStats } : {}),
     ...(payload.gameId !== undefined ? { gameId: payload.gameId } : {}),
   };

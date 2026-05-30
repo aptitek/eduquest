@@ -267,7 +267,7 @@ function BonusVotePanel({
             >
               <span className="flex flex-col items-center gap-0.5">
                 <Gift size={14} aria-hidden />
-                <span>{isVoting ? '...' : '+1'}</span>
+                <span>{isVoting ? '…' : '+1'}</span>
               </span>
             </HoldToConfirmButton>
             <div className="min-w-0 text-xs font-bold uppercase tracking-[0.12em]">

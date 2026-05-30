@@ -29,7 +29,7 @@ export function buildCharacterPlayingCardData({
   typeText = classLabel,
   editable,
 }: CharacterCardAdapterInput): PlayingCardProps {
-  const resolvedSubtitle = subtitle || classLabel;
+  const resolvedSubtitle = subtitle || '';
 
   return {
     id,

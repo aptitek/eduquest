@@ -680,7 +680,12 @@ function ResourceUrlRow({
           target={isInternalResource ? undefined : '_blank'}
           rel={isInternalResource ? undefined : 'noreferrer'}
           onClick={handleResourceClick}
-          className="min-w-0 truncate text-sm font-semibold text-status-quest hover:underline"
+          title={resourceLabel}
+          className={cn(
+            'block min-w-0 flex-1 truncate rounded-md text-sm font-semibold text-status-quest transition hover:underline',
+            'hover:relative hover:z-30 hover:max-w-[min(24rem,calc(100vw-3rem))] hover:overflow-visible hover:whitespace-normal hover:bg-gaming-card hover:px-2 hover:py-1 hover:shadow-card',
+            'focus-visible:relative focus-visible:z-30 focus-visible:max-w-[min(24rem,calc(100vw-3rem))] focus-visible:overflow-visible focus-visible:whitespace-normal focus-visible:bg-gaming-card focus-visible:px-2 focus-visible:py-1 focus-visible:shadow-card'
+          )}
         >
           {resourceLabel}
         </a>
@@ -796,7 +801,7 @@ function ActivityIcon({
         onChange={onChange}
         size={size}
         label="Change activity icon"
-        searchPlaceholder="Search activity icons..."
+        searchPlaceholder="Search activity icons…"
         buttonClassName="h-full w-full rounded-none text-[color:var(--playing-card-accent)]"
         iconClassName={iconClassName}
       />

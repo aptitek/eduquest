@@ -4,9 +4,11 @@ export type DockGuildMember = {
   id: string;
   displayName: string;
   email?: string;
+  bio?: string;
   institutionalEmail?: string;
   avatarUrl?: string;
   characterIllustrationUrl?: string;
+  characterTitle?: string;
   characterClass?: GameCharacterClass;
   stats?: GameStats;
 };

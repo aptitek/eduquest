@@ -36,6 +36,21 @@ describe('game API client', () => {
     });
   });
 
+  it('retries transient network failures when loading guilds', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, guilds: [{ id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 }] })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchGuilds('token-1')).resolves.toEqual([
+      { id: 'guild-1', name: 'Solarized Sentinels', cohortId: 'cohort-1', gold: 180 },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('loads unguilded students from the class roster response', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       success: true,

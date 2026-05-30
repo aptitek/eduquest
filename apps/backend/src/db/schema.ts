@@ -331,6 +331,7 @@ export const gameCharacters = dbTable(
     intelligence: integer('intelligence').default(0).notNull(),
     wisdom: integer('wisdom').default(0).notNull(),
     charisma: integer('charisma').default(0).notNull(),
+    title: text('title'),
     illustrationUrl: text('illustration_url'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
   },
