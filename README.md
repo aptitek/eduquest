@@ -15,7 +15,7 @@ The repository is a TypeScript monorepo using npm workspaces.
 ## Project Structure
 
 - `apps/frontend`: React SPA built with Vite, TypeScript, Tailwind CSS 3, DaisyUI 5, Zustand, Framer Motion, TanStack Table, and Lucide icons.
-- `apps/backend`: Cloudflare Worker API built with Hono, Drizzle ORM, PostgreSQL, JWT authentication, and management/game routes.
+- `apps/backend`: Cloudflare Worker API built with Hono, Drizzle ORM, D1, R2, JWT authentication, and management/game routes.
 - `packages/shared`: Shared TypeScript interfaces and game contracts used by the frontend and backend.
 - `Taskfile.yml`: Common development tasks for running, compiling, cleaning, and enforcing design rules.
 
@@ -34,8 +34,7 @@ The repository is a TypeScript monorepo using npm workspaces.
 - Node.js 22.22.3 is declared in `package.json` through Volta. Node 18+ may work, but Node 22 is the expected version.
 - npm 9+.
 - Task, optional but recommended: [taskfile.dev](https://taskfile.dev).
-- Wrangler, installed through the root dev dependencies.
-- PostgreSQL for backend API data. Without `DATABASE_URL`, database-backed API routes return a configuration error.
+- Wrangler, installed through the root dev dependencies, for local Worker, D1, R2, and deployment commands.
 
 ## Installation
 
@@ -132,7 +131,7 @@ Create the backend local env file before starting Wrangler:
 cp apps/backend/.dev.vars.example apps/backend/.dev.vars
 ```
 
-Then edit `apps/backend/.dev.vars` and set `DATABASE_URL` to a PostgreSQL database that has the project migrations applied. Wrangler loads this file when the backend runs from `apps/backend`.
+Wrangler loads this file when the backend runs from `apps/backend`. Local development uses Wrangler's local D1 and R2 simulations by default.
 
 Frontend values:
 
@@ -146,7 +145,7 @@ For production frontend builds, set:
 
 ```bash
 VITE_APP_ENV=production
-VITE_BACKEND_BASE_URL=https://your-api.example.com
+VITE_BACKEND_BASE_URL=https://apti.space
 VITE_ENABLE_DEV_TOOLS=false
 ```
 
@@ -154,7 +153,6 @@ Backend Worker values:
 
 ```bash
 APP_ENV=development
-DATABASE_URL=postgresql://...
 JWT_SECRET=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
@@ -169,15 +167,51 @@ logos can be uploaded locally without creating a real Cloudflare bucket. Uploade
 objects are served by the Worker at `/assets/<object-key>` unless
 `ASSET_PUBLIC_BASE_URL` is set to a custom public bucket/CDN URL.
 
-`DATABASE_URL` is required for API data, including local development auth. Without it, database-backed API routes return a `503` configuration error and GitHub OAuth redirects back to the frontend with `error=missing_database_url`. When `APP_ENV=production`, production API routes require real bindings such as `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`; debug auth is disabled even if its flag is set.
+When `APP_ENV=production`, production API routes require real Cloudflare bindings and secrets such as `DB`, `ASSETS`, `JWT_SECRET`, and `FRONTEND_URL`; debug auth is disabled even if its flag is set.
 
 Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local starting points. Do not commit real `.env` or `.dev.vars` files.
+
+## Cloudflare Deployment
+
+GitHub Actions deploys the application with `.github/workflows/deploy-cloudflare.yml`. Pull requests run build and test validation. Pushes to `main` apply remote D1 migrations, deploy the backend Worker, build the production frontend, and upload `apps/frontend/dist` to Cloudflare Pages.
+
+The production hostname is `https://apti.space`. Cloudflare Pages serves the frontend, and the Worker in `apps/backend/wrangler.toml` handles `apti.space/api/*` and `apti.space/assets/*`.
+
+Before the first CI deployment, create or verify the Cloudflare resources:
+
+```bash
+npm exec --workspace backend wrangler d1 create eduquest-db
+npm exec --workspace backend wrangler r2 bucket create eduquest-assets
+npm exec --workspace frontend wrangler pages project create eduquest --production-branch main
+```
+
+Copy the D1 database UUID returned by `wrangler d1 create` into `apps/backend/wrangler.toml` as `database_id`.
+
+Set the Worker secrets:
+
+```bash
+npm exec --workspace backend wrangler secret put JWT_SECRET
+npm exec --workspace backend wrangler secret put GITHUB_CLIENT_ID
+npm exec --workspace backend wrangler secret put GITHUB_CLIENT_SECRET
+npm exec --workspace backend wrangler secret put GITHUB_WEBHOOK_SECRET
+```
+
+`GITHUB_WEBHOOK_SECRET` is optional unless GitHub webhooks are enabled. Configure the GitHub OAuth callback URL as `https://apti.space/api/auth/github/callback`.
+
+Add these GitHub repository secrets for Actions:
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=<your-account-id>
+CLOUDFLARE_API_TOKEN=<workers-pages-d1-r2-deploy-token>
+```
+
+The Cloudflare API token needs permissions to deploy Workers, deploy Pages, apply D1 migrations, and access the R2 bucket binding used by the Worker.
 
 ## Database
 
 The backend schema lives in `apps/backend/src/db/schema.ts`.
 
-Database initialization lives in `apps/backend/src/db/migrations`. Because the app is not in production yet, this folder keeps a single current-schema initialization that also seeds deterministic mock data for local/dev environments.
+Database initialization lives in `apps/backend/src/db/d1-migrations`. Because the app is not in production yet, this folder keeps a single current-schema initialization for D1.
 
 The current schema cleanup and pre-production architecture notes are documented in `docs/database-architecture-audit.md`.
 
@@ -187,9 +221,9 @@ Generate new migrations after schema changes:
 npm run db:generate --workspace backend
 ```
 
-In development, `npm run dev --workspace backend` applies pending migrations on startup and watches `apps/backend/src/db/migrations` for newly generated migrations. The Drizzle config reads `DATABASE_URL` from the environment first, then from `apps/backend/.dev.vars`.
+In development, `npm run dev --workspace backend` applies pending local D1 migrations on startup and watches `apps/backend/src/db/d1-migrations` for changes.
 
-Backend production deploys run `npm run db:migrate` before `wrangler deploy` through `npm run deploy --workspace backend`. Make sure the deployment environment exposes the production `DATABASE_URL`; Cloudflare Worker secrets are still needed for the deployed Worker runtime. Keep `schema.ts`, migrations, and shared types in sync.
+Backend production deploys run `npm run db:migrate:remote --workspace backend` before `wrangler deploy` through GitHub Actions. Keep `schema.ts`, D1 migrations, and shared types in sync.
 
 ## Code Guidelines
 

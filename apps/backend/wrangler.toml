@@ -3,15 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2026-05-30"
 compatibility_flags = [ "nodejs_compat" ]
 
-# Replace the route patterns with the production hostname attached to the Pages project.
 routes = [
-  { pattern = "example.com/api/*", zone_name = "example.com" },
-  { pattern = "example.com/assets/*", zone_name = "example.com" }
+  { pattern = "apti.space/api/*", zone_name = "apti.space" },
+  { pattern = "apti.space/assets/*", zone_name = "apti.space" }
 ]
 
 [vars]
 APP_ENV = "production"
-FRONTEND_URL = "https://example.com"
+FRONTEND_URL = "https://apti.space"
 
 [[r2_buckets]]
 binding = "ASSETS"
@@ -20,7 +19,7 @@ bucket_name = "eduquest-assets"
 [[d1_databases]]
 binding = "DB"
 database_name = "eduquest-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "1ce0d4a5-8d05-4a89-9fe5-98320788a2de"
 migrations_dir = "src/db/d1-migrations"
 
 # [[kv_namespaces]]

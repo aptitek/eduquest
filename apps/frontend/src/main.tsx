@@ -2,12 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/index.css';
 import '@xyflow/react/dist/style.css';
-import { MapPage } from './pages/MapPage/MapPage';
-import { AnnuairePage } from './pages/AnnuairePage';
-import { ProgressPage } from './pages/ProgressPage/ProgressPage';
-import { CharacterPage } from './pages/CharacterPage/CharacterPage';
-import { LoginPage } from './pages/LoginPage/LoginPage';
-import { ManagementPage } from './pages/ManagementPage/ManagementPage';
 import { GameHeader } from './components/organisms/GameHeader';
 import { GameLayout } from './components/templates/GameLayout';
 import { useAuth } from './features/auth/useAuth';
@@ -17,6 +11,21 @@ import { LayoutGroup, motion } from 'framer-motion';
 import { Gamepad2 } from 'lucide-react';
 import { ErrorNotificationProvider } from './features/errors/notifications';
 import { MissingTranslationHighlighter } from './features/debug/MissingTranslationHighlighter';
+
+const MapPage = React.lazy(() => import('./pages/MapPage/MapPage').then((module) => ({ default: module.MapPage })));
+const AnnuairePage = React.lazy(() => import('./pages/AnnuairePage').then((module) => ({ default: module.AnnuairePage })));
+const ProgressPage = React.lazy(() =>
+  import('./pages/ProgressPage/ProgressPage').then((module) => ({ default: module.ProgressPage }))
+);
+const CharacterPage = React.lazy(() =>
+  import('./pages/CharacterPage/CharacterPage').then((module) => ({ default: module.CharacterPage }))
+);
+const LoginPage = React.lazy(() =>
+  import('./pages/LoginPage/LoginPage').then((module) => ({ default: module.LoginPage }))
+);
+const ManagementPage = React.lazy(() =>
+  import('./pages/ManagementPage/ManagementPage').then((module) => ({ default: module.ManagementPage }))
+);
 
 const savedTheme = localStorage.getItem('eduquest_theme');
 document.documentElement.dataset.theme =
@@ -34,7 +43,6 @@ function getHashRoute() {
 }
 
 function App() {
-  const { t } = useTranslation();
   const auth = useAuth();
   const { user, student, character, loadingSession } = auth;
   const selectedGameId = useGameStore((state) => state.selectedGameId);
@@ -47,58 +55,24 @@ function App() {
   }, []);
 
   if (loadingSession) {
-    return (
-      <div className="min-h-screen bg-gaming-base flex flex-col justify-center items-center gap-6 relative font-display">
-        {/* Glowing Retro Splash Symbol */}
-        <motion.div
-          animate={{
-            scale: [1, 1.1, 1],
-            rotate: [0, 360],
-          }}
-          transition={{
-            repeat: Infinity,
-            duration: 3,
-            ease: 'easeInOut',
-          }}
-          className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center shadow-lg border border-status-boss/20 text-solarized-base3"
-        >
-          <Gamepad2 size={32} />
-        </motion.div>
-
-        {/* Loading Message */}
-        <div className="flex flex-col items-center gap-1.5 text-center">
-          <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-text-primary via-solarized-blue to-status-boss tracking-wider">
-            {t('layout.title').toUpperCase()}
-          </h2>
-          <span className="text-xs text-status-campfire font-semibold uppercase tracking-widest animate-pulse">
-            {t('layout.loadingSession')}
-          </span>
-        </div>
-
-        {/* Pulsing Game Console Loading Line */}
-        <div className="w-48 h-[2px] bg-gaming-border rounded-full overflow-hidden relative border border-gaming-border">
-          <motion.div
-            initial={{ left: '-100%' }}
-            animate={{ left: '100%' }}
-            transition={{
-              repeat: Infinity,
-              duration: 1.5,
-              ease: 'linear',
-            }}
-            className="w-24 h-full bg-gradient-to-r from-transparent via-status-boss to-transparent absolute"
-          />
-        </div>
-      </div>
-    );
+    return <AppLoadingScreen />;
   }
 
   // Force authentication to access the app
   if (!user) {
-    return <LoginPage auth={auth} />;
+    return (
+      <PageSuspense>
+        <LoginPage auth={auth} />
+      </PageSuspense>
+    );
   }
 
   if (route === 'management' && user.isAdmin) {
-    return <ManagementPage />;
+    return (
+      <PageSuspense>
+        <ManagementPage />
+      </PageSuspense>
+    );
   }
 
   const selectedMembership =
@@ -111,22 +85,94 @@ function App() {
   }
 
   if (route === 'character' && !user.isAdmin && student && hasCohortAssignment && !character) {
-    return <CharacterPage />;
+    return (
+      <PageSuspense>
+        <CharacterPage />
+      </PageSuspense>
+    );
   }
 
   if (route === 'annuaire') {
-    return <AnnuairePage />;
+    return (
+      <PageSuspense>
+        <AnnuairePage />
+      </PageSuspense>
+    );
   }
 
   if (route === 'bonus') {
-    return <ProgressPage />;
+    return (
+      <PageSuspense>
+        <ProgressPage />
+      </PageSuspense>
+    );
   }
 
   if (route === 'character') {
-    return <CharacterPage />;
+    return (
+      <PageSuspense>
+        <CharacterPage />
+      </PageSuspense>
+    );
   }
 
-  return <MapPage />;
+  return (
+    <PageSuspense>
+      <MapPage />
+    </PageSuspense>
+  );
+}
+
+function PageSuspense({ children }: { children: React.ReactNode }) {
+  return <React.Suspense fallback={<AppLoadingScreen />}>{children}</React.Suspense>;
+}
+
+function AppLoadingScreen() {
+  const { t } = useTranslation();
+
+  return (
+    <div className="min-h-screen bg-gaming-base flex flex-col justify-center items-center gap-6 relative font-display">
+      {/* Glowing Retro Splash Symbol */}
+      <motion.div
+        animate={{
+          scale: [1, 1.1, 1],
+          rotate: [0, 360],
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 3,
+          ease: 'easeInOut',
+        }}
+        className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-status-quest to-status-boss flex items-center justify-center shadow-lg border border-status-boss/20 text-solarized-base3"
+      >
+        <Gamepad2 size={32} />
+      </motion.div>
+
+      {/* Loading Message */}
+      <div className="flex flex-col items-center gap-1.5 text-center">
+        <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-text-primary via-solarized-blue to-status-boss tracking-wider">
+          {t('layout.title').toUpperCase()}
+        </h2>
+        <span className="text-xs text-status-campfire font-semibold uppercase tracking-widest animate-pulse">
+          {t('layout.loadingSession')}
+        </span>
+      </div>
+
+      {/* Pulsing Game Console Loading Line */}
+      <div className="w-48 h-[2px] bg-gaming-border rounded-full overflow-hidden relative border border-gaming-border">
+        <motion.div
+          initial={{ left: '-100%' }}
+          animate={{ left: '100%' }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.5,
+            ease: 'linear',
+          }}
+          className="w-24 h-full bg-gradient-to-r from-transparent via-status-boss to-transparent absolute"
+        />
+      </div>
+    </div>
+  );
 }
 
 function CohortAssignmentRequiredPage() {
