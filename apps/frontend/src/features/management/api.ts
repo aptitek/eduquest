@@ -68,6 +68,9 @@ export type ManagementStudentUpdate = {
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
   characterIllustrationUrl?: string;
+  characterClass?: GameCharacterClass;
+  characterStats?: GameStats;
+  gameId?: string | null;
 };
 
 export type ManagementSchoolUpdate = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;

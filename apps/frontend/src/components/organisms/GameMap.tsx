@@ -114,20 +114,24 @@ export function GameMap({
     return renderLucideIcon(typeof metadata.iconKey === 'string' ? metadata.iconKey : activity.type, 20);
   };
 
-  const getColors = (activity: Activity, status: NodeStatus) => {
-    const isLocked = !canEditLocked && Boolean(activity.isLocked);
+  const getColors = (activity: Activity, status: NodeStatus, isVisuallyLocked: boolean) => {
+    const isLocked = isVisuallyLocked;
 
-    if (!canEditLocked && status === 'FOG_OF_WAR') {
-      return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed opacity-50 blur-[1px]';
+    if (status === 'FOG_OF_WAR') {
+      return canEditLocked
+        ? 'bg-gaming-base border-status-locked text-text-muted cursor-pointer opacity-50 blur-[1px]'
+        : 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed opacity-50 blur-[1px]';
     }
-    if (activity.isCurrent) {
+    if (showCompletionState && activity.isCurrent) {
       return 'bg-status-quest/20 border-status-quest text-status-quest cursor-pointer motion-safe:hover:scale-110 shadow-glow-primary ring-2 ring-status-quest/40';
     }
     if (!canEditLocked && !activity.isRevealed) {
       return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed opacity-40';
     }
     if (isLocked) {
-      return 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed';
+      return canEditLocked
+        ? 'bg-gaming-base border-status-locked text-text-muted cursor-pointer'
+        : 'bg-gaming-base border-status-locked text-text-muted cursor-not-allowed';
     }
     if (activity.cardColor) {
       return 'cursor-pointer motion-safe:hover:scale-110 shadow-lg';
@@ -142,11 +146,12 @@ export function GameMap({
     }
   };
 
-  const getColorStyle = (activity: Activity, status: NodeStatus): CSSProperties | undefined => {
-    const isLocked = !canEditLocked && Boolean(activity.isLocked);
-
-    if (!activity.cardColor || isLocked) return undefined;
-    if (!canEditLocked && (status === 'FOG_OF_WAR' || !activity.isRevealed)) return undefined;
+  const getColorStyle = (
+    activity: Activity,
+    status: NodeStatus,
+    isVisuallyLocked: boolean
+  ): CSSProperties | undefined => {
+    if (!activity.cardColor || isVisuallyLocked || status === 'FOG_OF_WAR') return undefined;
 
     return {
       backgroundColor: `color-mix(in srgb, ${activity.cardColor} 18%, transparent)`,
@@ -171,11 +176,13 @@ export function GameMap({
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const graphNodes: GraphNode<Activity>[] = activities.map((act) => {
     const visibilityStatus: NodeStatus = act.isRevealed ? 'ACTIVE' : 'FOG_OF_WAR';
-    const displayStatus: NodeStatus = canEditLocked ? 'ACTIVE' : visibilityStatus;
-    const locked = !canEditLocked && (displayStatus !== 'ACTIVE' || Boolean(act.isLocked));
-    const isFogged = displayStatus === 'FOG_OF_WAR';
+    const visuallyLocked = visibilityStatus !== 'ACTIVE' || Boolean(act.isLocked);
+    const interactionLocked = !canEditLocked && visuallyLocked;
+    const nodeDisplayStatus = canEditLocked ? 'ACTIVE' : visibilityStatus;
+    const nodeStyleLocked = canEditLocked ? false : visuallyLocked;
+    const isFogged = visibilityStatus === 'FOG_OF_WAR';
     const isCompleted = showCompletionState && Boolean(act.isCompleted);
-    const showAdminFogBadge = canEditLocked && isActivityFoggedByStepWindow(act, currentStep);
+    const showAdminFogBadge = canEditLocked && visuallyLocked;
     const hasPlayerMarker =
       effectivePlayerMarker &&
       (effectivePlayerMarker.activityId ? effectivePlayerMarker.activityId === act.id : act.isCurrent);
@@ -193,13 +200,13 @@ export function GameMap({
     return {
       id: act.id,
       label: act.title,
-      displayLabel: isFogged ? t('map.hiddenNode') : act.title,
+      displayLabel: !canEditLocked && isFogged ? t('map.hiddenNode') : act.title,
       x: act.mapX,
       y: act.mapY,
       isCompleted,
-      isLocked: locked,
+      isLocked: interactionLocked,
       isHidden: false,
-      icon: getIcon(act, displayStatus, locked),
+      icon: getIcon(act, nodeDisplayStatus, nodeStyleLocked),
       badge: isCompleted ? (
         <CheckCircle2
           size={18}
@@ -215,23 +222,35 @@ export function GameMap({
       ) : undefined,
       marker,
       annularSegments: buildAnnularSegments(act, occupancy),
-      customClass: getColors(act, displayStatus),
-      customStyle: getColorStyle(act, displayStatus),
-      fogState: canEditLocked ? undefined : isFogged ? 'fog' : locked ? undefined : 'clear',
+      customClass: getColors(act, nodeDisplayStatus, nodeStyleLocked),
+      customStyle: getColorStyle(act, nodeDisplayStatus, nodeStyleLocked),
+      fogState: canEditLocked ? undefined : isFogged ? 'fog' : interactionLocked ? undefined : 'clear',
       deletable: !isSystemOnboardingActivity(act),
-      metadata: isFogged ? undefined : act,
+      metadata: !canEditLocked && isFogged ? undefined : act,
     };
   });
   const nodeById = new Map(graphNodes.map((node) => [node.id, node]));
   const graphEdges: GraphEdge[] = edges.map((edge) => {
     const fromNode = nodeById.get(edge.fromActivityId);
     const toNode = nodeById.get(edge.toActivityId);
+    const fromActivity = activityById.get(edge.fromActivityId);
+    const toActivity = activityById.get(edge.toActivityId);
+    const edgeVisuallyLocked = Boolean(
+      !fromActivity ||
+        !toActivity ||
+        !fromActivity.isRevealed ||
+        !toActivity.isRevealed ||
+        fromActivity.isLocked ||
+        toActivity.isLocked
+    );
     const edgeStyle = resolveMapEdgeStyle({
       edge,
-      fromActivity: activityById.get(edge.fromActivityId),
-      toActivity: activityById.get(edge.toActivityId),
+      fromActivity,
+      toActivity,
       currentActivityId: effectivePlayerMarker?.activityId,
       currentStep,
+      showCompletionState,
+      useStepWindowVisibility: canEditLocked,
     });
 
     return {
@@ -239,7 +258,7 @@ export function GameMap({
       from: edge.fromActivityId,
       to: edge.toActivityId,
       isCompleted: showCompletionState && Boolean(fromNode?.isCompleted && toNode?.isCompleted),
-      isLocked: Boolean(fromNode?.isLocked || toNode?.isLocked),
+      isLocked: edgeVisuallyLocked,
       isHidden: Boolean(fromNode?.isHidden || toNode?.isHidden),
       ...edgeStyle,
     };
@@ -288,12 +307,16 @@ function resolveMapEdgeStyle({
   toActivity,
   currentActivityId,
   currentStep,
+  showCompletionState,
+  useStepWindowVisibility,
 }: {
   edge: GameActivityEdge;
   fromActivity?: Activity;
   toActivity?: Activity;
   currentActivityId?: string | null;
   currentStep: number;
+  showCompletionState: boolean;
+  useStepWindowVisibility: boolean;
 }): Pick<GraphEdge, 'color' | 'opacity' | 'strokeWidth' | 'strokeDasharray' | 'animation'> {
   const metadata = edge.metadata || {};
   const manualAnimation =
@@ -305,20 +328,30 @@ function resolveMapEdgeStyle({
   const manualStrokeWidth = getNumberMetadata(metadata, 'strokeWidth', 1, 8);
   const manualDash = getStringMetadata(metadata, 'strokeDasharray');
 
-  const automaticStyle = getAutomaticMapEdgeStyle(fromActivity, toActivity, currentActivityId, currentStep);
+  const automaticStyle = getAutomaticMapEdgeStyle(
+    fromActivity,
+    toActivity,
+    currentActivityId,
+    currentStep,
+    showCompletionState,
+    useStepWindowVisibility
+  );
 
   if (activeWindow) {
     const activeAnimation =
       getEdgeAnimation(activeWindow.animation) ||
       manualAnimation ||
-      getDefaultActiveEdgeAnimation(fromActivity, toActivity, currentStep);
+      getDefaultActiveEdgeAnimation(fromActivity, toActivity, currentStep, useStepWindowVisibility);
     const isDisabled = activeAnimation === 'disabled';
     const opacity = manualOpacity ?? (isDisabled ? getDisabledEdgeOpacity(automaticStyle.opacity) : 0.9);
     const strokeDasharray = manualDash || (isDisabled ? automaticStyle.strokeDasharray || '2 10' : 'none');
 
     return {
       ...automaticStyle,
-      color: activeWindow.color || manualColor || automaticStyle.color,
+      color:
+        activeWindow.color ||
+        manualColor ||
+        (isDisabled ? EDGE_COLOR_LOCKED : automaticStyle.color),
       opacity,
       strokeWidth: manualStrokeWidth ?? automaticStyle.strokeWidth,
       strokeDasharray,
@@ -372,24 +405,30 @@ function getAutomaticMapEdgeStyle(
   fromActivity: Activity | undefined,
   toActivity: Activity | undefined,
   currentActivityId: string | null | undefined,
-  currentStep: number
+  currentStep: number,
+  showCompletionState: boolean,
+  useStepWindowVisibility: boolean
 ): Pick<GraphEdge, 'color' | 'opacity' | 'strokeWidth' | 'strokeDasharray' | 'animation'> {
   if (!fromActivity || !toActivity) {
     return { color: EDGE_COLOR_LOCKED, opacity: 0.18, strokeDasharray: '2 10', animation: 'disabled' };
   }
 
-  const fromFogged = isActivityFoggedByStepWindow(fromActivity, currentStep);
-  const toFogged = isActivityFoggedByStepWindow(toActivity, currentStep);
+  const fromFogged = isActivityFoggedForMap(fromActivity, currentStep, useStepWindowVisibility);
+  const toFogged = isActivityFoggedForMap(toActivity, currentStep, useStepWindowVisibility);
 
   if (fromFogged || toFogged) {
     return { color: EDGE_COLOR_LOCKED, opacity: 0.18, strokeDasharray: '2 10', animation: 'disabled' };
   }
 
-  if (fromActivity.isCompleted && toActivity.isCompleted) {
+  if (fromActivity.isLocked || toActivity.isLocked) {
+    return { color: EDGE_COLOR_LOCKED, opacity: 0.28, strokeDasharray: '2 10', animation: 'disabled' };
+  }
+
+  if (showCompletionState && fromActivity.isCompleted && toActivity.isCompleted) {
     return { color: EDGE_COLOR_COMPLETED, opacity: 0.7, strokeWidth: 3.5, animation: 'flow' };
   }
 
-  if (currentActivityId === fromActivity.id && !toActivity.isCompleted) {
+  if (showCompletionState && currentActivityId === fromActivity.id && !toActivity.isCompleted) {
     return {
       color: toActivity.cardColor || EDGE_COLOR_TARGET,
       opacity: 0.85,
@@ -398,7 +437,7 @@ function getAutomaticMapEdgeStyle(
     };
   }
 
-  if (fromActivity.isCompleted && !toActivity.isCompleted) {
+  if (showCompletionState && fromActivity.isCompleted && !toActivity.isCompleted) {
     return {
       color: toActivity.cardColor || EDGE_COLOR_TARGET,
       opacity: 0.6,
@@ -427,14 +466,27 @@ function getDisabledEdgeOpacity(value: number | undefined) {
 function getDefaultActiveEdgeAnimation(
   fromActivity: Activity | undefined,
   toActivity: Activity | undefined,
-  currentStep: number
+  currentStep: number,
+  useStepWindowVisibility: boolean
 ): GameActivityEdgeAnimation {
   return !fromActivity ||
     !toActivity ||
-    isActivityFoggedByStepWindow(fromActivity, currentStep) ||
-    isActivityFoggedByStepWindow(toActivity, currentStep)
+    isActivityFoggedForMap(fromActivity, currentStep, useStepWindowVisibility) ||
+    isActivityFoggedForMap(toActivity, currentStep, useStepWindowVisibility) ||
+    fromActivity.isLocked ||
+    toActivity.isLocked
     ? 'disabled'
     : 'none';
+}
+
+function isActivityFoggedForMap(
+  activity: Activity,
+  currentStep: number,
+  useStepWindowVisibility: boolean
+) {
+  return useStepWindowVisibility
+    ? isActivityFoggedByStepWindow(activity, currentStep)
+    : !activity.isRevealed;
 }
 
 function getStringMetadata(metadata: Record<string, unknown>, key: string) {

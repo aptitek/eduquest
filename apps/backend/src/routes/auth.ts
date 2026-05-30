@@ -142,6 +142,9 @@ type ManagementStudentUpdateBody = {
   institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
   characterIllustrationUrl?: string;
+  characterClass?: string;
+  characterStats?: Partial<GameStats>;
+  gameId?: string | null;
 };
 type ManagementSchoolUpdateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain' | 'logoUrl'>>;
 type ManagementSchoolCreateBody = Partial<Pick<School, 'name' | 'website' | 'emailDomain'>>;
@@ -1459,14 +1462,103 @@ authRouter.put('/management/students/:studentId', async (c) => {
     await db.update(users).set(userUpdate).where(eq(users.id, studentRecord.userId));
   }
 
-  if (body.characterIllustrationUrl !== undefined) {
-    await db
-      .update(gameCharacters)
-      .set({
-        illustrationUrl: body.characterIllustrationUrl || null,
-        updatedAt: new Date(),
-      })
-      .where(eq(gameCharacters.studentId, studentId));
+  if (
+    body.characterClass !== undefined ||
+    body.characterIllustrationUrl !== undefined ||
+    body.characterStats !== undefined
+  ) {
+    if (body.characterClass !== undefined && !GAME_CHARACTER_CLASS_SET.has(body.characterClass)) {
+      return apiError(c, 'Character class not found', 404);
+    }
+
+    await ensureCharacterClassSeeds(db);
+    const [existingChar] = await db
+      .select()
+      .from(gameCharacters)
+      .where(eq(gameCharacters.studentId, studentId))
+      .limit(1);
+    const nextClassSlug = (body.characterClass ||
+      existingChar?.characterClass ||
+      DEFAULT_CHARACTER_CLASS) as GameCharacterClass;
+    const [classRecord] = await db
+      .select()
+      .from(gameCharacterClasses)
+      .where(eq(gameCharacterClasses.slug, nextClassSlug))
+      .limit(1);
+
+    if (!classRecord) {
+      return apiError(c, 'Character class not found', 404);
+    }
+
+    let characterStatsUpdate: CharacterStatAllocation | undefined;
+    const baseStats = toGameCharacterClassDefinition(classRecord).baseStats;
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(
+      db,
+      typeof body.gameId === 'string' && body.gameId ? body.gameId : undefined
+    );
+    const statCap = balanceConfig.rewardSystem.attributes.levelOneMaxValue;
+    const statBudget = balanceConfig.rewardSystem.attributes.statAllocationBudget;
+
+    if (body.characterStats !== undefined) {
+      characterStatsUpdate = normalizeManualAllocation(body.characterStats, {
+        cap: statCap,
+        budget: statBudget,
+        baseStats,
+      });
+      if (!characterStatsUpdate) {
+        return apiError(c, 'Character stats must respect the configured budget and cap.', 400, {
+          errorCode: 'validation_failed',
+        });
+      }
+    } else if (body.characterClass !== undefined && existingChar) {
+      characterStatsUpdate = repairManualAllocation(
+        toGameCharacterStats(existingChar),
+        baseStats,
+        statCap,
+        statBudget
+      ).nextManual;
+    }
+
+    if (existingChar) {
+      await db
+        .update(gameCharacters)
+        .set({
+          ...(body.characterClass !== undefined ? { characterClass: nextClassSlug } : {}),
+          ...(body.characterIllustrationUrl !== undefined
+            ? { illustrationUrl: body.characterIllustrationUrl || null }
+            : {}),
+          ...(characterStatsUpdate
+            ? {
+                strength: characterStatsUpdate.strength,
+                dexterity: characterStatsUpdate.dexterity,
+                constitution: characterStatsUpdate.constitution,
+                intelligence: characterStatsUpdate.intelligence,
+                wisdom: characterStatsUpdate.wisdom,
+                charisma: characterStatsUpdate.charisma,
+              }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(gameCharacters.studentId, studentId));
+    } else {
+      await db.insert(gameCharacters).values({
+        studentId,
+        characterClass: nextClassSlug,
+        ...(body.characterIllustrationUrl !== undefined
+          ? { illustrationUrl: body.characterIllustrationUrl || null }
+          : {}),
+        ...(characterStatsUpdate
+          ? {
+              strength: characterStatsUpdate.strength,
+              dexterity: characterStatsUpdate.dexterity,
+              constitution: characterStatsUpdate.constitution,
+              intelligence: characterStatsUpdate.intelligence,
+              wisdom: characterStatsUpdate.wisdom,
+              charisma: characterStatsUpdate.charisma,
+            }
+          : {}),
+      });
+    }
   }
 
   let currentMemberships = await db

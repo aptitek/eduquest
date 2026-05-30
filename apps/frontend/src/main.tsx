@@ -28,8 +28,9 @@ document.documentElement.dataset.theme =
 
 function getHashRoute() {
   const route = window.location.hash.replace(/^#\/?/, '');
-  if (route === 'guild' || route === 'class') return 'annuaire';
-  return route === 'progress' ? 'bonus' : route;
+  const routeName = route.split(/[/?]/)[0];
+  if (routeName === 'guild' || routeName === 'class') return 'annuaire';
+  return routeName === 'progress' ? 'bonus' : routeName;
 }
 
 function App() {
@@ -98,10 +99,6 @@ function App() {
 
   if (route === 'management' && user.isAdmin) {
     return <ManagementPage />;
-  }
-
-  if (user.isAdmin && route === 'character') {
-    return <MapPage />;
   }
 
   const selectedMembership =

@@ -63,6 +63,7 @@ type VoteCostConfig = Pick<
 >;
 
 const PROGRESS_BONUS_SEEN_STORAGE_PREFIX = 'eduquest_progress_seen_bonus_cards';
+const COHORT_STEP_UPDATED_STORAGE_KEY = 'eduquest_cohort_step_updated';
 const DEFAULT_VOTE_COST_CONFIG: VoteCostConfig = {
   baseVoteCost: 1,
   quadraticExponent: 2,
@@ -654,6 +655,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
         if (!token) throw new Error('Missing session token.');
         const savedStep = await updateCohortStep(token, selectedGameId, nextStep);
         setAdminStep(savedStep);
+        try {
+          localStorage.setItem(
+            COHORT_STEP_UPDATED_STORAGE_KEY,
+            JSON.stringify({ gameId: selectedGameId, step: savedStep, updatedAt: Date.now() })
+          );
+        } catch {
+          // The local event below still refreshes the current tab when storage is unavailable.
+        }
         window.dispatchEvent(new CustomEvent('eduquest:cohort-step-updated'));
       } catch (error) {
         console.warn('Could not update dashboard cohort step.', error);

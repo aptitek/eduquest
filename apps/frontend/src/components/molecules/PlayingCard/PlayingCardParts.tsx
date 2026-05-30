@@ -263,7 +263,7 @@ export function PlayingCardStatPanel({
     <motion.div
       layoutId={layoutId}
       transition={PLAYING_CARD_TRANSITION}
-      className="w-52 shrink-0 self-start rounded-[1rem] border border-solarized-base0/40 bg-transparent p-1"
+      className="w-36 shrink-0 self-start rounded-[0.85rem] border border-solarized-base0/40 bg-transparent p-0.5 sm:w-40"
     >
       <RadarGraph
         axes={axes}

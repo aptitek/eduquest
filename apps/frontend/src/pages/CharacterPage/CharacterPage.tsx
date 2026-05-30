@@ -17,6 +17,12 @@ import {
 } from '../../components/molecules/PlayingCard';
 import { useGameStore } from '../../features/game/gameStore';
 import { fetchCharacterClasses } from '../../features/game/api';
+import {
+  fetchManagementBackup,
+  updateManagementStudent,
+  type ManagementStudentUpdate,
+} from '../../features/management/api';
+import type { ManagementStudentProfile } from '../../features/management/types';
 import { BACKEND_BASE_URL } from '../../config/deployment';
 import { throwApiResponseError } from '../../features/errors/api';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -54,6 +60,9 @@ export function CharacterPage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
   const { user, student, character, activityCompletions, selectedGameId, setUserSession } = useGameStore();
+  const adminTargetStudentId = user?.isAdmin ? getCharacterTargetStudentIdFromHash() : null;
+  const [adminTargetProfile, setAdminTargetProfile] = useState<ManagementStudentProfile | null>(null);
+  const [isLoadingAdminTarget, setIsLoadingAdminTarget] = useState(Boolean(adminTargetStudentId));
   const [playerCardOverride, setPlayerCardOverride] = useState<EditablePlayerCardOverride>({});
   const [classDefinitions, setClassDefinitions] = useState<GameCharacterClassDefinition[]>([]);
   const [statConfig, setStatConfig] = useState<GameCharacterStatConfig>(DEFAULT_STAT_CONFIG);
@@ -81,6 +90,44 @@ export function CharacterPage() {
     };
   }, [selectedGameId]);
 
+  useEffect(() => {
+    if (!adminTargetStudentId) {
+      setAdminTargetProfile(null);
+      setIsLoadingAdminTarget(false);
+      return;
+    }
+
+    let isMounted = true;
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setIsLoadingAdminTarget(false);
+      return;
+    }
+
+    setIsLoadingAdminTarget(true);
+    fetchManagementBackup(token)
+      .then((backup) => {
+        if (!isMounted) return;
+        setAdminTargetProfile(
+          backup.students.find((profile) => profile.student.id === adminTargetStudentId) || null
+        );
+      })
+      .catch((error) => {
+        reportError(error, {
+          messageKey: 'management.errors.loadFailed',
+          id: 'character.errors.loadAdminTarget',
+          logMessage: 'Could not load admin character target.',
+        });
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingAdminTarget(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [adminTargetStudentId, reportError]);
+
   if (!user) {
     return (
       <div className="flex min-h-screen items-center justify-center font-display text-text-muted">
@@ -89,8 +136,11 @@ export function CharacterPage() {
     );
   }
 
-  const playerName = formatUserDisplayName(user);
-  const avatarUrl = character?.illustrationUrl || user.avatarUrl || user.githubAvatarUrl;
+  const editableUser = adminTargetProfile?.user || user;
+  const editableStudent = adminTargetProfile?.student || student;
+  const editableCharacter = adminTargetProfile?.character || character;
+  const playerName = formatUserDisplayName(editableUser);
+  const avatarUrl = editableCharacter?.illustrationUrl || editableUser.avatarUrl || editableUser.githubAvatarUrl;
   const savePlayerCardProfileUpdate = async (payload: CharacterProfileUpdatePayload) => {
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
@@ -100,6 +150,15 @@ export function CharacterPage() {
 
     setSaveError(null);
     try {
+      if (adminTargetStudentId) {
+        const update = toManagementStudentUpdate(payload);
+        const backup = await updateManagementStudent(token, adminTargetStudentId, update);
+        setAdminTargetProfile(
+          backup.students.find((profile) => profile.student.id === adminTargetStudentId) || null
+        );
+        return;
+      }
+
       const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
@@ -140,6 +199,18 @@ export function CharacterPage() {
     setIsSavingCharacterClass(true);
     setSaveError(null);
     try {
+      if (adminTargetStudentId) {
+        const backup = await updateManagementStudent(token, adminTargetStudentId, {
+          characterClass,
+          gameId: selectedGameId,
+        });
+        setAdminTargetProfile(
+          backup.students.find((profile) => profile.student.id === adminTargetStudentId) || null
+        );
+        setPlayerCardOverride({});
+        return;
+      }
+
       const response = await fetch(`${BACKEND_BASE_URL}/api/auth/profile`, {
         method: 'PUT',
         headers: {
@@ -190,15 +261,15 @@ export function CharacterPage() {
     const token = localStorage.getItem('eduquest_token');
     if (!token) throw new Error('profile.errors.unauthorized');
 
-    const asset = await uploadAsset(token, 'character-illustration', file, character?.studentId);
+    const asset = await uploadAsset(token, 'character-illustration', file, editableCharacter?.studentId || editableStudent?.id);
     return asset.url;
   };
   const updatePlayerCardStat = (statId: string, value: number) => {
-    if (!character) return;
+    if (!editableCharacter) return;
     const statKey = getGameStatKey(statId);
     if (!statKey) return;
 
-    const currentAllocations = getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue);
+    const currentAllocations = getCurrentStatAllocations(editableCharacter.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue);
     const currentRemainingPoints = getRemainingStatPoints(statBudget, currentAllocations);
     const nextAllocation = clampStatValue(
       value - baseStats[statKey],
@@ -217,7 +288,7 @@ export function CharacterPage() {
     void savePlayerCardProfileUpdate({ characterStats: nextStats });
   };
   const getPlayerCardStatRange = (statId: string, currentValue: number) => {
-    if (!character) return { min: 0, max: currentValue };
+    if (!editableCharacter) return { min: 0, max: currentValue };
     const statKey = getGameStatKey(statId);
     if (!statKey) return { min: 0, max: currentValue };
 
@@ -229,20 +300,20 @@ export function CharacterPage() {
       max: Math.min(statMaxValue, baseValue + currentAllocation + remainingStatPoints),
     };
   };
-  const currentClassLabel = character ? t(`game.classes.${character.characterClass}`) : '';
-  const baseStats = character ? getCharacterClassBaseStats(character.characterClass, classDefinitions) : createEmptyGameStats();
+  const currentClassLabel = editableCharacter ? t(`game.classes.${editableCharacter.characterClass}`) : '';
+  const baseStats = editableCharacter ? getCharacterClassBaseStats(editableCharacter.characterClass, classDefinitions) : createEmptyGameStats();
   const statMaxValue = statConfig.maxValue;
-  const statBudget = character ? statConfig.allocationBudget : 0;
-  const statAllocations = character
-    ? getCurrentStatAllocations(character.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue)
+  const statBudget = editableCharacter ? statConfig.allocationBudget : 0;
+  const statAllocations = editableCharacter
+    ? getCurrentStatAllocations(editableCharacter.stats, playerCardOverride.stats, statBudget, baseStats, statMaxValue)
     : createEmptyGameStats();
   const remainingStatPoints = getRemainingStatPoints(statBudget, statAllocations);
-  const playerCard = character
+  const playerCard = editableCharacter
     ? applyPlayerCardOverrides(
         buildPlayerCharacterCard({
           name: playerName,
           avatarUrl,
-          characterClass: character.characterClass,
+          characterClass: editableCharacter.characterClass,
           classLabel: currentClassLabel,
           statAllocations,
           baseStats,
@@ -250,7 +321,7 @@ export function CharacterPage() {
           remainingStatPoints,
           remainingStatPointsLabel: t('character.pointsRemainingShort'),
           getStatEditableRange: getPlayerCardStatRange,
-          bio: user.bio,
+          bio: editableUser.bio,
           fallbackDescription: t('character.activeCardDescription'),
         }),
         playerCardOverride,
@@ -260,7 +331,7 @@ export function CharacterPage() {
       )
     : null;
   const currentClassIndex = Math.max(
-    GAME_CHARACTER_CLASSES.findIndex((characterClass) => characterClass === character?.characterClass),
+    GAME_CHARACTER_CLASSES.findIndex((characterClass) => characterClass === editableCharacter?.characterClass),
     0
   );
   const classCards = GAME_CHARACTER_CLASSES.map((characterClass) => {
@@ -282,7 +353,18 @@ export function CharacterPage() {
     variant: 'fan',
   };
 
-  if (!character) {
+  if (isLoadingAdminTarget) {
+    return (
+      <GameLayout>
+        <GameHeader currentView="character" />
+        <div className="flex min-h-[20rem] items-center justify-center font-display text-text-muted">
+          {t('layout.loadingSession')}
+        </div>
+      </GameLayout>
+    );
+  }
+
+  if (!editableCharacter) {
     return (
       <GameLayout hideDashboard>
         <GameHeader currentView="character" navigationMode="mapOnly" />
@@ -616,6 +698,31 @@ function formatClassStatBonus(value: number) {
   const roundedValue = Math.round(value);
   if (roundedValue <= 0) return '';
   return `+${roundedValue}`;
+}
+
+function getCharacterTargetStudentIdFromHash() {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  const queryStart = hash.indexOf('?');
+  if (queryStart < 0) return null;
+
+  const params = new URLSearchParams(hash.slice(queryStart + 1));
+  return params.get('studentId');
+}
+
+function toManagementStudentUpdate(payload: CharacterProfileUpdatePayload): ManagementStudentUpdate {
+  const userUpdate = {
+    ...(payload.displayName !== undefined ? { displayName: payload.displayName } : {}),
+    ...(payload.bio !== undefined ? { bio: payload.bio } : {}),
+  };
+
+  return {
+    ...(Object.keys(userUpdate).length > 0 ? { user: userUpdate } : {}),
+    ...(payload.characterIllustrationUrl !== undefined
+      ? { characterIllustrationUrl: payload.characterIllustrationUrl }
+      : {}),
+    ...(payload.characterStats !== undefined ? { characterStats: payload.characterStats } : {}),
+    ...(payload.gameId !== undefined ? { gameId: payload.gameId } : {}),
+  };
 }
 
 export default CharacterPage;

@@ -60,6 +60,8 @@ const DEFAULT_BOSS_ANSWER_FIELDS: BossActivityAnswerField[] = [
     maxBytes: 10 * 1024 * 1024,
   },
 ];
+const COHORT_STEP_UPDATED_STORAGE_KEY = 'eduquest_cohort_step_updated';
+const STUDENT_MAP_REFRESH_INTERVAL_MS = 15000;
 
 function getDefaultBossAnswerFields(t: (path: string) => string): BossActivityAnswerField[] {
   return DEFAULT_BOSS_ANSWER_FIELDS.map((field) => ({
@@ -218,6 +220,39 @@ export function MapPage() {
   }, [fetchMapData]);
 
   useEffect(() => {
+    if (user?.isAdmin || !user) return undefined;
+
+    const refreshStudentMap = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchMapData({ preserveSelection: true, silent: true });
+    };
+    const handleFocus = () => refreshStudentMap();
+    const handleVisibilityChange = () => refreshStudentMap();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== COHORT_STEP_UPDATED_STORAGE_KEY || !event.newValue) return;
+      try {
+        const payload = JSON.parse(event.newValue) as { gameId?: string | null };
+        if (payload.gameId && selectedGameId && payload.gameId !== selectedGameId) return;
+      } catch {
+        return;
+      }
+      refreshStudentMap();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorage);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const intervalId = window.setInterval(refreshStudentMap, STUDENT_MAP_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorage);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [fetchMapData, selectedGameId, user, user?.isAdmin]);
+
+  useEffect(() => {
     const handleOnboardingStateUpdated = () => {
       setCompletionError(null);
       fetchMapData();
@@ -269,6 +304,21 @@ export function MapPage() {
   const previewStepIndex = Math.max(0, previewSteps.indexOf(previewStep));
   const canPreviewPreviousStep = previewStepIndex > 0;
   const canPreviewNextStep = previewStepIndex >= 0 && previewStepIndex < previewSteps.length - 1;
+  const mapActivities = useMemo(
+    () =>
+      user?.isAdmin
+        ? activities.map((activity) =>
+            resolveActivityWithStepRanges(
+              activity,
+              activity.stepRanges || [],
+              activities,
+              activityEdges,
+              previewStep
+            )
+          )
+        : activities,
+    [activities, activityEdges, previewStep, user?.isAdmin]
+  );
   const changePreviewStepByOffset = (offset: -1 | 1) => {
     const currentIndex = previewSteps.indexOf(previewStep);
     const fallbackIndex = previewSteps.reduce(
@@ -909,7 +959,7 @@ export function MapPage() {
           ) : (
             <div className="relative h-full min-h-0">
               <GameMap
-                activities={activities}
+                activities={mapActivities}
                 edges={activityEdges}
                 nodeOccupancies={nodeOccupancies}
                 playerMarker={
@@ -972,7 +1022,7 @@ export function MapPage() {
           {selectedEdge && user?.isAdmin ? (
             <MapEdgeCard
               edge={selectedEdge}
-              activities={activities}
+              activities={mapActivities}
               currentStep={previewStep}
               isSaving={savingEdgeId === selectedEdge.id}
               error={edgeStyleError}
@@ -1255,13 +1305,13 @@ function resolveActivityWithStepRanges(
   const hasBeenRevealed = normalizedRanges.some((range) => currentStep >= range.startStep);
   const isActiveForStep = normalizedRanges.some((range) => isStepInsideRange(currentStep, range));
   const isRevealed =
-    isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
+    hasBeenRevealed && isActiveForStep && (isCompleted || isRoot || prerequisitesCompleted);
 
   return {
     ...activity,
     stepRanges: normalizedRanges,
     isRevealed,
-    isLocked: !isRevealed || !prerequisitesCompleted,
+    isLocked: !isRevealed || (!isCompleted && !prerequisitesCompleted),
   };
 }
 

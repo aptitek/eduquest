@@ -996,8 +996,9 @@ function buildMapData(
     const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
     const hasBeenRevealed = stepRanges.some((range) => currentStep >= range.startStep);
     const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
-    const isRevealed = isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
-    const isLocked = !isRevealed || !prerequisitesCompleted;
+    const isRevealed =
+      hasBeenRevealed && isActiveForStep && (isCompleted || isRoot || prerequisitesCompleted);
+    const isLocked = !isRevealed || (!isCompleted && !prerequisitesCompleted);
     const isCurrent = activity.id === currentActivityId;
 
     return toActivity(
@@ -1038,12 +1039,13 @@ function getActivityLockState(
   const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
   const hasBeenRevealed = stepRanges.some((range) => currentStep >= range.startStep);
   const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
-  const isRevealed = isCompleted || (hasBeenRevealed && isActiveForStep && (isRoot || prerequisitesCompleted));
+  const isRevealed =
+    hasBeenRevealed && isActiveForStep && (isCompleted || isRoot || prerequisitesCompleted);
 
   return {
     isCompleted,
     isRevealed,
-    isLocked: !isRevealed || !prerequisitesCompleted,
+    isLocked: !isRevealed || (!isCompleted && !prerequisitesCompleted),
   };
 }
 

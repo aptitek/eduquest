@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Handshake, Search, Users } from 'lucide-react';
 import { GameHeader } from '../components/organisms/GameHeader';
@@ -7,10 +7,11 @@ import { CompoundBadge } from '../components/atoms/CompoundBadge';
 import { HoldToConfirmButton } from '../components/atoms/HoldToConfirmButton';
 import {
   PlayingHandPanel,
+  type PlayingCardFace,
   type PlayingCardProps,
   type PlayingHandData,
 } from '../components/molecules/PlayingCard';
-import { fetchClassRoster, joinGuild, type ClassRosterGuild } from '../features/game/api';
+import { fetchClassRoster, joinGuild, updateGuild, type ClassRosterGuild, type GuildFieldsPayload } from '../features/game/api';
 import { useGameStore } from '../features/game/gameStore';
 import { useTranslation } from '../hooks/useTranslation';
 import { cn } from '../utils/cn';
@@ -24,6 +25,12 @@ import { buildCharacterPlayingCardData } from '../features/game/cards/characterC
 import { formatUserDisplayName } from '../utils/displayName';
 import mascotUrl from '../assets/mascot.svg';
 
+const DEFAULT_GUILD_MAX_MEMBERS = 3;
+type EditableGuildField = 'title' | 'description' | 'art' | 'typeIcon';
+type EditableGuildCardOverride = Partial<Record<EditableGuildField, string>> & {
+  color?: string;
+};
+
 export function AnnuairePage() {
   const { t } = useTranslation();
   const reportError = useErrorReporter();
@@ -34,6 +41,7 @@ export function AnnuairePage() {
   const [revealedJoinGuildId, setRevealedJoinGuildId] = useState<string | null>(null);
   const [completedJoinGuildRevealId, setCompletedJoinGuildRevealId] = useState<string | null>(null);
   const [joiningGuildId, setJoiningGuildId] = useState<string | null>(null);
+  const [editableGuildCards, setEditableGuildCards] = useState<Record<string, EditableGuildCardOverride>>({});
   const [loading, setLoading] = useState(true);
   const currentGuildSectionRef = useRef<HTMLElement | null>(null);
   const latestMembership =
@@ -105,8 +113,73 @@ export function AnnuairePage() {
   }, [currentGuild, currentGuildKey, guilds, searchQuery]);
   const groupedGuilds = useMemo(() => groupGuildsByInitial(additionalGuilds), [additionalGuilds]);
 
+  const applyUpdatedGuild = useCallback((updatedGuild: ClassRosterGuild) => {
+    setGuilds((current) => upsertGuild(current, updatedGuild));
+    setCurrentGuildId((current) => current === updatedGuild.id ? updatedGuild.id : current);
+  }, []);
+
+  const updateEditableGuildField = useCallback(
+    (guildId: string, field: EditableGuildField, value: string) => {
+      setEditableGuildCards((current) => ({
+        ...current,
+        [guildId]: {
+          ...current[guildId],
+          [field]: value,
+        },
+      }));
+
+      const payload = getGuildFieldPayload(field, value);
+      if (!payload) return;
+
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) return;
+
+      updateGuild(token, guildId, payload)
+        .then((updatedGuild) => applyUpdatedGuild(updatedGuild as ClassRosterGuild))
+        .catch((error) => {
+          reportError(error, {
+            messageKey: 'guild.errors.create',
+            id: `directory.errors.updateGuild.${guildId}`,
+            logMessage: 'Could not update guild from directory.',
+          });
+        });
+    },
+    [applyUpdatedGuild, reportError]
+  );
+
+  const updateEditableGuildColor = useCallback(
+    (guildId: string, color: string) => {
+      setEditableGuildCards((current) => ({
+        ...current,
+        [guildId]: {
+          ...current[guildId],
+          color,
+        },
+      }));
+
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) return;
+
+      updateGuild(token, guildId, { color })
+        .then((updatedGuild) => applyUpdatedGuild(updatedGuild as ClassRosterGuild))
+        .catch((error) => {
+          reportError(error, {
+            messageKey: 'guild.errors.create',
+            id: `directory.errors.updateGuildColor.${guildId}`,
+            logMessage: 'Could not update guild color from directory.',
+          });
+        });
+    },
+    [applyUpdatedGuild, reportError]
+  );
+  const openCharacterPageForStudent = useCallback((studentId: string | undefined) => {
+    if (!studentId) return;
+    window.location.hash = `character?studentId=${encodeURIComponent(studentId)}`;
+  }, []);
+
   const handleJoinGuild = async (guild: ClassRosterGuild) => {
     if (joiningGuildId) return;
+    if (isGuildFull(guild)) return;
     setJoiningGuildId(guild.id);
     try {
       const token = localStorage.getItem('eduquest_token');
@@ -241,6 +314,11 @@ export function AnnuairePage() {
                         currentGuild,
                         user,
                         character,
+                        canEditGuild: Boolean(user?.isAdmin),
+                        guildOverride: editableGuildCards[guild.id],
+                        onGuildFieldChange: (field, value) => updateEditableGuildField(guild.id, field, value),
+                        onGuildColorChange: (color) => updateEditableGuildColor(guild.id, color),
+                        onMemberSelect: user?.isAdmin ? openCharacterPageForStudent : undefined,
                         isRevealed: revealedJoinGuildId === guild.id,
                         isRevealComplete: completedJoinGuildRevealId === guild.id,
                         isJoining: joiningGuildId === guild.id,
@@ -275,6 +353,11 @@ function buildJoinableGuildHand({
   currentGuild,
   user,
   character,
+  canEditGuild,
+  guildOverride,
+  onGuildFieldChange,
+  onGuildColorChange,
+  onMemberSelect,
   isRevealed,
   isRevealComplete,
   isJoining,
@@ -287,6 +370,11 @@ function buildJoinableGuildHand({
   currentGuild?: Partial<ClassRosterGuild>;
   user: ReturnType<typeof useGameStore.getState>['user'];
   character: ReturnType<typeof useGameStore.getState>['character'];
+  canEditGuild: boolean;
+  guildOverride?: EditableGuildCardOverride;
+  onGuildFieldChange: (field: EditableGuildField, value: string) => void;
+  onGuildColorChange: (color: string) => void;
+  onMemberSelect?: (studentId: string | undefined) => void;
   isRevealed: boolean;
   isRevealComplete: boolean;
   isJoining: boolean;
@@ -294,7 +382,35 @@ function buildJoinableGuildHand({
   onRevealComplete: () => void;
   onJoin: () => void;
 }): PlayingHandData {
-  const hand = buildClassGuildHand(t, { guild });
+  const baseHand = buildClassGuildHand(t, { guild });
+  const hand = canEditGuild
+    ? {
+        ...baseHand,
+        cards: baseHand.cards.map((card) => {
+          if (card.kind === 'guild') {
+            return makeEditableGuildCard({
+              card,
+              override: guildOverride,
+              onFieldChange: onGuildFieldChange,
+              onColorChange: onGuildColorChange,
+            });
+          }
+
+          if (card.kind === 'character') {
+            return {
+              ...card,
+              interactive: true,
+              onClick: () => onMemberSelect?.(getStudentIdFromMemberCard(card)),
+            };
+          }
+
+          return card;
+        }) as [PlayingCardProps, ...PlayingCardProps[]],
+      }
+    : baseHand;
+
+  if (user?.isAdmin || isGuildFull(guild)) return hand;
+
   return {
     ...hand,
     cards: [...hand.cards, buildJoinGuildCard({
@@ -310,6 +426,117 @@ function buildJoinableGuildHand({
       onRevealComplete,
       onJoin,
     })] as [PlayingCardProps, ...PlayingCardProps[]],
+  };
+}
+
+function makeEditableGuildCard({
+  card,
+  override,
+  onFieldChange,
+  onColorChange,
+}: {
+  card: PlayingCardProps;
+  override?: EditableGuildCardOverride;
+  onFieldChange: (field: EditableGuildField, value: string) => void;
+  onColorChange: (color: string) => void;
+}): PlayingCardProps {
+  const editableBack = card.model.back
+    ? applyEditableGuildFace({
+        face: card.model.back,
+        override,
+        onFieldChange,
+        onColorChange,
+      })
+    : undefined;
+
+  return {
+    ...card,
+    model: {
+      ...card.model,
+      front: applyEditableGuildFace({
+        face: card.model.front,
+        override,
+        onFieldChange,
+        onColorChange,
+      }) || card.model.front,
+      ...(editableBack !== undefined ? { back: editableBack } : {}),
+    },
+  };
+}
+
+function applyEditableGuildFace({
+  face,
+  override,
+  onFieldChange,
+  onColorChange,
+}: {
+  face: PlayingCardFace | undefined;
+  override?: EditableGuildCardOverride;
+  onFieldChange: (field: EditableGuildField, value: string) => void;
+  onColorChange: (color: string) => void;
+}): PlayingCardFace | undefined {
+  if (!face || face === 'none') return face;
+  const descriptionSection = face.info?.sections?.find((section) => section.id === 'description');
+  const iconValue = override?.typeIcon ?? face.icon?.value;
+
+  return {
+    ...face,
+    title: {
+      ...face.title,
+      value: override?.title ?? face.title?.value,
+      editable: true,
+      onChange: (value) => onFieldChange('title', value),
+    },
+    art: {
+      ...face.art,
+      value: override?.art ?? face.art?.value,
+      editable: true,
+      onChange: (value) => onFieldChange('art', value),
+    },
+    color: {
+      ...face.color,
+      value: override?.color ?? face.color?.value,
+      editable: true,
+      onChange: onColorChange,
+    },
+    icon: face.icon
+      ? {
+          ...face.icon,
+          value: iconValue,
+          editable: true,
+          onChange: (value) => onFieldChange('typeIcon', value),
+        }
+      : face.icon,
+    type: face.icon
+      ? {
+          ...(face.type || { variant: 'custom' as const }),
+          icon: {
+            ...face.type?.icon,
+            value: iconValue,
+            editable: true,
+            onChange: (value: string) => onFieldChange('typeIcon', value),
+          },
+        }
+      : face.type,
+    info: {
+      ...face.info,
+      sections: [
+        ...(descriptionSection
+          ? [
+              {
+                ...descriptionSection,
+                description: {
+                  ...descriptionSection.description,
+                  value: override?.description ?? descriptionSection.description?.value,
+                  editable: true,
+                  onChange: (value: string) => onFieldChange('description', value),
+                },
+              },
+            ]
+          : []),
+        ...(face.info?.sections || []).filter((section) => section.id !== 'description'),
+      ],
+    },
   };
 }
 
@@ -467,7 +694,31 @@ function mergeGuilds(
 }
 
 function upsertGuild(guilds: ClassRosterGuild[], guild: ClassRosterGuild) {
-  return [guild, ...guilds.filter((candidate) => candidate.id !== guild.id)];
+  const previousGuild = guilds.find((candidate) => candidate.id === guild.id);
+  const nextGuild = previousGuild
+    ? {
+        ...previousGuild,
+        ...guild,
+        members: guild.members ?? previousGuild.members,
+      }
+    : guild;
+
+  return [nextGuild, ...guilds.filter((candidate) => candidate.id !== guild.id)];
+}
+
+function getGuildFieldPayload(field: EditableGuildField, value: string): GuildFieldsPayload | null {
+  if (field === 'title') return { name: value };
+  if (field === 'description') return { description: value };
+  if (field === 'art') return { iconUrl: value };
+  if (field === 'typeIcon') return { iconKey: value };
+  return null;
+}
+
+function getStudentIdFromMemberCard(card: PlayingCardProps) {
+  const id = card.id || '';
+  const marker = '-member-';
+  const markerIndex = id.indexOf(marker);
+  return markerIndex >= 0 ? id.slice(markerIndex + marker.length) : undefined;
 }
 
 function doesGuildMatchSearch(guild: ClassRosterGuild, normalizedQuery: string) {
@@ -500,6 +751,16 @@ function getGuildStableId(guild: Partial<ClassRosterGuild>) {
 function getGuildIdentityKey(guild?: Partial<ClassRosterGuild>) {
   if (!guild) return '';
   return slugify(guild.name || getGuildStableId(guild));
+}
+
+function getGuildMaxMembers(guild: ClassRosterGuild) {
+  return Number.isFinite(guild.maxMembers) && guild.maxMembers && guild.maxMembers > 0
+    ? guild.maxMembers
+    : DEFAULT_GUILD_MAX_MEMBERS;
+}
+
+function isGuildFull(guild: ClassRosterGuild) {
+  return (guild.members?.length || 0) >= getGuildMaxMembers(guild);
 }
 
 function normalizeSearch(value: string | undefined) {
