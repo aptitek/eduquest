@@ -83,6 +83,12 @@ function clampValue(value: number, min: number, max: number) {
   return Math.min(Math.max(Math.round(value), safeMin), safeMax);
 }
 
+function getRemainingRibbonColor(value: number) {
+  if (value <= 0) return 'var(--color-solarized-red)';
+  if (value <= 2) return 'var(--color-solarized-yellow)';
+  return 'var(--color-solarized-green)';
+}
+
 export function RadarGraph({
   axes,
   datasets,
@@ -106,6 +112,9 @@ export function RadarGraph({
   const editableDataset =
     datasets.find((dataset) => dataset.id === editableDatasetId) || datasets[0];
   const canEdit = editable && Boolean(onValueChange) && Boolean(editableDataset);
+  const remainingRibbonText = remainingValue !== undefined ? String(remainingValue) : undefined;
+  const remainingRibbonColor =
+    remainingValue !== undefined ? getRemainingRibbonColor(remainingValue) : undefined;
 
   const chart = useMemo(() => {
     const usableAxes = axes.filter((axis) => axis.id);
@@ -247,7 +256,7 @@ export function RadarGraph({
   }
 
   return (
-    <div className={cn('relative min-w-0 overflow-visible', className)}>
+    <div className={cn('relative min-w-0', className)}>
       <svg
         ref={svgRef}
         viewBox={`${VIEWBOX_MIN} ${VIEWBOX_MIN} ${VIEWBOX_RENDER_SIZE} ${VIEWBOX_RENDER_SIZE}`}
@@ -304,42 +313,6 @@ export function RadarGraph({
             />
           </g>
         ))}
-
-        {remainingValue !== undefined ? (
-          <g className="pointer-events-none">
-            <circle
-              cx={CENTER}
-              cy={CENTER}
-              r="11.25"
-              fill="transparent"
-              stroke="var(--color-solarized-yellow)"
-              strokeOpacity="0.7"
-              strokeWidth="0.65"
-            />
-            <text
-              x={CENTER}
-              y={CENTER - 2}
-              textAnchor="middle"
-              dominantBaseline="central"
-              className="text-[1.05rem] font-black"
-              fill="var(--color-solarized-yellow)"
-            >
-              {remainingValue}
-            </text>
-            {remainingValueLabel ? (
-              <text
-                x={CENTER}
-                y={CENTER + 6.5}
-                textAnchor="middle"
-                dominantBaseline="central"
-                className="text-[0.38rem] font-black uppercase tracking-widest"
-                fill="var(--color-solarized-base1)"
-              >
-                {remainingValueLabel}
-              </text>
-            ) : null}
-          </g>
-        ) : null}
 
         {showLabels
           ? chart.axisMarkers.map(({ axis, angle, editableMax, min, max, point, value }) => (
@@ -429,6 +402,30 @@ export function RadarGraph({
                 </g>
               );
             })}
+          </g>
+        ) : null}
+
+        {remainingRibbonText ? (
+          <g className="pointer-events-none select-none drop-shadow-sm" transform="translate(116 -16) rotate(45)">
+            <rect
+              x="-42"
+              y="-9"
+              width="84"
+              height="18"
+              fill={remainingRibbonColor}
+              opacity="0.96"
+            />
+            <text
+              x="0"
+              y="0.25"
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="font-black"
+              fontSize="12"
+              fill="var(--color-solarized-base3)"
+            >
+              {remainingRibbonText}
+            </text>
           </g>
         ) : null}
       </svg>

@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, inArray, or, sql, sum } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   STUDENT_ATTRIBUTES,
   type Activity,
@@ -724,6 +724,33 @@ function validateEdgeStyleWindows(value: unknown): GameActivityEdgeStyleWindow[]
   return windows;
 }
 
+function validateEdgeUnlockPrerequisites(
+  value: unknown,
+  activityIds: ReadonlySet<string>
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error('unlockPrerequisiteActivityIds must be an array.');
+  }
+
+  const prerequisiteIds = Array.from(
+    new Set(
+      value.map((item) => {
+        if (typeof item !== 'string' || !item.trim()) {
+          throw new Error('unlock prerequisite activity ids must be non-empty strings.');
+        }
+        return item.trim();
+      })
+    )
+  );
+
+  if (prerequisiteIds.some((id) => !activityIds.has(id))) {
+    throw new Error('unlock prerequisite activities must exist on this map.');
+  }
+
+  return prerequisiteIds;
+}
+
 function validateActivityStepRanges(value: unknown): ActivityStepRange[] {
   if (!Array.isArray(value)) {
     throw new Error('stepRanges must be an array.');
@@ -973,32 +1000,41 @@ function buildMapData(
   includeStepRanges = false,
   nodeOccupancies: GameMapNodeOccupancy[] = [],
   defaultCurrentActivityId?: string,
-  currentGuildMemberCount?: number
+  currentGuildMemberCount?: number,
+  lockGuildActivitiesWithoutGuild = false
 ): GameMapData {
   const completedActivityIds = new Set(completions.map((completion) => completion.activityId));
   const currentActivityId = currentMove?.toActivityId || defaultCurrentActivityId;
   const currentStep = cohortProgression?.currentStep ?? run.currentSectorDepth;
   const activityIds = new Set(activityRecords.map((activity) => activity.id));
-  const incomingByActivity = new Map<string, string[]>();
+  const incomingByActivity = new Map<string, GameActivityEdge[]>();
 
   for (const edge of edges) {
     if (!activityIds.has(edge.fromActivityId) || !activityIds.has(edge.toActivityId)) continue;
-    const incoming = incomingByActivity.get(edge.toActivityId) || [];
-    incoming.push(edge.fromActivityId);
-    incomingByActivity.set(edge.toActivityId, incoming);
+    incomingByActivity.set(edge.toActivityId, [...(incomingByActivity.get(edge.toActivityId) || []), edge]);
   }
 
   const activities = activityRecords.map((activity) => {
-    const prerequisites = incomingByActivity.get(activity.id) || [];
+    const incomingEdges = incomingByActivity.get(activity.id) || [];
     const isCompleted = completedActivityIds.has(activity.id);
-    const prerequisitesCompleted = prerequisites.every((id) => completedActivityIds.has(id));
-    const isRoot = prerequisites.length === 0;
+    const hasUnlockedIncomingEdge = incomingEdges.some((edge) =>
+      isEdgeUnlocked(edge, completedActivityIds, currentStep, activityIds)
+    );
+    const isRoot = incomingEdges.length === 0;
     const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
     const hasBeenRevealed = stepRanges.some((range) => currentStep >= range.startStep);
     const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
+    const isUnavailableGuildActivity =
+      lockGuildActivitiesWithoutGuild && activity.participationMode === 'guild';
     const isRevealed =
-      hasBeenRevealed && isActiveForStep && (isCompleted || isRoot || prerequisitesCompleted);
-    const isLocked = !isRevealed || (!isCompleted && !prerequisitesCompleted);
+      !isUnavailableGuildActivity &&
+      hasBeenRevealed &&
+      isActiveForStep &&
+      (isCompleted || isRoot || hasUnlockedIncomingEdge);
+    const isLocked =
+      isUnavailableGuildActivity ||
+      !isRevealed ||
+      (!isCompleted && !isRoot && !hasUnlockedIncomingEdge);
     const isCurrent = activity.id === currentActivityId;
 
     return toActivity(
@@ -1022,31 +1058,86 @@ function buildMapData(
 }
 
 function getActivityLockState(
-  activity: Pick<ActivityRecord, 'id' | 'requiredLevel' | 'stepRanges'>,
+  activity: Pick<ActivityRecord, 'id' | 'requiredLevel' | 'stepRanges' | 'participationMode'>,
   activityRecords: Array<Pick<ActivityRecord, 'id' | 'requiredLevel' | 'stepRanges'>>,
-  edges: Array<Pick<GameActivityEdge, 'fromActivityId' | 'toActivityId'>>,
+  edges: Array<Pick<GameActivityEdge, 'fromActivityId' | 'toActivityId' | 'metadata'>>,
   completions: Array<Pick<GameActivityCompletion, 'activityId'>>,
-  currentStep: number
+  currentStep: number,
+  hasGuildMembership = true
 ) {
   const completedActivityIds = new Set(completions.map((completion) => completion.activityId));
   const activityIds = new Set(activityRecords.map((record) => record.id));
-  const prerequisites = edges
-    .filter((edge) => edge.toActivityId === activity.id && activityIds.has(edge.fromActivityId))
-    .map((edge) => edge.fromActivityId);
-  const prerequisitesCompleted = prerequisites.every((id) => completedActivityIds.has(id));
-  const isRoot = prerequisites.length === 0;
+  const incomingEdges = edges.filter(
+    (edge) =>
+      edge.toActivityId === activity.id &&
+      activityIds.has(edge.fromActivityId) &&
+      activityIds.has(edge.toActivityId)
+  );
+  const hasUnlockedIncomingEdge = incomingEdges.some((edge) =>
+    isEdgeUnlocked(edge, completedActivityIds, currentStep, activityIds)
+  );
+  const isRoot = incomingEdges.length === 0;
   const isCompleted = completedActivityIds.has(activity.id);
   const stepRanges = parseStepRanges(activity.stepRanges, activity.requiredLevel);
   const hasBeenRevealed = stepRanges.some((range) => currentStep >= range.startStep);
   const isActiveForStep = stepRanges.some((range) => isStepInsideRange(currentStep, range));
+  const isUnavailableGuildActivity = activity.participationMode === 'guild' && !hasGuildMembership;
   const isRevealed =
-    hasBeenRevealed && isActiveForStep && (isCompleted || isRoot || prerequisitesCompleted);
+    !isUnavailableGuildActivity &&
+    hasBeenRevealed &&
+    isActiveForStep &&
+    (isCompleted || isRoot || hasUnlockedIncomingEdge);
 
   return {
     isCompleted,
     isRevealed,
-    isLocked: !isRevealed || (!isCompleted && !prerequisitesCompleted),
+    isLocked:
+      isUnavailableGuildActivity ||
+      !isRevealed ||
+      (!isCompleted && !isRoot && !hasUnlockedIncomingEdge),
   };
+}
+
+function getEdgeUnlockPrerequisiteIds(
+  edge: Pick<GameActivityEdge, 'fromActivityId' | 'metadata'>,
+  activityIds?: ReadonlySet<string>
+) {
+  const explicitPrerequisites = Array.isArray(edge.metadata?.unlockPrerequisiteActivityIds)
+    ? edge.metadata.unlockPrerequisiteActivityIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const validExplicitPrerequisites = activityIds
+    ? explicitPrerequisites.filter((id) => activityIds.has(id))
+    : explicitPrerequisites;
+
+  return validExplicitPrerequisites.length > 0 ? validExplicitPrerequisites : [edge.fromActivityId];
+}
+
+function isEdgeUnlocked(
+  edge: Pick<GameActivityEdge, 'fromActivityId' | 'metadata'>,
+  completedActivityIds: ReadonlySet<string>,
+  currentStep: number,
+  activityIds?: ReadonlySet<string>
+) {
+  return (
+    isEdgeActiveForStep(edge, currentStep) &&
+    getEdgeUnlockPrerequisiteIds(edge, activityIds).every((id) => completedActivityIds.has(id))
+  );
+}
+
+function isEdgeActiveForStep(edge: Pick<GameActivityEdge, 'metadata'>, currentStep: number) {
+  const styleWindows = edge.metadata?.styleWindows;
+  if (!Array.isArray(styleWindows) || styleWindows.length === 0) return true;
+
+  return styleWindows.some((window) => {
+    if (!window || typeof window !== 'object') return false;
+    const candidate = window as Partial<GameActivityEdgeStyleWindow>;
+    return (
+      candidate.animation !== 'disabled' &&
+      typeof candidate.startStep === 'number' &&
+      currentStep >= candidate.startStep &&
+      (candidate.endStep == null || currentStep < candidate.endStep)
+    );
+  });
 }
 
 async function loadActivityAuthorizationState(
@@ -1124,7 +1215,8 @@ async function loadActivityAuthorizationState(
     activityRecords,
     edgeRecords.map(toActivityEdge),
     completionItems,
-    currentStep
+    currentStep,
+    Boolean(guildId)
   );
 }
 
@@ -1168,6 +1260,13 @@ function toMilestone(record: ProgressMilestoneRecord) {
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
   };
+}
+
+function getActiveMilestoneTargetPoints(
+  milestones: ProgressMilestoneRecord[],
+  currentPoints: number
+) {
+  return milestones.find((milestone) => currentPoints < milestone.cost)?.cost ?? milestones.at(-1)?.cost ?? 0;
 }
 
 function toRewardCard(record: GameBonusCardRecord, gameId: string) {
@@ -2625,7 +2724,10 @@ mapRouter.patch('/map/edges/:edgeId', async (c) => {
 
   const edgeId = c.req.param('edgeId');
   const requestedCohortId = getRequestedGameId(c);
-  const body = await parseJsonBody<{ styleWindows?: unknown }>(c, {});
+  const body = await parseJsonBody<{
+    styleWindows?: unknown;
+    unlockPrerequisiteActivityIds?: unknown;
+  }>(c, {});
 
   let styleWindows: GameActivityEdgeStyleWindow[] | undefined;
   try {
@@ -2634,8 +2736,8 @@ mapRouter.patch('/map/edges/:edgeId', async (c) => {
     return apiError(c, error.message || 'Invalid edge style windows.', 400);
   }
 
-  if (!styleWindows) {
-    return apiError(c, 'styleWindows is required.', 400);
+  if (!styleWindows && body?.unlockPrerequisiteActivityIds === undefined) {
+    return apiError(c, 'styleWindows or unlockPrerequisiteActivityIds is required.', 400);
   }
 
   try {
@@ -2666,17 +2768,40 @@ mapRouter.patch('/map/edges/:edgeId', async (c) => {
       return apiError(c, 'Activity edge not found.', 404);
     }
 
+    const activityRecords = await db
+      .select({ id: gameActivities.id })
+      .from(gameActivities)
+      .where(
+        or(
+          sql`${gameActivities.cohortId} IS NULL`,
+          eq(gameActivities.cohortId, cohortRecord.id),
+          eq(gameActivities.mapRunId, activeRun.id)
+        )
+      );
+    const activityIds = new Set(activityRecords.map((activity) => activity.id));
+    let unlockPrerequisiteActivityIds: string[] | undefined;
+    try {
+      unlockPrerequisiteActivityIds = validateEdgeUnlockPrerequisites(
+        body?.unlockPrerequisiteActivityIds,
+        activityIds
+      );
+    } catch (error: any) {
+      return apiError(c, error.message || 'Invalid edge unlock prerequisites.', 400);
+    }
+
     const metadata =
       edge.metadata && typeof edge.metadata === 'object' && !Array.isArray(edge.metadata)
         ? (edge.metadata as Record<string, unknown>)
         : {};
+    const nextMetadata = {
+      ...metadata,
+      ...(styleWindows ? { styleWindows } : {}),
+      ...(unlockPrerequisiteActivityIds !== undefined ? { unlockPrerequisiteActivityIds } : {}),
+    };
     const [updatedEdge] = await db
       .update(gameActivityEdges)
       .set({
-        metadata: {
-          ...metadata,
-          styleWindows,
-        },
+        metadata: nextMetadata,
       })
       .where(eq(gameActivityEdges.id, edgeId))
       .returning();
@@ -3757,20 +3882,12 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
 
     if (latestMove?.toActivityId) {
       const [directEdge] = await db
-        .select({ id: gameActivityEdges.id })
+        .select()
         .from(gameActivityEdges)
         .where(
           and(
-            or(
-              and(
-                eq(gameActivityEdges.fromActivityId, latestMove.toActivityId),
-                eq(gameActivityEdges.toActivityId, activityId)
-              ),
-              and(
-                eq(gameActivityEdges.fromActivityId, activityId),
-                eq(gameActivityEdges.toActivityId, latestMove.toActivityId)
-              )
-            ),
+            eq(gameActivityEdges.fromActivityId, latestMove.toActivityId),
+            eq(gameActivityEdges.toActivityId, activityId),
             or(
               sql`${gameActivityEdges.cohortId} IS NULL AND ${gameActivityEdges.mapRunId} IS NULL`,
               eq(gameActivityEdges.cohortId, membership.cohortId),
@@ -3781,7 +3898,21 @@ mapRouter.post('/map/activities/:activityId/move', async (c) => {
         .limit(1);
 
       if (!directEdge) {
-        return apiError(c, 'Characters can only move to directly connected activities.', 403);
+        return apiError(c, 'Characters can only move through outgoing unlocked edges.', 403);
+      }
+
+      const completionRecords = await db
+        .select()
+        .from(gameActivityCompletions)
+        .where(
+          and(
+            eq(gameActivityCompletions.studentId, studentRecord.id),
+            eq(gameActivityCompletions.cohortId, membership.cohortId)
+          )
+        );
+      const completedActivityIds = new Set(completionRecords.map((completion) => completion.activityId));
+      if (!isEdgeUnlocked(toActivityEdge(directEdge), completedActivityIds, context.cohortRecord.currentStep)) {
+        return apiError(c, 'Characters can only move through outgoing unlocked edges.', 403);
       }
     }
 
@@ -4002,7 +4133,8 @@ mapRouter.get('/map', async (c) => {
           Boolean(user?.isAdmin),
           nodeOccupancies,
           defaultCurrentActivityId,
-          currentGuildMemberCount
+          currentGuildMemberCount,
+          Boolean(!user?.isAdmin && !studentContext?.membership.guildId)
         ),
       });
     }
@@ -4017,7 +4149,8 @@ mapRouter.get('/map', async (c) => {
       Boolean(user?.isAdmin),
       nodeOccupancies,
       defaultCurrentActivityId,
-      currentGuildMemberCount
+      currentGuildMemberCount,
+      Boolean(!user?.isAdmin && !studentContext?.membership.guildId)
     );
 
     return c.json({
@@ -4074,16 +4207,12 @@ mapRouter.get('/dashboard', async (c) => {
         )
       : and(eq(notifications.cohortId, cohortRecord.id), sql`${notifications.guildId} IS NULL`);
 
-    const [milestones, [targetRow], notificationRows] = await Promise.all([
+    const [milestones, notificationRows] = await Promise.all([
       db
         .select()
         .from(progressMilestones)
         .where(eq(progressMilestones.progressId, progress.id))
         .orderBy(progressMilestones.sortOrder),
-      db
-        .select({ targetPoints: sum(progressMilestones.cost) })
-        .from(progressMilestones)
-        .where(eq(progressMilestones.progressId, progress.id)),
       db
         .select()
         .from(notifications)
@@ -4094,7 +4223,7 @@ mapRouter.get('/dashboard', async (c) => {
     const progressData: CohortProgressData = {
       gauge: {
         currentPoints: progress.currentPoints,
-        targetPoints: Number(targetRow?.targetPoints || 0),
+        targetPoints: getActiveMilestoneTargetPoints(milestones, progress.currentPoints),
         labelI18nKey: progress.labelI18nKey,
         milestones: milestones.map(toMilestone),
       },

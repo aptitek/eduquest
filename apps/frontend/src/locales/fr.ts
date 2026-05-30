@@ -648,6 +648,11 @@ export const fr = {
     color: 'Couleur',
     defaultColor: 'Par défaut',
     useColor: 'Utiliser la couleur {color}',
+    unlockPrerequisites: 'Activités nécessaires',
+    unlockPrerequisitesHelp:
+      'Sélectionnez les activités à terminer pour déverrouiller cette arête. Sans sélection, l’arête dépend de {from}.',
+    noUnlockPrerequisites: 'Aucune activité disponible.',
+    defaultUnlockPrerequisite: 'Réinitialiser : dépendre de {from}',
     errors: {
       save: 'Le style de l’arête n’a pas pu être enregistré.',
       startStep: 'L’étape de départ doit être un entier positif ou nul.',

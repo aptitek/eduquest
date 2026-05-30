@@ -127,6 +127,8 @@ export function PlayingCardTitleBlock({
 }: PlayingCardTitleBlockProps) {
   const { t } = useTranslation();
 
+  if (!title && !subtitle && !editable && !titleAccessory) return null;
+
   if (size === 'full') {
     return (
       <motion.div

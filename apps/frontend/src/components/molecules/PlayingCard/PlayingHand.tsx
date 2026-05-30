@@ -126,7 +126,7 @@ export function PlayingHand({
             mainCardPresentation,
             stackCardPresentation,
           })}
-          interactive={isEmphasis ? card.interactive : Boolean(onCardSelect)}
+          interactive={isEmphasis ? card.interactive : Boolean(card.onClick || onCardSelect)}
           onClick={resolveCardSelectHandler(card, index, isEmphasis, onCardSelect)}
           className={cn(
             card.className,
@@ -193,6 +193,7 @@ function resolveCardSelectHandler(
   isEmphasis: boolean,
   onCardSelect?: (card: PlayingCardProps, index: number) => void
 ) {
+  if (card.onClick) return card.onClick;
   if (onCardSelect) return () => onCardSelect(card, index);
   if (isEmphasis) return card.onClick;
   return undefined;

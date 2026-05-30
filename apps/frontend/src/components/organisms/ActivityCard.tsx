@@ -29,7 +29,6 @@ import type { ActivityCompletionDraft } from '../../features/game/api';
 import { PlayingCard, type PlayingCardFaceSlots } from '../molecules/PlayingCard';
 import { EditableList } from '../molecules/EditableList';
 import { QuestCompletionAction } from '../molecules/QuestCompletionAction';
-import { ColorSwatchPicker } from '../molecules/ColorSwatchPicker';
 import { EditableIcon } from '../atoms/EditableIcon';
 import { EditableText } from '../atoms/EditableText';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -109,7 +108,6 @@ export interface ActivityCardProps {
   onDescriptionChange?: (description: string) => void | Promise<void>;
   onGoldRewardChange?: (goldReward: number) => void | Promise<void>;
   onResourcesChange?: (resources: ActivityResourceLink[]) => void | Promise<void>;
-  onPositionChange?: (position: { mapX: number; mapY: number }) => void | Promise<void>;
   onParticipationModeChange?: (participationMode: ActivityParticipationMode) => void | Promise<void>;
   onIconChange?: (iconId: string) => void | Promise<void>;
   onCardColorChange?: (cardColor: string) => void | Promise<void>;
@@ -138,7 +136,6 @@ export function ActivityCard({
   onDescriptionChange,
   onGoldRewardChange,
   onResourcesChange,
-  onPositionChange,
   onParticipationModeChange,
   onIconChange,
   onCardColorChange,
@@ -204,15 +201,6 @@ export function ActivityCard({
     setDraft((current) => (current ? updater(current) : current));
   };
 
-  const updateNumber = (field: 'mapX' | 'mapY', value: string) => {
-    const nextValue = Number(value) || 0;
-    const nextPosition = {
-      mapX: field === 'mapX' ? nextValue : draft.mapX,
-      mapY: field === 'mapY' ? nextValue : draft.mapY,
-    };
-    updateDraft((current) => ({ ...current, [field]: nextValue }));
-    void onPositionChange?.(nextPosition);
-  };
   const updateCardColor = (cardColor: string) => {
     updateDraft((current) => ({ ...current, cardColor: cardColor || undefined }));
     void onCardColorChange?.(cardColor);
@@ -262,17 +250,15 @@ export function ActivityCard({
   };
 
   const applyStepRanges = (stepRanges: ActivityStepRange[]) => {
-    updateDraft((current) => ({ ...current, stepRanges }));
-    void onStepRangesChange?.(stepRanges);
+    const normalizedStepRanges = normalizeActivityStepRanges(stepRanges);
+    updateDraft((current) => ({ ...current, stepRanges: normalizedStepRanges }));
+    void onStepRangesChange?.(normalizedStepRanges);
   };
 
   const updateStepRange = (index: number, field: keyof ActivityStepRange, value: string) => {
     const stepRanges = draft.stepRanges.map((range, rangeIndex) =>
       rangeIndex === index
-        ? {
-            ...range,
-            [field]: value === '' && field === 'endStep' ? undefined : Number(value) || 0,
-          }
+        ? normalizeActivityStepRange(range, field, value)
         : range
     );
     applyStepRanges(stepRanges);
@@ -334,14 +320,11 @@ export function ActivityCard({
               ? activityFront
               : canEdit
                 ? {
-                    title: { value: t('activityCard.flipAdminView'), variant: 'title' },
+                    title: { value: '', variant: 'title' },
                     art: {
                       node: (
                         <ActivityCardBack
                           activity={draft}
-                          onNumberChange={updateNumber}
-                          onIllustrationUrlChange={(value) => updateCardField('art', value)}
-                          onCardColorChange={updateCardColor}
                           onParticipationModeChange={updateParticipationMode}
                           onStepRangeChange={updateStepRange}
                           onStepRangeAdd={addStepRange}
@@ -349,7 +332,7 @@ export function ActivityCard({
                           t={t}
                         />
                       ),
-                      alt: t('activityCard.flipAdminView'),
+                      alt: draft.title,
                     },
                   }
                 : undefined,
@@ -562,6 +545,8 @@ function buildActivityFace({
     },
     icon: {
       value: activity.selectedIcon,
+      editable: canEdit,
+      onChange: onIconSelect,
       icon: (
         <ActivityIcon
           iconId={activity.selectedIcon}
@@ -750,9 +735,6 @@ function getFaviconUrl(url: string) {
 
 interface ActivityCardBackProps {
   activity: ActivityCardData;
-  onNumberChange: (field: 'mapX' | 'mapY', value: string) => void;
-  onIllustrationUrlChange: (illustrationUrl: string) => void;
-  onCardColorChange: (cardColor: string) => void;
   onParticipationModeChange: (participationMode: ActivityParticipationMode) => void;
   onStepRangeChange: (index: number, field: keyof ActivityStepRange, value: string) => void;
   onStepRangeAdd: () => void;
@@ -762,9 +744,6 @@ interface ActivityCardBackProps {
 
 function ActivityCardBack({
   activity,
-  onNumberChange,
-  onIllustrationUrlChange,
-  onCardColorChange,
   onParticipationModeChange,
   onStepRangeChange,
   onStepRangeAdd,
@@ -775,32 +754,6 @@ function ActivityCardBack({
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.1rem] bg-gaming-card text-text-primary">
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 pr-4">
         <section className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <NumberField
-              label="X"
-              value={activity.mapX}
-              onChange={(value) => onNumberChange('mapX', value)}
-            />
-            <NumberField
-              label="Y"
-              value={activity.mapY}
-              onChange={(value) => onNumberChange('mapY', value)}
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <label className="space-y-1.5 text-sm">
-            <span className="font-bold text-text-secondary">{t('activityCard.illustrationUrl')}</span>
-            <EditableText
-              value={activity.illustrationUrl || ''}
-              onChange={onIllustrationUrlChange}
-              placeholder={t('activityCard.illustrationUrlPlaceholder')}
-              className="min-w-0 text-sm text-text-secondary"
-              truncate={false}
-            />
-          </label>
-          <ActivityColorSelector value={activity.cardColor} onChange={onCardColorChange} />
           <label className="space-y-1.5 text-sm">
             <span className="font-bold text-text-secondary">{t('activityCard.activityMode')}</span>
             <select
@@ -823,7 +776,7 @@ function ActivityCardBack({
           <div className="space-y-3 rounded-xl border border-gaming-border bg-gaming-base p-3">
             <EditableList
               items={activity.stepRanges}
-              getKey={(range, index) => `${range.startStep}-${range.endStep ?? 'open'}-${index}`}
+              getKey={(_range, index) => `step-range-${index}`}
               renderItem={(range, index) => (
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField
@@ -835,7 +788,7 @@ function ActivityCardBack({
                   <NumberField
                     label={t('activityCard.beforeStep')}
                     value={range.endStep ?? ''}
-                    min={0}
+                    min={range.startStep + 1}
                     onChange={(value) => onStepRangeChange(index, 'endStep', value)}
                   />
                 </div>
@@ -848,47 +801,9 @@ function ActivityCardBack({
               itemClassName="bg-gaming-card/40"
             />
           </div>
-          <div className="space-y-1.5 text-sm">
-            <span className="font-bold text-text-secondary">{t('activityCard.adjacentNodes')}</span>
-            <EditableList
-              items={activity.adjacentNodes}
-              getKey={(node, index) => `${node || 'adjacent-node'}-${index}`}
-              renderItem={(node) => (
-                <span className="min-w-0 truncate text-sm text-text-secondary">
-                  {node || t('activityCard.adjacentNodePlaceholder')}
-                </span>
-              )}
-              addLabel={t('activityCard.addAdjacentNode')}
-              removeLabel={t('activityCard.removeAdjacentNode')}
-              emptyState={t('activityCard.noAdjacentNodes')}
-              itemClassName="bg-gaming-card/40"
-            />
-          </div>
         </section>
       </div>
     </div>
-  );
-}
-
-function ActivityColorSelector({
-  value,
-  onChange,
-}: {
-  value?: string;
-  onChange: (cardColor: string) => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <fieldset className="space-y-1.5">
-      <legend className="font-bold text-text-secondary">{t('activityCard.cardColor')}</legend>
-      <ColorSwatchPicker
-        value={value}
-        onChange={onChange}
-        variant="grid"
-        useColorLabelKey="activityCard.useCardColor"
-      />
-    </fieldset>
   );
 }
 
@@ -937,17 +852,66 @@ function NumberField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="space-y-1.5 text-sm">
-      <span className="font-bold text-text-secondary">{label}</span>
+    <label className="block space-y-1.5 text-sm">
+      <span className="block font-bold text-text-secondary">{label}</span>
       <input
         type="number"
         min={min}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 font-mono text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
+        className="h-11 w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 font-mono text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
       />
     </label>
   );
+}
+
+function normalizeActivityStepRange(
+  range: ActivityStepRange,
+  field: keyof ActivityStepRange,
+  value: string
+): ActivityStepRange {
+  if (field === 'startStep') {
+    const startStep = toNonNegativeInteger(value);
+    return {
+      ...range,
+      startStep,
+      endStep:
+        range.endStep == null
+          ? undefined
+          : Math.max(toNonNegativeIntegerValue(range.endStep), startStep + 1),
+    };
+  }
+
+  if (value === '') {
+    return { ...range, endStep: undefined };
+  }
+
+  return {
+    ...range,
+    endStep: Math.max(toNonNegativeInteger(value), toNonNegativeIntegerValue(range.startStep) + 1),
+  };
+}
+
+function normalizeActivityStepRanges(stepRanges: ActivityStepRange[]) {
+  return stepRanges.map((range) => {
+    const startStep = toNonNegativeIntegerValue(range.startStep);
+    return {
+      startStep,
+      endStep:
+        range.endStep == null
+          ? undefined
+          : Math.max(toNonNegativeIntegerValue(range.endStep), startStep + 1),
+    };
+  });
+}
+
+function toNonNegativeInteger(value: string) {
+  const parsedValue = Number(value);
+  return toNonNegativeIntegerValue(parsedValue);
+}
+
+function toNonNegativeIntegerValue(value: number) {
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 }
 
 export default ActivityCard;

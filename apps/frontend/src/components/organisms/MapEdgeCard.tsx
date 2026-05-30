@@ -18,7 +18,11 @@ interface MapEdgeCardProps {
   currentStep: number;
   isSaving?: boolean;
   error?: string | null;
-  onChange: (edge: GameActivityEdge, styleWindows: GameActivityEdgeStyleWindow[]) => void | Promise<void>;
+  onChange: (
+    edge: GameActivityEdge,
+    styleWindows: GameActivityEdgeStyleWindow[],
+    unlockPrerequisiteActivityIds: string[]
+  ) => void | Promise<void>;
 }
 
 type TranslateFn = (path: string) => string;
@@ -28,13 +32,18 @@ export function MapEdgeCard({ edge, activities, currentStep, isSaving, error, on
   const [styleWindows, setStyleWindows] = useState<GameActivityEdgeStyleWindow[]>(
     () => getStyleWindows(edge)
   );
+  const [unlockPrerequisiteActivityIds, setUnlockPrerequisiteActivityIds] = useState<string[]>(
+    () => getUnlockPrerequisiteActivityIds(edge)
+  );
   const validationError = useMemo(() => validateStyleWindows(styleWindows, t), [styleWindows, t]);
   const fromActivity = activities.find((activity) => activity.id === edge.fromActivityId);
   const toActivity = activities.find((activity) => activity.id === edge.toActivityId);
+  const selectableActivities = activities.filter((activity) => activity.id !== edge.toActivityId);
   const defaultAnimation = getDefaultEdgeAnimation(fromActivity, toActivity);
 
   useEffect(() => {
     setStyleWindows(getStyleWindows(edge));
+    setUnlockPrerequisiteActivityIds(getUnlockPrerequisiteActivityIds(edge));
   }, [edge]);
 
   const updateWindow = (
@@ -54,7 +63,13 @@ export function MapEdgeCard({ edge, activities, currentStep, isSaving, error, on
   const applyStyleWindows = (nextWindows: GameActivityEdgeStyleWindow[]) => {
     setStyleWindows(nextWindows);
     if (!validateStyleWindows(nextWindows)) {
-      void onChange(edge, nextWindows);
+      void onChange(edge, nextWindows, unlockPrerequisiteActivityIds);
+    }
+  };
+  const applyUnlockPrerequisites = (nextActivityIds: string[]) => {
+    setUnlockPrerequisiteActivityIds(nextActivityIds);
+    if (!validationError) {
+      void onChange(edge, styleWindows, nextActivityIds);
     }
   };
 
@@ -95,9 +110,7 @@ export function MapEdgeCard({ edge, activities, currentStep, isSaving, error, on
 
           <EditableList
             items={styleWindows}
-            getKey={(window, index) =>
-              `${window.startStep}-${window.endStep ?? 'open'}-${window.color ?? 'default'}-${window.animation ?? 'default'}-${index}`
-            }
+            getKey={(_window, index) => `style-window-${index}`}
             renderItem={(window, index) => (
               <StyleWindowEditor
                 window={window}
@@ -115,6 +128,57 @@ export function MapEdgeCard({ edge, activities, currentStep, isSaving, error, on
             emptyState={t('mapEdgeCard.emptyState')}
             itemClassName="bg-gaming-base/60"
           />
+        </section>
+
+        <section className="space-y-2">
+          <div>
+            <h3 className="font-display text-xs font-black uppercase tracking-[0.2em] text-text-secondary">
+              {t('mapEdgeCard.unlockPrerequisites')}
+            </h3>
+            <p className="text-xs text-text-muted">
+              {formatTranslation(t('mapEdgeCard.unlockPrerequisitesHelp'), {
+                from: fromActivity?.title || edge.fromActivityId,
+              })}
+            </p>
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-gaming-border bg-gaming-base/60 p-3">
+            {selectableActivities.map((activity) => {
+              const isChecked = unlockPrerequisiteActivityIds.includes(activity.id);
+
+              return (
+                <label
+                  key={activity.id}
+                  className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-semibold text-text-secondary transition hover:bg-gaming-card/70"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(event) => {
+                      const nextActivityIds = event.currentTarget.checked
+                        ? [...unlockPrerequisiteActivityIds, activity.id]
+                        : unlockPrerequisiteActivityIds.filter((id) => id !== activity.id);
+                      applyUnlockPrerequisites(nextActivityIds);
+                    }}
+                    className="checkbox checkbox-sm border-gaming-border"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{activity.title}</span>
+                </label>
+              );
+            })}
+            {selectableActivities.length === 0 ? (
+              <p className="text-xs font-semibold text-text-muted">{t('mapEdgeCard.noUnlockPrerequisites')}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => applyUnlockPrerequisites([])}
+              className="text-xs font-bold text-text-muted transition hover:text-status-quest"
+            >
+              {formatTranslation(t('mapEdgeCard.defaultUnlockPrerequisite'), {
+                from: fromActivity?.title || edge.fromActivityId,
+              })}
+            </button>
+          </div>
         </section>
 
         {validationError ? (
@@ -240,14 +304,14 @@ function NumberField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="space-y-1.5 text-sm">
-      <span className="font-bold text-text-secondary">{label}</span>
+    <label className="block space-y-1.5 text-sm">
+      <span className="block font-bold text-text-secondary">{label}</span>
       <input
         type="number"
         min={min}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 font-mono text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
+        className="h-11 w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 font-mono text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
       />
     </label>
   );
@@ -266,6 +330,11 @@ function getStyleWindows(edge: GameActivityEdge): GameActivityEdgeStyleWindow[] 
         };
       })
     : [];
+}
+
+function getUnlockPrerequisiteActivityIds(edge: GameActivityEdge) {
+  const value = edge.metadata?.unlockPrerequisiteActivityIds;
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
 }
 
 function getNextStartStep(windows: GameActivityEdgeStyleWindow[]) {

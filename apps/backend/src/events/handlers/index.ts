@@ -96,8 +96,6 @@ export const notificationEventHandler: EventHandler = async (event, context) => 
       descriptionI18nKey: 'rewards.notification.description',
       icon: 'coins',
       tone: 'warning',
-      actionLabelI18nKey: 'dashboard.notifications.rewardGold.action',
-      actionTarget: 'collect',
       context: notificationContext,
       sortOrder,
     });

@@ -52,6 +52,9 @@ export function AnnuairePage() {
   const currentGuild =
     guilds.find((guild) => guild.id === currentGuildId || guild.id === membershipGuild?.id) || membershipGuild;
   const currentGuildKey = getGuildIdentityKey(currentGuild);
+  const openOwnCharacterPage = useCallback(() => {
+    window.location.hash = 'character';
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -91,7 +94,7 @@ export function AnnuairePage() {
   const currentGuildHand = useMemo(() => {
     if (!currentGuild || !student || !user || !character) return undefined;
 
-    return buildGuildCardHands(t, {
+    const [hand] = buildGuildCardHands(t, {
       guild: currentGuild,
       guildName: currentGuild.name || t('dashboard.dock.playerGuild'),
       playerStudentId: student.id,
@@ -101,8 +104,20 @@ export function AnnuairePage() {
       characterClassLabel: t(`game.classes.${character.characterClass}`),
       characterStats: character.stats,
       activeCardIndex: 0,
-    })[0];
-  }, [character, currentGuild, student, t, user]);
+    });
+
+    return {
+      ...hand,
+      cards: hand.cards.map((card) =>
+        card.id === 'player'
+          ? {
+              ...card,
+              onClick: openOwnCharacterPage,
+            }
+          : card
+      ) as [PlayingCardProps, ...PlayingCardProps[]],
+    };
+  }, [character, currentGuild, openOwnCharacterPage, student, t, user]);
 
   const additionalGuilds = useMemo(() => {
     const normalizedQuery = normalizeSearch(searchQuery);
@@ -675,6 +690,7 @@ function mergeGuilds(
   [...primaryGuilds, ...secondaryGuilds].forEach((guild) => {
     if (!guild.name) return;
     guildMap.set(getGuildIdentityKey(guild), {
+      ...guild,
       id: getGuildStableId(guild),
       name: guild.name,
       cohortId: guild.cohortId || '',

@@ -647,6 +647,11 @@ export const en: TranslationKeys = {
     color: 'Color',
     defaultColor: 'Default',
     useColor: 'Use {color}',
+    unlockPrerequisites: 'Required activities',
+    unlockPrerequisitesHelp:
+      'Select the activities to complete before this edge unlocks. With no selection, the edge depends on {from}.',
+    noUnlockPrerequisites: 'No activity available.',
+    defaultUnlockPrerequisite: 'Reset: depend on {from}',
     errors: {
       save: 'Edge style could not be saved.',
       startStep: 'Start step must be a non-negative integer.',

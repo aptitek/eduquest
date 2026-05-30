@@ -175,14 +175,16 @@ export function GameMap({
     : undefined;
   const activityById = new Map(activities.map((activity) => [activity.id, activity]));
   const graphNodes: GraphNode<Activity>[] = activities.map((act) => {
-    const visibilityStatus: NodeStatus = act.isRevealed ? 'ACTIVE' : 'FOG_OF_WAR';
+    const isFogged = canEditLocked
+      ? isActivityFoggedByStepWindow(act, currentStep)
+      : !act.isRevealed;
+    const visibilityStatus: NodeStatus = isFogged ? 'FOG_OF_WAR' : 'ACTIVE';
     const visuallyLocked = visibilityStatus !== 'ACTIVE' || Boolean(act.isLocked);
     const interactionLocked = !canEditLocked && visuallyLocked;
     const nodeDisplayStatus = canEditLocked ? 'ACTIVE' : visibilityStatus;
     const nodeStyleLocked = canEditLocked ? false : visuallyLocked;
-    const isFogged = visibilityStatus === 'FOG_OF_WAR';
     const isCompleted = showCompletionState && Boolean(act.isCompleted);
-    const showAdminFogBadge = canEditLocked && visuallyLocked;
+    const showAdminFogBadge = canEditLocked && isFogged;
     const hasPlayerMarker =
       effectivePlayerMarker &&
       (effectivePlayerMarker.activityId ? effectivePlayerMarker.activityId === act.id : act.isCurrent);
@@ -235,11 +237,13 @@ export function GameMap({
     const toNode = nodeById.get(edge.toActivityId);
     const fromActivity = activityById.get(edge.fromActivityId);
     const toActivity = activityById.get(edge.toActivityId);
+    const edgeUnlocked = isMapEdgeUnlocked(edge, activityById, currentStep);
     const edgeVisuallyLocked = Boolean(
       !fromActivity ||
         !toActivity ||
         !fromActivity.isRevealed ||
         !toActivity.isRevealed ||
+        !edgeUnlocked ||
         fromActivity.isLocked ||
         toActivity.isLocked
     );
@@ -249,6 +253,7 @@ export function GameMap({
       toActivity,
       currentActivityId: effectivePlayerMarker?.activityId,
       currentStep,
+      edgeUnlocked,
       showCompletionState,
       useStepWindowVisibility: canEditLocked,
     });
@@ -307,6 +312,7 @@ function resolveMapEdgeStyle({
   toActivity,
   currentActivityId,
   currentStep,
+  edgeUnlocked,
   showCompletionState,
   useStepWindowVisibility,
 }: {
@@ -315,6 +321,7 @@ function resolveMapEdgeStyle({
   toActivity?: Activity;
   currentActivityId?: string | null;
   currentStep: number;
+  edgeUnlocked: boolean;
   showCompletionState: boolean;
   useStepWindowVisibility: boolean;
 }): Pick<GraphEdge, 'color' | 'opacity' | 'strokeWidth' | 'strokeDasharray' | 'animation'> {
@@ -333,6 +340,7 @@ function resolveMapEdgeStyle({
     toActivity,
     currentActivityId,
     currentStep,
+    edgeUnlocked,
     showCompletionState,
     useStepWindowVisibility
   );
@@ -406,6 +414,7 @@ function getAutomaticMapEdgeStyle(
   toActivity: Activity | undefined,
   currentActivityId: string | null | undefined,
   currentStep: number,
+  edgeUnlocked: boolean,
   showCompletionState: boolean,
   useStepWindowVisibility: boolean
 ): Pick<GraphEdge, 'color' | 'opacity' | 'strokeWidth' | 'strokeDasharray' | 'animation'> {
@@ -418,6 +427,10 @@ function getAutomaticMapEdgeStyle(
 
   if (fromFogged || toFogged) {
     return { color: EDGE_COLOR_LOCKED, opacity: 0.18, strokeDasharray: '2 10', animation: 'disabled' };
+  }
+
+  if (!edgeUnlocked) {
+    return { color: EDGE_COLOR_LOCKED, opacity: 0.24, strokeDasharray: '2 10', animation: 'disabled' };
   }
 
   if (fromActivity.isLocked || toActivity.isLocked) {
@@ -447,6 +460,39 @@ function getAutomaticMapEdgeStyle(
   }
 
   return { color: EDGE_COLOR_LOCKED, opacity: 0.35, animation: 'none' };
+}
+
+function isMapEdgeUnlocked(edge: GameActivityEdge, activityById: ReadonlyMap<string, Activity>, currentStep: number) {
+  return (
+    isMapEdgeActiveForStep(edge, currentStep) &&
+    getMapEdgeUnlockPrerequisiteIds(edge).every((activityId) =>
+      Boolean(activityById.get(activityId)?.isCompleted)
+    )
+  );
+}
+
+function getMapEdgeUnlockPrerequisiteIds(edge: GameActivityEdge) {
+  const explicitPrerequisites = Array.isArray(edge.metadata?.unlockPrerequisiteActivityIds)
+    ? edge.metadata.unlockPrerequisiteActivityIds.filter((id): id is string => typeof id === 'string')
+    : [];
+
+  return explicitPrerequisites.length > 0 ? explicitPrerequisites : [edge.fromActivityId];
+}
+
+function isMapEdgeActiveForStep(edge: GameActivityEdge, currentStep: number) {
+  const styleWindows = edge.metadata?.styleWindows;
+  if (!Array.isArray(styleWindows) || styleWindows.length === 0) return true;
+
+  return styleWindows.some((window) => {
+    if (!window || typeof window !== 'object') return false;
+    const candidate = window as Partial<GameActivityEdgeStyleWindow>;
+    return (
+      candidate.animation !== 'disabled' &&
+      typeof candidate.startStep === 'number' &&
+      currentStep >= candidate.startStep &&
+      (candidate.endStep == null || currentStep < candidate.endStep)
+    );
+  });
 }
 
 function getEdgeAnimation(value: unknown): GameActivityEdgeAnimation | undefined {

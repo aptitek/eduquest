@@ -218,7 +218,7 @@ export function GameHeader({
               : undefined,
         tone: notification.tone,
         icon: getNotificationIcon(notification.icon),
-        action: notification.actionLabelI18nKey
+        action: shouldShowNotificationAction(notification)
           ? {
               label: t(notification.actionLabelI18nKey),
               onSelect: () => runNotificationAction(notification.actionTarget),
@@ -549,6 +549,16 @@ function getNotificationIcon(icon?: string) {
   return undefined;
 }
 
+function shouldShowNotificationAction(notification: HeaderNotificationSource): notification is HeaderNotificationSource & {
+  actionLabelI18nKey: string;
+} {
+  return Boolean(
+    notification.actionLabelI18nKey &&
+      notification.actionTarget !== 'collect' &&
+      notification.context?.type !== 'reward'
+  );
+}
+
 function runNotificationAction(actionTarget?: string) {
   if (actionTarget === 'map') {
     window.location.hash = '';
@@ -559,3 +569,5 @@ function runNotificationAction(actionTarget?: string) {
 }
 
 export default GameHeader;
+
+type HeaderNotificationSource = NonNullable<ReturnType<typeof useCohortProgressData>>['notifications'][number];

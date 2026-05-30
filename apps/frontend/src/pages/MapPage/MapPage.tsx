@@ -311,13 +311,11 @@ export function MapPage() {
             resolveActivityWithStepRanges(
               activity,
               activity.stepRanges || [],
-              activities,
-              activityEdges,
               previewStep
             )
           )
         : activities,
-    [activities, activityEdges, previewStep, user?.isAdmin]
+    [activities, previewStep, user?.isAdmin]
   );
   const changePreviewStepByOffset = (offset: -1 | 1) => {
     const currentIndex = previewSteps.indexOf(previewStep);
@@ -376,7 +374,7 @@ export function MapPage() {
     }
     if (
       currentActivityId &&
-      !hasDirectMapEdge(activityEdges, currentActivityId, activity.id)
+      !hasUnlockedOutgoingMapEdge(activityEdges, currentActivityId, activity.id, completedActivityIds, currentStep)
     ) {
       return;
     }
@@ -647,16 +645,6 @@ export function MapPage() {
     );
   };
 
-  const handleActivityCardPositionChange = (activity: Activity, position: { mapX: number; mapY: number }) => {
-    void handleActivityCardFieldsChange(
-      activity,
-      'position',
-      position,
-      position,
-      'map.errors.updatePosition'
-    );
-  };
-
   const handleActivityParticipationModeChange = (
     activity: Activity,
     participationMode: Activity['participationMode']
@@ -747,14 +735,13 @@ export function MapPage() {
   ) => {
     if (!user?.isAdmin) return;
 
+    const normalizedStepRanges = normalizeActivityStepRanges(stepRanges);
     const previousActivity = activities.find((candidate) => candidate.id === activity.id) || activity;
     const saveVersion = (activityStepRangeSaveVersionsRef.current.get(activity.id) || 0) + 1;
     activityStepRangeSaveVersionsRef.current.set(activity.id, saveVersion);
     const optimisticActivity = resolveActivityWithStepRanges(
       previousActivity,
-      stepRanges,
-      activities,
-      activityEdges,
+      normalizedStepRanges,
       previewStep
     );
     patchActivity(activity.id, optimisticActivity);
@@ -768,7 +755,7 @@ export function MapPage() {
       const updatedActivity = await updateMapActivityStepRanges(
         token,
         activity.id,
-        stepRanges,
+        normalizedStepRanges,
         selectedGameId
       );
       if (activityStepRangeSaveVersionsRef.current.get(activity.id) !== saveVersion) return;
@@ -902,7 +889,8 @@ export function MapPage() {
 
   const handleChangeEdgeStyles = async (
     edge: GameActivityEdge,
-    styleWindows: GameActivityEdgeStyleWindow[]
+    styleWindows: GameActivityEdgeStyleWindow[],
+    unlockPrerequisiteActivityIds: string[]
   ) => {
     if (!user?.isAdmin) return;
 
@@ -912,6 +900,7 @@ export function MapPage() {
     const metadata = {
       ...(edge.metadata || {}),
       styleWindows,
+      unlockPrerequisiteActivityIds,
     };
     const optimisticEdge = { ...edge, metadata };
     patchActivityEdge(edge.id, optimisticEdge);
@@ -922,7 +911,13 @@ export function MapPage() {
     try {
       const token = localStorage.getItem('eduquest_token');
       if (!token) throw new Error('Missing session token.');
-      const updatedEdge = await updateMapActivityEdgeStyles(token, edge.id, styleWindows, selectedGameId);
+      const updatedEdge = await updateMapActivityEdgeStyles(
+        token,
+        edge.id,
+        styleWindows,
+        unlockPrerequisiteActivityIds,
+        selectedGameId
+      );
       if (edgeStyleSaveVersionsRef.current.get(edge.id) !== saveVersion) return;
       patchActivityEdge(edge.id, updatedEdge);
       setSelectedEdge(updatedEdge);
@@ -1093,11 +1088,6 @@ export function MapPage() {
                 onResourcesChange={
                   user?.isAdmin && selectedActivity
                     ? (resources) => handleActivityResourcesChange(selectedActivity, resources)
-                    : undefined
-                }
-                onPositionChange={
-                  user?.isAdmin && selectedActivity
-                    ? (position) => handleActivityCardPositionChange(selectedActivity, position)
                     : undefined
                 }
                 onParticipationModeChange={
@@ -1286,37 +1276,40 @@ function isSystemOnboardingActivity(activity: Activity) {
 function resolveActivityWithStepRanges(
   activity: Activity,
   stepRanges: ActivityStepRange[],
-  activities: Activity[],
-  edges: GameActivityEdge[],
   currentStep: number
 ): Activity {
   const normalizedRanges = stepRanges.length
     ? stepRanges
     : [{ startStep: Math.max(activity.requiredLevel - 1, 0) }];
-  const prerequisites = edges
-    .filter((edge) => edge.toActivityId === activity.id)
-    .map((edge) => edge.fromActivityId);
-  const completedActivityIds = new Set(
-    activities.filter((candidate) => candidate.isCompleted).map((candidate) => candidate.id)
-  );
-  const prerequisitesCompleted = prerequisites.every((id) => completedActivityIds.has(id));
-  const isRoot = prerequisites.length === 0;
-  const isCompleted = Boolean(activity.isCompleted);
-  const hasBeenRevealed = normalizedRanges.some((range) => currentStep >= range.startStep);
   const isActiveForStep = normalizedRanges.some((range) => isStepInsideRange(currentStep, range));
-  const isRevealed =
-    hasBeenRevealed && isActiveForStep && (isCompleted || isRoot || prerequisitesCompleted);
 
   return {
     ...activity,
     stepRanges: normalizedRanges,
-    isRevealed,
-    isLocked: !isRevealed || (!isCompleted && !prerequisitesCompleted),
+    isRevealed: isActiveForStep,
+    isLocked: !isActiveForStep,
   };
 }
 
 function isStepInsideRange(step: number, range: ActivityStepRange) {
   return step >= range.startStep && (range.endStep == null || step < range.endStep);
+}
+
+function normalizeActivityStepRanges(stepRanges: ActivityStepRange[]) {
+  return stepRanges.map((range) => {
+    const startStep = toNonNegativeInteger(range.startStep);
+    return {
+      startStep,
+      endStep:
+        range.endStep == null
+          ? undefined
+          : Math.max(toNonNegativeInteger(range.endStep), startStep + 1),
+    };
+  });
+}
+
+function toNonNegativeInteger(value: number) {
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 }
 
 function getMapPreviewSteps(
@@ -1353,12 +1346,51 @@ function getMapPreviewSteps(
   return Array.from({ length: maxStep + 1 }, (_item, index) => index);
 }
 
-function hasDirectMapEdge(edges: GameActivityEdge[], firstActivityId: string, secondActivityId: string) {
+function hasUnlockedOutgoingMapEdge(
+  edges: GameActivityEdge[],
+  fromActivityId: string,
+  toActivityId: string,
+  completedActivityIds: readonly string[],
+  currentStep: number
+) {
+  const completedSet = new Set(completedActivityIds);
   return edges.some(
     (edge) =>
-      (edge.fromActivityId === firstActivityId && edge.toActivityId === secondActivityId) ||
-      (edge.fromActivityId === secondActivityId && edge.toActivityId === firstActivityId)
+      edge.fromActivityId === fromActivityId &&
+      edge.toActivityId === toActivityId &&
+      isEdgeUnlocked(edge, completedSet, currentStep)
   );
+}
+
+function getEdgeUnlockPrerequisiteIds(edge: GameActivityEdge) {
+  const explicitPrerequisites = Array.isArray(edge.metadata?.unlockPrerequisiteActivityIds)
+    ? edge.metadata.unlockPrerequisiteActivityIds.filter((id): id is string => typeof id === 'string')
+    : [];
+
+  return explicitPrerequisites.length > 0 ? explicitPrerequisites : [edge.fromActivityId];
+}
+
+function isEdgeUnlocked(edge: GameActivityEdge, completedActivityIds: ReadonlySet<string>, currentStep: number) {
+  return (
+    isEdgeActiveForStep(edge, currentStep) &&
+    getEdgeUnlockPrerequisiteIds(edge).every((id) => completedActivityIds.has(id))
+  );
+}
+
+function isEdgeActiveForStep(edge: GameActivityEdge, currentStep: number) {
+  const styleWindows = edge.metadata?.styleWindows;
+  if (!Array.isArray(styleWindows) || styleWindows.length === 0) return true;
+
+  return styleWindows.some((window) => {
+    if (!window || typeof window !== 'object') return false;
+    const candidate = window as Partial<GameActivityEdgeStyleWindow>;
+    return (
+      candidate.animation !== 'disabled' &&
+      typeof candidate.startStep === 'number' &&
+      currentStep >= candidate.startStep &&
+      (candidate.endStep == null || currentStep < candidate.endStep)
+    );
+  });
 }
 
 function formatTranslation(template: string, values: Record<string, string | number>) {

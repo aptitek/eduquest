@@ -914,6 +914,7 @@ export async function updateMapActivityEdgeStyles(
   token: string,
   edgeId: string,
   styleWindows: GameActivityEdgeStyleWindow[],
+  unlockPrerequisiteActivityIds?: string[],
   gameId?: string | null
 ): Promise<GameActivityEdge> {
   const response = await fetch(withGameParam(`/api/map/edges/${edgeId}`, gameId), {
@@ -922,7 +923,7 @@ export async function updateMapActivityEdgeStyles(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ styleWindows }),
+    body: JSON.stringify({ styleWindows, unlockPrerequisiteActivityIds }),
   });
   const data = (await response.json()) as ActivityEdgeUpdateResponse;
 

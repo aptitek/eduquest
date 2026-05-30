@@ -375,6 +375,7 @@ export type GameActivityEdgeMetadata = Record<string, unknown> & {
   opacity?: number;
   strokeWidth?: number;
   styleWindows?: GameActivityEdgeStyleWindow[];
+  unlockPrerequisiteActivityIds?: string[];
 };
 
 export type GameActivityCompletionType = 'read' | 'submission' | 'battle' | 'system';

@@ -92,6 +92,8 @@ export interface PlayingCardProps {
 const GAME_STAT_IDS = new Set(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']);
 const GAME_STAT_MAX_VALUE = 5;
 const PLAYING_CARD_FLIP_DURATION_MS = 420;
+const NANO_GUILD_CHROME_REVEAL_CLASSNAME =
+  'pointer-events-none opacity-0 transition-opacity duration-300 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100';
 
 export function PlayingCard({
   size = 'mini',
@@ -366,6 +368,7 @@ function PlayingCardType({
   layoutId?: string;
 }) {
   const renderGuildIconInType = shouldRenderGuildIconInType(kind, cardSize, face);
+  const hideGuildChromeUntilExpanded = shouldHideRibbonUntilNanoExpanded(cardSize);
   const type = face.type || (renderGuildIconInType ? { variant: 'custom' as const } : undefined);
   const text = type?.text ? getTextValue(type.text) : type?.value === undefined ? undefined : String(type.value);
   const icon =
@@ -391,6 +394,7 @@ function PlayingCardType({
       size={size}
       color={color}
       icon={type.icon?.editable ? undefined : icon}
+      className={hideGuildChromeUntilExpanded ? NANO_GUILD_CHROME_REVEAL_CLASSNAME : undefined}
       editableText={editableText}
       editableIcon={
         type.icon?.editable && type.icon.onChange && type.icon.value
@@ -456,7 +460,7 @@ function CardArtSlot({
     void face.art?.onChange?.(await readFileAsDataUrl(file));
   };
 
-  if (canEdit && (face.art?.value || (!face.art?.node && !face.icon))) {
+  if (canEdit && (face.art?.value || face.art?.upload || (!face.art?.node && !face.icon))) {
     return (
       <motion.div
         layoutId={layoutId ? `${layoutId}-illustration` : undefined}
@@ -519,13 +523,17 @@ function CardIconOverlay({
   if (shouldRenderCardIconInType(face)) return null;
   const icon = getCardIcon(face, 64);
   if (!icon) return null;
+  const isInteractiveIcon = Boolean(face.icon?.editable || face.icon?.onChange);
+  const hideGuildChromeUntilExpanded = shouldHideRibbonUntilNanoExpanded(cardSize);
 
   return (
     <div
       aria-label={face.icon?.label}
       className={cn(
-        'pointer-events-none absolute left-4 top-4 z-20 flex h-20 w-20 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-card/70 text-text-muted shadow-card backdrop-blur',
-        (face.icon?.colored || face.icon?.color) && 'text-[color:var(--playing-card-accent)]'
+        'absolute left-4 top-4 z-20 flex h-20 w-20 items-center justify-center rounded-2xl border border-gaming-border bg-gaming-card/70 text-text-muted shadow-card backdrop-blur',
+        isInteractiveIcon ? 'pointer-events-auto' : 'pointer-events-none',
+        (face.icon?.colored || face.icon?.color) && 'text-[color:var(--playing-card-accent)]',
+        hideGuildChromeUntilExpanded && NANO_GUILD_CHROME_REVEAL_CLASSNAME
       )}
       style={face.icon?.color ? { color: String(face.icon.color) } : undefined}
     >
@@ -790,6 +798,12 @@ function shouldRenderGuildIconInType(
   face: PlayingCardFaceSlots
 ) {
   return kind === 'guild' && size !== 'nano' && Boolean(face.icon);
+}
+
+function shouldHideRibbonUntilNanoExpanded(
+  size: PlayingCardSize | 'mini' | 'full' | 'nano'
+) {
+  return size === 'nano';
 }
 
 function getFaceDownIconSize(size: PlayingCardSize) {
