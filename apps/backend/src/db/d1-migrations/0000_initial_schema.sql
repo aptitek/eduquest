@@ -165,6 +165,11 @@ CREATE TABLE `game_bonus_cards` (
 CREATE TABLE `game_character_classes` (
 	`slug` text PRIMARY KEY NOT NULL,
 	`name_i18n_key` text NOT NULL,
+	`name` text,
+	`subtitle` text,
+	`description` text,
+	`icon_key` text,
+	`color` text,
 	`base_strength` integer DEFAULT 0 NOT NULL,
 	`base_dexterity` integer DEFAULT 0 NOT NULL,
 	`base_constitution` integer DEFAULT 0 NOT NULL,
@@ -202,6 +207,7 @@ CREATE TABLE `game_characters` (
 	`intelligence` integer DEFAULT 0 NOT NULL,
 	`wisdom` integer DEFAULT 0 NOT NULL,
 	`charisma` integer DEFAULT 0 NOT NULL,
+	`title` text,
 	`illustration_url` text,
 	`updated_at` integer DEFAULT (unixepoch() * 1000),
 	FOREIGN KEY (`student_id`) REFERENCES `students`(`id`) ON UPDATE no action ON DELETE no action,
@@ -264,6 +270,18 @@ CREATE TABLE `guilds` (
 	FOREIGN KEY (`cohort_id`) REFERENCES `cohorts`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `guild_vote_balances` (
+	`id` text PRIMARY KEY NOT NULL,
+	`guild_id` text NOT NULL,
+	`cohort_id` text NOT NULL,
+	`vote_balance` integer DEFAULT 0 NOT NULL,
+	`created_at` integer DEFAULT (unixepoch() * 1000),
+	`updated_at` integer DEFAULT (unixepoch() * 1000),
+	FOREIGN KEY (`guild_id`) REFERENCES `guilds`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`cohort_id`) REFERENCES `cohorts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `guild_vote_balances_guild_cohort_idx` ON `guild_vote_balances` (`guild_id`,`cohort_id`);--> statement-breakpoint
 CREATE TABLE `milestone_bonus_votes` (
 	`id` text PRIMARY KEY NOT NULL,
 	`milestone_id` text NOT NULL,
@@ -317,6 +335,8 @@ CREATE TABLE `progress_milestones` (
 	`description_i18n_key` text,
 	`cost` integer NOT NULL,
 	`sort_order` integer NOT NULL,
+	`vote_opened_at` integer,
+	`vote_closed_at` integer,
 	`created_at` integer DEFAULT (unixepoch() * 1000),
 	`updated_at` integer DEFAULT (unixepoch() * 1000),
 	FOREIGN KEY (`progress_id`) REFERENCES `cohort_progress`(`id`) ON UPDATE no action ON DELETE cascade
