@@ -149,7 +149,7 @@ publicAssetRouter.get('/*', async (c) => {
     return c.text('Asset storage is not configured.', 503);
   }
 
-  const key = decodeURIComponent(c.req.path.replace(/^\/assets\/?/, ''));
+  const key = decodeURIComponent(c.req.path.replace(/^\/(?:api\/public-assets|assets)\/?/, ''));
   if (!key || key.includes('..')) {
     return c.text('Invalid asset key.', 400);
   }

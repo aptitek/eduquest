@@ -164,7 +164,7 @@ ENABLE_DEBUG_AUTH=true
 Asset uploads use the Worker `ASSETS` R2 binding declared in `apps/backend/wrangler.toml`.
 Wrangler dev uses a local R2 simulation by default, so profile pictures and school
 logos can be uploaded locally without creating a real Cloudflare bucket. Uploaded
-objects are served by the Worker at `/assets/<object-key>` unless
+objects are served by the Worker at `/assets/<object-key>` locally unless
 `ASSET_PUBLIC_BASE_URL` is set to a custom public bucket/CDN URL.
 
 When `APP_ENV=production`, production API routes require real Cloudflare bindings and secrets such as `DB`, `ASSETS`, `JWT_SECRET`, and `FRONTEND_URL`; debug auth is disabled even if its flag is set.
@@ -175,7 +175,7 @@ Use `apps/frontend/.env.example` and `apps/backend/.dev.vars.example` as local s
 
 GitHub Actions deploys the application with `.github/workflows/deploy-cloudflare.yml`. Pull requests run build and test validation. Pushes to `main` apply remote D1 migrations, deploy the backend Worker, build the production frontend, and upload `apps/frontend/dist` to Cloudflare Pages.
 
-The production hostname is `https://apti.space`. Cloudflare Pages serves the frontend, and the Worker in `apps/backend/wrangler.toml` handles `apti.space/api/*` and `apti.space/assets/*`.
+The production hostname is `https://apti.space`. Cloudflare Pages serves the frontend and owns Vite's `/assets/*` bundle paths. The Worker in `apps/backend/wrangler.toml` handles `apti.space/api/*`, including uploaded R2 assets under `/api/public-assets/*`.
 
 Before the first CI deployment, create or verify the Cloudflare resources:
 

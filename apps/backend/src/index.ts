@@ -43,6 +43,7 @@ app.use(
 // Montage des routes publiques d'authentification sous /api/auth
 app.route('/api/auth', authRouter);
 app.route('/assets', publicAssetRouter);
+app.route('/api/public-assets', publicAssetRouter);
 app.route('/api/webhooks', webhooksRouter);
 
 // Enforcer l'authentification sur les endpoints protégés du jeu

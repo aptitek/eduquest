@@ -4,13 +4,14 @@ compatibility_date = "2026-05-30"
 compatibility_flags = [ "nodejs_compat" ]
 
 routes = [
-  { pattern = "apti.space/api/*", zone_name = "apti.space" },
-  { pattern = "apti.space/assets/*", zone_name = "apti.space" }
+  { pattern = "apti.space/api/*", zone_name = "apti.space" }
 ]
 
 [vars]
 APP_ENV = "production"
 FRONTEND_URL = "https://apti.space"
+ASSET_PUBLIC_BASE_URL = "https://apti.space/api/public-assets"
+GITHUB_REDIRECT_URI = "https://apti.space/api/auth/github/callback"
 
 [[r2_buckets]]
 binding = "ASSETS"
