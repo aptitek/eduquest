@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Handshake, Search, UserPlus, Users } from 'lucide-react';
-import type { GuildInvitation } from '@eduquest/shared';
+import { Check, Gift, Handshake, Search, UserPlus, Users } from 'lucide-react';
+import type { GuildInvitation, RewardActivityType } from '@eduquest/shared';
 import { GameHeader } from '../components/organisms/GameHeader';
 import { GameLayout } from '../components/templates/GameLayout';
 import { CompoundBadge } from '../components/atoms/CompoundBadge';
@@ -18,6 +18,7 @@ import {
   fetchMapActivities,
   inviteToGuild,
   joinGuild,
+  rewardGuild,
   updateGuild,
   type ClassRosterGuild,
   type ClassRosterStudent,
@@ -38,9 +39,23 @@ import { formatUserDisplayName } from '../utils/displayName';
 import mascotUrl from '../assets/mascot.svg';
 
 const DEFAULT_GUILD_MAX_MEMBERS = 3;
+const REWARD_ACTIVITY_TYPES: RewardActivityType[] = [
+  'strength',
+  'intelligence',
+  'wisdom',
+  'dexterity',
+  'constitution',
+  'charisma',
+];
 type EditableGuildField = 'title' | 'description' | 'art' | 'typeIcon';
 type EditableGuildCardOverride = Partial<Record<EditableGuildField, string>> & {
   color?: string;
+};
+type GuildRewardFormPayload = {
+  basePoints: number;
+  targetAttribute: RewardActivityType;
+  hoursEarly?: number;
+  activeDays?: number;
 };
 
 export function AnnuairePage() {
@@ -70,6 +85,7 @@ export function AnnuairePage() {
   const [createdGuild, setCreatedGuild] = useState<ClassRosterGuild | null>(null);
   const [isCreatingGuild, setIsCreatingGuild] = useState(false);
   const [isCreatedGuildRevealComplete, setIsCreatedGuildRevealComplete] = useState(false);
+  const [rewardingGuildId, setRewardingGuildId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const currentGuildSectionRef = useRef<HTMLElement | null>(null);
   const latestMembership =
@@ -254,6 +270,34 @@ export function AnnuairePage() {
     const asset = await uploadAsset(token, 'guild-icon', file, guildId);
     return asset.url;
   }, []);
+
+  const handleRewardGuild = useCallback(
+    async (guildId: string, payload: GuildRewardFormPayload) => {
+      const token = localStorage.getItem('eduquest_token');
+      if (!token) throw new Error('Missing session token.');
+
+      setRewardingGuildId(guildId);
+      try {
+        const updatedGuild = await rewardGuild(token, guildId, payload);
+        applyUpdatedGuild(updatedGuild as ClassRosterGuild);
+        const roster = await fetchClassRoster(token, selectedGameId);
+        setGuilds(roster.guilds);
+        setUnguildedStudents(roster.unguildedStudents);
+        setInvitations(roster.invitations);
+        setCurrentGuildId(roster.currentGuildId);
+        window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
+      } catch (error) {
+        reportError(error, {
+          messageKey: 'directory.errors.rewardGuild',
+          id: `directory.errors.rewardGuild.${guildId}`,
+          logMessage: 'Could not reward guild from directory.',
+        });
+      } finally {
+        setRewardingGuildId((current) => (current === guildId ? null : current));
+      }
+    },
+    [applyUpdatedGuild, reportError, selectedGameId]
+  );
   const currentGuildHand = useMemo(() => {
     if (!currentGuild || !student || !user || !character) return undefined;
 
@@ -523,6 +567,13 @@ export function AnnuairePage() {
               className="border-status-quest/60 bg-gaming-card/70 shadow-glow-primary"
               handClassName="h-[30rem] md:h-[32rem]"
             />
+            {user?.isAdmin && currentGuild?.id ? (
+              <GuildRewardPanel
+                guild={currentGuild}
+                isSubmitting={rewardingGuildId === currentGuild.id}
+                onSubmit={(payload) => handleRewardGuild(currentGuild.id, payload)}
+              />
+            ) : null}
           </motion.section>
         ) : null}
 
@@ -653,7 +704,18 @@ export function AnnuairePage() {
                         onJoin: () => void handleJoinGuild(guild),
                       });
 
-                      return <ClassHandSection key={hand.id} hand={hand} />;
+                      return (
+                        <div key={hand.id} className="space-y-3">
+                          <ClassHandSection hand={hand} />
+                          {user?.isAdmin ? (
+                            <GuildRewardPanel
+                              guild={guild}
+                              isSubmitting={rewardingGuildId === guild.id}
+                              onSubmit={(payload) => handleRewardGuild(guild.id, payload)}
+                            />
+                          ) : null}
+                        </div>
+                      );
                     })}
                   </div>
                 </div>
@@ -1205,6 +1267,108 @@ function ClassHandSection({ hand }: { hand: PlayingHandData }) {
       onCardSelect={(card) => card.onClick?.()}
     />
   );
+}
+
+function GuildRewardPanel({
+  guild,
+  isSubmitting,
+  onSubmit,
+}: {
+  guild: ClassRosterGuild;
+  isSubmitting: boolean;
+  onSubmit: (payload: GuildRewardFormPayload) => void | Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [basePoints, setBasePoints] = useState(10);
+  const [targetAttribute, setTargetAttribute] = useState<RewardActivityType>('strength');
+  const [hoursEarly, setHoursEarly] = useState(1);
+  const [activeDays, setActiveDays] = useState(1);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSubmit({
+      basePoints,
+      targetAttribute,
+      ...(targetAttribute === 'dexterity' ? { hoursEarly } : {}),
+      ...(targetAttribute === 'constitution' ? { activeDays } : {}),
+    });
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-2xl border border-status-campfire/35 bg-gaming-card/70 p-4 shadow-inner"
+    >
+      <div className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-status-campfire">
+        <Gift size={16} aria-hidden />
+        {t('directory.rewardGuildTitle').replace(
+          '{guild}',
+          guild.name || t('dashboard.dock.playerGuild')
+        )}
+      </div>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+        <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+          {t('directory.rewardBasePoints')}
+          <input
+            type="number"
+            min={1}
+            value={basePoints}
+            onChange={(event) => setBasePoints(Math.max(1, Number(event.target.value) || 1))}
+            className="w-full rounded-xl border border-gaming-border bg-gaming-base/80 px-3 py-2 text-sm text-text-primary outline-none focus:border-status-campfire focus:ring-2 focus:ring-status-campfire/30"
+          />
+        </label>
+        <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+          {t('directory.rewardType')}
+          <select
+            value={targetAttribute}
+            onChange={(event) => setTargetAttribute(event.target.value as RewardActivityType)}
+            className="w-full rounded-xl border border-gaming-border bg-gaming-base/80 px-3 py-2 text-sm text-text-primary outline-none focus:border-status-campfire focus:ring-2 focus:ring-status-campfire/30"
+          >
+            {REWARD_ACTIVITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {getRewardActivityTypeLabel(type, t)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {targetAttribute === 'dexterity' ? (
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+            {t('directory.rewardHoursEarly')}
+            <input
+              type="number"
+              min={0}
+              value={hoursEarly}
+              onChange={(event) => setHoursEarly(Math.max(0, Number(event.target.value) || 0))}
+              className="w-full rounded-xl border border-gaming-border bg-gaming-base/80 px-3 py-2 text-sm text-text-primary outline-none focus:border-status-campfire focus:ring-2 focus:ring-status-campfire/30"
+            />
+          </label>
+        ) : null}
+        {targetAttribute === 'constitution' ? (
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+            {t('directory.rewardActiveDays')}
+            <input
+              type="number"
+              min={0}
+              value={activeDays}
+              onChange={(event) => setActiveDays(Math.max(0, Number(event.target.value) || 0))}
+              className="w-full rounded-xl border border-gaming-border bg-gaming-base/80 px-3 py-2 text-sm text-text-primary outline-none focus:border-status-campfire focus:ring-2 focus:ring-status-campfire/30"
+            />
+          </label>
+        ) : null}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-xl border border-status-campfire bg-status-campfire px-4 py-2 text-sm font-bold text-gaming-base shadow-glow-primary transition hover:bg-status-campfire/90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? t('directory.rewardSubmitting') : t('directory.rewardSubmit')}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function getRewardActivityTypeLabel(type: RewardActivityType, t: (path: string) => string): string {
+  return t(`directory.rewardTypes.${type}`);
 }
 
 function groupGuildsByInitial(guilds: ClassRosterGuild[]) {

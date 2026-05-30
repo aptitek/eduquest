@@ -164,7 +164,7 @@ type RewardDb = any;
 type PointTransactionType = (typeof pointTransactions.transactionType.enumValues)[number];
 
 export interface RewardActivityInput {
-  id: string;
+  id?: string;
   basePoints: number;
   targetAttribute: RewardActivityType | null;
 }
@@ -182,7 +182,7 @@ export interface RewardCalculationInput {
 
 export interface RewardCalculationResult {
   guildId: string;
-  activityId: string;
+  activityId?: string;
   activityType: RewardActivityType;
   amount: number;
   calculatedPoints: number;
@@ -559,7 +559,7 @@ export class RewardService {
     await this.db.insert(pointTransactions).values({
       guildId: input.guildId,
       studentId: input.studentId,
-      activityId: input.activity.id,
+      ...(input.activity.id ? { activityId: input.activity.id } : {}),
       amount,
       transactionType: input.transactionType || 'EARNED',
       createdAt: input.now || new Date(),

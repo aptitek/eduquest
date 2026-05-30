@@ -32,6 +32,15 @@ type CohortInvitesResponse =
       success: false;
       error?: string;
     };
+type ManagementImpersonationResponse =
+  | {
+      success: true;
+      token: string;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
 
 export async function fetchManagementBackup(token: string): Promise<ManagementBackup> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management`, {
@@ -146,6 +155,23 @@ export async function deleteManagementStudent(
   }
 
   return data.backup;
+}
+
+export async function impersonateManagementStudent(token: string, studentId: string): Promise<string> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/auth/management/students/${studentId}/impersonate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json()) as ManagementImpersonationResponse;
+
+  if (!response.ok || !data.success || !data.token) {
+    throwApiResponseError(response, data, 'Student impersonation failed.');
+  }
+
+  return data.token;
 }
 
 export async function createManagementSchool(

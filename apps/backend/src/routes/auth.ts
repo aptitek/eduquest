@@ -1183,6 +1183,45 @@ authRouter.post('/management/students', async (c) => {
   });
 });
 
+authRouter.post('/management/students/:studentId/impersonate', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+  if (!c.env.DB) return missingDatabaseBinding(c);
+
+  const studentId = c.req.param('studentId');
+  const db = getDb(c.env.DB);
+  const [studentRecord] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
+  if (!studentRecord) {
+    return apiError(c, 'Student profile not found.', 404, { errorCode: 'not_found' });
+  }
+
+  const [targetUserRecord] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, studentRecord.userId))
+    .limit(1);
+  if (!targetUserRecord) {
+    return apiError(c, 'User profile not found.', 404, { errorCode: 'not_found' });
+  }
+  if (targetUserRecord.isAdmin) {
+    return apiError(c, 'Admin users cannot be impersonated.', 403, { errorCode: 'access_denied' });
+  }
+
+  await db
+    .update(users)
+    .set({ lastLogin: new Date(), updatedAt: new Date() })
+    .where(eq(users.id, targetUserRecord.id));
+
+  const token = await signAuthToken(toAuthPayload(toUser(targetUserRecord)), requireJwtSecret(c.env));
+  return c.json({
+    success: true,
+    token,
+    user: toUser(targetUserRecord),
+  });
+});
+
 authRouter.get('/management/cohorts/:cohortId/invites', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser?.isAdmin) {

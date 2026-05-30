@@ -21,6 +21,7 @@ import type {
   Guild,
   GuildInvitation,
   GuildRecruitmentStatus,
+  RewardActivityType,
   RewardBalanceConfigPayload,
   RewardSystemConfig,
 } from '@eduquest/shared';
@@ -51,6 +52,12 @@ export type GuildCreatePayload = GuildFieldsPayload & {
 export type GuildInvitationPayload = {
   inviteeUserId: string;
   message?: string;
+};
+export type GuildRewardPayload = {
+  basePoints: number;
+  targetAttribute: RewardActivityType;
+  hoursEarly?: number;
+  activeDays?: number;
 };
 
 export type RewardBalanceConfigState = {
@@ -157,6 +164,7 @@ type GuildUpdateResponse =
   | {
       success: true;
       guild: Guild;
+      reward?: unknown;
       source?: string;
     }
   | {
@@ -376,6 +384,29 @@ export async function updateGuild(
 
 export async function updateGuildIcon(token: string, guildId: string, iconKey: string): Promise<Guild> {
   return updateGuild(token, guildId, { iconKey });
+}
+
+export async function rewardGuild(
+  token: string,
+  guildId: string,
+  payload: GuildRewardPayload
+): Promise<Guild> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/guilds/${guildId}/rewards`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as GuildUpdateResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Guild reward failed.');
+  }
+
+  return data.guild;
 }
 
 export async function joinGuild(token: string, guildId: string): Promise<Guild> {

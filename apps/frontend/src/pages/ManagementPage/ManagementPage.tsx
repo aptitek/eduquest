@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { PlayingCard, type PlayingCardFaceSlots } from '../../components/molecules/PlayingCard';
+import { LogIn } from 'lucide-react';
 import { ManagementTable } from '../../components/organisms/ManagementTable';
 import {
   CardSkeleton,
@@ -19,6 +20,7 @@ import {
   deleteManagementSchool,
   deleteManagementStudent,
   fetchManagementBackup,
+  impersonateManagementStudent,
   type ManagementCohortUpdate,
   type ManagementSchoolUpdate,
   type ManagementStudentUpdate,
@@ -46,6 +48,7 @@ import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
 import { getCharacterClassIconKey, toPlayingCardStats } from '../../features/game/characterStats';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { startImpersonationSession } from '../../features/auth/impersonation';
 
 function getSchoolInstitutionalEmail(rowUser: StudentRow['user'], legacyEmail?: string) {
   return legacyEmail || rowUser.email;
@@ -60,6 +63,7 @@ export function ManagementPage() {
   const [selectedEntity, setSelectedEntity] = useState<SelectedManagementEntity | null>(null);
   const [managementBackup, setManagementBackup] = useState<ManagementBackup | null>(null);
   const [isManagementLoading, setIsManagementLoading] = useState(false);
+  const [impersonatingStudentId, setImpersonatingStudentId] = useState<string | null>(null);
   const [managementErrorKey, setManagementErrorKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -427,6 +431,34 @@ export function ManagementPage() {
       () => (selectedEntity?.tab === tab && selectedEntity.id === rowId ? null : selectedEntity)
     );
   };
+  const impersonateStudent = async (studentId: string) => {
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      reportError('Missing session token.', {
+        messageKey: 'management.errors.missingSession',
+        id: 'management.errors.missingSession',
+        includeDetail: false,
+      });
+      setManagementErrorKey('management.errors.missingSession');
+      return;
+    }
+
+    setImpersonatingStudentId(studentId);
+    setManagementErrorKey(null);
+    try {
+      const impersonationToken = await impersonateManagementStudent(token, studentId);
+      startImpersonationSession(impersonationToken);
+    } catch (error) {
+      reportError(error, {
+        messageKey: 'management.errors.impersonateStudent',
+        id: `management.errors.impersonateStudent.${studentId}`,
+        logMessage: 'Could not impersonate management student.',
+      });
+      setManagementErrorKey('management.errors.impersonateStudent');
+    } finally {
+      setImpersonatingStudentId((current) => (current === studentId ? null : current));
+    }
+  };
   const selectedStudentCharacterBack = selectedStudentRow?.character
     ? buildStudentCharacterBackSide(selectedStudentRow, t, updateSelectedStudent)
     : undefined;
@@ -455,7 +487,7 @@ export function ManagementPage() {
       t={t}
     />
   ) : selectedStudentRow ? (
-    <div className="h-full min-h-0 overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
       <InstitutionalProfileCard
         user={selectedStudentRow.user}
         variant="management"
@@ -535,6 +567,17 @@ export function ManagementPage() {
           );
         }}
       />
+      <button
+        type="button"
+        onClick={() => void impersonateStudent(selectedStudentRow.id)}
+        disabled={impersonatingStudentId === selectedStudentRow.id}
+        className="mx-4 mb-4 flex items-center justify-center gap-2 rounded-2xl border border-status-quest bg-status-quest px-4 py-3 font-display text-sm font-bold uppercase tracking-[0.14em] text-gaming-base shadow-glow-primary transition hover:bg-status-quest/90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <LogIn size={18} aria-hidden />
+        {impersonatingStudentId === selectedStudentRow.id
+          ? t('management.impersonation.connecting')
+          : t('management.impersonation.action')}
+      </button>
     </div>
   ) : (
     <CardSkeleton label={t('management.card.rectoEmpty')} variant={activeCardSkeletonVariant} />

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { LogOut, ChevronDown, Languages, Check, Moon, Sun } from 'lucide-react';
+import { LogOut, ChevronDown, Languages, Check, Moon, Sun, ShieldCheck } from 'lucide-react';
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
 import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
@@ -11,6 +11,7 @@ import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { uploadAsset } from '../../features/assets/api';
 import { useErrorReporter } from '../../features/errors/notifications';
+import { hasImpersonationSession, stopImpersonationSession } from '../../features/auth/impersonation';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -95,6 +96,7 @@ export function AccountDropdown() {
     user.avatarUrl ||
     user.githubAvatarUrl ||
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
+  const isImpersonating = hasImpersonationSession();
   const chevronClass = cn(
     'text-text-muted transition-transform duration-300',
     isOpen && 'rotate-180'
@@ -302,6 +304,19 @@ export function AccountDropdown() {
               </div>
 
               <div className="divider my-0"></div>
+
+              {isImpersonating ? (
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    stopImpersonationSession();
+                  }}
+                  className="w-full btn btn-sm border-status-quest bg-status-quest text-gaming-base hover:border-status-quest hover:bg-status-quest/90 flex items-center justify-center gap-2 transition-colors font-display font-semibold"
+                >
+                  <ShieldCheck size={16} />
+                  <span>{t('management.impersonation.returnToAdmin')}</span>
+                </button>
+              ) : null}
 
               <button
                 onClick={() => {

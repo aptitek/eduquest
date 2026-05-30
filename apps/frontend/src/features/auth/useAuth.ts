@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../game/gameStore';
 import { BACKEND_BASE_URL, ENABLE_DEV_TOOLS } from '../../config/deployment';
 import { ApiClientError, throwApiResponseError } from '../errors/api';
+import { IMPERSONATOR_TOKEN_STORAGE_KEY } from './impersonation';
 
 export { BACKEND_BASE_URL };
 
@@ -137,6 +138,7 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     localStorage.removeItem('eduquest_token');
+    localStorage.removeItem(IMPERSONATOR_TOKEN_STORAGE_KEY);
     clearStoreSession();
   }, [clearStoreSession]);
 

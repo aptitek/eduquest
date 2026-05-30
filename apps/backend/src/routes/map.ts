@@ -24,6 +24,7 @@ import {
   type Guild,
   type GuildInvitation,
   type GuildRecruitmentStatus,
+  type RewardActivityType,
   type VoteSpendBreakdown,
 } from '@eduquest/shared';
 import { getDb } from '../db';
@@ -51,7 +52,7 @@ import {
 } from '../db/schema';
 import type { UserPayload } from '../middleware/auth';
 import { createEventContext, publishEvent } from '../events';
-import { VotingCostService } from '../services/rewards';
+import { RewardService, VotingCostService } from '../services/rewards';
 import { RewardBalanceConfigService } from '../services/reward-balance-config';
 import { apiError, missingDatabaseBinding, parseJsonBody, requireAdminUser, requireDatabase } from './http';
 
@@ -3526,6 +3527,67 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   } catch (error: any) {
     console.error('Guild update SQL error:', error.message);
     return apiError(c, 'Guild could not be updated.', 500);
+  }
+});
+
+mapRouter.post('/guilds/:guildId/rewards', async (c) => {
+  const adminUser = requireAdminUser(c);
+  if (adminUser instanceof Response) return adminUser;
+
+  const databaseUrl = c.env?.DB;
+  if (!databaseUrl) {
+    return missingDatabaseBinding(c);
+  }
+
+  const body = await parseJsonBody<{
+    basePoints?: unknown;
+    targetAttribute?: unknown;
+    hoursEarly?: unknown;
+    activeDays?: unknown;
+  }>(c, {});
+  const basePoints = typeof body?.basePoints === 'number' ? body.basePoints : Number(body?.basePoints);
+  const targetAttribute = typeof body?.targetAttribute === 'string' ? body.targetAttribute : '';
+  const hoursEarly = typeof body?.hoursEarly === 'number' ? body.hoursEarly : Number(body?.hoursEarly ?? 0);
+  const activeDays = typeof body?.activeDays === 'number' ? body.activeDays : Number(body?.activeDays ?? 0);
+
+  if (!Number.isFinite(basePoints) || basePoints <= 0) {
+    return apiError(c, 'basePoints must be a positive number.', 400, { errorCode: 'validation_failed' });
+  }
+  if (!STUDENT_ATTRIBUTES.includes(targetAttribute as RewardActivityType)) {
+    return apiError(c, 'targetAttribute must be a valid reward attribute.', 400, { errorCode: 'validation_failed' });
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const guildId = c.req.param('guildId');
+    const [guildRecord] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+    if (!guildRecord) {
+      return apiError(c, 'Guild not found.', 404);
+    }
+
+    const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db, guildRecord.cohortId);
+    const result = await new RewardService(db).calculateReward({
+      guildId,
+      activity: {
+        basePoints,
+        targetAttribute: targetAttribute as RewardActivityType,
+      },
+      hoursEarly: Number.isFinite(hoursEarly) ? hoursEarly : 0,
+      activeDays: Number.isFinite(activeDays) ? activeDays : undefined,
+      config: balanceConfig.rewardSystem,
+      transactionType: 'MANUAL_BONUS',
+    });
+    const [updatedGuild] = await db.select().from(guilds).where(eq(guilds.id, guildId)).limit(1);
+
+    return c.json({
+      success: true,
+      source: 'database',
+      guild: toGuildPayload(updatedGuild),
+      reward: result,
+    });
+  } catch (error: any) {
+    console.error('Guild manual reward SQL error:', error.message);
+    return apiError(c, error.message || 'Guild reward could not be applied.', 400);
   }
 });
 

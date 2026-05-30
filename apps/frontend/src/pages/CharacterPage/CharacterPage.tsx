@@ -6,7 +6,7 @@ import {
   type GameCharacterStatConfig,
   type GameStats,
 } from '@eduquest/shared';
-import { UserRound } from 'lucide-react';
+import { LogIn, UserRound } from 'lucide-react';
 import { GameHeader } from '../../components/organisms/GameHeader';
 import { GameLayout } from '../../components/templates/GameLayout';
 import {
@@ -19,6 +19,7 @@ import { useGameStore } from '../../features/game/gameStore';
 import { fetchCharacterClasses } from '../../features/game/api';
 import {
   fetchManagementBackup,
+  impersonateManagementStudent,
   updateManagementStudent,
   type ManagementStudentUpdate,
 } from '../../features/management/api';
@@ -29,6 +30,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { formatUserDisplayName } from '../../utils/displayName';
 import { useErrorReporter } from '../../features/errors/notifications';
 import { uploadAsset } from '../../features/assets/api';
+import { startImpersonationSession } from '../../features/auth/impersonation';
 import {
   CHARACTER_CLASS_BASE_STATS,
   GAME_STAT_FIELDS,
@@ -68,6 +70,7 @@ export function CharacterPage() {
   const [classDefinitions, setClassDefinitions] = useState<GameCharacterClassDefinition[]>([]);
   const [statConfig, setStatConfig] = useState<GameCharacterStatConfig>(DEFAULT_STAT_CONFIG);
   const [isSavingCharacterClass, setIsSavingCharacterClass] = useState(false);
+  const [isImpersonating, setIsImpersonating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +145,31 @@ export function CharacterPage() {
   const editableCharacter = adminTargetProfile?.character || character;
   const playerName = formatUserDisplayName(editableUser);
   const avatarUrl = editableCharacter?.illustrationUrl || editableUser.avatarUrl || editableUser.githubAvatarUrl;
+  const impersonateEditableStudent = async () => {
+    if (!adminTargetStudentId || isImpersonating) return;
+
+    const token = localStorage.getItem('eduquest_token');
+    if (!token) {
+      setSaveError(t('profile.errors.unauthorized'));
+      return;
+    }
+
+    setIsImpersonating(true);
+    setSaveError(null);
+    try {
+      const impersonationToken = await impersonateManagementStudent(token, adminTargetStudentId);
+      startImpersonationSession(impersonationToken);
+    } catch (error) {
+      reportError(error, {
+        messageKey: 'management.errors.impersonateStudent',
+        id: `character.errors.impersonateStudent.${adminTargetStudentId}`,
+        logMessage: 'Could not impersonate student from character page.',
+      });
+      setSaveError(t('management.errors.impersonateStudent'));
+    } finally {
+      setIsImpersonating(false);
+    }
+  };
   const savePlayerCardProfileUpdate = async (payload: CharacterProfileUpdatePayload) => {
     const token = localStorage.getItem('eduquest_token');
     if (!token) {
@@ -434,8 +462,19 @@ export function CharacterPage() {
 
           <div className="grid gap-8 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] xl:items-center">
             {playerCard ? (
-              <div className="mx-auto w-full max-w-sm">
+              <div className="mx-auto w-full max-w-sm space-y-3">
                 <PlayingCard {...playerCard} size="full" presentation={{ fit: 'fillWidth' }} />
+                {adminTargetStudentId ? (
+                  <button
+                    type="button"
+                    onClick={() => void impersonateEditableStudent()}
+                    disabled={isImpersonating}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-status-quest bg-status-quest px-4 py-3 font-display text-sm font-bold uppercase tracking-[0.14em] text-gaming-base shadow-glow-primary transition hover:bg-status-quest/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <LogIn size={18} aria-hidden />
+                    {isImpersonating ? t('management.impersonation.connecting') : t('management.impersonation.action')}
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <div className="min-w-0 overflow-visible rounded-3xl border border-gaming-border bg-gaming-card/40 p-4 shadow-lg">
