@@ -180,6 +180,11 @@ export const GAME_CHARACTER_CLASS_I18N_KEYS: Record<GameCharacterClass, string> 
 export interface GameCharacterClassDefinition {
   slug: GameCharacterClass;
   nameI18nKey: string;
+  name?: string;
+  subtitle?: string;
+  description?: string;
+  iconKey?: string;
+  color?: string;
   baseStats: GameStats;
   sortOrder: number;
   createdAt?: string;

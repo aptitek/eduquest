@@ -163,6 +163,11 @@ type ManagementCohortCreateBody = Partial<
 };
 type ManagementCharacterClassUpdateBody = {
   baseStats?: Partial<GameStats>;
+  name?: unknown;
+  subtitle?: unknown;
+  description?: unknown;
+  iconKey?: unknown;
+  color?: unknown;
 };
 type CohortInvitePayload = {
   purpose: 'cohort_invite';
@@ -372,6 +377,11 @@ function toGameCharacterClassDefinition(
   return {
     slug: normalizeGameCharacterClass(record.slug),
     nameI18nKey: record.nameI18nKey,
+    name: record.name || undefined,
+    subtitle: record.subtitle || undefined,
+    description: record.description || undefined,
+    iconKey: record.iconKey || undefined,
+    color: record.color || undefined,
     baseStats: {
       strength: record.baseStrength,
       dexterity: record.baseDexterity,
@@ -396,6 +406,14 @@ async function ensureCharacterClassSeeds(db: Pick<ReturnType<typeof getDb>, 'sel
     missingClasses.map((slug, index) => ({
       slug,
       nameI18nKey: GAME_CHARACTER_CLASS_I18N_KEYS[slug],
+      iconKey:
+        slug === 'scholar'
+          ? 'BookOpen'
+          : slug === 'champion'
+            ? 'Trophy'
+            : slug === 'guide'
+              ? 'Users'
+              : 'Sparkles',
       baseStrength: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].strength,
       baseDexterity: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].dexterity,
       baseConstitution: DEFAULT_CHARACTER_CLASS_BASE_STATS[slug].constitution,
@@ -1326,6 +1344,127 @@ authRouter.delete('/management/cohorts/:cohortId/invites/:inviteId', async (c) =
       requireFrontendUrl(c.env)
     ),
   });
+});
+
+authRouter.put('/management/character-classes/:classSlug', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser?.isAdmin) {
+    return apiError(c, 'Access denied. You do not have permission to do this.', 403, { errorCode: 'access_denied' });
+  }
+
+  let body: ManagementCharacterClassUpdateBody;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  const rawClassSlug = c.req.param('classSlug');
+  if (!GAME_CHARACTER_CLASS_SET.has(rawClassSlug)) {
+    return apiError(c, 'Character class not found', 404);
+  }
+  if (!c.env.DB) return missingDatabaseBinding(c);
+
+  const classSlug = rawClassSlug as GameCharacterClass;
+  const db = getDb(c.env.DB);
+  const balanceConfig = await RewardBalanceConfigService.getActiveConfig(db);
+  const baseStats = normalizeBaseStats(
+    body.baseStats || {},
+    balanceConfig.rewardSystem.attributes.levelOneMaxValue
+  );
+  if (!baseStats) {
+    return apiError(c, 'Invalid base stats', 400);
+  }
+
+  const textField = (value: unknown, maxLength: number) => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.slice(0, maxLength) || null;
+  };
+  const name = textField(body.name, 80);
+  const subtitle = textField(body.subtitle, 120);
+  const description = textField(body.description, 500);
+  const iconKey = textField(body.iconKey, 80);
+  const color = textField(body.color, 80);
+
+  try {
+    const [classRecord] = await db
+      .select()
+      .from(gameCharacterClasses)
+      .where(eq(gameCharacterClasses.slug, classSlug))
+      .limit(1);
+    if (!classRecord) {
+      return apiError(c, 'Character class not found', 404);
+    }
+
+    await db
+      .update(gameCharacterClasses)
+      .set({
+        ...(name !== undefined ? { name } : {}),
+        ...(subtitle !== undefined ? { subtitle } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(iconKey !== undefined ? { iconKey } : {}),
+        ...(color !== undefined ? { color } : {}),
+        baseStrength: baseStats.strength,
+        baseDexterity: baseStats.dexterity,
+        baseConstitution: baseStats.constitution,
+        baseIntelligence: baseStats.intelligence,
+        baseWisdom: baseStats.wisdom,
+        baseCharisma: baseStats.charisma,
+      })
+      .where(eq(gameCharacterClasses.slug, classSlug));
+
+    const affectedCharacters = await db
+      .select({
+        studentId: gameCharacters.studentId,
+        strength: gameCharacters.strength,
+        dexterity: gameCharacters.dexterity,
+        constitution: gameCharacters.constitution,
+        intelligence: gameCharacters.intelligence,
+        wisdom: gameCharacters.wisdom,
+        charisma: gameCharacters.charisma,
+      })
+      .from(gameCharacters)
+      .where(eq(gameCharacters.characterClass, classSlug));
+
+    for (const character of affectedCharacters) {
+      const repair = repairManualAllocation(
+        {
+          strength: character.strength,
+          dexterity: character.dexterity,
+          constitution: character.constitution,
+          intelligence: character.intelligence,
+          wisdom: character.wisdom,
+          charisma: character.charisma,
+        },
+        baseStats,
+        balanceConfig.rewardSystem.attributes.levelOneMaxValue,
+        balanceConfig.rewardSystem.attributes.statAllocationBudget
+      );
+
+      if (!repair.changed) continue;
+
+      await db
+        .update(gameCharacters)
+        .set({
+          strength: repair.nextManual.strength,
+          dexterity: repair.nextManual.dexterity,
+          constitution: repair.nextManual.constitution,
+          intelligence: repair.nextManual.intelligence,
+          wisdom: repair.nextManual.wisdom,
+          charisma: repair.nextManual.charisma,
+          updatedAt: new Date(),
+        })
+        .where(eq(gameCharacters.studentId, character.studentId));
+    }
+
+    return c.json({ success: true, backup: await getManagementBackup(c.env.DB) });
+  } catch (error: any) {
+    console.error('Character class management SQL error:', error.message);
+    return apiError(c, 'Character class could not be updated.', 500);
+  }
 });
 
 authRouter.put('/management/cohorts/:cohortId/character-classes/:classSlug', async (c) => {

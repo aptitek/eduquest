@@ -322,6 +322,11 @@ export const gameActivityParticipationModeEnum = enumText('game_activity_partici
 export const gameCharacterClasses = dbTable('game_character_classes', {
   slug: text('slug').notNull().primaryKey(),
   nameI18nKey: text('name_i18n_key').notNull(),
+  name: text('name'),
+  subtitle: text('subtitle'),
+  description: text('description'),
+  iconKey: text('icon_key'),
+  color: text('color'),
   baseStrength: integer('base_strength').default(0).notNull(),
   baseDexterity: integer('base_dexterity').default(0).notNull(),
   baseConstitution: integer('base_constitution').default(0).notNull(),

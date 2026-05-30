@@ -215,6 +215,11 @@ export const en: TranslationKeys = {
       schools: 'School',
       cohorts: 'Cohorts',
       students: 'Students',
+      classes: 'Classes',
+    },
+    classes: {
+      title: 'Classes',
+      ribbon: 'Class',
     },
     students: {
       avatar: 'Avatar',
@@ -249,6 +254,7 @@ export const en: TranslationKeys = {
       deleteRowFailed: 'The row could not be deleted. It may still be linked to other data.',
       updateCohortFailed: 'Cohort settings could not be saved. The cohort card was restored to the previous data.',
       impersonateStudent: 'Could not sign in as this student.',
+      updateClassFailed: 'The class could not be saved. Previous values are still active.',
     },
     impersonation: {
       action: 'Sign in as student',

@@ -103,6 +103,11 @@ export type ManagementCohortCreate = Partial<
 
 export type ManagementCharacterClassUpdate = {
   baseStats: GameStats;
+  name?: string;
+  subtitle?: string;
+  description?: string;
+  iconKey?: string;
+  color?: string;
 };
 
 export type ManagementCohortInvite = {
@@ -312,6 +317,32 @@ export async function updateManagementCohortCharacterClass(
 ): Promise<ManagementBackup> {
   const response = await fetch(
     `${BACKEND_BASE_URL}/api/auth/management/cohorts/${cohortId}/character-classes/${characterClass}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(update),
+    }
+  );
+
+  const data = (await response.json()) as ManagementResponse;
+
+  if (!response.ok || !data.success) {
+    throwApiResponseError(response, data, 'Character class update failed.');
+  }
+
+  return data.backup;
+}
+
+export async function updateManagementCharacterClass(
+  token: string,
+  characterClass: GameCharacterClass,
+  update: ManagementCharacterClassUpdate
+): Promise<ManagementBackup> {
+  const response = await fetch(
+    `${BACKEND_BASE_URL}/api/auth/management/character-classes/${characterClass}`,
     {
       method: 'PUT',
       headers: {

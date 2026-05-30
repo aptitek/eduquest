@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GameLayout } from '../../components/templates/GameLayout';
 import { GameHeader } from '../../components/organisms/GameHeader';
-import { PlayingCard, type PlayingCardFaceSlots } from '../../components/molecules/PlayingCard';
+import {
+  PlayingCard,
+  type PlayingCardFaceSlots,
+  type PlayingCardProps,
+} from '../../components/molecules/PlayingCard';
 import { LogIn } from 'lucide-react';
 import { ManagementTable } from '../../components/organisms/ManagementTable';
 import {
@@ -21,7 +25,9 @@ import {
   deleteManagementStudent,
   fetchManagementBackup,
   impersonateManagementStudent,
+  updateManagementCharacterClass,
   type ManagementCohortUpdate,
+  type ManagementCharacterClassUpdate,
   type ManagementSchoolUpdate,
   type ManagementStudentUpdate,
   updateManagementCohort,
@@ -30,6 +36,7 @@ import {
 } from '../../features/management/api';
 import { useManagementColumns } from '../../features/management/useManagementColumns';
 import type {
+  CharacterClassRow,
   CohortRow,
   ManagementBackup,
   ManagementTab,
@@ -199,6 +206,14 @@ export function ManagementPage() {
       },
     ];
   }, [character, cohortRows, managementBackup, schoolRows, student, user]);
+  const classRows = useMemo<CharacterClassRow[]>(
+    () =>
+      (managementBackup?.characterClasses || []).map((characterClass) => ({
+        ...characterClass,
+        displayName: characterClass.name || t(`game.classes.${characterClass.slug}`),
+      })),
+    [managementBackup?.characterClasses, t]
+  );
   const schoolFilterOptions = useMemo(
     () => Array.from(new Set(studentRows.map((row) => row.school?.name || t('management.schools.unassigned')))),
     [studentRows, t]
@@ -240,13 +255,19 @@ export function ManagementPage() {
       ? cohortRows.find((cohort) => cohort.id === selectedStudentMembership.cohortId)
       : undefined);
   const activeCardSkeletonVariant =
-    activeTab === 'schools' ? 'school' : activeTab === 'cohorts' ? 'cohort' : 'student';
+    activeTab === 'schools'
+      ? 'school'
+      : activeTab === 'cohorts'
+        ? 'cohort'
+        : 'student';
   const activeCardCreateLabel =
     activeTab === 'schools'
       ? t('management.table.addSchool')
       : activeTab === 'cohorts'
         ? t('management.table.addCohort')
-        : t('management.table.inviteStudents');
+        : activeTab === 'classes'
+          ? t('management.classes.title')
+          : t('management.table.inviteStudents');
   const canCreateManagementRow =
     activeTab === 'schools' ||
     (activeTab === 'cohorts' && schoolRows.length > 0);
@@ -424,11 +445,32 @@ export function ManagementPage() {
       (token) => {
         if (tab === 'schools') return deleteManagementSchool(token, rowId);
         if (tab === 'cohorts') return deleteManagementCohort(token, rowId);
+        if (tab === 'classes') return Promise.resolve(managementBackup!);
         return deleteManagementStudent(token, rowId);
       },
       'management.errors.deleteRowFailed',
       'Could not delete management row.',
       () => (selectedEntity?.tab === tab && selectedEntity.id === rowId ? null : selectedEntity)
+    );
+  };
+  const updateCharacterClass = async (
+    row: CharacterClassRow,
+    update: Partial<ManagementCharacterClassUpdate>
+  ) => {
+    const nextUpdate: ManagementCharacterClassUpdate = {
+      baseStats: row.baseStats,
+      name: row.name || '',
+      subtitle: row.subtitle || '',
+      description: row.description || '',
+      iconKey: row.iconKey || getCharacterClassIconKey(row.slug),
+      color: row.color || '',
+      ...update,
+    };
+
+    await mutateManagementRows(
+      (token) => updateManagementCharacterClass(token, row.slug, nextUpdate),
+      'management.errors.updateClassFailed',
+      'Could not update character class.'
     );
   };
   const impersonateStudent = async (studentId: string) => {
@@ -591,7 +633,12 @@ export function ManagementPage() {
     <GameLayout>
       <GameHeader currentView="management" />
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-stretch">
+      <section
+        className={cn(
+          'grid gap-5 xl:items-stretch',
+          activeTab === 'classes' ? 'xl:grid-cols-1' : 'xl:grid-cols-[minmax(0,1fr)_22rem]'
+        )}
+      >
         <div className="flex min-w-0 flex-col gap-5">
           <div>
             <h2 className="text-2xl font-display font-bold text-text-primary">
@@ -615,7 +662,7 @@ export function ManagementPage() {
 
           <div className="flex flex-col">
             <div className="tabs tabs-lifted w-fit gap-1">
-              {(['schools', 'cohorts', 'students'] as const).map((tab) => (
+              {(['schools', 'cohorts', 'students', 'classes'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -632,7 +679,22 @@ export function ManagementPage() {
               ))}
             </div>
 
-            {activeTab === 'students' ? (
+            {activeTab === 'classes' ? (
+              <div className="grid gap-5 rounded-b-3xl rounded-tr-3xl border border-gaming-border bg-gaming-card/40 p-4 md:grid-cols-2 xl:grid-cols-4">
+                {classRows.map((row) => (
+                  <PlayingCard
+                    key={row.slug}
+                    {...buildCharacterClassManagementCard({
+                      row,
+                      t,
+                      onUpdate: (update) => void updateCharacterClass(row, update),
+                    })}
+                    size="full"
+                    presentation={{ fit: 'fillWidth' }}
+                  />
+                ))}
+              </div>
+            ) : activeTab === 'students' ? (
               <ManagementTable
                 key="students"
                 data={studentRows}
@@ -686,7 +748,7 @@ export function ManagementPage() {
           </div>
         </div>
 
-        {hasSelectedCard ? (
+        {activeTab === 'classes' ? null : hasSelectedCard ? (
           <PlayingCard
             size="page"
             flipLabel={selectedStudentCharacterBack ? t('management.card.flip') : undefined}
@@ -735,6 +797,94 @@ export function ManagementPage() {
 }
 
 export default ManagementPage;
+
+function buildCharacterClassManagementCard({
+  row,
+  t,
+  onUpdate,
+}: {
+  row: CharacterClassRow;
+  t: (key: string) => string;
+  onUpdate: (update: Partial<ManagementCharacterClassUpdate>) => void;
+}): PlayingCardProps {
+  const title = row.name || t(`game.classes.${row.slug}`);
+  const subtitle = row.subtitle || row.slug;
+  const description = row.description || t(`game.classDescriptions.${row.slug}`);
+  const iconKey = row.iconKey || getCharacterClassIconKey(row.slug);
+
+  return {
+    id: `management-class-${row.slug}`,
+    kind: 'character',
+    accentToken: row.slug,
+    model: {
+      front: {
+        title: {
+          value: title,
+          variant: 'title',
+          editable: true,
+          onChange: (value) => onUpdate({ name: value }),
+        },
+        subtitle: {
+          value: subtitle,
+          variant: 'subtitle',
+          editable: true,
+          onChange: (value) => onUpdate({ subtitle: value }),
+        },
+        color: {
+          value: row.color,
+          editable: true,
+          onChange: (value) => onUpdate({ color: value }),
+        },
+        icon: {
+          value: iconKey,
+          colored: true,
+          editable: true,
+          onChange: (value) => onUpdate({ iconKey: value }),
+        },
+        type: {
+          variant: 'class',
+          icon: {
+            value: iconKey,
+            editable: true,
+            onChange: (value) => onUpdate({ iconKey: value }),
+          },
+          text: { value: t('management.classes.ribbon'), variant: 'ribbon' },
+        },
+        info: {
+          sections: [
+            {
+              id: 'description',
+              description: {
+                value: description,
+                variant: 'description',
+                editable: true,
+                onChange: (value) => onUpdate({ description: value }),
+              },
+            },
+          ],
+          stats: {
+            editable: true,
+            label: title,
+            onChange: (statId, value) => {
+              if (!isGameStatKey(statId)) return;
+              onUpdate({
+                baseStats: {
+                  ...row.baseStats,
+                  [statId]: Math.max(0, Math.round(value)),
+                },
+              });
+            },
+            values: toPlayingCardStats(row.baseStats),
+          },
+        },
+      },
+    },
+  };
+}
+
+function isGameStatKey(value: string): value is keyof CharacterClassRow['baseStats'] {
+  return ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].includes(value);
+}
 
 function buildStudentCharacterBackSide(
   row: StudentRow,

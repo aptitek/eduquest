@@ -9,7 +9,7 @@ import type {
   User,
 } from '@eduquest/shared';
 
-export type ManagementTab = 'schools' | 'cohorts' | 'students';
+export type ManagementTab = 'schools' | 'cohorts' | 'students' | 'classes';
 
 export type SelectedManagementEntity = {
   tab: ManagementTab;
@@ -37,6 +37,10 @@ export type CohortRow = Cohort & {
   schoolName: string;
   campusName: string;
   studentCount: number;
+};
+
+export type CharacterClassRow = GameCharacterClassDefinition & {
+  displayName: string;
 };
 
 export type ManagementStudentProfile = {

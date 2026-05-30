@@ -214,6 +214,11 @@ export const fr = {
       schools: 'École',
       cohorts: 'Cohortes',
       students: 'Étudiant·e·s',
+      classes: 'Classes',
+    },
+    classes: {
+      title: 'Classes',
+      ribbon: 'Classe',
     },
     students: {
       avatar: 'Avatar',
@@ -248,6 +253,7 @@ export const fr = {
       deleteRowFailed: 'La ligne n’a pas pu être supprimée. Elle est peut-être encore liée à d’autres données.',
       updateCohortFailed: 'Les paramètres de la cohorte n’ont pas pu être enregistrés. La carte cohorte a été restaurée avec les données précédentes.',
       impersonateStudent: 'La connexion en tant que cet·te étudiant·e a échoué.',
+      updateClassFailed: 'La classe n’a pas pu être enregistrée. Les valeurs précédentes restent actives.',
     },
     impersonation: {
       action: 'Se connecter en tant que',
