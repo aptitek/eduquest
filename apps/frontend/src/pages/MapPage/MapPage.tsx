@@ -359,17 +359,8 @@ export function MapPage() {
   const handleSelectActivity = async (activity: Activity) => {
     setSelectedActivity(activity);
     setSelectedEdge(null);
-    const onboardingTask = getStringMetadata(
-      (activity.metadata || {}) as Record<string, unknown>,
-      'onboardingTask'
-    );
     if (user?.isAdmin) return;
     if (activity.isCurrent || activity.isLocked) {
-      return;
-    }
-    const canMoveWithoutCharacter =
-      onboardingTask === 'institutional_profile' || onboardingTask === 'character_card';
-    if (!character && !canMoveWithoutCharacter) {
       return;
     }
     if (

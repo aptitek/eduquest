@@ -74,3 +74,8 @@ AUDIT
 [x] Check ALL raw colors and enforce token design. Also refactor the tokens completely to factorize them into as little tokens and as generic tokens as possible. Re-check then for any and all non solarized colors in the theme.
 [ ] Do a comprehensive security audit of the entire app, especially sanitation of the inputs and prevent ANY privilege escalation from the students.
 [ ]
+
+----
+
+[ ] Bonus dext première guilde
+[ ] Remove invite button when guild is full
