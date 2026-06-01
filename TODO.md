@@ -73,9 +73,12 @@ AUDIT
 [ ] Render missing translation keys in a visible debug style during development.
 [x] Check ALL raw colors and enforce token design. Also refactor the tokens completely to factorize them into as little tokens and as generic tokens as possible. Re-check then for any and all non solarized colors in the theme.
 [ ] Do a comprehensive security audit of the entire app, especially sanitation of the inputs and prevent ANY privilege escalation from the students.
-[ ]
 
 ----
 
+[ ] Hold button plus évident
 [ ] Bonus dext première guilde
 [ ] Remove invite button when guild is full
+[ ] Onboarding nodes are stuck on level 0
+[ ] No realtime gold update
+[ ] Secu : API exposes guild size modification to non admins. Restrict the API and make sure to split guilds that are bigger than 3 players in several guilds.

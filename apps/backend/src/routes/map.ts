@@ -3065,6 +3065,11 @@ mapRouter.post('/guilds', async (c) => {
   let recruitmentMessage: string | undefined;
   let maxMembers: number | undefined;
 
+  const hasMaxMembers = body && Object.prototype.hasOwnProperty.call(body, 'maxMembers') && body.maxMembers !== undefined;
+  if (!user?.isAdmin && hasMaxMembers) {
+    return apiError(c, 'Guild size modification is not allowed.', 403);
+  }
+
   try {
     recruitmentStatus = validateOptionalRecruitmentStatus(body?.recruitmentStatus);
     recruitmentMessage = validateOptionalText(body?.recruitmentMessage, 'recruitmentMessage', 400);
@@ -3431,6 +3436,10 @@ mapRouter.patch('/guilds/:guildId', async (c) => {
   let recruitmentStatus: GuildRecruitmentStatus | undefined;
   let recruitmentMessage: string | undefined;
   let maxMembers: number | undefined;
+
+  if (!user?.isAdmin && hasMaxMembers && body.maxMembers !== undefined) {
+    return apiError(c, 'Guild size modification is not allowed.', 403);
+  }
 
   try {
     recruitmentStatus = hasRecruitmentStatus

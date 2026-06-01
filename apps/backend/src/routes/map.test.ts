@@ -326,6 +326,46 @@ describe('map routes', () => {
     expect(payload.success).toBe(false);
     expect(payload.error).toContain('overlap');
   });
+
+  it('rejects guild creation with maxMembers if user is not an admin', async () => {
+    const response = await app.request(
+      '/api/guilds',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(false)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'Solarized Sentinels', maxMembers: 5 }),
+      },
+      { JWT_SECRET, APP_ENV: 'development', DB }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(403);
+    expect(payload.success).toBe(false);
+    expect(payload.error).toContain('Guild size modification is not allowed.');
+  });
+
+  it('rejects guild update with maxMembers if user is not an admin', async () => {
+    const response = await app.request(
+      '/api/guilds/guild-1',
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(false)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ maxMembers: 5 }),
+      },
+      { JWT_SECRET, APP_ENV: 'development', DB }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(403);
+    expect(payload.success).toBe(false);
+    expect(payload.error).toContain('Guild size modification is not allowed.');
+  });
 });
 
 function tokenFor(isAdmin = false) {
