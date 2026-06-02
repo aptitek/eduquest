@@ -55,7 +55,49 @@ describe('RewardContextResolver', () => {
     expect(db.select).toHaveBeenCalledTimes(1);
   });
 
-  it('allows guild rally onboarding rewards when the event marks guild creation', async () => {
+  it('skips guild rally onboarding rewards unless the event marks the first guild bonus', async () => {
+    const db = {
+      select: vi.fn().mockReturnValue(
+        selectBuilder([
+          {
+            id: 'activity-guild-rally',
+            basePoints: 100,
+            targetAttribute: 'charisma',
+            endDate: null,
+            metadata: { onboardingTask: 'guild_rally' },
+          },
+        ])
+      ),
+    };
+    const resolver = new RewardContextResolver(db as any, {
+      version: 1,
+      rewardSystem: DEFAULT_REWARD_SYSTEM_CONFIG,
+      policies: DEFAULT_REWARD_POLICIES,
+    });
+
+    const context = await resolver.resolve(
+      {
+        id: 'event-1',
+        type: 'activity.validated',
+        occurredAt: new Date().toISOString(),
+        source: 'test',
+        payload: {
+          guildId: 'guild-1',
+          activityId: 'activity-guild-rally',
+          cohortId: 'cohort-1',
+          studentId: 'student-1',
+          validatedBy: 'system',
+        },
+        metadata: { onboardingRewardAction: 'guild_created' },
+      } as DomainEvent<'activity.validated'>,
+      DEFAULT_REWARD_POLICIES['activity.validated']
+    );
+
+    expect(context).toBeNull();
+    expect(db.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a dexterity bonus when the event marks the first guild creation', async () => {
     const db = {
       select: vi
         .fn()
@@ -109,7 +151,7 @@ describe('RewardContextResolver', () => {
           studentId: 'student-1',
           validatedBy: 'system',
         },
-        metadata: { onboardingRewardAction: 'guild_created' },
+        metadata: { onboardingRewardAction: 'guild_created', firstGuildBonus: true },
       } as DomainEvent<'activity.validated'>,
       DEFAULT_REWARD_POLICIES['activity.validated']
     );
@@ -118,8 +160,9 @@ describe('RewardContextResolver', () => {
       guildId: 'guild-1',
       activityId: 'activity-guild-rally',
       studentId: 'student-1',
-      basePoints: 100,
-      targetAttribute: 'charisma',
+      basePoints: 0,
+      targetAttribute: 'dexterity',
+      hoursEarly: 168,
     });
     expect(db.select).toHaveBeenCalledTimes(2);
   });

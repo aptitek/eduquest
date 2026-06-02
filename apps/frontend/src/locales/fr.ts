@@ -25,6 +25,7 @@ export const fr = {
     dismiss: 'Fermer',
     close: 'Fermer',
     cancel: 'Annuler',
+    holdToConfirm: 'Maintenir',
   },
   errors: {
     notificationTitle: 'Erreur',

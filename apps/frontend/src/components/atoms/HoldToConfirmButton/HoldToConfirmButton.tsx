@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import { cn } from '../../../utils/cn';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 export type HoldToConfirmButtonShape = 'default' | 'round';
 
@@ -28,6 +29,7 @@ export interface HoldToConfirmButtonProps
   disabled?: boolean;
   progressTarget?: number;
   progressValue?: number;
+  holdHint?: string;
 }
 
 export function HoldToConfirmButton({
@@ -40,14 +42,22 @@ export function HoldToConfirmButton({
   disabled = false,
   progressTarget = 1,
   progressValue = 0,
+  holdHint,
+  title,
+  'aria-describedby': ariaDescribedBy,
   ...buttonProps
 }: HoldToConfirmButtonProps) {
+  const { t } = useTranslation();
   const controls = useAnimation();
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
   const isHeld = useRef(false);
   const isMounted = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const holdHintId = useId();
   const isRound = shape === 'round';
+  const resolvedHoldHint = holdHint ?? t('common.holdToConfirm');
+  const describedBy = [ariaDescribedBy, holdHintId].filter(Boolean).join(' ') || undefined;
   const resolvedProgressTarget = Math.min(1, Math.max(0, progressTarget));
   const resolvedProgressValue = Math.min(1, Math.max(0, progressValue));
   const idleProgressState = isRound
@@ -74,6 +84,7 @@ export function HoldToConfirmButton({
     clearTimeout(timeoutRef.current);
 
     isHeld.current = true;
+    setIsHolding(true);
     setIsSuccess(false);
 
     void controls.start({
@@ -85,6 +96,7 @@ export function HoldToConfirmButton({
       if (isHeld.current && isMounted.current) {
         setIsSuccess(true);
         onConfirm();
+        setIsHolding(false);
         void controls
           .start({ opacity: 0, transition: { duration: 0.2 } })
           .then(() => {
@@ -113,6 +125,7 @@ export function HoldToConfirmButton({
 
   const cancelHold = () => {
     isHeld.current = false;
+    setIsHolding(false);
     clearTimeout(timeoutRef.current);
     if (!isSuccess && isMounted.current) {
       void controls.start({
@@ -126,14 +139,17 @@ export function HoldToConfirmButton({
     <button
       type="button"
       className={cn(
-        'btn relative overflow-hidden transition-shadow hover:shadow-lg',
+        'btn group/hold relative overflow-hidden transition-all hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/40',
         isRound && 'btn-circle min-h-0 overflow-visible rounded-full p-0',
         variant,
+        isHolding && 'scale-[1.03] shadow-lg ring-4 ring-current/25',
         isSuccess && 'animate-pulse',
         disabled && 'btn-disabled cursor-not-allowed opacity-60',
         className
       )}
       disabled={disabled}
+      title={title ?? resolvedHoldHint}
+      aria-describedby={describedBy}
       {...buttonProps}
       onPointerDown={handlePointerDown}
       onPointerUp={cancelHold}
@@ -144,12 +160,26 @@ export function HoldToConfirmButton({
       onBlur={cancelHold}
       onContextMenu={(e) => e.preventDefault()}
     >
+      <span id={holdHintId} className="sr-only">
+        {resolvedHoldHint}
+      </span>
       {isRound ? (
         <svg
           aria-hidden="true"
           viewBox="0 0 100 100"
           className="pointer-events-none absolute inset-[-0.25rem] h-[calc(100%+0.5rem)] w-[calc(100%+0.5rem)] -rotate-90"
         >
+          <circle
+            cx="50"
+            cy="50"
+            r="46"
+            fill="none"
+            stroke="currentColor"
+            strokeDasharray="4 8"
+            strokeLinecap="round"
+            strokeWidth="6"
+            className={cn('opacity-40 transition-opacity', !disabled && 'group-hover/hold:opacity-65 group-focus-visible/hold:opacity-65')}
+          />
           <motion.circle
             cx="50"
             cy="50"
@@ -163,12 +193,26 @@ export function HoldToConfirmButton({
           />
         </svg>
       ) : (
-        <motion.div
-          className="pointer-events-none absolute inset-0 origin-left bg-current opacity-20"
-          initial={{ scaleX: 0, opacity: 0.2 }}
-          animate={controls}
-        />
+        <>
+          <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] border-2 border-current/25" />
+          <motion.div
+            className="pointer-events-none absolute inset-0 origin-left bg-current opacity-20"
+            initial={{ scaleX: 0, opacity: 0.2 }}
+            animate={controls}
+          />
+        </>
       )}
+      <span
+        aria-hidden
+        className={cn(
+          'pointer-events-none absolute z-20 whitespace-nowrap rounded-full border border-current/25 bg-gaming-base/90 px-2 py-0.5 font-display text-[0.55rem] font-black uppercase leading-none tracking-[0.16em] text-current opacity-0 shadow-lg transition-opacity',
+          isRound ? 'left-1/2 top-full mt-1 -translate-x-1/2' : 'bottom-1 left-1/2 -translate-x-1/2',
+          !disabled && 'group-hover/hold:opacity-100 group-focus-visible/hold:opacity-100',
+          isHolding && 'opacity-100'
+        )}
+      >
+        {resolvedHoldHint}
+      </span>
       <span className="relative z-10 flex items-center justify-center gap-2 pointer-events-none">
         {children}
       </span>

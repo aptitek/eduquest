@@ -35,6 +35,7 @@ import {
 } from '../components/organisms/DashboardDock/dashboardDockData';
 import { useErrorReporter } from '../features/errors/notifications';
 import { buildCharacterPlayingCardData } from '../features/game/cards/characterCardAdapter';
+import { computeEffectiveCharacterStats } from '../features/game/characterStats';
 import { formatUserDisplayName } from '../utils/displayName';
 import mascotUrl from '../assets/mascot.svg';
 
@@ -95,6 +96,7 @@ export function AnnuairePage() {
   const membershipGuild = latestMembership?.guild;
   const currentGuild =
     guilds.find((guild) => guild.id === currentGuildId || guild.id === membershipGuild?.id) || membershipGuild;
+  const currentGuildIsFull = currentGuild ? isGuildFull(currentGuild) : false;
   const canUseGuildRallyActions = useMemo(
     () =>
       Boolean(
@@ -206,8 +208,9 @@ export function AnnuairePage() {
       current?.id === updatedGuild.id ? { ...current, ...updatedGuild } : current
     );
     setCurrentGuildId((current) => current === updatedGuild.id ? updatedGuild.id : current);
+    if (updatedGuild.cohortId) setStudentGuild(updatedGuild.cohortId, updatedGuild);
     window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
-  }, []);
+  }, [setStudentGuild]);
 
   const updateEditableGuildField = useCallback(
     (guildId: string, field: EditableGuildField, value: string) => {
@@ -300,6 +303,7 @@ export function AnnuairePage() {
   );
   const currentGuildHand = useMemo(() => {
     if (!currentGuild || !student || !user || !character) return undefined;
+    const effectiveCharacterStats = computeEffectiveCharacterStats(character.characterClass, character.stats);
 
     const [hand] = buildGuildCardHands(t, {
       guild: currentGuild,
@@ -310,7 +314,7 @@ export function AnnuairePage() {
       characterTitle: character.title,
       characterClass: character.characterClass,
       characterClassLabel: t(`game.classes.${character.characterClass}`),
-      characterStats: character.stats,
+      characterStats: effectiveCharacterStats,
       activeCardIndex: 0,
     });
 
@@ -428,7 +432,7 @@ export function AnnuairePage() {
   const handleInviteStudent = useCallback(
     async (rosterStudent: ClassRosterStudent) => {
       if (!currentGuild?.id || invitingStudentUserId || pendingInvitationUserIds.has(rosterStudent.userId)) return;
-      if (!canUseGuildRallyActions) return;
+      if (!canUseGuildRallyActions || currentGuildIsFull) return;
 
       setInvitingStudentUserId(rosterStudent.userId);
       try {
@@ -446,7 +450,14 @@ export function AnnuairePage() {
         setInvitingStudentUserId(null);
       }
     },
-    [canUseGuildRallyActions, currentGuild?.id, invitingStudentUserId, pendingInvitationUserIds, reportError]
+    [
+      canUseGuildRallyActions,
+      currentGuild?.id,
+      currentGuildIsFull,
+      invitingStudentUserId,
+      pendingInvitationUserIds,
+      reportError,
+    ]
   );
 
   const unguildedStudentsHand = useMemo(
@@ -458,12 +469,14 @@ export function AnnuairePage() {
             pendingInvitationUserIds,
             invitingStudentUserId,
             canInvite: canUseGuildRallyActions,
+            showInviteButton: !currentGuildIsFull,
             onInvite: (rosterStudent) => void handleInviteStudent(rosterStudent),
           })
         : undefined,
     [
       canUseGuildRallyActions,
       currentGuild?.id,
+      currentGuildIsFull,
       handleInviteStudent,
       invitingStudentUserId,
       pendingInvitationUserIds,
@@ -914,6 +927,7 @@ function buildUnguildedStudentsHand({
   pendingInvitationUserIds,
   invitingStudentUserId,
   canInvite,
+  showInviteButton,
   onInvite,
 }: {
   t: (path: string) => string;
@@ -921,6 +935,7 @@ function buildUnguildedStudentsHand({
   pendingInvitationUserIds: Set<string>;
   invitingStudentUserId: string | null;
   canInvite: boolean;
+  showInviteButton: boolean;
   onInvite: (rosterStudent: ClassRosterStudent) => void;
 }): PlayingHandData | undefined {
   if (students.length === 0) return undefined;
@@ -935,6 +950,7 @@ function buildUnguildedStudentsHand({
         isInvitationPending: pendingInvitationUserIds.has(rosterStudent.userId),
         isInviting: invitingStudentUserId === rosterStudent.userId,
         canInvite,
+        showInviteButton,
         onInvite: () => onInvite(rosterStudent),
       })
     ) as [PlayingCardProps, ...PlayingCardProps[]],
@@ -949,6 +965,7 @@ function buildUnguildedStudentCard({
   isInvitationPending,
   isInviting,
   canInvite,
+  showInviteButton,
   onInvite,
 }: {
   t: (path: string) => string;
@@ -956,13 +973,14 @@ function buildUnguildedStudentCard({
   isInvitationPending: boolean;
   isInviting: boolean;
   canInvite: boolean;
+  showInviteButton: boolean;
   onInvite: () => void;
 }): PlayingCardProps {
   const characterClass = rosterStudent.characterClass || 'scholar';
   const classLabel = rosterStudent.characterClass
     ? t(`game.classes.${rosterStudent.characterClass}`)
     : t('dashboard.dock.guildmate');
-  const inviteButton = (
+  const inviteButton = showInviteButton ? (
     <div className="flex items-center justify-center">
       <HoldToConfirmButton
         onConfirm={onInvite}
@@ -996,7 +1014,7 @@ function buildUnguildedStudentCard({
         </span>
       </HoldToConfirmButton>
     </div>
-  );
+  ) : null;
   const card = buildCharacterPlayingCardData({
     id: `unguilded-${rosterStudent.id}`,
     layoutId: `unguilded-${rosterStudent.id}`,
@@ -1015,6 +1033,17 @@ function buildUnguildedStudentCard({
           ...card.model.front,
         }
       : card.model.front;
+  const overlays = [...(card.overlays || [])];
+
+  if (inviteButton) {
+    overlays.push({
+      id: `${card.id}-invite-action`,
+      placement: 'bottom-right-outside',
+      interactive: true,
+      className: 'z-[80] translate-x-[28%] translate-y-[28%]',
+      content: inviteButton,
+    });
+  }
 
   return {
     ...card,
@@ -1023,16 +1052,7 @@ function buildUnguildedStudentCard({
       ...card.model,
       front,
     },
-    overlays: [
-      ...(card.overlays || []),
-      {
-        id: `${card.id}-invite-action`,
-        placement: 'bottom-right-outside',
-        interactive: true,
-        className: 'z-[80] translate-x-[28%] translate-y-[28%]',
-        content: inviteButton,
-      },
-    ],
+    overlays,
   };
 }
 
@@ -1492,13 +1512,13 @@ function getGuildIdentityKey(guild?: Partial<ClassRosterGuild>) {
   return slugify(guild.name || getGuildStableId(guild));
 }
 
-function getGuildMaxMembers(guild: ClassRosterGuild) {
+function getGuildMaxMembers(guild: { maxMembers?: number }) {
   return Number.isFinite(guild.maxMembers) && guild.maxMembers && guild.maxMembers > 0
     ? guild.maxMembers
     : DEFAULT_GUILD_MAX_MEMBERS;
 }
 
-function isGuildFull(guild: ClassRosterGuild) {
+function isGuildFull(guild: { members?: ClassRosterStudent[]; maxMembers?: number }) {
   return (guild.members?.length || 0) >= getGuildMaxMembers(guild);
 }
 

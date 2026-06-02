@@ -83,6 +83,10 @@ type GuildVoteBalanceRecord = typeof guildVoteBalances.$inferSelect;
 type Database = ReturnType<typeof getDb>;
 
 const GUILD_CREATION_ONBOARDING_REWARD_ACTION = 'guild_created';
+const FIRST_GUILD_CREATION_BONUS_METADATA = {
+  onboardingRewardAction: GUILD_CREATION_ONBOARDING_REWARD_ACTION,
+  firstGuildBonus: true,
+};
 type GuildMutationDb = Pick<Database, 'select' | 'update' | 'delete'>;
 
 const ONLINE_PRESENCE_WINDOW_MS = 60 * 60 * 1000;
@@ -666,6 +670,14 @@ function parseStepRanges(value: unknown, requiredLevel = 1): ActivityStepRange[]
   });
 
   return ranges.length > 0 ? ranges : [{ startStep: Math.max(requiredLevel - 1, 0) }];
+}
+
+function getPrimaryStepFromRanges(stepRanges: ActivityStepRange[], fallbackStep: number) {
+  if (stepRanges.length === 0) return Math.max(fallbackStep, 0);
+  return Math.max(
+    0,
+    Math.min(...stepRanges.map((range) => range.startStep))
+  );
 }
 
 function isStepInsideRange(step: number, range: ActivityStepRange) {
@@ -2064,7 +2076,7 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
     const task = getOnboardingTask(activity);
     const defaultResource = getDefaultOnboardingResource(task);
     const defaultIconKey = getDefaultOnboardingIconKey(task);
-    if (!defaultResource && !defaultIconKey) continue;
+    if (!task || (!defaultResource && !defaultIconKey)) continue;
 
     const metadata = normalizeMetadata(activity.metadata);
     let nextMetadata = defaultResource
@@ -2080,13 +2092,29 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
     if (shouldUseDefaultIcon) {
       nextMetadata = { ...nextMetadata, iconKey: defaultIconKey };
     }
-    if (nextMetadata.resources === metadata.resources && nextMetadata.iconKey === metadata.iconKey) continue;
+    const primaryStep = getPrimaryStepFromRanges(
+      parseStepRanges(activity.stepRanges, activity.requiredLevel),
+      Math.max(activity.requiredLevel - 1, 0)
+    );
+    const activityPatch: Partial<typeof gameActivities.$inferInsert> = {};
+    if (nextMetadata.resources !== metadata.resources || nextMetadata.iconKey !== metadata.iconKey) {
+      activityPatch.metadata = nextMetadata;
+    }
+    if (activity.sectorDepth !== primaryStep) {
+      activityPatch.sectorDepth = primaryStep;
+    }
+    if (activity.requiredLevel !== primaryStep + 1) {
+      activityPatch.requiredLevel = primaryStep + 1;
+    }
+    if (Object.keys(activityPatch).length === 0) continue;
 
     await db
       .update(gameActivities)
-      .set({ metadata: nextMetadata })
+      .set(activityPatch)
       .where(eq(gameActivities.id, activity.id));
-    activity.metadata = nextMetadata;
+    if (activityPatch.metadata) activity.metadata = nextMetadata;
+    if (activityPatch.sectorDepth !== undefined) activity.sectorDepth = activityPatch.sectorDepth;
+    if (activityPatch.requiredLevel !== undefined) activity.requiredLevel = activityPatch.requiredLevel;
   }
 
   return allActivities;
@@ -2511,15 +2539,31 @@ mapRouter.patch('/map/activities/:activityId/step-ranges', async (c) => {
       eq(gameActivities.cohortId, cohortRecord.id),
       eq(gameActivities.mapRunId, activeRun.id)
     );
-    const [updatedActivity] = await db
-      .update(gameActivities)
-      .set({ stepRanges })
+    const [activityRecord] = await db
+      .select({
+        requiredLevel: gameActivities.requiredLevel,
+      })
+      .from(gameActivities)
       .where(and(eq(gameActivities.id, activityId), activityScope))
-      .returning();
+      .limit(1);
 
-    if (!updatedActivity) {
+    if (!activityRecord) {
       return apiError(c, 'Activity not found.', 404);
     }
+
+    const primaryStep = getPrimaryStepFromRanges(
+      stepRanges,
+      Math.max(activityRecord.requiredLevel - 1, 0)
+    );
+    const [updatedActivity] = await db
+      .update(gameActivities)
+      .set({
+        stepRanges,
+        sectorDepth: primaryStep,
+        requiredLevel: primaryStep + 1,
+      })
+      .where(and(eq(gameActivities.id, activityId), activityScope))
+      .returning();
 
     const [activityRecords, edgeRecords] = await Promise.all([
       db.select().from(gameActivities).where(activityScope),
@@ -3119,6 +3163,12 @@ mapRouter.post('/guilds', async (c) => {
     if (!(await isStudentOnGuildRallyNode(db, context))) {
       return apiError(c, 'Guild actions are only available from the guild rally activity.', 403);
     }
+    const [existingGuildCountRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(guilds)
+      .where(eq(guilds.cohortId, context.cohortRecord.id));
+    const isFirstGuildInCohort = Number(existingGuildCountRow?.count || 0) === 0;
+
     const [createdGuild] = await db
       .insert(guilds)
       .values({
@@ -3170,9 +3220,7 @@ mapRouter.post('/guilds', async (c) => {
             guildId: createdGuild.id,
             validatedBy: 'system',
           },
-          metadata: {
-            onboardingRewardAction: GUILD_CREATION_ONBOARDING_REWARD_ACTION,
-          },
+          metadata: isFirstGuildInCohort ? FIRST_GUILD_CREATION_BONUS_METADATA : undefined,
         },
         createEventContext({ db, env: c.env, userId: user?.id })
       );

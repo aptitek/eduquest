@@ -33,6 +33,7 @@ import {
   type GuildFieldsPayload,
   type RewardBalanceConfigState,
 } from '../../features/game/api';
+import { computeEffectiveCharacterStats } from '../../features/game/characterStats';
 import { useCohortProgressData } from '../../features/game/useCohortProgressData';
 import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
@@ -94,7 +95,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
   const [isSavingVoteCost, setIsSavingVoteCost] = useState(false);
   const [seenProgressBonusCardIds, setSeenProgressBonusCardIds] = useState<Set<string>>(() => new Set());
   const [bonusHandTarget, setBonusHandTarget] = useState<HTMLElement | null>(null);
-  const { user, student, character, selectedGameId } = useGameStore();
+  const { user, student, character, selectedGameId, setStudentGuild } = useGameStore();
   const { t, tMaybe } = useTranslation();
   const reportError = useErrorReporter();
   const showDockError = useCallback((messageKey: string, error: unknown) => {
@@ -240,7 +241,16 @@ export function DashboardDock({ className }: DashboardDockProps) {
     const loadGuilds = () => {
       fetchGuilds(token, selectedGameId)
         .then((nextGuilds) => {
-          if (isMounted) setGuilds(nextGuilds);
+          if (!isMounted) return;
+          setGuilds(nextGuilds);
+
+          const nextPlayerGuild = playerGuild
+            ? nextGuilds.find((guild) => guild.id === playerGuild.id || guild.name === playerGuild.name)
+            : undefined;
+          const guildCohortId = latestMembership?.cohortId || nextPlayerGuild?.cohortId;
+          if (nextPlayerGuild?.id && guildCohortId) {
+            setStudentGuild(guildCohortId, nextPlayerGuild);
+          }
         })
         .catch((error) => {
           console.warn('Could not load dashboard guilds.', error);
@@ -254,7 +264,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
       isMounted = false;
       window.removeEventListener('eduquest:guilds-updated', loadGuilds);
     };
-  }, [selectedGameId]);
+  }, [
+    latestMembership?.cohortId,
+    playerGuild?.id,
+    playerGuild?.name,
+    selectedGameId,
+    setStudentGuild,
+    showDockError,
+  ]);
 
   useEffect(() => {
     const token = localStorage.getItem('eduquest_token');
@@ -782,6 +799,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
 
   if (!student || !character) return null;
 
+  const effectiveCharacterStats = computeEffectiveCharacterStats(character.characterClass, character.stats);
   const hasPlayerGuild = Boolean(playerGuild?.id);
   const activePlayerGuild =
     (playerGuild
@@ -807,7 +825,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
     characterTitle: character.title,
     characterClass: character.characterClass,
     characterClassLabel: t(`game.classes.${character.characterClass}`),
-    characterStats: character.stats,
+    characterStats: effectiveCharacterStats,
     activeCardIndex: 0,
   })[0];
   const visibleGuildHandCards = hasPlayerGuild
@@ -923,6 +941,9 @@ export function DashboardDock({ className }: DashboardDockProps) {
           gold: voteSpend?.balance ?? activePlayerGuild.gold,
           boostPointsSpent: (activePlayerGuild.boostPointsSpent || 0) + (voteSpend?.cost || 0),
         };
+        if (playerGuild?.cohortId) {
+          setStudentGuild(playerGuild.cohortId, { ...playerGuild, ...updatedGuild });
+        }
         return [updatedGuild, ...current.filter((guild) => guild?.id !== activePlayerGuild.id)];
       });
     } catch (error) {

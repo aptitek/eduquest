@@ -27,6 +27,7 @@ export const en: TranslationKeys = {
     dismiss: 'Dismiss',
     close: 'Close',
     cancel: 'Cancel',
+    holdToConfirm: 'Hold',
   },
   errors: {
     notificationTitle: 'Error',

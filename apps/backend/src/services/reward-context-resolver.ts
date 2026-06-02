@@ -19,6 +19,8 @@ import type { RewardActivityInput } from './rewards';
 
 type RewardDb = ReturnType<typeof import('../db').getDb>;
 const GUILD_CREATION_ONBOARDING_REWARD_ACTION = 'guild_created';
+const FIRST_GUILD_CREATION_BONUS_BASE_POINTS = 0;
+const FIRST_GUILD_CREATION_BONUS_HOURS_EARLY = 168;
 
 export interface ResolvedRewardContext {
   guildId: string;
@@ -96,11 +98,21 @@ export class RewardContextResolver {
       difficultyRaw === 1 || difficultyRaw === 2 || difficultyRaw === 3
         ? difficultyRaw
         : undefined;
+    const isFirstGuildBonus = isFirstGuildCreationBonus(metadata, event.metadata);
 
     let basePoints = activity.basePoints;
     if (policy.basePointsSource === 'fixed' && policy.fixedBasePoints !== undefined) {
       basePoints = policy.fixedBasePoints;
     }
+    if (isFirstGuildBonus) {
+      basePoints = FIRST_GUILD_CREATION_BONUS_BASE_POINTS;
+    }
+    const targetAttribute: RewardActivityInput['targetAttribute'] = isFirstGuildBonus
+      ? 'dexterity'
+      : activity.targetAttribute;
+    const hoursEarly = activity.endDate
+      ? Math.max(0, (activity.endDate.getTime() - Date.now()) / 3_600_000)
+      : undefined;
 
     return {
       guildId: payload.guildId,
@@ -110,16 +122,14 @@ export class RewardContextResolver {
       activity: {
         id: activity.id,
         basePoints,
-        targetAttribute: activity.targetAttribute,
+        targetAttribute,
       },
       guildProfile,
       policy,
       basePoints,
-      targetAttribute: activity.targetAttribute,
+      targetAttribute,
       difficulty: policy.difficultyMultiplier ? difficulty : undefined,
-      hoursEarly: activity.endDate
-        ? Math.max(0, (activity.endDate.getTime() - Date.now()) / 3_600_000)
-        : undefined,
+      hoursEarly: isFirstGuildBonus ? FIRST_GUILD_CREATION_BONUS_HOURS_EARLY : hoursEarly,
     };
   }
 
@@ -266,8 +276,16 @@ function isRewardableOnboardingActivity(
   const onboardingTask = activityMetadata.onboardingTask;
   if (typeof onboardingTask !== 'string') return true;
 
+  return isFirstGuildCreationBonus(activityMetadata, eventMetadata);
+}
+
+function isFirstGuildCreationBonus(
+  activityMetadata: Record<string, unknown>,
+  eventMetadata?: Record<string, unknown>
+) {
   return (
-    onboardingTask === 'guild_rally' &&
-    eventMetadata?.onboardingRewardAction === GUILD_CREATION_ONBOARDING_REWARD_ACTION
+    activityMetadata.onboardingTask === 'guild_rally' &&
+    eventMetadata?.onboardingRewardAction === GUILD_CREATION_ONBOARDING_REWARD_ACTION &&
+    eventMetadata.firstGuildBonus === true
   );
 }

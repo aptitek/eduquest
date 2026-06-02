@@ -69,6 +69,19 @@ export function createEmptyGameStats(): GameStats {
   };
 }
 
+export function computeEffectiveCharacterStats(
+  characterClass: GameCharacterClass,
+  manualStats: GameStats,
+  max = 5
+): GameStats {
+  const baseStats = CHARACTER_CLASS_BASE_STATS[characterClass] || createEmptyGameStats();
+
+  return GAME_STAT_FIELDS.reduce<GameStats>((effectiveStats, { id }) => {
+    effectiveStats[id] = Math.min(max, (baseStats[id] || 0) + (manualStats[id] || 0));
+    return effectiveStats;
+  }, createEmptyGameStats());
+}
+
 export function toPlayingCardStats(stats?: GameStats, max = 5): CardStatValue[] | undefined {
   if (!stats) return undefined;
   return GAME_STAT_FIELDS.map((field) => ({

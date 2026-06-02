@@ -431,6 +431,7 @@ export function MapPage() {
       });
       addActivityCompletion(completion);
       gainXp(getActivityCompletionGoldReward(act));
+      window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
       if (act.participationMode === 'guild') {
         await fetchMapData({ preserveSelection: true, silent: true });
       } else {
@@ -1290,10 +1291,16 @@ function resolveActivityWithStepRanges(
   const normalizedRanges = stepRanges.length
     ? stepRanges
     : [{ startStep: Math.max(activity.requiredLevel - 1, 0) }];
+  const primaryStep = getPrimaryStepFromRanges(
+    normalizedRanges,
+    Math.max(activity.requiredLevel - 1, 0)
+  );
   const isActiveForStep = normalizedRanges.some((range) => isStepInsideRange(currentStep, range));
 
   return {
     ...activity,
+    sectorDepth: primaryStep,
+    requiredLevel: primaryStep + 1,
     stepRanges: normalizedRanges,
     isRevealed: isActiveForStep,
     isLocked: !isActiveForStep,
@@ -1302,6 +1309,11 @@ function resolveActivityWithStepRanges(
 
 function isStepInsideRange(step: number, range: ActivityStepRange) {
   return step >= range.startStep && (range.endStep == null || step < range.endStep);
+}
+
+function getPrimaryStepFromRanges(stepRanges: ActivityStepRange[], fallbackStep: number) {
+  if (stepRanges.length === 0) return Math.max(fallbackStep, 0);
+  return Math.max(0, Math.min(...stepRanges.map((range) => range.startStep)));
 }
 
 function normalizeActivityStepRanges(stepRanges: ActivityStepRange[]) {
