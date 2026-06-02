@@ -81,4 +81,6 @@ AUDIT
 [ ] Remove invite button when guild is full
 [ ] Onboarding nodes are stuck on level 0
 [ ] No realtime gold update
-[ ] Secu : API exposes guild size modification to non admins. Restrict the API and make sure to split guilds that are bigger than 3 players in several guilds.
+[x] Secu : API exposes guild size modification to non admins. Restrict the API and make sure to split guilds that are bigger than 3 players in several guilds.
+[ ] Stats in player's card in the annuaire is not computed based on the class
+[ ] Boost needs to use a vote button

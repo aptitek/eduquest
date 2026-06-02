@@ -34,7 +34,8 @@ type CharacterMoveRecord = typeof gameCharacterMoves.$inferSelect;
 type CharacterMoveInsert = typeof gameCharacterMoves.$inferInsert;
 type RelocationPlan = {
   moves: CharacterMoveInsert[];
-  blockedStudentIds: string[];
+  forcedStudentIds: string[];
+  unmovedStudentIds: string[];
 };
 
 export const adminRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -68,17 +69,7 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
     const relocationPlan =
       currentStep > existingCohort.currentStep
         ? await planFogRelocations(db, existingCohort.id, existingCohort.currentStep, currentStep)
-        : { moves: [], blockedStudentIds: [] };
-
-    if (relocationPlan.blockedStudentIds.length > 0) {
-      const blockedCount = relocationPlan.blockedStudentIds.length;
-      return apiError(
-        c,
-        `Step cannot be updated because ${blockedCount} student${blockedCount > 1 ? 's' : ''} would remain on a fogged activity without any reachable clear node.`,
-        409,
-        { errorCode: 'conflict' }
-      );
-    }
+        : { moves: [], forcedStudentIds: [], unmovedStudentIds: [] };
 
     if (relocationPlan.moves.length > 0) {
       await db.insert(gameCharacterMoves).values(relocationPlan.moves);
@@ -97,6 +88,8 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
       success: true,
       relocation: {
         movedStudents: relocationPlan.moves.length,
+        forcedStudents: relocationPlan.forcedStudentIds.length,
+        unmovedStudents: relocationPlan.unmovedStudentIds.length,
       },
       cohort: {
         id: updatedCohort.id,
@@ -164,7 +157,7 @@ async function planFogRelocations(
     .where(and(eq(gameMapRuns.cohortId, cohortId), eq(gameMapRuns.status, 'active')))
     .limit(1);
 
-  if (!activeRun) return { moves: [], blockedStudentIds: [] };
+  if (!activeRun) return { moves: [], forcedStudentIds: [], unmovedStudentIds: [] };
 
   const cohortStudents = await db
     .select({ id: students.id })
@@ -173,7 +166,7 @@ async function planFogRelocations(
     .where(eq(cohortMemberships.cohortId, cohortId));
   const studentIds = cohortStudents.map((student) => student.id);
 
-  if (studentIds.length === 0) return { moves: [], blockedStudentIds: [] };
+  if (studentIds.length === 0) return { moves: [], forcedStudentIds: [], unmovedStudentIds: [] };
 
   const [activities, edges, completions, moves] = await Promise.all([
     db
@@ -221,7 +214,8 @@ async function planFogRelocations(
   const graph = buildRelocationGraph(activities, edges);
   const latestMoveByStudentId = getLatestMoveByStudentId(moves);
   const completionsByStudentId = getCompletionsByStudentId(completions);
-  const blockedStudentIds: string[] = [];
+  const forcedStudentIds: string[] = [];
+  const unmovedStudentIds: string[] = [];
   const moveInserts: CharacterMoveInsert[] = [];
 
   for (const studentId of studentIds) {
@@ -231,17 +225,21 @@ async function planFogRelocations(
     const currentActivity = graph.activityById.get(latestMove.toActivityId);
     if (!currentActivity || isActivityActiveForStep(currentActivity, toStep)) continue;
 
-    const targetActivityId = findClearRelocationTarget(
+    const clearTargetActivityId = findClearRelocationTarget(
       latestMove.toActivityId,
       graph,
       completionsByStudentId.get(studentId) || new Set<string>(),
       toStep
     );
+    const targetActivityId =
+      clearTargetActivityId || findForcedRelocationTarget(latestMove.toActivityId, graph, toStep);
 
     if (!targetActivityId) {
-      blockedStudentIds.push(studentId);
+      unmovedStudentIds.push(studentId);
       continue;
     }
+    const isForced = !clearTargetActivityId;
+    if (isForced) forcedStudentIds.push(studentId);
 
     moveInserts.push({
       studentId,
@@ -252,14 +250,15 @@ async function planFogRelocations(
       moveType: 'move',
       metadata: {
         automatic: true,
-        reason: 'cohort_step_fog_relocation',
+        forced: isForced,
+        reason: isForced ? 'cohort_step_forced_fog_relocation' : 'cohort_step_fog_relocation',
         fromStep,
         toStep,
       },
     });
   }
 
-  return { moves: moveInserts, blockedStudentIds };
+  return { moves: moveInserts, forcedStudentIds, unmovedStudentIds };
 }
 
 function buildRelocationGraph(activities: ActivityRecord[], edges: ActivityEdgeRecord[]) {
@@ -331,6 +330,47 @@ function findClearRelocationTarget(
     if (isRelocationTarget(activity, graph.incomingByActivityId, completedActivityIds, currentStep)) {
       return activity.id;
     }
+
+    queue.push(...(graph.adjacencyByActivityId.get(activityId) || []));
+  }
+
+  return undefined;
+}
+
+function findForcedRelocationTarget(
+  fromActivityId: string,
+  graph: ReturnType<typeof buildRelocationGraph>,
+  currentStep: number
+) {
+  const reachableActiveTarget = findReachableRelocationTarget(fromActivityId, graph, (activity) =>
+    isActivityActiveForStep(activity, currentStep)
+  );
+  if (reachableActiveTarget) return reachableActiveTarget;
+
+  const activeTarget = [...graph.activityById.values()].find(
+    (activity) => activity.id !== fromActivityId && isActivityActiveForStep(activity, currentStep)
+  );
+  if (activeTarget) return activeTarget.id;
+
+  return findReachableRelocationTarget(fromActivityId, graph, (activity) => activity.id !== fromActivityId);
+}
+
+function findReachableRelocationTarget(
+  fromActivityId: string,
+  graph: ReturnType<typeof buildRelocationGraph>,
+  isTarget: (activity: ActivityRecord) => boolean
+) {
+  const queue = [...(graph.adjacencyByActivityId.get(fromActivityId) || [])];
+  const visited = new Set<string>([fromActivityId]);
+
+  while (queue.length > 0) {
+    const activityId = queue.shift()!;
+    if (visited.has(activityId)) continue;
+    visited.add(activityId);
+
+    const activity = graph.activityById.get(activityId);
+    if (!activity) continue;
+    if (isTarget(activity)) return activity.id;
 
     queue.push(...(graph.adjacencyByActivityId.get(activityId) || []));
   }

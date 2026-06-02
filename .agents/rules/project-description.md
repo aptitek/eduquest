@@ -11,7 +11,7 @@ EduQuest is a gamified LMS MVP functioning as an interactive node-based map (RPG
 - **Architecture:** Monorepo (Workspaces) strictly segr
   egating Front, Back, and Shared types.
 - **Frontend (apps/frontend):** React, Vite, TypeScript, Tailwind CSS, DaisyUI.
-- **Backend (apps/backend):** Cloudflare Workers, Hono, Drizzle ORM, PostgreSQL.
+- **Backend (apps/backend):** Cloudflare Workers, Hono, Drizzle ORM, D1, R2
 - **Auth:** GitHub SSO exclusively (Lucia Auth). No password management.
 - **Shared (packages/shared):** TypeScript types/interfaces and global game constants.
 
