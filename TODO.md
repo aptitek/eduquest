@@ -10,8 +10,8 @@ This file tracks the remaining project backlog. Completed items are kept only wh
 
 ## Frontend And Design System
 
-[ ] Add loading skeletons for every API-backed organism that still renders empty states directly.
-[ ] Persist the selected locale per user and infer the initial locale from browser settings before falling back to French.
+[x] Add loading skeletons for every API-backed organism that still renders empty states directly.
+[x] Persist the selected locale per user and infer the initial locale from browser settings before falling back to French.
 [ ] Continue replacing decorative emoji text with Lucide icons or localized plain text in app UI.
 [ ] Move remaining feature/store/API access out of presentational components where practical.
 
@@ -83,4 +83,4 @@ AUDIT
 [x] No realtime gold update
 [x] Secu : API exposes guild size modification to non admins. Restrict the API and make sure to split guilds that are bigger than 3 players in several guilds.
 [x] Stats in player's card in the annuaire is not computed based on the class
-[ ] Boost needs to use a vote button
+[x] Boost needs to use a vote button

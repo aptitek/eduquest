@@ -39,7 +39,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { cn } from '../../utils/cn';
 import { formatUserDisplayName } from '../../utils/displayName';
 import mascotUrl from '../../assets/mascot.svg';
-import { Coins, GripVertical } from 'lucide-react';
+import { Coins, GripVertical, Vote as VoteIcon } from 'lucide-react';
 import {
   buildGuildCardHands,
   buildPodiumCards,
@@ -951,7 +951,7 @@ export function DashboardDock({ className }: DashboardDockProps) {
       showDockError('dashboard.dock.errors.spendVote', error);
     }
   };
-  const boostButton = (
+  const guildVoteButton = (
     <HoldToConfirmButton
       onConfirm={confirmGuildGaugeAction}
       holdDuration={1200}
@@ -964,7 +964,14 @@ export function DashboardDock({ className }: DashboardDockProps) {
         isProgressPage && 'h-36 w-36 -translate-y-6 text-xl sm:h-40 sm:w-40 sm:text-2xl'
       )}
     >
-      {hasPlayerGuild ? (isGuildVoteOpen ? 'Vote' : t('dashboard.dock.boost')) : t('dashboard.dock.noGuildBoost')}
+      {hasPlayerGuild ? (
+        <span className="flex flex-col items-center gap-1">
+          <VoteIcon size={24} aria-hidden />
+          <span>{t('activityCard.vote')}</span>
+        </span>
+      ) : (
+        t('dashboard.dock.noGuildBoost')
+      )}
     </HoldToConfirmButton>
   );
   const goldIndicator = (
@@ -1081,10 +1088,10 @@ export function DashboardDock({ className }: DashboardDockProps) {
               targetPoints={gaugeTargetPoints}
               milestones={gaugeMilestones}
               label={gaugeLabel}
-              centerContent={boostButton}
+              centerContent={guildVoteButton}
               goldIndicator={goldIndicator}
               rightIndicatorCompactValue={(activePlayerGuild.gold || 0).toLocaleString()}
-              boostLabel={t('dashboard.dock.boost')}
+              boostLabel={t('activityCard.vote')}
               milestoneBadgesExpanded={isProgressPage}
               className={cn(
                 'h-40 w-40 shrink-0 rounded-none border-0 bg-transparent shadow-none lg:h-52 lg:w-auto lg:min-w-[26rem] lg:max-w-[50rem] lg:flex-1 lg:shrink xl:min-w-[30rem] 2xl:min-w-[34rem]',

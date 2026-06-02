@@ -3,7 +3,7 @@ import { LogOut, ChevronDown, Languages, Check, Moon, Sun, ShieldCheck } from 'l
 import { BACKEND_BASE_URL, useAuth } from '../../features/auth/useAuth';
 import { useGameStore } from '../../features/game/gameStore';
 import { reconcileProfileUser } from '../../features/auth/reconcileProfileUser';
-import { useTranslation } from '../../hooks/useTranslation';
+import { LocaleType, useTranslation } from '../../hooks/useTranslation';
 import { StatusIndicator } from '../atoms/StatusIndicator';
 import { InstitutionalProfileCard } from './InstitutionalProfileCard/InstitutionalProfileCard';
 import { CohortMembership, GameCharacter, Student, User } from '@eduquest/shared';
@@ -187,6 +187,18 @@ export function AccountDropdown() {
 
   const handleUpdateProfile = (data: Partial<User>) => updateProfile(data);
 
+  const handleLocaleChange = async (nextLocale: LocaleType) => {
+    if (nextLocale === locale) return;
+    const previousLocale = locale;
+    setLocale(nextLocale);
+
+    try {
+      await updateProfile({ preferredLocale: nextLocale }, true);
+    } catch {
+      setLocale(previousLocale);
+    }
+  };
+
   const handleUploadAvatar = async (file: File) => {
     const token = localStorage.getItem('eduquest_token');
     if (!token) throw new Error('profile.errors.network');
@@ -269,14 +281,14 @@ export function AccountDropdown() {
                 <div className="flex gap-2">
                   <div className="tooltip tooltip-top">
                     <span className="tooltip-content z-50">{t('common.languageFrench')}</span>
-                    <button onClick={() => setLocale('fr')} className={localeButtonClass('fr')}>
+                    <button onClick={() => void handleLocaleChange('fr')} className={localeButtonClass('fr')}>
                       <span>FR</span>
                       {locale === 'fr' && <Check size={12} />}
                     </button>
                   </div>
                   <div className="tooltip tooltip-top">
                     <span className="tooltip-content z-50">{t('common.languageEnglish')}</span>
-                    <button onClick={() => setLocale('en')} className={localeButtonClass('en')}>
+                    <button onClick={() => void handleLocaleChange('en')} className={localeButtonClass('en')}>
                       <span>EN</span>
                       {locale === 'en' && <Check size={12} />}
                     </button>

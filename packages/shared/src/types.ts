@@ -3,6 +3,7 @@
 // ==========================================
 
 export type UserStatus = 'online' | 'offline' | 'busy';
+export type Locale = 'fr' | 'en';
 
 // Table `users` : Données de connexion et administration
 export interface User {
@@ -19,6 +20,7 @@ export interface User {
   avatarUrl?: string;
   githubAvatarUrl?: string;
   userStatus?: UserStatus;
+  preferredLocale?: Locale;
   isAdmin: boolean;
   createdAt?: string;
   updatedAt?: string;

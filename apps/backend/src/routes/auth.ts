@@ -327,6 +327,7 @@ function toUser(record: UserRecord): User {
     avatarUrl: record.avatarUrl || undefined,
     githubAvatarUrl: record.githubAvatarUrl || undefined,
     userStatus: record.userStatus || undefined,
+    preferredLocale: record.preferredLocale || undefined,
     isAdmin: record.isAdmin,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt),
@@ -369,6 +370,10 @@ function toGameCharacterStats(record: GameCharacterRecord): GameCharacter['stats
     wisdom: record.wisdom,
     charisma: record.charisma,
   };
+}
+
+function isSupportedLocale(value: unknown): value is 'fr' | 'en' {
+  return value === 'fr' || value === 'en';
 }
 
 function toGameCharacterClassDefinition(
@@ -740,6 +745,7 @@ function toAuthPayload(user: User): UserPayload {
     pronouns: user.pronouns,
     avatarUrl: user.avatarUrl,
     githubAvatarUrl: user.githubAvatarUrl,
+    preferredLocale: user.preferredLocale,
     isAdmin: user.isAdmin,
   };
 }
@@ -2321,6 +2327,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
     pronouns: userPayload.pronouns,
     avatarUrl: userPayload.avatarUrl,
     githubAvatarUrl: userPayload.githubAvatarUrl,
+    preferredLocale: userPayload.preferredLocale,
     isAdmin: userPayload.isAdmin,
   };
 
@@ -2340,21 +2347,7 @@ authRouter.get('/me', authMiddleware, async (c) => {
         .where(eq(users.id, userPayload.id))
         .limit(1);
       if (loadedUsers.length > 0) {
-        const userRecord = loadedUsers[0];
-        userObj = {
-          id: userRecord.id,
-          email: userRecord.email,
-          githubUsername: userRecord.githubUsername || undefined,
-          firstName: userRecord.firstName || undefined,
-          lastName: userRecord.lastName || undefined,
-          displayName: userRecord.displayName || undefined,
-          birthDate: userRecord.birthDate || undefined,
-          bio: userRecord.bio || undefined,
-          pronouns: userRecord.pronouns || undefined,
-          avatarUrl: userRecord.avatarUrl || undefined,
-          githubAvatarUrl: userRecord.githubAvatarUrl || undefined,
-          isAdmin: userRecord.isAdmin,
-        };
+        userObj = toUser(loadedUsers[0]);
       } else {
         return apiError(c, 'User profile not found.', 404);
       }
@@ -2533,6 +2526,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     characterTitle?: string;
     characterStats?: Partial<GameStats>;
     gameId?: string;
+    preferredLocale?: string;
   };
 
   try {
@@ -2585,6 +2579,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     pronouns: body.pronouns ?? userPayload.pronouns,
     avatarUrl: body.avatarUrl ?? userPayload.avatarUrl,
     githubAvatarUrl: userPayload.githubAvatarUrl,
+    preferredLocale: isSupportedLocale(body.preferredLocale) ? body.preferredLocale : userPayload.preferredLocale,
     isAdmin: userPayload.isAdmin,
   };
 
@@ -2605,6 +2600,15 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       if (body.birthDate !== undefined) userUpdate.birthDate = body.birthDate === null ? null : body.birthDate;
       if (body.bio !== undefined) userUpdate.bio = body.bio;
       if (body.pronouns !== undefined) userUpdate.pronouns = body.pronouns;
+      if (body.preferredLocale !== undefined) {
+        if (!isSupportedLocale(body.preferredLocale)) {
+          return apiError(c, 'preferredLocale must be "fr" or "en".', 400, {
+            errorCode: 'validation_failed',
+            errorKey: 'profile.errors.invalidPayload',
+          });
+        }
+        userUpdate.preferredLocale = body.preferredLocale;
+      }
 
       const [updatedUser] = await db
         .update(users)
@@ -2613,20 +2617,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         .returning();
 
       if (updatedUser) {
-        userObj = {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          githubUsername: updatedUser.githubUsername || undefined,
-          firstName: updatedUser.firstName || undefined,
-          lastName: updatedUser.lastName || undefined,
-          displayName: updatedUser.displayName || undefined,
-          birthDate: updatedUser.birthDate || undefined,
-          bio: updatedUser.bio || undefined,
-          pronouns: updatedUser.pronouns || undefined,
-          avatarUrl: updatedUser.avatarUrl || undefined,
-          githubAvatarUrl: updatedUser.githubAvatarUrl || undefined,
-          isAdmin: updatedUser.isAdmin,
-        };
+        userObj = toUser(updatedUser);
       } else {
         return apiError(c, 'User profile not found.', 404);
       }
@@ -2924,6 +2915,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     pronouns: userObj.pronouns,
     avatarUrl: userObj.avatarUrl,
     githubAvatarUrl: userObj.githubAvatarUrl,
+    preferredLocale: userObj.preferredLocale,
     isAdmin: userObj.isAdmin,
   };
 

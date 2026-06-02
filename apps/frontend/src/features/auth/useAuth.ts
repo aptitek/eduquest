@@ -3,6 +3,7 @@ import { useGameStore } from '../game/gameStore';
 import { BACKEND_BASE_URL, ENABLE_DEV_TOOLS } from '../../config/deployment';
 import { ApiClientError, throwApiResponseError } from '../errors/api';
 import { IMPERSONATOR_TOKEN_STORAGE_KEY } from './impersonation';
+import { isSupportedLocale, useTranslationStore } from '../../hooks/useTranslation';
 
 export { BACKEND_BASE_URL };
 
@@ -51,6 +52,9 @@ export function useAuth() {
         if (data.success && data.user && (data.user.isAdmin || data.student)) {
           if (typeof data.token === 'string' && data.token) {
             localStorage.setItem('eduquest_token', data.token);
+          }
+          if (isSupportedLocale(data.user.preferredLocale)) {
+            useTranslationStore.getState().setLocale(data.user.preferredLocale);
           }
           setUserSession(data.user, data.student || null, data.character || null, data.activityCompletions || []);
         } else {

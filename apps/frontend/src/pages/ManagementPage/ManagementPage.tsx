@@ -271,6 +271,7 @@ export function ManagementPage() {
   const canCreateManagementRow =
     activeTab === 'schools' ||
     (activeTab === 'cohorts' && schoolRows.length > 0);
+  const isInitialManagementLoading = isManagementLoading && !managementBackup;
   const activeCardCreateHint =
     activeTab === 'cohorts' && schoolRows.length === 0
       ? t('management.empty.createSchoolFirst')
@@ -647,10 +648,6 @@ export function ManagementPage() {
             <p className="text-sm text-text-muted">{t('management.subtitle')}</p>
           </div>
 
-          {isManagementLoading && (
-            <p className="text-sm text-text-muted">{t('management.loading')}</p>
-          )}
-
           {managementErrorKey && (
             <div
               role="alert"
@@ -681,18 +678,20 @@ export function ManagementPage() {
 
             {activeTab === 'classes' ? (
               <div className="grid gap-5 rounded-b-3xl rounded-tr-3xl border border-gaming-border bg-gaming-card/40 p-4 md:grid-cols-2 xl:grid-cols-4">
-                {classRows.map((row) => (
-                  <PlayingCard
-                    key={row.slug}
-                    {...buildCharacterClassManagementCard({
-                      row,
-                      t,
-                      onUpdate: (update) => void updateCharacterClass(row, update),
-                    })}
-                    size="full"
-                    presentation={{ fit: 'fillWidth' }}
-                  />
-                ))}
+                {isInitialManagementLoading
+                  ? Array.from({ length: 4 }).map((_, index) => <ManagementClassCardSkeleton key={index} />)
+                  : classRows.map((row) => (
+                      <PlayingCard
+                        key={row.slug}
+                        {...buildCharacterClassManagementCard({
+                          row,
+                          t,
+                          onUpdate: (update) => void updateCharacterClass(row, update),
+                        })}
+                        size="full"
+                        presentation={{ fit: 'fillWidth' }}
+                      />
+                    ))}
               </div>
             ) : activeTab === 'students' ? (
               <ManagementTable
@@ -708,6 +707,7 @@ export function ManagementPage() {
                 deleteRowLabel={(row) => t('management.table.deleteStudent').replace('{name}', row.displayName)}
                 onDeleteRow={(row) => deleteManagementRow('students', row.id)}
                 emptyMessage={t('management.empty.students')}
+                isLoading={isInitialManagementLoading}
                 flushTop
               />
             ) : activeTab === 'cohorts' ? (
@@ -727,6 +727,7 @@ export function ManagementPage() {
                     ? t('management.empty.createSchoolFirst')
                     : t('management.empty.cohorts')
                 }
+                isLoading={isInitialManagementLoading}
                 flushTop
               />
             ) : (
@@ -742,13 +743,31 @@ export function ManagementPage() {
                 deleteRowLabel={(row) => t('management.table.deleteSchool').replace('{name}', row.name)}
                 onDeleteRow={(row) => deleteManagementRow('schools', row.id)}
                 emptyMessage={t('management.empty.schools')}
+                isLoading={isInitialManagementLoading}
                 flushTop
               />
             )}
           </div>
         </div>
 
-        {activeTab === 'classes' ? null : hasSelectedCard ? (
+        {activeTab === 'classes' ? null : isInitialManagementLoading ? (
+          <PlayingCard
+            size="page"
+            kind={activeCardSkeletonVariant}
+            accentToken="neutral"
+            model={{
+              front: {
+                title: { value: t('management.loading'), variant: 'title' },
+                art: {
+                  node: <CardSkeleton label={t('management.loading')} variant={activeCardSkeletonVariant} loading />,
+                  alt: t('management.loading'),
+                },
+              },
+            }}
+            presentation={{ fit: 'fillHeight' }}
+            className="h-full max-h-[calc(100vh-8rem)] xl:sticky xl:top-8"
+          />
+        ) : hasSelectedCard ? (
           <PlayingCard
             size="page"
             flipLabel={selectedStudentCharacterBack ? t('management.card.flip') : undefined}
@@ -797,6 +816,26 @@ export function ManagementPage() {
 }
 
 export default ManagementPage;
+
+function ManagementClassCardSkeleton() {
+  return (
+    <div
+      className="flex min-h-[22rem] flex-col rounded-[1.75rem] border border-gaming-border bg-gaming-card/80 p-5 shadow-card"
+      aria-hidden="true"
+    >
+      <div className="mx-auto h-20 w-20 animate-pulse rounded-2xl bg-gaming-base/70" />
+      <div className="mt-6 space-y-3">
+        <div className="mx-auto h-4 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+        <div className="mx-auto h-3 w-1/2 animate-pulse rounded-full bg-gaming-base/50" />
+      </div>
+      <div className="mt-auto grid grid-cols-3 gap-2">
+        <div className="h-14 animate-pulse rounded-xl bg-gaming-base/50" />
+        <div className="h-14 animate-pulse rounded-xl bg-gaming-base/60" />
+        <div className="h-14 animate-pulse rounded-xl bg-gaming-base/50" />
+      </div>
+    </div>
+  );
+}
 
 function buildCharacterClassManagementCard({
   row,

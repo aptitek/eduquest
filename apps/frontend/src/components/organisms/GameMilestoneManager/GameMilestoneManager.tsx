@@ -30,6 +30,7 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
   const { t } = useTranslation();
   const reportError = useErrorReporter();
   const [milestones, setMilestones] = useState<GameMilestone[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +44,7 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
     if (!token) return undefined;
 
     let isMounted = true;
+    setIsLoading(true);
     fetchGameMilestones(token, gameId)
       .then((items) => {
         if (isMounted) setMilestones(items);
@@ -56,6 +58,9 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
         if (isMounted) {
           setError(`Impossible de charger les milestones. ${getUserErrorMessage(loadError, t)}`);
         }
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -169,8 +174,10 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
 
       {error ? <p className="text-sm font-semibold text-status-danger">{error}</p> : null}
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {milestones.map((milestone) => (
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-busy={isLoading}>
+        {isLoading && milestones.length === 0 ? (
+          Array.from({ length: 3 }).map((_, index) => <MilestoneSkeleton key={index} />)
+        ) : milestones.map((milestone) => (
           <article
             key={milestone.id}
             className="rounded-2xl border border-gaming-border bg-gaming-card/95 p-4 shadow-card"
@@ -216,6 +223,25 @@ export function GameMilestoneManager({ gameId, className }: GameMilestoneManager
         ))}
       </div>
     </section>
+  );
+}
+
+function MilestoneSkeleton() {
+  return (
+    <article
+      className="rounded-2xl border border-gaming-border bg-gaming-card/95 p-4 shadow-card"
+      aria-hidden="true"
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="h-5 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+          <div className="h-3 w-full animate-pulse rounded-full bg-gaming-base/50" />
+          <div className="h-3 w-4/5 animate-pulse rounded-full bg-gaming-base/50" />
+          <div className="h-8 w-28 animate-pulse rounded-lg bg-gaming-base/60" />
+        </div>
+        <div className="h-8 w-8 animate-pulse rounded-full bg-gaming-base/70" />
+      </div>
+    </article>
   );
 }
 

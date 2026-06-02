@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { fr } from '../locales/fr';
 import { en } from '../locales/en';
 
-type LocaleType = 'fr' | 'en';
+export type LocaleType = 'fr' | 'en';
 type TranslationNode = string | { [key: string]: TranslationNode };
+const LOCALE_STORAGE_KEY = 'eduquest_locale';
 
 interface TranslationStore {
   locale: LocaleType;
@@ -11,8 +12,11 @@ interface TranslationStore {
 }
 
 export const useTranslationStore = create<TranslationStore>((set) => ({
-  locale: 'fr',
-  setLocale: (locale) => set({ locale }),
+  locale: getInitialLocale(),
+  setLocale: (locale) => {
+    persistLocale(locale);
+    set({ locale });
+  },
 }));
 
 const translations = { fr, en };
@@ -25,6 +29,31 @@ export function formatMissingTranslation(path: string, isDevelopment = import.me
 
 export function isMissingTranslation(value: string) {
   return value.startsWith(MISSING_TRANSLATION_PREFIX) && value.endsWith(MISSING_TRANSLATION_SUFFIX);
+}
+
+export function isSupportedLocale(value: unknown): value is LocaleType {
+  return value === 'fr' || value === 'en';
+}
+
+function getInitialLocale(): LocaleType {
+  if (typeof window === 'undefined') return 'fr';
+
+  const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  if (isSupportedLocale(storedLocale)) return storedLocale;
+
+  const browserLocales = window.navigator.languages?.length
+    ? window.navigator.languages
+    : [window.navigator.language];
+  const inferredLocale = browserLocales.find((candidate) =>
+    candidate?.toLowerCase().startsWith('en')
+  );
+
+  return inferredLocale ? 'en' : 'fr';
+}
+
+function persistLocale(locale: LocaleType) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
 }
 
 export function resolveTranslation(locale: LocaleType, path: string, isDevelopment = import.meta.env.DEV) {

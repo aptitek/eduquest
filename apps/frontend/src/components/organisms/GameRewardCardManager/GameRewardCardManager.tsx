@@ -146,6 +146,7 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
 
   const activeRewardCards = rewardCards.filter((card) => activeRewardCardIds.has(card.id));
   const candidateRewardCards = rewardCards.filter((card) => !activeRewardCardIds.has(card.id));
+  const isInitialLoading = isLoading && rewardCards.length === 0;
   const activeCardData = toNonEmptyCards(
     activeRewardCards.length
       ? activeRewardCards.map((card) => toActivePlayingCard(card))
@@ -176,7 +177,9 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
     className: isSaving ? 'cursor-wait opacity-60' : undefined,
   };
   const candidateCardData = [...candidateRewardCards.map((card) => toEditablePlayingCard(card)), spareRewardCard];
-  const activeCardView = (
+  const activeCardView = isInitialLoading ? (
+    <RewardCardLoadingHand />
+  ) : (
     <PlayingHand
       hand={{
         id: 'admin-editable-bonus-hand',
@@ -315,14 +318,18 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
             {t('rewardCards.title')}
           </h3>
         </div>
-        {isLoading ? <span className="text-sm text-text-muted">{t('common.loading')}</span> : null}
+        {isLoading ? (
+          <span className="h-3 w-24 animate-pulse rounded-full bg-gaming-base/70" aria-hidden="true" />
+        ) : null}
       </div>
 
       {error ? <p className="text-sm font-semibold text-status-danger">{error}</p> : null}
 
       {activeCardTarget ? createPortal(activeCardView, activeCardTarget) : activeCardView}
 
-      {candidateCardData.length > 0 ? (
+      {isInitialLoading ? (
+        <RewardCardLoadingGrid />
+      ) : candidateCardData.length > 0 ? (
         <ResponsiveCardGrid
           items={candidateCardData}
           getKey={(card) => card.id || 'candidate-reward-card'}
@@ -343,6 +350,51 @@ export function GameRewardCardManager({ gameId, className }: GameRewardCardManag
         />
       ) : null}
     </section>
+  );
+}
+
+function RewardCardLoadingHand() {
+  return (
+    <div
+      className="mx-auto grid h-[30rem] min-h-0 max-w-7xl grid-cols-1 gap-4 md:h-[32rem] md:grid-cols-3"
+      aria-hidden="true"
+    >
+      {Array.from({ length: 3 }).map((_, index) => (
+        <RewardCardSkeleton key={index} className={index > 0 ? 'hidden md:flex' : undefined} />
+      ))}
+    </div>
+  );
+}
+
+function RewardCardLoadingGrid() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" aria-hidden="true">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <RewardCardSkeleton key={index} />
+      ))}
+    </div>
+  );
+}
+
+function RewardCardSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        'flex min-h-[22rem] flex-col rounded-[1.75rem] border border-gaming-border bg-gaming-card/70 p-5 shadow-card',
+        className
+      )}
+    >
+      <div className="mx-auto h-20 w-20 animate-pulse rounded-2xl bg-gaming-base/70" />
+      <div className="mt-6 space-y-3">
+        <div className="mx-auto h-4 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+        <div className="mx-auto h-3 w-1/2 animate-pulse rounded-full bg-gaming-base/50" />
+      </div>
+      <div className="mt-auto space-y-2">
+        <div className="h-3 animate-pulse rounded-full bg-gaming-base/50" />
+        <div className="h-3 w-4/5 animate-pulse rounded-full bg-gaming-base/50" />
+        <div className="h-10 animate-pulse rounded-xl bg-gaming-base/60" />
+      </div>
+    </div>
   );
 }
 

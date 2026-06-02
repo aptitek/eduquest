@@ -402,6 +402,7 @@ CREATE TABLE `users` (
 	`avatar_url` text,
 	`github_avatar_url` text,
 	`user_status` text DEFAULT 'offline',
+	`preferred_locale` text,
 	`is_admin` integer DEFAULT false NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000),
 	`updated_at` integer DEFAULT (unixepoch() * 1000),

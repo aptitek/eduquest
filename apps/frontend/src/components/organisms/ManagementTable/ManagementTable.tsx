@@ -35,6 +35,8 @@ export function ManagementTable<TData extends { id: string }>({
   onDeleteRow,
   flushTop,
   emptyMessage,
+  isLoading = false,
+  skeletonRowCount = 6,
 }: {
   data: TData[];
   columns: ColumnDef<TData>[];
@@ -50,6 +52,8 @@ export function ManagementTable<TData extends { id: string }>({
   onDeleteRow?: (row: TData) => void;
   flushTop?: boolean;
   emptyMessage?: string;
+  isLoading?: boolean;
+  skeletonRowCount?: number;
 }) {
   const { t } = useTranslation();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -115,6 +119,7 @@ export function ManagementTable<TData extends { id: string }>({
         'overflow-visible rounded-xl border border-gaming-border bg-gaming-card shadow-lg',
         flushTop && 'rounded-tl-none'
       )}
+      aria-busy={isLoading}
     >
       <div className="flex flex-col gap-2 border-b border-gaming-border bg-gaming-card p-3 sm:flex-row sm:items-center">
         <input
@@ -198,7 +203,27 @@ export function ManagementTable<TData extends { id: string }>({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
+            {isLoading ? (
+              Array.from({ length: skeletonRowCount }).map((_, rowIndex) => (
+                <tr key={`management-table-skeleton-${rowIndex}`} className="border-gaming-border">
+                  {visibleColumns.map((column, columnIndex) => (
+                    <td key={column.id} className="py-3" style={{ width: getColumnWidth(column.id) }}>
+                      <div
+                        className={cn(
+                          'h-4 animate-pulse rounded-full bg-gaming-base/70',
+                          columnIndex % 3 === 0 ? 'w-3/4' : columnIndex % 3 === 1 ? 'w-1/2' : 'w-5/6'
+                        )}
+                      />
+                    </td>
+                  ))}
+                  {hasActions && (
+                    <td className="text-right">
+                      <div className="ml-auto h-8 w-8 animate-pulse rounded-full bg-gaming-base/70" />
+                    </td>
+                  )}
+                </tr>
+              ))
+            ) : table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
                 onClick={() => onRowSelect?.(row.original)}
@@ -240,7 +265,7 @@ export function ManagementTable<TData extends { id: string }>({
                 )}
               </tr>
             ))}
-            {table.getRowModel().rows.length === 0 && (
+            {!isLoading && table.getRowModel().rows.length === 0 && (
               <tr className="border-gaming-border">
                 <td
                   colSpan={visibleColumns.length + (hasActions ? 1 : 0)}

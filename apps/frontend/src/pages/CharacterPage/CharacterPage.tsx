@@ -390,9 +390,7 @@ export function CharacterPage() {
     return (
       <GameLayout>
         <GameHeader currentView="character" />
-        <div className="flex min-h-[20rem] items-center justify-center font-display text-text-muted">
-          {t('layout.loadingSession')}
-        </div>
+        <CharacterPageSkeleton />
       </GameLayout>
     );
   }
@@ -693,6 +691,48 @@ function getGameStatKey(statId: string): GameStatKey | null {
 function clampStatValue(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(Math.max(Math.round(value), min), Math.max(min, max));
+}
+
+function CharacterPageSkeleton() {
+  return (
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]" aria-hidden="true">
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 animate-pulse rounded-2xl bg-gaming-base/70" />
+          <div className="space-y-2">
+            <div className="h-5 w-48 animate-pulse rounded-full bg-gaming-base/70" />
+            <div className="h-3 w-72 animate-pulse rounded-full bg-gaming-base/50" />
+          </div>
+        </div>
+        <div className="grid min-h-[28rem] gap-4 rounded-[1.75rem] border border-gaming-border bg-gaming-card/50 p-5 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex flex-col rounded-[1.5rem] border border-gaming-border bg-gaming-card/80 p-5 shadow-card"
+            >
+              <div className="mx-auto h-20 w-20 animate-pulse rounded-2xl bg-gaming-base/70" />
+              <div className="mt-6 space-y-3">
+                <div className="mx-auto h-4 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+                <div className="mx-auto h-3 w-1/2 animate-pulse rounded-full bg-gaming-base/50" />
+              </div>
+              <div className="mt-auto grid grid-cols-3 gap-2">
+                <div className="h-12 animate-pulse rounded-xl bg-gaming-base/50" />
+                <div className="h-12 animate-pulse rounded-xl bg-gaming-base/60" />
+                <div className="h-12 animate-pulse rounded-xl bg-gaming-base/50" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="min-h-[32rem] rounded-[1.75rem] border border-gaming-border bg-gaming-card/80 p-5 shadow-card">
+        <div className="mx-auto h-28 w-28 animate-pulse rounded-3xl bg-gaming-base/70" />
+        <div className="mt-8 space-y-3">
+          <div className="mx-auto h-5 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+          <div className="mx-auto h-3 w-1/2 animate-pulse rounded-full bg-gaming-base/50" />
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function buildClassCard({

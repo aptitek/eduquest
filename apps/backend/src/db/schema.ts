@@ -185,6 +185,7 @@ export const users = dbTable('users', {
   avatarUrl: text('avatar_url'),
   githubAvatarUrl: text('github_avatar_url'),
   userStatus: userStatusEnum('user_status').default('offline'),
+  preferredLocale: text('preferred_locale', { enum: ['fr', 'en'] }),
   isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),

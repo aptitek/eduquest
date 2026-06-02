@@ -16,6 +16,7 @@ export type UserPayload = {
   pronouns?: string;
   avatarUrl?: string;
   githubAvatarUrl?: string;
+  preferredLocale?: 'fr' | 'en';
 };
 
 export const authMiddleware: MiddlewareHandler = async (c, next) => {

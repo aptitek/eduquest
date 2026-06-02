@@ -632,7 +632,9 @@ export function AnnuairePage() {
             <p className="max-w-3xl text-sm text-text-secondary">
               {t('directory.unguildedHelp')}
             </p>
-            {unguildedStudentsHand ? (
+            {loading ? (
+              <DirectoryHandSkeleton />
+            ) : unguildedStudentsHand ? (
               <PlayingHandPanel
                 hand={unguildedStudentsHand}
                 className="border-status-quest/40 bg-gaming-card/50"
@@ -640,11 +642,9 @@ export function AnnuairePage() {
               />
             ) : (
               <p className="rounded-2xl border border-dashed border-gaming-border p-6 text-center text-sm text-text-muted">
-                {loading
-                  ? t('common.loading')
-                  : unguildedSearchQuery.trim()
-                    ? t('directory.noUnguildedSearchResults')
-                    : t('directory.noUnguildedStudents')}
+                {unguildedSearchQuery.trim()
+                  ? t('directory.noUnguildedSearchResults')
+                  : t('directory.noUnguildedStudents')}
               </p>
             )}
           </motion.section>
@@ -684,7 +684,9 @@ export function AnnuairePage() {
             </label>
           </div>
 
-          {additionalGuilds.length > 0 ? (
+          {loading ? (
+            <DirectoryGuildListSkeleton />
+          ) : additionalGuilds.length > 0 ? (
             <div className="space-y-6">
               {groupedGuilds.map((group) => (
                 <div key={group.letter} id={`guild-letter-${group.letter}`} className="scroll-mt-24 space-y-3">
@@ -742,6 +744,45 @@ export function AnnuairePage() {
         </motion.section>
       </div>
     </GameLayout>
+  );
+}
+
+function DirectoryHandSkeleton() {
+  return (
+    <div
+      className="grid min-h-[30rem] gap-4 rounded-[1.75rem] border border-status-quest/40 bg-gaming-card/50 p-5 md:grid-cols-3"
+      aria-hidden="true"
+    >
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="flex flex-col rounded-[1.5rem] border border-gaming-border bg-gaming-card/80 p-5 shadow-card"
+        >
+          <div className="mx-auto h-20 w-20 animate-pulse rounded-2xl bg-gaming-base/70" />
+          <div className="mt-6 space-y-3">
+            <div className="mx-auto h-4 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+            <div className="mx-auto h-3 w-1/2 animate-pulse rounded-full bg-gaming-base/50" />
+          </div>
+          <div className="mt-auto space-y-2">
+            <div className="h-3 animate-pulse rounded-full bg-gaming-base/50" />
+            <div className="h-3 w-4/5 animate-pulse rounded-full bg-gaming-base/50" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DirectoryGuildListSkeleton() {
+  return (
+    <div className="space-y-5" aria-hidden="true">
+      {Array.from({ length: 2 }).map((_, groupIndex) => (
+        <div key={groupIndex} className="space-y-3">
+          <div className="h-4 w-10 animate-pulse rounded-full bg-gaming-base/70" />
+          <DirectoryHandSkeleton />
+        </div>
+      ))}
+    </div>
   );
 }
 
