@@ -28,6 +28,8 @@ export function ProgressPage() {
   const [selectedBonusCardId, setSelectedBonusCardId] = useState<string | null>(null);
   const [showSelectCardPrompt, setShowSelectCardPrompt] = useState(false);
   const [guilds, setGuilds] = useState<ClassRosterGuild[]>([]);
+  const [isVoteStateLoading, setIsVoteStateLoading] = useState(false);
+  const [isGuildsLoading, setIsGuildsLoading] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
 
   const loadVoteState = () => {
@@ -36,6 +38,7 @@ export function ProgressPage() {
     if (!token) return undefined;
 
     let isMounted = true;
+    setIsVoteStateLoading(true);
     fetchGameBonusVoteState(token, selectedGameId)
       .then((state) => {
         if (!isMounted) return;
@@ -44,6 +47,9 @@ export function ProgressPage() {
       })
       .catch((error) => {
         console.warn('Could not load bonus vote state.', error);
+      })
+      .finally(() => {
+        if (isMounted) setIsVoteStateLoading(false);
       });
 
     return () => {
@@ -59,12 +65,16 @@ export function ProgressPage() {
 
     let isMounted = true;
     const loadGuilds = () => {
+      setIsGuildsLoading(true);
       fetchGuilds(token, selectedGameId)
         .then((nextGuilds) => {
           if (isMounted) setGuilds(nextGuilds);
         })
         .catch((error) => {
           console.warn('Could not load reward page guild podium.', error);
+        })
+        .finally(() => {
+          if (isMounted) setIsGuildsLoading(false);
         });
     };
 
@@ -173,7 +183,7 @@ export function ProgressPage() {
       <div className="space-y-8">
         <h2 className="sr-only">{t('bonus.title')}</h2>
 
-        <GuildPodium cards={podiumCards} />
+        <GuildPodium cards={podiumCards} isLoading={isGuildsLoading && guilds.length === 0} />
 
         {user?.isAdmin ? (
           <>
@@ -218,6 +228,7 @@ export function ProgressPage() {
             voteCards={voteCards}
             selectedBonusCardId={selectedBonusCardId}
             isVoting={isVoting}
+            isLoading={isVoteStateLoading && !voteState}
             onSelectMilestone={setSelectedMilestoneId}
             onSelectCard={(bonusCardId) => {
               setSelectedBonusCardId(bonusCardId);
@@ -234,7 +245,8 @@ export function ProgressPage() {
 
 export default ProgressPage;
 
-function GuildPodium({ cards }: { cards: PlayingCardProps[] }) {
+function GuildPodium({ cards, isLoading = false }: { cards: PlayingCardProps[]; isLoading?: boolean }) {
+  if (isLoading) return <GuildPodiumSkeleton />;
   if (cards.length === 0) return null;
 
   const rankedSlots = [
@@ -263,6 +275,27 @@ function GuildPodium({ cards }: { cards: PlayingCardProps[] }) {
               />
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GuildPodiumSkeleton() {
+  return (
+    <section aria-labelledby="guild-podium-title" className="space-y-3">
+      <h3 id="guild-podium-title" className="sr-only">
+        Podium des guildes
+      </h3>
+      <div
+        className="relative mx-auto h-64 max-w-4xl overflow-hidden rounded-[2rem] border border-gaming-border bg-gaming-base/60 px-3 pt-4 shadow-inner sm:h-72"
+        aria-hidden="true"
+      >
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-gaming-base via-gaming-base/85 to-transparent" />
+        <div className="relative flex h-full items-end justify-center gap-2 sm:gap-5">
+          <div className="h-40 w-28 animate-pulse rounded-[1.5rem] bg-gaming-card/70 sm:w-36 md:w-40" />
+          <div className="h-52 w-28 animate-pulse rounded-[1.5rem] bg-gaming-card/80 sm:w-36 md:w-40" />
+          <div className="h-32 w-28 animate-pulse rounded-[1.5rem] bg-gaming-card/60 sm:w-36 md:w-40" />
         </div>
       </div>
     </section>
@@ -347,6 +380,7 @@ function BonusVotePanel({
   voteCards,
   selectedBonusCardId,
   isVoting,
+  isLoading,
   showSelectCardPrompt,
   onSelectMilestone,
   onSelectCard,
@@ -359,6 +393,7 @@ function BonusVotePanel({
   voteCards: PlayingCardProps[];
   selectedBonusCardId: string | null;
   isVoting: boolean;
+  isLoading?: boolean;
   showSelectCardPrompt: boolean;
   onSelectMilestone: (milestoneId: string) => void;
   onSelectCard: (bonusCardId: string | null) => void;
@@ -372,6 +407,8 @@ function BonusVotePanel({
   const boostApproval = getBoostApprovalState(guildVote, voteState?.currentGuildMemberCount);
   const isVoteOpen = selectedVoteState?.isVoteOpen ?? false;
   const canBoostVote = Boolean(selectedVoteState) && !isVoteOpen && !isVoting && !boostApproval.hasVoted;
+
+  if (isLoading) return <BonusVotePanelSkeleton />;
 
   return (
     <section aria-labelledby="progress-next-vote-title" className="relative z-20 space-y-5">
@@ -503,6 +540,39 @@ function BonusVotePanel({
         }}
         className="pt-2"
       />
+    </section>
+  );
+}
+
+function BonusVotePanelSkeleton() {
+  return (
+    <section className="relative z-20 space-y-5" aria-hidden="true">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-gaming-base/95 px-3 py-4 backdrop-blur">
+        <div className="h-4 w-28 animate-pulse rounded-full bg-gaming-card/80" />
+        <div className="h-7 w-24 animate-pulse rounded-full bg-gaming-card/70" />
+        <div className="h-7 w-36 animate-pulse rounded-full bg-gaming-card/70" />
+        <div className="h-7 w-20 animate-pulse rounded-full bg-gaming-card/60" />
+        <div className="h-7 w-24 animate-pulse rounded-full bg-gaming-card/60" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={index}
+            className="flex min-h-[22rem] flex-col rounded-[1.75rem] border border-gaming-border bg-gaming-card/70 p-5 shadow-card"
+          >
+            <div className="mx-auto h-20 w-20 animate-pulse rounded-2xl bg-gaming-base/70" />
+            <div className="mt-6 space-y-3">
+              <div className="mx-auto h-4 w-2/3 animate-pulse rounded-full bg-gaming-base/70" />
+              <div className="mx-auto h-3 w-1/2 animate-pulse rounded-full bg-gaming-base/50" />
+            </div>
+            <div className="mt-auto space-y-2">
+              <div className="h-3 animate-pulse rounded-full bg-gaming-base/50" />
+              <div className="h-3 w-4/5 animate-pulse rounded-full bg-gaming-base/50" />
+              <div className="h-10 animate-pulse rounded-xl bg-gaming-base/60" />
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

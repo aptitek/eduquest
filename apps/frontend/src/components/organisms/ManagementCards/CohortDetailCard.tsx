@@ -82,6 +82,7 @@ export function CohortDetailCard({
   const [invites, setInvites] = useState<ManagementCohortInvite[]>([]);
   const [selectedInvite, setSelectedInvite] = useState<ManagementCohortInvite | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [isInvitesLoading, setIsInvitesLoading] = useState(false);
   const [isInviteLoading, setIsInviteLoading] = useState(false);
   const [isRegistrationUpdating, setIsRegistrationUpdating] = useState(false);
   const [hasCopiedInvite, setHasCopiedInvite] = useState(false);
@@ -130,6 +131,7 @@ export function CohortDetailCard({
     setInvites([]);
     setSelectedInvite(null);
     setInviteError(null);
+    setIsInvitesLoading(false);
     setHasCopiedInvite(false);
     setIsQrFullscreenOpen(false);
   }, [cohort]);
@@ -139,6 +141,7 @@ export function CohortDetailCard({
     if (!token) return;
 
     let isMounted = true;
+    setIsInvitesLoading(true);
     fetchManagementCohortInvites(token, cohort.id)
       .then((nextInvites) => {
         if (isMounted) setInvites(nextInvites);
@@ -149,6 +152,9 @@ export function CohortDetailCard({
           id: 'management.errors.loadInvitesFailed',
           logMessage: 'Could not load cohort invites.',
         });
+      })
+      .finally(() => {
+        if (isMounted) setIsInvitesLoading(false);
       });
 
     return () => {
@@ -662,7 +668,7 @@ export function CohortDetailCard({
               </p>
               <div className="flex items-center gap-2">
                 <span className="badge badge-sm border-gaming-border bg-gaming-card text-text-secondary">
-                  {invites.length}
+                  {isInvitesLoading ? '…' : invites.length}
                 </span>
                 <AddButton
                   onClick={openInviteModal}
@@ -675,7 +681,9 @@ export function CohortDetailCard({
               </div>
             </div>
 
-            {invites.length > 0 ? (
+            {isInvitesLoading && invites.length === 0 ? (
+              <CohortInviteSkeletonList />
+            ) : invites.length > 0 ? (
               <div className="flex max-h-40 flex-col gap-2 overflow-y-auto pr-1">
                 {invites.map((invite) => (
                   <div
@@ -771,5 +779,21 @@ export function CohortDetailCard({
 
       {inviteModal}
     </EditableFieldContext.Provider>
+  );
+}
+
+function CohortInviteSkeletonList() {
+  return (
+    <div className="flex flex-col gap-2" aria-hidden="true">
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div key={index} className="rounded-xl border border-gaming-border bg-gaming-card p-2">
+          <div className="h-3 w-4/5 animate-pulse rounded-full bg-gaming-base/70" />
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <div className="h-3 w-28 animate-pulse rounded-full bg-gaming-base/50" />
+            <div className="h-6 w-20 animate-pulse rounded-lg bg-gaming-base/60" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
