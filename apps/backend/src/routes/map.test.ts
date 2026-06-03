@@ -270,6 +270,48 @@ describe('map routes', () => {
     expect(payload.error).toContain('endStep');
   });
 
+  it('rejects malformed boss answer fields before updating', async () => {
+    const response = await app.request(
+      '/api/map/activities/debug_activity_api_bridge/card-fields',
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(true)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          answerFields: [{ id: 'bad id', label: 'Project', kind: 'url' }],
+        }),
+      },
+      { JWT_SECRET, APP_ENV: 'development', DB }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(400);
+    expect(payload.success).toBe(false);
+    expect(payload.error).toContain('answerFields[0].id');
+  });
+
+  it('rejects malformed boss submission deadlines before updating', async () => {
+    const response = await app.request(
+      '/api/map/activities/debug_activity_api_bridge/card-fields',
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${await tokenFor(true)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ submissionDeadline: 'not-a-date' }),
+      },
+      { JWT_SECRET, APP_ENV: 'development', DB }
+    );
+    const payload = (await response.json()) as any;
+
+    expect(response.status).toBe(400);
+    expect(payload.success).toBe(false);
+    expect(payload.error).toContain('submissionDeadline');
+  });
+
   it('requires an admin to delete activity edges', async () => {
     const response = await app.request(
       '/api/map/edges/00000000-0000-0000-0000-000000000001',

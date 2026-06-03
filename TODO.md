@@ -62,7 +62,7 @@ This file tracks the remaining project backlog. Completed items are kept only wh
 [x] Make the icon bigger in reward cards especially in full mode
 [x] Fiche personnage, Personnage is redondant in the character page keep only one
 [x] In the map for admin user show all guilds icons in the avatar stacks over the nodes, display characters icon only on hover
-[ ] Add a field in boss activities to let students fill various fields with answers to the boss activity of either text (mostly URL) or files to store in the project file storage R2 cloudflare
+[x] Add a field in boss activities to let students fill various fields with answers to the boss activity of either text (mostly URL) or files to store in the project file storage R2 cloudflare
 [x] Add more fog and redo the avoid area system instead of big visible circles. If needed try to find an existing react component to draw that with a neet effect. Try to keep it light weight 
 
 AUDIT
@@ -70,7 +70,7 @@ AUDIT
 [ ] Remove all unused translations from the translation files
 [x] Move mock data in the database and wire all the relevant API. Also add much more generated data like 3 cohorts of 10 to 30 students, with one that is yet to start making characters or even fill the profile card and one well along the game with guilds and such.
 [ ] Refactor the API to follow DRY and KISS principles along with following the industry best practices
-[ ] Render missing translation keys in a visible debug style during development.
+[x] Render missing translation keys in a visible debug style during development.
 [x] Check ALL raw colors and enforce token design. Also refactor the tokens completely to factorize them into as little tokens and as generic tokens as possible. Re-check then for any and all non solarized colors in the theme.
 [ ] Do a comprehensive security audit of the entire app, especially sanitation of the inputs and prevent ANY privilege escalation from the students.
 

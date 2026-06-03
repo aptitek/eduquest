@@ -7,6 +7,7 @@ import type {
   ActivityParticipationMode,
   ActivityStepRange,
   BossActivityAnswerField,
+  BossActivityAnswerFieldKind,
   BossActivitySubmissionField,
 } from '@eduquest/shared';
 import type { ActivityCompletionDraft } from '../../features/game/api';
@@ -43,6 +44,7 @@ export interface ActivityCardData {
   stepRanges: ActivityStepRange[];
   adjacentNodes: string[];
   answerFields?: BossActivityAnswerField[];
+  submissionDeadline?: string;
 }
 
 export interface ActivityCardProps {
@@ -56,6 +58,7 @@ export interface ActivityCardProps {
   completionProgressValue?: number;
   isCompletionPending?: boolean;
   completionPendingLabel?: string;
+  bossSubmissionUpdatedAt?: string;
   onResolve?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
   onTitleChange?: (title: string) => void | Promise<void>;
   onSubtitleChange?: (subtitle: string) => void | Promise<void>;
@@ -68,6 +71,8 @@ export interface ActivityCardProps {
   onIllustrationUrlChange?: (illustrationUrl: string) => void | Promise<void>;
   onIllustrationUpload?: (file: File) => Promise<string | void>;
   onStepRangesChange?: (stepRanges: ActivityStepRange[]) => void | Promise<void>;
+  onAnswerFieldsChange?: (fields: BossActivityAnswerField[]) => void | Promise<void>;
+  onSubmissionDeadlineChange?: (deadline?: string) => void | Promise<void>;
   emptyCardLabel?: string;
   onEmptyCardClick?: () => void;
   className?: string;
@@ -84,6 +89,7 @@ export function ActivityCard({
   completionProgressValue,
   isCompletionPending,
   completionPendingLabel,
+  bossSubmissionUpdatedAt,
   onResolve,
   onTitleChange,
   onSubtitleChange,
@@ -96,6 +102,8 @@ export function ActivityCard({
   onIllustrationUrlChange,
   onIllustrationUpload,
   onStepRangesChange,
+  onAnswerFieldsChange,
+  onSubmissionDeadlineChange,
   emptyCardLabel,
   onEmptyCardClick,
   className,
@@ -104,8 +112,9 @@ export function ActivityCard({
   const [draft, setDraft] = useState<ActivityCardData | undefined>(activity);
   const wasEmptyActivityRef = useRef(!activity);
   const [isRevealingSelectedActivity, setIsRevealingSelectedActivity] = useState(false);
-  const hasBossAnswerFields = Boolean(
-    showCompletionAction && !isCompleted && draft?.answerFields?.length
+  const hasBossAnswerFields = Boolean(showCompletionAction && draft?.answerFields?.length);
+  const isSubmissionClosed = Boolean(
+    draft?.submissionDeadline && Date.now() > new Date(draft.submissionDeadline).getTime()
   );
 
   useEffect(() => {
@@ -207,6 +216,15 @@ export function ActivityCard({
     updateDraft((current) => ({ ...current, stepRanges: normalizedStepRanges }));
     void onStepRangesChange?.(normalizedStepRanges);
   };
+  const applyAnswerFields = (answerFields: BossActivityAnswerField[]) => {
+    const normalizedFields = normalizeBossAnswerFields(answerFields);
+    updateDraft((current) => ({ ...current, answerFields: normalizedFields }));
+    void onAnswerFieldsChange?.(normalizedFields);
+  };
+  const applySubmissionDeadline = (deadline?: string) => {
+    updateDraft((current) => ({ ...current, submissionDeadline: deadline }));
+    void onSubmissionDeadlineChange?.(deadline);
+  };
 
   const updateStepRange = (index: number, field: keyof ActivityStepRange, value: string) => {
     const stepRanges = draft.stepRanges.map((range, rangeIndex) =>
@@ -282,6 +300,8 @@ export function ActivityCard({
                           onStepRangeChange={updateStepRange}
                           onStepRangeAdd={addStepRange}
                           onStepRangeRemove={removeStepRange}
+                          onAnswerFieldsChange={applyAnswerFields}
+                          onSubmissionDeadlineChange={applySubmissionDeadline}
                           t={t}
                         />
                       ),
@@ -313,7 +333,11 @@ export function ActivityCard({
           fields={draft.answerFields || []}
           isResolving={isResolving}
           error={resolveError}
-          onSubmit={onResolve}
+          onSubmit={isSubmissionClosed ? undefined : onResolve}
+          isResubmission={isCompleted}
+          submittedAt={bossSubmissionUpdatedAt}
+          submissionDeadline={draft.submissionDeadline}
+          isClosed={isSubmissionClosed}
           t={t}
         />
       ) : null}
@@ -326,12 +350,20 @@ function BossSubmissionForm({
   isResolving,
   error,
   onSubmit,
+  isResubmission,
+  submittedAt,
+  submissionDeadline,
+  isClosed,
   t,
 }: {
   fields: BossActivityAnswerField[];
   isResolving?: boolean;
   error?: string | null;
   onSubmit?: (draft?: ActivityCompletionDraft) => void | Promise<void>;
+  isResubmission?: boolean;
+  submittedAt?: string;
+  submissionDeadline?: string;
+  isClosed?: boolean;
   t: (path: string) => string;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -356,6 +388,21 @@ function BossSubmissionForm({
           {t('activityCard.bossSubmission')}
         </h3>
         <p className="text-xs text-text-muted">{t('activityCard.bossSubmissionHelp')}</p>
+        <div className="mt-2 space-y-1 text-xs font-semibold text-text-muted">
+          {submittedAt ? (
+            <p>
+              {t('activityCard.lastSubmittedAt').replace('{date}', formatDateTime(submittedAt))}
+            </p>
+          ) : null}
+          {submissionDeadline ? (
+            <p className={isClosed ? 'text-status-danger' : undefined}>
+              {t(isClosed ? 'activityCard.submissionClosedAt' : 'activityCard.submissionDeadlineAt').replace(
+                '{date}',
+                formatDateTime(submissionDeadline)
+              )}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {fields.map((field) => (
@@ -386,7 +433,13 @@ function BossSubmissionForm({
         className="btn w-full border-none bg-status-boss text-gaming-base"
         disabled={isResolving || !onSubmit}
       >
-        {isResolving ? t('activityCard.submitting') : t('activityCard.submitBossAnswer')}
+        {isClosed
+          ? t('activityCard.submissionClosed')
+          : isResolving
+            ? t('activityCard.submitting')
+            : isResubmission
+              ? t('activityCard.resubmitBossAnswer')
+              : t('activityCard.submitBossAnswer')}
       </button>
     </form>
   );
@@ -457,6 +510,29 @@ function formatBytes(bytes: number) {
   if (bytes >= 1024 * 1024) return `${Math.round(bytes / 1024 / 1024)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function toDateTimeLocalValue(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocalValue(value: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 function buildActivityFace({
@@ -711,6 +787,8 @@ interface ActivityCardBackProps {
   onStepRangeChange: (index: number, field: keyof ActivityStepRange, value: string) => void;
   onStepRangeAdd: () => void;
   onStepRangeRemove: (index: number) => void;
+  onAnswerFieldsChange: (fields: BossActivityAnswerField[]) => void;
+  onSubmissionDeadlineChange: (deadline?: string) => void;
   t: (path: string) => string;
 }
 
@@ -720,6 +798,8 @@ function ActivityCardBack({
   onStepRangeChange,
   onStepRangeAdd,
   onStepRangeRemove,
+  onAnswerFieldsChange,
+  onSubmissionDeadlineChange,
   t,
 }: ActivityCardBackProps) {
   return (
@@ -774,8 +854,189 @@ function ActivityCardBack({
             />
           </div>
         </section>
+
+        {activity.answerFields ? (
+          <BossAnswerFieldsEditor
+            fields={activity.answerFields}
+            submissionDeadline={activity.submissionDeadline}
+            onChange={onAnswerFieldsChange}
+            onSubmissionDeadlineChange={onSubmissionDeadlineChange}
+            t={t}
+          />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function BossAnswerFieldsEditor({
+  fields,
+  submissionDeadline,
+  onChange,
+  onSubmissionDeadlineChange,
+  t,
+}: {
+  fields: BossActivityAnswerField[];
+  submissionDeadline?: string;
+  onChange: (fields: BossActivityAnswerField[]) => void;
+  onSubmissionDeadlineChange: (deadline?: string) => void;
+  t: (path: string) => string;
+}) {
+  const updateField = (index: number, patch: Partial<BossActivityAnswerField>) => {
+    onChange(fields.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)));
+  };
+
+  return (
+    <section className="space-y-3 pb-2">
+      <h4 className="font-display text-xs font-black uppercase tracking-[0.2em] text-status-boss">
+        {t('activityCard.bossAnswerFields')}
+      </h4>
+      <div className="space-y-3 rounded-xl border border-status-boss/30 bg-status-boss/10 p-3">
+        <DateTimeField
+          label={t('activityCard.submissionDeadline')}
+          value={submissionDeadline}
+          onChange={onSubmissionDeadlineChange}
+        />
+        <EditableList
+          items={fields}
+          getKey={(field, index) => `${field.id || 'boss-field'}-${index}`}
+          renderItem={(field, index) => (
+            <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <TextField
+                  label={t('activityCard.answerFieldId')}
+                  value={field.id}
+                  onChange={(value) => updateField(index, { id: toAnswerFieldId(value) })}
+                />
+                <TextField
+                  label={t('activityCard.answerFieldLabel')}
+                  value={field.label}
+                  onChange={(value) => updateField(index, { label: value })}
+                />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block space-y-1.5 text-sm">
+                  <span className="block font-bold text-text-secondary">
+                    {t('activityCard.answerFieldKind')}
+                  </span>
+                  <select
+                    value={field.kind}
+                    onChange={(event) =>
+                      updateField(index, { kind: event.target.value as BossActivityAnswerFieldKind })
+                    }
+                    className="h-11 w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
+                  >
+                    <option value="text">{t('activityCard.answerKindText')}</option>
+                    <option value="url">{t('activityCard.answerKindUrl')}</option>
+                    <option value="file">{t('activityCard.answerKindFile')}</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 self-end rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 text-sm font-bold text-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(field.required)}
+                    onChange={(event) => updateField(index, { required: event.target.checked })}
+                    className="checkbox checkbox-sm border-gaming-border"
+                  />
+                  {t('activityCard.answerFieldRequired')}
+                </label>
+              </div>
+
+              <TextField
+                label={t('activityCard.answerFieldPlaceholder')}
+                value={field.placeholder || ''}
+                onChange={(value) => updateField(index, { placeholder: value || undefined })}
+              />
+              <TextField
+                label={t('activityCard.answerFieldHelp')}
+                value={field.helpText || ''}
+                onChange={(value) => updateField(index, { helpText: value || undefined })}
+              />
+
+              {field.kind === 'file' ? (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <TextField
+                    label={t('activityCard.answerFieldAccept')}
+                    value={field.accept || ''}
+                    onChange={(value) => updateField(index, { accept: value || undefined })}
+                  />
+                  <NumberField
+                    label={t('activityCard.answerFieldMaxFiles')}
+                    value={field.maxFiles ?? ''}
+                    min={1}
+                    onChange={(value) =>
+                      updateField(index, { maxFiles: value === '' ? undefined : Math.max(1, Number(value) || 1) })
+                    }
+                  />
+                  <NumberField
+                    label={t('activityCard.answerFieldMaxMb')}
+                    value={field.maxBytes ? Math.round(field.maxBytes / 1024 / 1024) : ''}
+                    min={1}
+                    onChange={(value) =>
+                      updateField(index, {
+                        maxBytes: value === '' ? undefined : Math.max(1, Number(value) || 1) * 1024 * 1024,
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+            </div>
+          )}
+          onAdd={() => onChange([...fields, createBossAnswerField(fields.length)])}
+          onRemove={(_field, index) => onChange(fields.filter((_, fieldIndex) => fieldIndex !== index))}
+          addLabel={t('activityCard.addAnswerField')}
+          removeLabel={t('activityCard.removeAnswerField')}
+          emptyState={t('activityCard.noAnswerFields')}
+          itemClassName="bg-gaming-card/40"
+        />
+      </div>
+    </section>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1.5 text-sm">
+      <span className="block font-bold text-text-secondary">{label}</span>
+      <EditableText
+        value={value}
+        onChange={onChange}
+        variant="field"
+        truncate={false}
+        inputClassName="border-gaming-border bg-gaming-base text-sm"
+      />
+    </label>
+  );
+}
+
+function DateTimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  onChange: (value?: string) => void;
+}) {
+  return (
+    <label className="block space-y-1.5 text-sm">
+      <span className="block font-bold text-text-secondary">{label}</span>
+      <input
+        type="datetime-local"
+        className="input input-sm w-full border-gaming-border bg-gaming-base text-sm text-text-primary"
+        value={toDateTimeLocalValue(value)}
+        onChange={(event) => onChange(fromDateTimeLocalValue(event.currentTarget.value))}
+      />
+    </label>
   );
 }
 
@@ -874,6 +1135,38 @@ function normalizeActivityStepRanges(stepRanges: ActivityStepRange[]) {
           : Math.max(toNonNegativeIntegerValue(range.endStep), startStep + 1),
     };
   });
+}
+
+function createBossAnswerField(index: number): BossActivityAnswerField {
+  return {
+    id: `answer_${index + 1}`,
+    label: `Answer ${index + 1}`,
+    kind: 'text',
+  };
+}
+
+function normalizeBossAnswerFields(fields: BossActivityAnswerField[]) {
+  return fields.map((field, index) => ({
+    ...field,
+    id: toAnswerFieldId(field.id) || `answer_${index + 1}`,
+    label: field.label.trim() || `Answer ${index + 1}`,
+    placeholder: field.placeholder?.trim() || undefined,
+    helpText: field.helpText?.trim() || undefined,
+    accept: field.accept?.trim() || undefined,
+    maxFiles: field.maxFiles == null ? undefined : Math.max(1, Math.min(10, Math.trunc(field.maxFiles))),
+    maxBytes:
+      field.maxBytes == null
+        ? undefined
+        : Math.max(1, Math.min(25 * 1024 * 1024, Math.trunc(field.maxBytes))),
+  }));
+}
+
+function toAnswerFieldId(value: string) {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
 }
 
 function toNonNegativeInteger(value: string) {

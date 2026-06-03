@@ -361,6 +361,20 @@ function getBossAnswerFields(activity: Pick<ActivityRecord, 'type' | 'metadata'>
   return normalized.length > 0 ? normalized : DEFAULT_BOSS_ANSWER_FIELDS;
 }
 
+function getBossSubmissionDeadline(activity: Pick<ActivityRecord, 'metadata'>): Date | undefined {
+  const metadata = (activity.metadata || {}) as Record<string, unknown>;
+  const rawDeadline =
+    typeof metadata.submissionDeadline === 'string'
+      ? metadata.submissionDeadline
+      : typeof (metadata.boss as Record<string, unknown> | undefined)?.submissionDeadline === 'string'
+        ? ((metadata.boss as Record<string, unknown>).submissionDeadline as string)
+        : undefined;
+  if (!rawDeadline) return undefined;
+
+  const deadline = new Date(rawDeadline);
+  return Number.isNaN(deadline.getTime()) ? undefined : deadline;
+}
+
 function normalizeBossAnswerFields(value: unknown): BossActivityAnswerField[] {
   if (!Array.isArray(value)) return [];
 
@@ -403,6 +417,12 @@ async function parseCompletionSubmission(
 ): Promise<CompletionSubmissionPayload | Response> {
   const answerFields = getBossAnswerFields(activity);
   if (answerFields.length === 0) return {};
+  const deadline = getBossSubmissionDeadline(activity);
+  if (deadline && Date.now() > deadline.getTime()) {
+    return apiError(c, 'The boss submission deadline has passed.', 403, {
+      errorCode: 'access_denied',
+    });
+  }
 
   const contentType = c.req.header('content-type') || '';
   const textAnswers = new Map<string, string>();
@@ -617,6 +637,26 @@ function sanitizeFileName(name: string) {
     .replace(/[^\w.-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 120) || 'submission.bin';
+}
+
+function findBossSubmissionFile(metadata: unknown, fileId: string): BossActivitySubmissionFile | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const submission = (metadata as Record<string, unknown>).bossSubmission;
+  if (!submission || typeof submission !== 'object' || Array.isArray(submission)) return undefined;
+  const fields = (submission as Partial<BossActivitySubmission>).fields;
+  if (!Array.isArray(fields)) return undefined;
+
+  for (const field of fields) {
+    if (!field?.files?.length) continue;
+    const file = field.files.find((candidate) => candidate.id === fileId);
+    if (file) return file;
+  }
+
+  return undefined;
+}
+
+function escapeHeaderValue(value: string) {
+  return value.replace(/["\\\r\n]/g, '_');
 }
 
 function toActivity(
@@ -859,6 +899,64 @@ function validateOptionalResources(value: unknown) {
 
     return title ? [{ title, url }] : [{ url }];
   });
+}
+
+function validateOptionalBossAnswerFields(value: unknown): BossActivityAnswerField[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error('answerFields must be an array.');
+  }
+  if (value.length > 12) {
+    throw new Error('answerFields can contain at most 12 fields.');
+  }
+
+  return value.map((item, index): BossActivityAnswerField => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`answerFields[${index}] must be a field object.`);
+    }
+
+    const field = item as Record<string, unknown>;
+    const id = validateOptionalText(field.id, `answerFields[${index}].id`, 64);
+    const label = validateOptionalText(field.label, `answerFields[${index}].label`, 120);
+    const kind = field.kind;
+
+    if (!id || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)) {
+      throw new Error(`answerFields[${index}].id must contain only letters, numbers, underscores, or dashes.`);
+    }
+    if (!label) {
+      throw new Error(`answerFields[${index}].label is required.`);
+    }
+    if (kind !== 'text' && kind !== 'url' && kind !== 'file') {
+      throw new Error(`answerFields[${index}].kind must be text, url, or file.`);
+    }
+
+    return {
+      id,
+      label,
+      kind,
+      required: field.required === true,
+      placeholder: validateOptionalText(field.placeholder, `answerFields[${index}].placeholder`, 200),
+      helpText: validateOptionalText(field.helpText, `answerFields[${index}].helpText`, 500),
+      accept: validateOptionalText(field.accept, `answerFields[${index}].accept`, 200),
+      maxFiles: validateOptionalInteger(field.maxFiles, `answerFields[${index}].maxFiles`, 1, 10),
+      maxBytes: validateOptionalInteger(field.maxBytes, `answerFields[${index}].maxBytes`, 1, 25 * 1024 * 1024),
+    };
+  });
+}
+
+function validateOptionalSubmissionDeadline(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return '';
+  if (typeof value !== 'string') {
+    throw new Error('submissionDeadline must be an ISO date string.');
+  }
+
+  const deadline = new Date(value);
+  if (Number.isNaN(deadline.getTime())) {
+    throw new Error('submissionDeadline must be a valid ISO date string.');
+  }
+
+  return deadline.toISOString();
 }
 
 function edgeStyleWindowsOverlap(
@@ -2421,6 +2519,8 @@ mapRouter.patch('/map/activities/:activityId/card-fields', async (c) => {
     resources?: unknown;
     basePoints?: unknown;
     participationMode?: unknown;
+    answerFields?: unknown;
+    submissionDeadline?: unknown;
     mapX?: unknown;
     mapY?: unknown;
   }>(c, {});
@@ -2430,6 +2530,8 @@ mapRouter.patch('/map/activities/:activityId/card-fields', async (c) => {
   let resources: Array<{ title?: string; url: string }> | undefined;
   let basePoints: number | undefined;
   let participationMode: ActivityParticipationMode | undefined;
+  let answerFields: BossActivityAnswerField[] | undefined;
+  let submissionDeadline: string | undefined;
   let mapX: number | undefined;
   let mapY: number | undefined;
 
@@ -2439,6 +2541,8 @@ mapRouter.patch('/map/activities/:activityId/card-fields', async (c) => {
     resources = validateOptionalResources(body?.resources);
     basePoints = validateOptionalInteger(body?.basePoints, 'basePoints', 0, 100000);
     participationMode = validateOptionalParticipationMode(body?.participationMode);
+    answerFields = validateOptionalBossAnswerFields(body?.answerFields);
+    submissionDeadline = validateOptionalSubmissionDeadline(body?.submissionDeadline);
     mapX = validateOptionalInteger(body?.mapX, 'mapX', -100000, 100000);
     mapY = validateOptionalInteger(body?.mapY, 'mapY', -100000, 100000);
   } catch (error: any) {
@@ -2473,9 +2577,23 @@ mapRouter.patch('/map/activities/:activityId/card-fields', async (c) => {
     if (subtitle !== undefined) nextMetadata.subtitle = subtitle;
     if (description !== undefined) nextMetadata.description = description;
     if (resources !== undefined) nextMetadata.resources = resources;
+    if (answerFields !== undefined) nextMetadata.answerFields = answerFields;
+    if (submissionDeadline !== undefined) {
+      if (submissionDeadline) {
+        nextMetadata.submissionDeadline = submissionDeadline;
+      } else {
+        delete nextMetadata.submissionDeadline;
+      }
+    }
 
     const update: Partial<typeof gameActivities.$inferInsert> = {};
-    if (subtitle !== undefined || description !== undefined || resources !== undefined) {
+    if (
+      subtitle !== undefined ||
+      description !== undefined ||
+      resources !== undefined ||
+      answerFields !== undefined ||
+      submissionDeadline !== undefined
+    ) {
       update.metadata = nextMetadata;
     }
     if (basePoints !== undefined) update.basePoints = basePoints;
@@ -4016,6 +4134,50 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
       .limit(1);
 
     if (existingCompletion) {
+      if (activity.type === 'boss' || activity.type === 'mini_boss') {
+        const submission = await parseCompletionSubmission(c, activity, studentRecord, membership);
+        if (submission instanceof Response) return submission;
+
+        const [updatedCompletion] = await db
+          .update(gameActivityCompletions)
+          .set({
+            workUrl: submission.workUrl || null,
+            metadata: submission.metadata || {},
+            updatedAt: new Date(),
+          })
+          .where(eq(gameActivityCompletions.id, existingCompletion.id))
+          .returning();
+        const completionPayload = toActivityCompletion(updatedCompletion || existingCompletion);
+
+        if (activity.participationMode === 'guild') {
+          if (!membership.guildId) {
+            return apiError(c, 'Guild activity requires an active guild membership.', 403);
+          }
+
+          const voteState = (
+            await loadGuildActivityVoteStates(db, membership.cohortId, membership.guildId, [activityId], {
+              includeStudentId: studentRecord.id,
+            })
+          ).get(activityId);
+          if (voteState) voteState.hasVoted = true;
+
+          return c.json({
+            success: true,
+            source: 'database',
+            completion: withGuildVoteState(
+              completionPayload,
+              voteState || { requiredVotes: 0, receivedVotes: 0, isComplete: false }
+            ),
+          });
+        }
+
+        return c.json({
+          success: true,
+          source: 'database',
+          completion: completionPayload,
+        });
+      }
+
       if (activity.participationMode === 'guild') {
         if (!membership.guildId) {
           return apiError(c, 'Guild activity requires an active guild membership.', 403);
@@ -4137,6 +4299,63 @@ mapRouter.post('/map/activities/:activityId/complete', async (c) => {
   } catch (error: any) {
     console.error('Activity completion SQL error:', error.message);
     return apiError(c, 'Activity completion failed.', 500);
+  }
+});
+
+mapRouter.get('/map/completions/:completionId/files/:fileId', async (c) => {
+  const databaseUrl = c.env?.DB;
+  const bucket = c.env.ASSETS;
+  const user = c.get('user');
+  const completionId = c.req.param('completionId');
+  const fileId = c.req.param('fileId');
+
+  if (!databaseUrl) {
+    return missingDatabaseBinding(c);
+  }
+  if (!bucket) {
+    return apiError(c, 'Project file storage is not configured.', 503);
+  }
+
+  try {
+    const db = getDb(databaseUrl);
+    const [completion] = await db
+      .select()
+      .from(gameActivityCompletions)
+      .where(eq(gameActivityCompletions.id, completionId))
+      .limit(1);
+
+    if (!completion) {
+      return apiError(c, 'Boss submission file not found.', 404);
+    }
+
+    if (!user?.isAdmin) {
+      const context = await resolveStudentCohortContext(db, user, completion.cohortId);
+      if (!context || context.studentRecord.id !== completion.studentId) {
+        return apiError(c, 'Boss submission file not found.', 404);
+      }
+    }
+
+    const submittedFile = findBossSubmissionFile(completion.metadata, fileId);
+    if (!submittedFile || !submittedFile.key.startsWith('boss-submissions/')) {
+      return apiError(c, 'Boss submission file not found.', 404);
+    }
+
+    const object = await bucket.get(submittedFile.key);
+    if (!object) {
+      return apiError(c, 'Boss submission file not found.', 404);
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('cache-control', 'private, max-age=0');
+    headers.set('content-disposition', `attachment; filename="${escapeHeaderValue(submittedFile.fileName)}"`);
+    headers.set('etag', object.httpEtag);
+    headers.set('x-content-type-options', 'nosniff');
+
+    return new Response(object.body, { headers });
+  } catch (error: any) {
+    console.error('Boss submission file download failed:', error.message);
+    return apiError(c, 'Boss submission file could not be loaded.', 500);
   }
 });
 

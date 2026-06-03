@@ -390,7 +390,9 @@ export function MapPage() {
 
   // Soumission / Résolution d'un nœud
   const handleCompleteActivity = async (act: Activity, draft?: ActivityCompletionDraft) => {
-    if (completedActivityIds.includes(act.id) || completingActivityId) return;
+    const isBossSubmission = act.type === 'boss' || act.type === 'mini_boss';
+    const wasAlreadyCompleted = completedActivityIds.includes(act.id);
+    if ((wasAlreadyCompleted && !isBossSubmission) || completingActivityId) return;
     const onboardingTask = getStringMetadata((act.metadata || {}) as Record<string, unknown>, 'onboardingTask');
 
     if (onboardingTask === 'character_card' && !character) {
@@ -430,9 +432,13 @@ export function MapPage() {
         return next;
       });
       addActivityCompletion(completion);
-      gainXp(getActivityCompletionGoldReward(act));
+      if (!wasAlreadyCompleted) {
+        gainXp(getActivityCompletionGoldReward(act));
+      }
       window.dispatchEvent(new CustomEvent('eduquest:guilds-updated'));
-      if (act.participationMode === 'guild') {
+      if (isBossSubmission) {
+        await fetchMapData({ preserveSelection: true, silent: true });
+      } else if (act.participationMode === 'guild') {
         await fetchMapData({ preserveSelection: true, silent: true });
       } else {
         setSelectedActivity(null);
@@ -635,6 +641,42 @@ export function MapPage() {
       { resources: normalizedResources },
       { metadata },
       'map.errors.updateResources'
+    );
+  };
+
+  const handleActivityAnswerFieldsChange = (
+    activity: Activity,
+    answerFields: BossActivityAnswerField[]
+  ) => {
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const metadata = { ...previousMetadata, answerFields };
+    void handleActivityCardFieldsChange(
+      activity,
+      'answerFields',
+      { answerFields },
+      { metadata },
+      'map.errors.updateAnswerFields'
+    );
+  };
+
+  const handleActivitySubmissionDeadlineChange = (
+    activity: Activity,
+    submissionDeadline?: string
+  ) => {
+    const previousMetadata = (activity.metadata || {}) as Record<string, unknown>;
+    const metadata = { ...previousMetadata };
+    if (submissionDeadline) {
+      metadata.submissionDeadline = submissionDeadline;
+    } else {
+      delete metadata.submissionDeadline;
+    }
+
+    void handleActivityCardFieldsChange(
+      activity,
+      'submissionDeadline',
+      { submissionDeadline: submissionDeadline || '' },
+      { metadata },
+      'map.errors.updateAnswerFields'
     );
   };
 
@@ -936,6 +978,10 @@ export function MapPage() {
     );
   }
 
+  const selectedActivityCompletion = selectedActivity
+    ? activityCompletions.find((completion) => completion.activityId === selectedActivity.id)
+    : undefined;
+
   return (
     <GameLayout fitToViewport hideDashboard={Boolean(!user?.isAdmin && !character)}>
       <GameHeader navigationMode={!user?.isAdmin && !character ? 'mapOnly' : 'full'} />
@@ -1048,6 +1094,7 @@ export function MapPage() {
                     : false
                 }
                 completionPendingLabel={t('activityCard.waitingGuild')}
+                bossSubmissionUpdatedAt={selectedActivityCompletion?.updatedAt}
                 onResolve={
                   !selectedActivity || user?.isAdmin || selectedActivity.isLocked
                     ? undefined
@@ -1106,6 +1153,17 @@ export function MapPage() {
                 onStepRangesChange={
                   user?.isAdmin && selectedActivity
                     ? (stepRanges) => handleActivityStepRangesChange(selectedActivity, stepRanges)
+                    : undefined
+                }
+                onAnswerFieldsChange={
+                  user?.isAdmin && selectedActivity
+                    ? (answerFields) => handleActivityAnswerFieldsChange(selectedActivity, answerFields)
+                    : undefined
+                }
+                onSubmissionDeadlineChange={
+                  user?.isAdmin && selectedActivity
+                    ? (submissionDeadline) =>
+                        handleActivitySubmissionDeadlineChange(selectedActivity, submissionDeadline)
                     : undefined
                 }
                 emptyCardLabel={user?.isAdmin ? t('map.addActivity') : undefined}
@@ -1254,6 +1312,7 @@ function toActivityCardData(
     stepRanges: activity.stepRanges || [{ startStep: Math.max(activity.requiredLevel - 1, 0) }],
     adjacentNodes,
     answerFields: getBossAnswerFields(activity, t),
+    submissionDeadline: getStringMetadata(metadata, 'submissionDeadline'),
   };
 }
 

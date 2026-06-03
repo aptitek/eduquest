@@ -246,6 +246,7 @@ export type ActivityMetadata = Record<string, unknown> & {
   resources?: Array<{ title?: string; url: string }>;
   rubricUrl?: string;
   answerFields?: BossActivityAnswerField[];
+  submissionDeadline?: string;
   boss?: {
     projectUrl?: string;
     gradingUrl?: string;

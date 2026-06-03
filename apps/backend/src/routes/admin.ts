@@ -66,15 +66,6 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
       return apiError(c, 'Cohort not found.', 404);
     }
 
-    const relocationPlan =
-      currentStep > existingCohort.currentStep
-        ? await planFogRelocations(db, existingCohort.id, existingCohort.currentStep, currentStep)
-        : { moves: [], forcedStudentIds: [], unmovedStudentIds: [] };
-
-    if (relocationPlan.moves.length > 0) {
-      await db.insert(gameCharacterMoves).values(relocationPlan.moves);
-    }
-
     const [updatedCohort] = await db
       .update(cohorts)
       .set({
@@ -84,13 +75,11 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
       .where(eq(cohorts.id, existingCohort.id))
       .returning();
 
+    const relocation = await applyFogRelocations(db, existingCohort.id, existingCohort.currentStep, currentStep);
+
     return c.json({
       success: true,
-      relocation: {
-        movedStudents: relocationPlan.moves.length,
-        forcedStudents: relocationPlan.forcedStudentIds.length,
-        unmovedStudents: relocationPlan.unmovedStudentIds.length,
-      },
+      relocation,
       cohort: {
         id: updatedCohort.id,
         schoolId: updatedCohort.schoolId,
@@ -112,6 +101,38 @@ adminRouter.patch('/cohorts/:cohortId/step', async (c) => {
     return apiError(c, 'Cohort step could not be updated.', 500);
   }
 });
+
+async function applyFogRelocations(db: Database, cohortId: string, fromStep: number, toStep: number) {
+  const emptyRelocation = {
+    movedStudents: 0,
+    forcedStudents: 0,
+    unmovedStudents: 0,
+    skipped: false,
+  };
+
+  if (toStep <= fromStep) return emptyRelocation;
+
+  try {
+    const relocationPlan = await planFogRelocations(db, cohortId, fromStep, toStep);
+
+    if (relocationPlan.moves.length > 0) {
+      await db.insert(gameCharacterMoves).values(relocationPlan.moves);
+    }
+
+    return {
+      movedStudents: relocationPlan.moves.length,
+      forcedStudents: relocationPlan.forcedStudentIds.length,
+      unmovedStudents: relocationPlan.unmovedStudentIds.length,
+      skipped: false,
+    };
+  } catch (error: any) {
+    console.error('Cohort step relocation SQL error:', error.message);
+    return {
+      ...emptyRelocation,
+      skipped: true,
+    };
+  }
+}
 
 adminRouter.get('/cohorts/:cohortId/step', async (c) => {
   const adminUser = requireAdminUser(c);

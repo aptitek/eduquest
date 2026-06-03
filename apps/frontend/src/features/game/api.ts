@@ -3,6 +3,7 @@ import type {
   ActivityParticipationMode,
   Game,
   ActivityStepRange,
+  BossActivityAnswerField,
   BossActivitySubmissionField,
   CohortProgressData,
   GameBonusVoteState,
@@ -39,6 +40,8 @@ export type ActivityCardFieldsPayload = {
   resources?: Array<{ title?: string; url: string }>;
   basePoints?: number;
   participationMode?: ActivityParticipationMode;
+  answerFields?: BossActivityAnswerField[];
+  submissionDeadline?: string;
   mapX?: number;
   mapY?: number;
 };
