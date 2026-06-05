@@ -373,7 +373,6 @@ export function AnnuairePage() {
           description: '',
           iconKey: 'Shield',
           recruitmentStatus: 'open',
-          maxMembers: DEFAULT_GUILD_MAX_MEMBERS,
         },
         selectedGameId
       );
