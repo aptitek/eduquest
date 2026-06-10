@@ -42,6 +42,7 @@ export interface ActivityCardData {
   mapX: number;
   mapY: number;
   stepRanges: ActivityStepRange[];
+  fixedStepRanges?: boolean;
   adjacentNodes: string[];
   answerFields?: BossActivityAnswerField[];
   submissionDeadline?: string;
@@ -835,18 +836,20 @@ function ActivityCardBack({
                     label={t('activityCard.afterStep')}
                     value={range.startStep}
                     min={0}
+                    disabled={activity.fixedStepRanges}
                     onChange={(value) => onStepRangeChange(index, 'startStep', value)}
                   />
                   <NumberField
                     label={t('activityCard.beforeStep')}
                     value={range.endStep ?? ''}
                     min={range.startStep + 1}
+                    disabled={activity.fixedStepRanges}
                     onChange={(value) => onStepRangeChange(index, 'endStep', value)}
                   />
                 </div>
               )}
-              onAdd={onStepRangeAdd}
-              onRemove={(_range, index) => onStepRangeRemove(index)}
+              onAdd={activity.fixedStepRanges ? undefined : onStepRangeAdd}
+              onRemove={activity.fixedStepRanges ? undefined : (_range, index) => onStepRangeRemove(index)}
               addLabel={t('activityCard.addWindow')}
               removeLabel={t('activityCard.removeWindow')}
               emptyState={t('activityCard.noStepWindows')}
@@ -1076,11 +1079,13 @@ function NumberField({
   label,
   value,
   min,
+  disabled = false,
   onChange,
 }: {
   label: string;
   value: number | '';
   min?: number;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -1090,8 +1095,9 @@ function NumberField({
         type="number"
         min={min}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 font-mono text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30"
+        className="h-11 w-full rounded-xl border border-gaming-border bg-gaming-base px-3 py-2 font-mono text-sm outline-none transition focus:border-status-quest focus:ring-2 focus:ring-status-quest/30 disabled:cursor-not-allowed disabled:opacity-60"
       />
     </label>
   );

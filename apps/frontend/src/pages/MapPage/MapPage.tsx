@@ -1282,6 +1282,7 @@ function toActivityCardData(
   canEdit = false
 ): ActivityCardData {
   const metadata = (activity.metadata || {}) as Record<string, unknown>;
+  const onboardingTask = getStringMetadata(metadata, 'onboardingTask');
   const activityById = new Map(activities.map((candidate) => [candidate.id, candidate]));
   const adjacentNodes = edges
     .filter((edge) => edge.fromActivityId === activity.id || edge.toActivityId === activity.id)
@@ -1309,7 +1310,10 @@ function toActivityCardData(
     selectedIcon: getStringMetadata(metadata, 'iconKey') || activity.type,
     mapX: activity.mapX,
     mapY: activity.mapY,
-    stepRanges: activity.stepRanges || [{ startStep: Math.max(activity.requiredLevel - 1, 0) }],
+    stepRanges: onboardingTask
+      ? [{ startStep: 0 }]
+      : activity.stepRanges || [{ startStep: Math.max(activity.requiredLevel - 1, 0) }],
+    fixedStepRanges: Boolean(onboardingTask),
     adjacentNodes,
     answerFields: getBossAnswerFields(activity, t),
     submissionDeadline: getStringMetadata(metadata, 'submissionDeadline'),

@@ -2019,6 +2019,10 @@ function getDefaultOnboardingIconKey(task: string | undefined) {
   return undefined;
 }
 
+function isOpenEndedStepZeroRange(stepRanges: ActivityStepRange[]) {
+  return stepRanges.length === 1 && stepRanges[0].startStep === 0 && stepRanges[0].endStep == null;
+}
+
 async function ensureOnboardingActivities(db: Database, cohortId: string, mapRunId: string) {
   const existingActivities = await db
     .select()
@@ -2125,7 +2129,9 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
   const guildRallyActivity =
     existingGuildRallyActivity ||
     createdActivities.find((activity) => getOnboardingTask(activity) === 'guild_rally');
-  if (profileActivity && characterActivity) {
+  const shouldCreateProfileToCharacterEdge =
+    profileActivity && characterActivity && (!existingProfileActivity || !existingCharacterActivity);
+  if (shouldCreateProfileToCharacterEdge) {
     const [existingEdge] = await db
       .select()
       .from(gameActivityEdges)
@@ -2147,7 +2153,9 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
       });
     }
   }
-  if (characterActivity && guildRallyActivity) {
+  const shouldCreateCharacterToGuildEdge =
+    characterActivity && guildRallyActivity && (!existingCharacterActivity || !existingGuildRallyActivity);
+  if (shouldCreateCharacterToGuildEdge) {
     const [existingEdge] = await db
       .select()
       .from(gameActivityEdges)
@@ -2190,13 +2198,16 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
     if (shouldUseDefaultIcon) {
       nextMetadata = { ...nextMetadata, iconKey: defaultIconKey };
     }
-    const primaryStep = getPrimaryStepFromRanges(
-      parseStepRanges(activity.stepRanges, activity.requiredLevel),
-      Math.max(activity.requiredLevel - 1, 0)
-    );
+    const stepRanges = task
+      ? [{ startStep: 0 }]
+      : parseStepRanges(activity.stepRanges, activity.requiredLevel);
+    const primaryStep = getPrimaryStepFromRanges(stepRanges, Math.max(activity.requiredLevel - 1, 0));
     const activityPatch: Partial<typeof gameActivities.$inferInsert> = {};
     if (nextMetadata.resources !== metadata.resources || nextMetadata.iconKey !== metadata.iconKey) {
       activityPatch.metadata = nextMetadata;
+    }
+    if (task && !isOpenEndedStepZeroRange(parseStepRanges(activity.stepRanges, activity.requiredLevel))) {
+      activityPatch.stepRanges = stepRanges;
     }
     if (activity.sectorDepth !== primaryStep) {
       activityPatch.sectorDepth = primaryStep;
@@ -2211,6 +2222,7 @@ async function ensureOnboardingActivities(db: Database, cohortId: string, mapRun
       .set(activityPatch)
       .where(eq(gameActivities.id, activity.id));
     if (activityPatch.metadata) activity.metadata = nextMetadata;
+    if (activityPatch.stepRanges) activity.stepRanges = stepRanges;
     if (activityPatch.sectorDepth !== undefined) activity.sectorDepth = activityPatch.sectorDepth;
     if (activityPatch.requiredLevel !== undefined) activity.requiredLevel = activityPatch.requiredLevel;
   }
@@ -2660,6 +2672,7 @@ mapRouter.patch('/map/activities/:activityId/step-ranges', async (c) => {
     const [activityRecord] = await db
       .select({
         requiredLevel: gameActivities.requiredLevel,
+        metadata: gameActivities.metadata,
       })
       .from(gameActivities)
       .where(and(eq(gameActivities.id, activityId), activityScope))
@@ -2669,14 +2682,15 @@ mapRouter.patch('/map/activities/:activityId/step-ranges', async (c) => {
       return apiError(c, 'Activity not found.', 404);
     }
 
+    const effectiveStepRanges = getOnboardingTask(activityRecord) ? [{ startStep: 0 }] : stepRanges;
     const primaryStep = getPrimaryStepFromRanges(
-      stepRanges,
+      effectiveStepRanges,
       Math.max(activityRecord.requiredLevel - 1, 0)
     );
     const [updatedActivity] = await db
       .update(gameActivities)
       .set({
-        stepRanges,
+        stepRanges: effectiveStepRanges,
         sectorDepth: primaryStep,
         requiredLevel: primaryStep + 1,
       })

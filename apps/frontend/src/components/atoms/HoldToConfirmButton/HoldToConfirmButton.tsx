@@ -49,14 +49,24 @@ export function HoldToConfirmButton({
 }: HoldToConfirmButtonProps) {
   const { t } = useTranslation();
   const controls = useAnimation();
+  const buttonControls = useAnimation();
+
   const [isSuccess, setIsSuccess] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+
   const isHeld = useRef(false);
   const isMounted = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const warningTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const holdStartTimeRef = useRef<number>(0);
+
   const holdHintId = useId();
   const isRound = shape === 'round';
-  const resolvedHoldHint = holdHint ?? t('common.holdToConfirm');
+  const resolvedHoldHint = showWarning
+    ? t('common.holdBrieflyWarning')
+    : holdHint ?? t('common.holdToConfirm');
+
   const describedBy = [ariaDescribedBy, holdHintId].filter(Boolean).join(' ') || undefined;
   const resolvedProgressTarget = Math.min(1, Math.max(0, progressTarget));
   const resolvedProgressValue = Math.min(1, Math.max(0, progressValue));
@@ -71,6 +81,7 @@ export function HoldToConfirmButton({
       isMounted.current = false;
       isHeld.current = false;
       clearTimeout(timeoutRef.current);
+      clearTimeout(warningTimeoutRef.current);
     };
   }, []);
 
@@ -82,8 +93,11 @@ export function HoldToConfirmButton({
   const startHold = () => {
     if (disabled || !isMounted.current) return;
     clearTimeout(timeoutRef.current);
+    setShowWarning(false);
+    clearTimeout(warningTimeoutRef.current);
 
     isHeld.current = true;
+    holdStartTimeRef.current = Date.now();
     setIsHolding(true);
     setIsSuccess(false);
 
@@ -124,9 +138,25 @@ export function HoldToConfirmButton({
   };
 
   const cancelHold = () => {
+    const elapsed = Date.now() - holdStartTimeRef.current;
     isHeld.current = false;
     setIsHolding(false);
     clearTimeout(timeoutRef.current);
+
+    if (elapsed > 10 && elapsed < 450 && !isSuccess) {
+      setShowWarning(true);
+      void buttonControls.start({
+        x: [-6, 6, -6, 6, -3, 3, 0],
+        transition: { duration: 0.4 }
+      });
+      clearTimeout(warningTimeoutRef.current);
+      warningTimeoutRef.current = setTimeout(() => {
+        if (isMounted.current) {
+          setShowWarning(false);
+        }
+      }, 2000);
+    }
+
     if (!isSuccess && isMounted.current) {
       void controls.start({
         ...idleProgressState,
@@ -135,22 +165,46 @@ export function HoldToConfirmButton({
     }
   };
 
+  const buttonClassName = cn(
+    'btn group/hold relative overflow-hidden transition-all hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/40',
+    isRound && 'btn-circle min-h-0 overflow-visible rounded-full p-0',
+    variant,
+    isHolding && 'scale-[1.03] shadow-lg ring-4 ring-current/25',
+    isSuccess && 'animate-pulse',
+    disabled && 'btn-disabled cursor-not-allowed opacity-60',
+    className
+  );
+
+  const backgroundCircleClassName = cn(
+    'opacity-70 transition-opacity',
+    !disabled && 'group-hover/hold:opacity-90 group-focus-visible/hold:opacity-90'
+  );
+
+  const innerBorderClassName = cn(
+    'pointer-events-none absolute inset-0 rounded-[inherit] border-2 border-current/60'
+  );
+
+  const hintClassName = cn(
+    'pointer-events-none absolute z-20 whitespace-nowrap rounded-full border px-2 py-0.5 font-display text-[0.55rem] font-black uppercase leading-none tracking-[0.16em] shadow-lg transition-all duration-300',
+    isRound ? 'left-1/2 top-full mt-1 -translate-x-1/2' : 'bottom-1 left-1/2 -translate-x-1/2',
+    showWarning
+      ? 'opacity-100 border-status-danger bg-status-danger text-white scale-110 shadow-status-danger/30'
+      : cn(
+          'border-current/25 bg-gaming-base/90 text-current opacity-0',
+          !disabled && 'group-hover/hold:opacity-100 group-focus-visible/hold:opacity-100',
+          isHolding && 'opacity-100'
+        )
+  );
+
   return (
-    <button
+    <motion.button
       type="button"
-      className={cn(
-        'btn group/hold relative overflow-hidden transition-all hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/40',
-        isRound && 'btn-circle min-h-0 overflow-visible rounded-full p-0',
-        variant,
-        isHolding && 'scale-[1.03] shadow-lg ring-4 ring-current/25',
-        isSuccess && 'animate-pulse',
-        disabled && 'btn-disabled cursor-not-allowed opacity-60',
-        className
-      )}
+      animate={buttonControls}
+      className={buttonClassName}
       disabled={disabled}
       title={title ?? resolvedHoldHint}
       aria-describedby={describedBy}
-      {...buttonProps}
+      {...(buttonProps as any)}
       onPointerDown={handlePointerDown}
       onPointerUp={cancelHold}
       onPointerLeave={cancelHold}
@@ -175,10 +229,9 @@ export function HoldToConfirmButton({
             r="46"
             fill="none"
             stroke="currentColor"
-            strokeDasharray="4 8"
             strokeLinecap="round"
             strokeWidth="6"
-            className={cn('opacity-40 transition-opacity', !disabled && 'group-hover/hold:opacity-65 group-focus-visible/hold:opacity-65')}
+            className={backgroundCircleClassName}
           />
           <motion.circle
             cx="50"
@@ -194,7 +247,7 @@ export function HoldToConfirmButton({
         </svg>
       ) : (
         <>
-          <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] border-2 border-current/25" />
+          <span aria-hidden className={innerBorderClassName} />
           <motion.div
             className="pointer-events-none absolute inset-0 origin-left bg-current opacity-20"
             initial={{ scaleX: 0, opacity: 0.2 }}
@@ -202,20 +255,12 @@ export function HoldToConfirmButton({
           />
         </>
       )}
-      <span
-        aria-hidden
-        className={cn(
-          'pointer-events-none absolute z-20 whitespace-nowrap rounded-full border border-current/25 bg-gaming-base/90 px-2 py-0.5 font-display text-[0.55rem] font-black uppercase leading-none tracking-[0.16em] text-current opacity-0 shadow-lg transition-opacity',
-          isRound ? 'left-1/2 top-full mt-1 -translate-x-1/2' : 'bottom-1 left-1/2 -translate-x-1/2',
-          !disabled && 'group-hover/hold:opacity-100 group-focus-visible/hold:opacity-100',
-          isHolding && 'opacity-100'
-        )}
-      >
+      <span aria-hidden className={hintClassName}>
         {resolvedHoldHint}
       </span>
       <span className="relative z-10 flex items-center justify-center gap-2 pointer-events-none">
         {children}
       </span>
-    </button>
+    </motion.button>
   );
 }

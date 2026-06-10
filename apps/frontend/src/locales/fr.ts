@@ -26,6 +26,7 @@ export const fr = {
     close: 'Fermer',
     cancel: 'Annuler',
     holdToConfirm: 'Maintenir',
+    holdBrieflyWarning: 'Laissez appuyé !',
   },
   errors: {
     notificationTitle: 'Erreur',

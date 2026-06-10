@@ -28,6 +28,7 @@ export const en: TranslationKeys = {
     close: 'Close',
     cancel: 'Cancel',
     holdToConfirm: 'Hold',
+    holdBrieflyWarning: 'Keep holding!',
   },
   errors: {
     notificationTitle: 'Error',
