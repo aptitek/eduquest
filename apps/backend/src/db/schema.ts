@@ -215,11 +215,14 @@ export const cohortMemberships = dbTable(
       .notNull()
       .references(() => cohorts.id, { onDelete: 'cascade' }),
     guildId: uuid('guild_id').references(() => guilds.id, { onDelete: 'set null' }),
-    institutionalEmail: text('institutional_email').unique(),
+    institutionalEmail: text('institutional_email'),
     createdAt: timestamp('created_at', { withTimezone: true }).default(sql`(unixepoch() * 1000)`),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.cohortId] }),
+    cohortInstitutionalEmailIdx: uniqueIndex(
+      'cohort_memberships_cohort_institutional_email_unique'
+    ).on(table.cohortId, table.institutionalEmail),
   })
 );
 

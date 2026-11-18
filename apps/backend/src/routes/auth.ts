@@ -512,6 +512,225 @@ async function resolveCohortInvite(
   }
 }
 
+type InstitutionalEmailNormalizationResult =
+  | { ok: true; value: string | null }
+  | { ok: false; domain?: string };
+
+export function normalizeInstitutionalEmailInput(
+  rawEmail: string,
+  schoolEmailDomain?: string | null
+): InstitutionalEmailNormalizationResult {
+  const trimmed = rawEmail.trim();
+  if (!trimmed) {
+    return { ok: true, value: null };
+  }
+
+  const domain = schoolEmailDomain?.trim().toLowerCase();
+  if (domain) {
+    const suffix = `@${domain}`;
+    let normalized = trimmed;
+    while (normalized.toLowerCase().endsWith(`${suffix}${suffix}`)) {
+      normalized = normalized.slice(0, -suffix.length).trim();
+    }
+
+    if (!normalized.toLowerCase().endsWith(suffix)) {
+      return { ok: false, domain };
+    }
+
+    const localPart = normalized.slice(0, -suffix.length).trim();
+    if (!localPart || localPart.includes('@') || /\s/.test(localPart)) {
+      return { ok: false, domain };
+    }
+
+    return { ok: true, value: `${localPart}${suffix}` };
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { ok: false };
+  }
+
+  return { ok: true, value: trimmed };
+}
+
+async function isPrimaryEmailOwnedByAnotherUser(
+  db: ReturnType<typeof getDb>,
+  email: string,
+  userId: string
+) {
+  const [conflict] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(sql`lower(${users.email}) = ${email.toLowerCase()}`, sql`${users.id} <> ${userId}`))
+    .limit(1);
+
+  return Boolean(conflict);
+}
+
+async function isInstitutionalEmailOwnedByAnotherUser(
+  db: ReturnType<typeof getDb>,
+  institutionalEmail: string,
+  userId: string
+) {
+  const [conflict] = await db
+    .select({ userId: cohortMemberships.userId })
+    .from(cohortMemberships)
+    .where(
+      and(
+        sql`lower(${cohortMemberships.institutionalEmail}) = ${institutionalEmail.toLowerCase()}`,
+        sql`${cohortMemberships.userId} <> ${userId}`
+      )
+    )
+    .limit(1);
+
+  return Boolean(conflict);
+}
+
+async function findExistingSchoolInstitutionalEmail(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  schoolId?: string | null
+) {
+  if (!schoolId) return null;
+
+  const [existing] = await db
+    .select({ institutionalEmail: cohortMemberships.institutionalEmail })
+    .from(cohortMemberships)
+    .innerJoin(cohorts, eq(cohorts.id, cohortMemberships.cohortId))
+    .where(
+      and(
+        eq(cohortMemberships.userId, userId),
+        eq(cohorts.schoolId, schoolId),
+        sql`${cohortMemberships.institutionalEmail} IS NOT NULL AND trim(${cohortMemberships.institutionalEmail}) <> ''`
+      )
+    )
+    .orderBy(desc(cohortMemberships.createdAt))
+    .limit(1);
+
+  return existing?.institutionalEmail || null;
+}
+
+async function syncUserInstitutionalEmailForSchool(
+  db: ReturnType<typeof getDb>,
+  params: {
+    userId: string;
+    targetCohortId: string;
+    schoolId?: string | null;
+    institutionalEmail: string | null;
+  }
+) {
+  const { userId, targetCohortId, schoolId, institutionalEmail } = params;
+
+  if (schoolId) {
+    const schoolCohorts = await db
+      .select({ id: cohorts.id })
+      .from(cohorts)
+      .where(eq(cohorts.schoolId, schoolId));
+    const schoolCohortIds = schoolCohorts.map((cohort) => cohort.id);
+
+    if (schoolCohortIds.length > 0) {
+      await db
+        .update(cohortMemberships)
+        .set({ institutionalEmail })
+        .where(
+          and(
+            eq(cohortMemberships.userId, userId),
+            inArray(cohortMemberships.cohortId, schoolCohortIds)
+          )
+        );
+      return;
+    }
+  }
+
+  await db
+    .update(cohortMemberships)
+    .set({ institutionalEmail })
+    .where(
+      and(
+        eq(cohortMemberships.userId, userId),
+        eq(cohortMemberships.cohortId, targetCohortId)
+      )
+    );
+}
+
+async function loadStudentCohortMemberships(
+  db: ReturnType<typeof getDb>,
+  userId: string
+): Promise<CohortMembership[]> {
+  const memberships = await db
+    .select()
+    .from(cohortMemberships)
+    .where(eq(cohortMemberships.userId, userId))
+    .orderBy(desc(cohortMemberships.createdAt));
+
+  if (memberships.length === 0) return [];
+
+  const cohortIds = Array.from(new Set(memberships.map((m) => m.cohortId)));
+  const guildIds = Array.from(
+    new Set(memberships.map((m) => m.guildId).filter((id): id is string => Boolean(id)))
+  );
+
+  const [loadedCohorts, loadedGuilds] = await Promise.all([
+    db.select().from(cohorts).where(inArray(cohorts.id, cohortIds)),
+    guildIds.length > 0 ? db.select().from(guilds).where(inArray(guilds.id, guildIds)) : Promise.resolve([]),
+  ]);
+
+  const schoolIds = Array.from(
+    new Set(loadedCohorts.map((c) => c.schoolId).filter((id): id is string => Boolean(id)))
+  );
+  const loadedSchools =
+    schoolIds.length > 0
+      ? await db.select().from(schools).where(inArray(schools.id, schoolIds))
+      : [];
+
+  const schoolById = new Map(
+    loadedSchools.map((school) => [
+      school.id,
+      {
+        id: school.id,
+        name: school.name,
+        logoUrl: school.logoUrl || undefined,
+        emailDomain: school.emailDomain || undefined,
+      },
+    ])
+  );
+  const cohortById = new Map(loadedCohorts.map((cohort) => [cohort.id, cohort]));
+  const guildById = new Map(loadedGuilds.map((guild) => [guild.id, guild]));
+
+  const membershipItems: CohortMembership[] = [];
+  for (const membership of memberships) {
+    const cohortRecord = cohortById.get(membership.cohortId);
+    if (!cohortRecord) continue;
+
+    const cohortSchoolObj = schoolById.get(cohortRecord.schoolId);
+    const cohortObj: Cohort = {
+      id: cohortRecord.id,
+      schoolId: cohortRecord.schoolId,
+      school: cohortSchoolObj,
+      campusId: cohortRecord.campusId || undefined,
+      startYear: cohortRecord.startYear,
+      grade: cohortRecord.grade as CohortGrade,
+      level: cohortRecord.level,
+      name: cohortRecord.name,
+      majorSpeciality: cohortRecord.majorSpeciality || undefined,
+      minorSpeciality: cohortRecord.minorSpeciality || undefined,
+      description: cohortRecord.description || undefined,
+    };
+    const loadedGuild = membership.guildId ? guildById.get(membership.guildId) : undefined;
+
+    membershipItems.push({
+      userId: membership.userId,
+      cohortId: membership.cohortId,
+      guildId: membership.guildId || undefined,
+      guild: loadedGuild ? toGuild(loadedGuild, cohortObj) : undefined,
+      institutionalEmail: membership.institutionalEmail || undefined,
+      createdAt: toIsoString(membership.createdAt),
+      cohort: cohortObj,
+    });
+  }
+
+  return membershipItems;
+}
+
 async function assignStudentToRegistrationCohort(
   databaseUrl: D1Database | undefined,
   invite: CohortInvitePayload | null,
@@ -567,9 +786,15 @@ async function assignStudentToRegistrationCohort(
     .limit(1);
 
   if (existingMembership.length === 0) {
+    const inheritedInstitutionalEmail = await findExistingSchoolInstitutionalEmail(
+      db,
+      userId,
+      cohortRecord.schoolId
+    );
     await db.insert(cohortMemberships).values({
       userId,
       cohortId: targetCohortId,
+      ...(inheritedInstitutionalEmail ? { institutionalEmail: inheritedInstitutionalEmail } : {}),
     });
   }
 }
@@ -1669,7 +1894,22 @@ authRouter.put('/management/students/:studentId', async (c) => {
     if (body.user.displayName !== undefined) userUpdate.displayName = body.user.displayName;
     if (body.user.firstName !== undefined) userUpdate.firstName = body.user.firstName;
     if (body.user.lastName !== undefined) userUpdate.lastName = body.user.lastName;
-    if (body.user.email !== undefined) userUpdate.email = body.user.email;
+    if (body.user.email !== undefined) {
+      const nextEmail = body.user.email.trim();
+      if (!nextEmail) {
+        return apiError(c, 'Email is required.', 400, {
+          errorCode: 'validation_failed',
+          errorKey: 'profile.errors.emailRequired',
+        });
+      }
+      if (await isPrimaryEmailOwnedByAnotherUser(db, nextEmail, studentRecord.userId)) {
+        return apiError(c, 'Email is already linked to another account.', 409, {
+          errorCode: 'conflict',
+          errorKey: 'profile.errors.emailAlreadyUsed',
+        });
+      }
+      userUpdate.email = nextEmail;
+    }
     if (body.user.avatarUrl !== undefined) userUpdate.avatarUrl = body.user.avatarUrl;
     if (body.user.birthDate !== undefined) userUpdate.birthDate = body.user.birthDate || null;
     if (body.user.bio !== undefined) userUpdate.bio = body.user.bio;
@@ -1795,19 +2035,34 @@ authRouter.put('/management/students/:studentId', async (c) => {
       (cohortId) => !nextCohortIds.includes(cohortId)
     );
 
-    if (nextCohortIds.length > 0) {
-      const validCohorts = await db
-        .select()
+    const validCohorts =
+      nextCohortIds.length > 0
+        ? await db.select().from(cohorts).where(inArray(cohorts.id, nextCohortIds))
+        : [];
+    if (validCohorts.length !== nextCohortIds.length) {
+      return c.json(
+        {
+          success: false,
+          error: 'One or more cohorts do not exist',
+        },
+        400
+      );
+    }
+
+    const existingSchoolEmailBySchoolId = new Map<string, string>();
+    if (addedCohortIds.length > 0 && existingCohortIds.length > 0) {
+      const existingCohorts = await db
+        .select({ id: cohorts.id, schoolId: cohorts.schoolId })
         .from(cohorts)
-        .where(inArray(cohorts.id, nextCohortIds));
-      if (validCohorts.length !== nextCohortIds.length) {
-        return c.json(
-          {
-            success: false,
-            error: 'One or more cohorts do not exist',
-          },
-          400
-        );
+        .where(inArray(cohorts.id, existingCohortIds));
+      const schoolIdByCohortId = new Map(existingCohorts.map((cohort) => [cohort.id, cohort.schoolId]));
+
+      for (const membership of currentMemberships) {
+        const schoolId = schoolIdByCohortId.get(membership.cohortId);
+        const email = membership.institutionalEmail?.trim();
+        if (schoolId && email && !existingSchoolEmailBySchoolId.has(schoolId)) {
+          existingSchoolEmailBySchoolId.set(schoolId, email);
+        }
       }
     }
 
@@ -1823,11 +2078,17 @@ authRouter.put('/management/students/:studentId', async (c) => {
     }
 
     if (addedCohortIds.length > 0) {
+      const validCohortById = new Map(validCohorts.map((cohort) => [cohort.id, cohort]));
       await db.insert(cohortMemberships).values(
-        addedCohortIds.map((cohortId) => ({
-          userId: studentRecord.userId,
-          cohortId,
-        }))
+        addedCohortIds.map((cohortId) => {
+          const schoolId = validCohortById.get(cohortId)?.schoolId;
+          const inheritedEmail = schoolId ? existingSchoolEmailBySchoolId.get(schoolId) : undefined;
+          return {
+            userId: studentRecord.userId,
+            cohortId,
+            ...(inheritedEmail ? { institutionalEmail: inheritedEmail } : {}),
+          };
+        })
       );
     }
 
@@ -1851,31 +2112,39 @@ authRouter.put('/management/students/:studentId', async (c) => {
         ? await db.select().from(schools).where(eq(schools.id, targetCohort.schoolId)).limit(1)
         : [];
 
-      if (body.institutionalEmail && targetSchool?.emailDomain) {
-        const domain = targetSchool.emailDomain.toLowerCase();
-        if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
-          return c.json(
-            {
-              success: false,
-              error: `Institutional email must end with @${domain}`,
-              errorKey: 'profile.errors.institutionalEmailDomain',
-            },
-            400
-          );
-        }
+      const normalizedResult = normalizeInstitutionalEmailInput(
+        body.institutionalEmail,
+        targetSchool?.emailDomain
+      );
+      if (!normalizedResult.ok) {
+        return c.json(
+          {
+            success: false,
+            error: normalizedResult.domain
+              ? `Institutional email must be a valid address ending with @${normalizedResult.domain}`
+              : 'Institutional email is invalid.',
+            errorKey: 'profile.errors.institutionalEmailDomain',
+          },
+          400
+        );
       }
 
-      await db
-        .update(cohortMemberships)
-        .set({
-          institutionalEmail: body.institutionalEmail || null,
-        })
-        .where(
-          and(
-            eq(cohortMemberships.userId, studentRecord.userId),
-            eq(cohortMemberships.cohortId, targetCohortId)
-          )
-        );
+      if (
+        normalizedResult.value &&
+        (await isInstitutionalEmailOwnedByAnotherUser(db, normalizedResult.value, studentRecord.userId))
+      ) {
+        return apiError(c, 'Institutional email is already linked to another student.', 409, {
+          errorCode: 'conflict',
+          errorKey: 'profile.errors.institutionalEmailAlreadyUsed',
+        });
+      }
+
+      await syncUserInstitutionalEmailForSchool(db, {
+        userId: studentRecord.userId,
+        targetCohortId,
+        schoolId: targetCohort?.schoolId,
+        institutionalEmail: normalizedResult.value,
+      });
     }
   }
 
@@ -2372,86 +2641,9 @@ authRouter.get('/me', authMiddleware, async (c) => {
 
       if (loadedStudents.length > 0) {
         const studentRecord = loadedStudents[0];
+        const membershipItems = await loadStudentCohortMemberships(db, studentRecord.userId);
 
-        const latestMemberships = await db
-          .select()
-          .from(cohortMemberships)
-          .where(eq(cohortMemberships.userId, studentRecord.userId))
-          .orderBy(desc(cohortMemberships.createdAt));
-
-        const membershipItems: CohortMembership[] = [];
-        for (const membership of latestMemberships) {
-          const loadedCohorts = await db
-            .select()
-            .from(cohorts)
-            .where(eq(cohorts.id, membership.cohortId))
-            .limit(1);
-          const [loadedGuild] = membership.guildId
-            ? await db.select().from(guilds).where(eq(guilds.id, membership.guildId)).limit(1)
-            : [];
-
-          if (loadedCohorts.length > 0) {
-            const cohortRecord = loadedCohorts[0];
-            let cohortSchoolObj: any = undefined;
-            if (cohortRecord.schoolId) {
-              const loadedCohortSchools = await db
-                .select()
-                .from(schools)
-                .where(eq(schools.id, cohortRecord.schoolId))
-                .limit(1);
-              if (loadedCohortSchools.length > 0) {
-                cohortSchoolObj = {
-                  id: loadedCohortSchools[0].id,
-                  name: loadedCohortSchools[0].name,
-                  logoUrl: loadedCohortSchools[0].logoUrl || undefined,
-                  emailDomain: loadedCohortSchools[0].emailDomain || undefined,
-                };
-              }
-            }
-
-            membershipItems.push({
-              userId: membership.userId,
-              cohortId: membership.cohortId,
-              guildId: membership.guildId || undefined,
-              guild: loadedGuild
-                ? toGuild(loadedGuild, {
-                    id: cohortRecord.id,
-                    schoolId: cohortRecord.schoolId,
-                    school: cohortSchoolObj,
-                    campusId: cohortRecord.campusId || undefined,
-                    startYear: cohortRecord.startYear,
-                    grade: cohortRecord.grade as CohortGrade,
-                    level: cohortRecord.level,
-                    name: cohortRecord.name,
-                    majorSpeciality: cohortRecord.majorSpeciality || undefined,
-                    minorSpeciality: cohortRecord.minorSpeciality || undefined,
-                    description: cohortRecord.description || undefined,
-                  })
-                : undefined,
-              institutionalEmail: membership.institutionalEmail || undefined,
-              createdAt: membership.createdAt?.toISOString?.() || undefined,
-              cohort: {
-                id: cohortRecord.id,
-                schoolId: cohortRecord.schoolId,
-                school: cohortSchoolObj,
-                campusId: cohortRecord.campusId || undefined,
-                startYear: cohortRecord.startYear,
-                grade: cohortRecord.grade as CohortGrade,
-                level: cohortRecord.level,
-                name: cohortRecord.name,
-                majorSpeciality: cohortRecord.majorSpeciality || undefined,
-                minorSpeciality: cohortRecord.minorSpeciality || undefined,
-                description: cohortRecord.description || undefined,
-              },
-            });
-          }
-        }
-
-        studentObj = {
-          id: studentRecord.id,
-          userId: studentRecord.userId,
-          cohortMemberships: membershipItems,
-        };
+        studentObj = toStudent(studentRecord, membershipItems);
         loadedDbProfile = true;
 
         const loadedCharacters = await db
@@ -2515,6 +2707,7 @@ authRouter.put('/profile', authMiddleware, async (c) => {
     email?: string;
     avatarUrl?: string;
     institutionalEmail?: string;
+    institutionalEmailCohortId?: string;
     institutionalSchoolId?: string;
     birthDate?: string | null;
     bio?: string;
@@ -2595,7 +2788,22 @@ authRouter.put('/profile', authMiddleware, async (c) => {
       if (body.displayName !== undefined) userUpdate.displayName = body.displayName;
       if (body.firstName !== undefined) userUpdate.firstName = body.firstName;
       if (body.lastName !== undefined) userUpdate.lastName = body.lastName;
-      if (body.email !== undefined) userUpdate.email = body.email;
+      if (body.email !== undefined) {
+        const nextEmail = body.email.trim();
+        if (!nextEmail) {
+          return apiError(c, 'Email is required.', 400, {
+            errorCode: 'validation_failed',
+            errorKey: 'profile.errors.emailRequired',
+          });
+        }
+        if (await isPrimaryEmailOwnedByAnotherUser(db, nextEmail, userPayload.id)) {
+          return apiError(c, 'Email is already linked to another account.', 409, {
+            errorCode: 'conflict',
+            errorKey: 'profile.errors.emailAlreadyUsed',
+          });
+        }
+        userUpdate.email = nextEmail;
+      }
       if (body.avatarUrl !== undefined) userUpdate.avatarUrl = body.avatarUrl;
       if (body.birthDate !== undefined) userUpdate.birthDate = body.birthDate === null ? null : body.birthDate;
       if (body.bio !== undefined) userUpdate.bio = body.bio;
@@ -2610,6 +2818,89 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         userUpdate.preferredLocale = body.preferredLocale;
       }
 
+      const existingUserRecords = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userPayload.id))
+        .limit(1);
+      const existingUserRecord = existingUserRecords[0];
+      if (!existingUserRecord) {
+        return apiError(c, 'User profile not found.', 404);
+      }
+
+      let studentRecord: StudentRecord | undefined;
+      let targetMembership: CohortMembershipRecord | undefined;
+      let targetCohort: CohortRecord | undefined;
+      let normalizedInstitutionalEmail: string | null | undefined = undefined;
+
+      if (!existingUserRecord.isAdmin) {
+        const existingStudents = await db
+          .select()
+          .from(students)
+          .where(eq(students.userId, userPayload.id))
+          .limit(1);
+
+        studentRecord = existingStudents[0];
+        if (!studentRecord) {
+          return apiError(c, 'Student profile not found.', 404);
+        }
+
+        const userMemberships = await db
+          .select()
+          .from(cohortMemberships)
+          .where(eq(cohortMemberships.userId, userPayload.id))
+          .orderBy(desc(cohortMemberships.createdAt));
+
+        targetMembership = body.institutionalEmailCohortId
+          ? userMemberships.find((m) => m.cohortId === body.institutionalEmailCohortId) || userMemberships[0]
+          : userMemberships[0];
+
+        if (targetMembership) {
+          const [loadedCohort] = await db
+            .select()
+            .from(cohorts)
+            .where(eq(cohorts.id, targetMembership.cohortId))
+            .limit(1);
+          targetCohort = loadedCohort;
+        }
+
+        if (body.institutionalEmail !== undefined && targetMembership) {
+          const targetSchoolId = targetCohort?.schoolId || body.institutionalSchoolId;
+          const [targetSchool] = targetSchoolId
+            ? await db.select().from(schools).where(eq(schools.id, targetSchoolId)).limit(1)
+            : [];
+
+          const normalizedResult = normalizeInstitutionalEmailInput(
+            body.institutionalEmail,
+            targetSchool?.emailDomain
+          );
+          if (!normalizedResult.ok) {
+            return c.json(
+              {
+                success: false,
+                error: normalizedResult.domain
+                  ? `Institutional email must be a valid address ending with @${normalizedResult.domain}`
+                  : 'Institutional email is invalid.',
+                errorKey: 'profile.errors.institutionalEmailDomain',
+              },
+              400
+            );
+          }
+
+          if (
+            normalizedResult.value &&
+            (await isInstitutionalEmailOwnedByAnotherUser(db, normalizedResult.value, userPayload.id))
+          ) {
+            return apiError(c, 'Institutional email is already linked to another student.', 409, {
+              errorCode: 'conflict',
+              errorKey: 'profile.errors.institutionalEmailAlreadyUsed',
+            });
+          }
+
+          normalizedInstitutionalEmail = normalizedResult.value;
+        }
+      }
+
       const [updatedUser] = await db
         .update(users)
         .set(userUpdate)
@@ -2622,91 +2913,20 @@ authRouter.put('/profile', authMiddleware, async (c) => {
         return apiError(c, 'User profile not found.', 404);
       }
 
-      if (userObj.isAdmin) {
+      if (userObj.isAdmin || !studentRecord) {
         studentObj = null;
         characterObj = null;
       } else {
-
-        // 2. Mise à jour de la table `students`
-        const existingStudents = await db
-          .select()
-          .from(students)
-          .where(eq(students.userId, userPayload.id))
-          .limit(1);
-
-        const studentRecord = existingStudents[0];
-        if (!studentRecord) {
-          return apiError(c, 'Student profile not found.', 404);
-        }
         const studentId = studentRecord.id;
+        const latestMembership = targetMembership;
 
-        const latestMemberships = await db
-          .select()
-          .from(cohortMemberships)
-          .where(eq(cohortMemberships.userId, userPayload.id))
-          .orderBy(desc(cohortMemberships.createdAt))
-          .limit(1);
-
-        const latestMembership = latestMemberships[0];
-        let latestCohort: any = undefined;
-        let latestCohortSchool: any = undefined;
-        let latestGuild: GuildRecord | undefined = undefined;
-        if (latestMembership) {
-          const loadedCohorts = await db
-            .select()
-            .from(cohorts)
-            .where(eq(cohorts.id, latestMembership.cohortId))
-            .limit(1);
-          latestCohort = loadedCohorts[0];
-
-          if (latestCohort?.schoolId) {
-            const loadedSchools = await db
-              .select()
-              .from(schools)
-              .where(eq(schools.id, latestCohort.schoolId))
-              .limit(1);
-            latestCohortSchool = loadedSchools[0];
-          }
-
-          if (latestMembership.guildId) {
-            const loadedGuilds = await db
-              .select()
-              .from(guilds)
-              .where(eq(guilds.id, latestMembership.guildId))
-              .limit(1);
-            latestGuild = loadedGuilds[0];
-          }
-        }
-
-        if (body.institutionalEmail && latestCohortSchool?.emailDomain) {
-          const domain = latestCohortSchool.emailDomain.toLowerCase();
-          if (!body.institutionalEmail.toLowerCase().endsWith('@' + domain)) {
-            return c.json(
-              {
-                success: false,
-                error: `Institutional email must end with @${domain}`,
-                errorKey: 'profile.errors.institutionalEmailDomain',
-              },
-              400
-            );
-          }
-        }
-
-        let updatedMembership = latestMembership;
-        if (body.institutionalEmail !== undefined && latestMembership) {
-          const [savedMembership] = await db
-            .update(cohortMemberships)
-            .set({
-              institutionalEmail: body.institutionalEmail,
-            })
-            .where(
-              and(
-                eq(cohortMemberships.userId, userPayload.id),
-                eq(cohortMemberships.cohortId, latestMembership.cohortId)
-              )
-            )
-            .returning();
-          updatedMembership = savedMembership || latestMembership;
+        if (normalizedInstitutionalEmail !== undefined && targetMembership) {
+          await syncUserInstitutionalEmailForSchool(db, {
+            userId: userPayload.id,
+            targetCohortId: targetMembership.cohortId,
+            schoolId: targetCohort?.schoolId || body.institutionalSchoolId,
+            institutionalEmail: normalizedInstitutionalEmail,
+          });
         }
 
         const [updatedStudent] = await db
@@ -2718,61 +2938,8 @@ authRouter.put('/profile', authMiddleware, async (c) => {
           .returning();
 
         if (updatedStudent) {
-          const latestSchoolObj = latestCohortSchool
-            ? {
-                id: latestCohortSchool.id,
-                name: latestCohortSchool.name,
-                logoUrl: latestCohortSchool.logoUrl || undefined,
-                emailDomain: latestCohortSchool.emailDomain || undefined,
-              }
-            : undefined;
-
-          const cohortMemberships =
-            updatedMembership && latestCohort
-              ? [
-                  {
-                    userId: updatedMembership.userId,
-                    cohortId: updatedMembership.cohortId,
-                    guildId: updatedMembership.guildId || undefined,
-                    guild: latestGuild
-                      ? toGuild(latestGuild, {
-                          id: latestCohort.id,
-                          schoolId: latestCohort.schoolId,
-                          school: latestSchoolObj,
-                          campusId: latestCohort.campusId || undefined,
-                          startYear: latestCohort.startYear,
-                          grade: latestCohort.grade,
-                          level: latestCohort.level,
-                          name: latestCohort.name,
-                          majorSpeciality: latestCohort.majorSpeciality || undefined,
-                          minorSpeciality: latestCohort.minorSpeciality || undefined,
-                          description: latestCohort.description || undefined,
-                        })
-                      : undefined,
-                    institutionalEmail: updatedMembership.institutionalEmail || undefined,
-                    createdAt: updatedMembership.createdAt?.toISOString?.() || undefined,
-                    cohort: {
-                      id: latestCohort.id,
-                      schoolId: latestCohort.schoolId,
-                      school: latestSchoolObj,
-                      campusId: latestCohort.campusId || undefined,
-                      startYear: latestCohort.startYear,
-                      grade: latestCohort.grade,
-                      level: latestCohort.level,
-                      name: latestCohort.name,
-                      majorSpeciality: latestCohort.majorSpeciality || undefined,
-                      minorSpeciality: latestCohort.minorSpeciality || undefined,
-                      description: latestCohort.description || undefined,
-                    },
-                  },
-                ]
-              : [];
-
-          studentObj = {
-            id: updatedStudent.id,
-            userId: updatedStudent.userId,
-            cohortMemberships,
-          } as any;
+          const membershipItems = await loadStudentCohortMemberships(db, userPayload.id);
+          studentObj = toStudent(updatedStudent, membershipItems);
         }
 
         if (

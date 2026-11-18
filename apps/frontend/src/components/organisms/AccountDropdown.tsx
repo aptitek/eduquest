@@ -27,6 +27,7 @@ type ProfileResponse = {
 
 type ProfileUpdate = Partial<User> & {
   institutionalEmail?: string;
+  institutionalEmailCohortId?: string;
   institutionalSchoolId?: string;
 };
 
@@ -62,6 +63,14 @@ export function AccountDropdown() {
   const latestCohortMembership = getLatestCohortMembership(student?.cohortMemberships);
   const latestCohort = user?.isAdmin ? undefined : latestCohortMembership?.cohort;
   const latestSchool = latestCohort?.school;
+  const resolvedSchoolInstitutionalEmail =
+    latestCohortMembership?.institutionalEmail ||
+    (latestSchool?.id
+      ? student?.cohortMemberships?.find(
+          (membership) =>
+            membership.cohort?.schoolId === latestSchool.id && Boolean(membership.institutionalEmail)
+        )?.institutionalEmail
+      : undefined);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -81,7 +90,7 @@ export function AccountDropdown() {
 
   useEffect(() => {
     setInstitutionalEmailOverride(null);
-  }, [latestCohortMembership?.institutionalEmail]);
+  }, [resolvedSchoolInstitutionalEmail]);
 
   useEffect(() => {
     const openProfileDropdown = () => setIsOpen(true);
@@ -108,12 +117,12 @@ export function AccountDropdown() {
         ? 'btn-primary text-primary-content shadow-sm'
         : 'btn-ghost bg-gaming-base/40 text-text-muted hover:text-text-secondary'
     );
-  const showErrorToast = (messageKey: string, fallback?: string) => {
-    reportError(fallback || messageKey, {
+  const showErrorToast = (messageKey: string, rawError?: string, includeDetail = false) => {
+    reportError(rawError || messageKey, {
       messageKey,
-      fallback,
+      fallback: t(messageKey),
       id: messageKey,
-      includeDetail: Boolean(fallback),
+      includeDetail,
     });
   };
 
@@ -149,7 +158,7 @@ export function AccountDropdown() {
       if (!response.ok || !json.success) {
         const messageKey = json.errorKey || 'profile.errors.updateFailed';
         patchUser(snapshot);
-        showErrorToast(messageKey, json.error || t('profile.errors.updateFailed'));
+        showErrorToast(messageKey, json.error, !json.errorKey && Boolean(json.error));
         if (shouldThrow) throw new Error(messageKey);
         return;
       }
@@ -211,7 +220,14 @@ export function AccountDropdown() {
     const snapshot = institutionalEmailOverride;
     setInstitutionalEmailOverride(institutionalEmail);
     try {
-      await updateProfile({ institutionalEmail, institutionalSchoolId: latestSchool?.id }, true);
+      await updateProfile(
+        {
+          institutionalEmail,
+          institutionalEmailCohortId: latestCohortMembership?.cohortId,
+          institutionalSchoolId: latestSchool?.id,
+        },
+        true
+      );
     } catch {
       setInstitutionalEmailOverride(snapshot);
     }
@@ -260,8 +276,7 @@ export function AccountDropdown() {
                 onUpdateProfile={handleUpdateProfile}
                 onUploadAvatar={handleUploadAvatar}
                 institutionalEmail={
-                  institutionalEmailOverride ??
-                  latestCohortMembership?.institutionalEmail
+                  institutionalEmailOverride ?? resolvedSchoolInstitutionalEmail
                 }
                 institutionalEmailDomain={latestSchool?.emailDomain}
                 onInstitutionalEmailChange={latestSchool ? handleInstitutionalEmailChange : undefined}

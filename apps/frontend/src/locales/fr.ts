@@ -796,8 +796,12 @@ export const fr = {
       network: 'Le service de profil est injoignable. Vérifiez votre connexion puis réessayez.',
       unauthorized: 'Votre session a expiré. Veuillez vous reconnecter.',
       invalidPayload: "La mise à jour du profil n'a pas pu être lue par le serveur.",
+      emailRequired: 'Une adresse e-mail est requise.',
+      emailAlreadyUsed: 'Cette adresse e-mail est déjà associée à un autre compte.',
       institutionalEmailDomain:
         "Votre e-mail institutionnel ne correspond pas au domaine requis par l'établissement.",
+      institutionalEmailAlreadyUsed:
+        'Cet e-mail institutionnel est déjà associé à un autre compte étudiant.',
       avatarInvalidFormat: 'Format d’avatar invalide. Utilisez PNG, JPG, JPEG, WebP ou GIF.',
       avatarTooLargeAfterCompression: "L’avatar n'a pas pu être compressé sous 2 Mo.",
       avatarProcessingFailed: "L’avatar n'a pas pu être enregistré. L’avatar précédent a été restauré. Détail : {detail}",

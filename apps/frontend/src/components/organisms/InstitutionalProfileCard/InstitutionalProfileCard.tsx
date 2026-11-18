@@ -59,6 +59,30 @@ const variantClassNameMap: Record<InstitutionalProfileCardVariant, string | unde
   management: 'max-w-none border-0 bg-transparent shadow-none rounded-none',
 };
 
+export function getInstitutionalEmailLocalPart(email: string | undefined, domain: string): string {
+  if (!email) return '';
+  const suffix = `@${domain}`;
+  let normalized = email.trim();
+  while (normalized.toLowerCase().endsWith(`${suffix.toLowerCase()}${suffix.toLowerCase()}`)) {
+    normalized = normalized.slice(0, -suffix.length).trim();
+  }
+  if (normalized.toLowerCase().endsWith(suffix.toLowerCase())) {
+    return normalized.slice(0, -suffix.length);
+  }
+  return normalized.split('@')[0] || '';
+}
+
+export function buildInstitutionalEmailValue(rawInput: string, domain: string): string {
+  const trimmed = rawInput.trim();
+  if (!trimmed) return '';
+  const suffix = `@${domain}`;
+  if (trimmed.toLowerCase().endsWith(suffix.toLowerCase())) {
+    const localPart = trimmed.slice(0, -suffix.length).trim();
+    return localPart ? `${localPart}${suffix}` : '';
+  }
+  return `${trimmed}${suffix}`;
+}
+
 export function InstitutionalProfileCard({
   user,
   variant = 'default',
@@ -134,8 +158,6 @@ export function InstitutionalProfileCard({
   const metaMuted = 'text-sm text-text-muted';
   const roleLabel = user.isAdmin ? ic('adminRole') : ic('studentRole');
   const fixedInstitutionalDomain = institutionalEmailDomain || 'school.edu';
-  const getInstitutionalEmailLocalPart = (email?: string, domain = fixedInstitutionalDomain) =>
-    email?.endsWith(`@${domain}`) ? email.slice(0, -domain.length - 1) : email?.split('@')[0] || '';
   const suggestedInstitutionalEmailLocalPart = [currentUser.firstName, currentUser.lastName]
     .map((part) =>
       (part || '')
@@ -487,7 +509,7 @@ export function InstitutionalProfileCard({
                         )}
                         onChange={(value) =>
                           onInstitutionalEmailChange(
-                            value.trim() ? `${value.trim()}@${primaryCohortGroup.emailDomain}` : '',
+                            buildInstitutionalEmailValue(value, primaryCohortGroup.emailDomain),
                             primaryCohortGroup.cohortIds[0]
                           )
                         }

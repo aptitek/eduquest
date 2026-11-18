@@ -795,8 +795,12 @@ export const en: TranslationKeys = {
       network: 'The profile service is unreachable. Check your connection and try again.',
       unauthorized: 'Your session expired. Please sign in again.',
       invalidPayload: 'The profile update could not be read by the server.',
+      emailRequired: 'An email address is required.',
+      emailAlreadyUsed: 'This email address is already linked to another account.',
       institutionalEmailDomain:
         'Your institutional email does not match the required school domain.',
+      institutionalEmailAlreadyUsed:
+        'This institutional email is already linked to another student account.',
       avatarInvalidFormat: 'Invalid avatar format. Use PNG, JPG, JPEG, WebP, or GIF.',
       avatarTooLargeAfterCompression: 'The avatar could not be compressed below 2 MB.',
       avatarProcessingFailed: 'The avatar could not be saved. The previous avatar was restored. Detail: {detail}',
